@@ -14,10 +14,11 @@ import {
   Minus,
   Trash2,
   ShoppingBag,
+  LogOut,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useGetCurrentUser } from "@workspace/api-client-react";
-import { LogOut } from "lucide-react";
+import { useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart-context";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +27,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
-  const { data: user } = useGetCurrentUser({ query: { retry: false } });
+  const queryClient = useQueryClient();
+  const { data: user } = useGetCurrentUser({ query: { retry: false, refetchOnWindowFocus: false } });
   const { items, totalItems, totalPrice, isOpen, openCart, closeCart, updateQuantity, removeItem, clearCart } = useCart();
 
   useEffect(() => {
@@ -114,7 +116,11 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   variant="ghost"
                   size="icon"
                   className="w-10 h-10"
-                  onClick={() => { localStorage.removeItem("sunotal_token"); window.location.reload(); }}
+                  onClick={() => {
+                    localStorage.removeItem("sunotal_token");
+                    queryClient.removeQueries({ queryKey: getGetCurrentUserQueryKey() });
+                    setLocation("/");
+                  }}
                   aria-label="Logout"
                 >
                   <LogOut className="w-4 h-4" />
@@ -226,7 +232,11 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     size="sm"
                     variant="ghost"
                     className="text-xs text-muted-foreground"
-                    onClick={() => { localStorage.removeItem("sunotal_token"); window.location.reload(); }}
+                    onClick={() => {
+                      localStorage.removeItem("sunotal_token");
+                      queryClient.removeQueries({ queryKey: getGetCurrentUserQueryKey() });
+                      setLocation("/login");
+                    }}
                   >
                     Logout
                   </Button>

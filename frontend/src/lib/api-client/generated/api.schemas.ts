@@ -213,9 +213,10 @@ export interface VendorUpdate {
 }
 
 export type ListProductsParams = {
-category?: string;
-search?: string;
-organic?: boolean;
+  category?: string;
+  search?: string;
+  organic?: boolean;
+  sort?: 'price_asc' | 'price_desc' | 'newest';
 };
 
 export type ListVendorsParams = {

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, productsTable } from "../lib/db.js";
-import { eq, ilike, and, SQL } from "drizzle-orm";
+import { eq, ilike, and, desc, asc, SQL } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import {
   ListProductsQueryParams,
@@ -34,16 +34,23 @@ function formatProduct(p: typeof productsTable.$inferSelect) {
 // GET /api/products
 router.get("/products", async (req, res) => {
   const parsed = ListProductsQueryParams.safeParse(req.query);
-  const { category, search } = parsed.success ? parsed.data : {};
+  const { category, search, organic, sort } = parsed.success ? parsed.data : {};
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(productsTable.active, true)];
   if (category) conditions.push(eq(productsTable.category, category as "Vegetables" | "Fruits" | "Dairy" | "Dry Fruits" | "Grains"));
   if (search) conditions.push(ilike(productsTable.name, `%${search}%`));
+  if (organic !== undefined) conditions.push(eq(productsTable.organic, organic));
 
-  const products =
-    conditions.length > 0
-      ? await db.select().from(productsTable).where(and(...conditions))
-      : await db.select().from(productsTable);
+  const query = db.select().from(productsTable).where(and(...conditions));
+  const sortedQuery = sort === "price_asc"
+    ? query.orderBy(asc(productsTable.price))
+    : sort === "price_desc"
+    ? query.orderBy(desc(productsTable.price))
+    : sort === "newest"
+    ? query.orderBy(desc(productsTable.createdAt))
+    : query.orderBy(desc(productsTable.createdAt));
+
+  const products = await sortedQuery;
 
   res.json(products.map(formatProduct));
 });
