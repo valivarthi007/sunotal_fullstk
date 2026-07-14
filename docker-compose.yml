@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sunotal-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sunotal
+      POSTGRES_USER: sunotal
+      POSTGRES_PASSWORD: sunotalpass123
+    ports:
+      - "5432:5432"
+    volumes:
+      - sunotal_pgdata:/var/lib/postgresql/data
+
+volumes:
+  sunotal_pgdata:
