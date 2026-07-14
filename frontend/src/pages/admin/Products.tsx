@@ -15,7 +15,6 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
-  DialogTrigger,
   DialogFooter,
   DialogClose
 } from "@/components/ui/dialog";
@@ -28,7 +27,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -61,9 +59,9 @@ export default function ProductsAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: products, isLoading } = useListProducts({ 
-    params: search.length > 2 ? { search } : undefined 
-  });
+  const { data: products, isLoading } = useListProducts( 
+    search.length > 2 ? { search } : undefined 
+  );
   
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -71,6 +69,9 @@ export default function ProductsAdmin() {
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  
+  // Fixed: State controller added to move delete prompts cleanly out of row bounds
+  const [deletingProduct, setDeletingProduct] = useState<any | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -149,6 +150,7 @@ export default function ProductsAdmin() {
       onSuccess: () => {
         toast.success("Product deleted");
         queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+        setDeletingProduct(null);
       },
       onError: () => toast.error("Failed to delete product")
     });
@@ -162,88 +164,107 @@ export default function ProductsAdmin() {
           <p className="text-muted-foreground mt-1">Manage your catalog, pricing, and inventory.</p>
         </div>
         
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleCreateNew} className="gap-2 bg-sidebar-primary hover:bg-sidebar-primary/90 text-white rounded-xl shadow-sm">
-              <Plus className="w-4 h-4" /> Add Product
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Product" : "Add New Product"}</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField control={form.control} name="name" render={({ field }) => (
-                    <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="category" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          {Object.values(ProductCategory).map(cat => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField control={form.control} name="unit" render={({ field }) => (
-                    <FormItem><FormLabel>Unit (e.g. 1 kg)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="price" render={({ field }) => (
-                    <FormItem><FormLabel>Selling Price (₹)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="originalPrice" render={({ field }) => (
-                    <FormItem><FormLabel>MRP (₹)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                </div>
-
-                <FormField control={form.control} name="image" render={({ field }) => (
-                  <FormItem><FormLabel>Image URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-
-                <FormField control={form.control} name="badge" render={({ field }) => (
-                  <FormItem><FormLabel>Badge Label (Optional)</FormLabel><FormControl><Input placeholder="e.g. Bestseller, New Arrival" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>
-                )} />
-
-                <FormField control={form.control} name="description" render={({ field }) => (
-                  <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea className="resize-none" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>
-                )} />
-
-                <div className="flex gap-8 py-2">
-                  <FormField control={form.control} name="organic" render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                      <div className="space-y-1 leading-none"><FormLabel>Organic Certified</FormLabel></div>
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="active" render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                      <div className="space-y-1 leading-none"><FormLabel>Active (Visible to users)</FormLabel></div>
-                    </FormItem>
-                  )} />
-                </div>
-
-                <DialogFooter className="pt-4 border-t">
-                  <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
-                  <Button type="submit" disabled={createProduct.isPending || updateProduct.isPending}>
-                    {editingId ? "Save Changes" : "Create Product"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+        {/* Fixed: Simplified button declaration, avoiding conflicting DialogTrigger event signals */}
+        <Button onClick={handleCreateNew} className="gap-2 bg-sidebar-primary hover:bg-sidebar-primary/90 text-white rounded-xl shadow-sm">
+          <Plus className="w-4 h-4" /> Add Product
+        </Button>
       </div>
+
+      {/* Main Creation / Modification Dialog */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Edit Product" : "Add New Product"}</DialogTitle>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="name" render={({ field }) => (
+                  <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="category" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {Object.values(ProductCategory).map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField control={form.control} name="unit" render={({ field }) => (
+                  <FormItem><FormLabel>Unit (e.g. 1 kg)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="price" render={({ field }) => (
+                  <FormItem><FormLabel>Selling Price (₹)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="originalPrice" render={({ field }) => (
+                  <FormItem><FormLabel>MRP (₹)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+
+              <FormField control={form.control} name="image" render={({ field }) => (
+                <FormItem><FormLabel>Image URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+
+              <FormField control={form.control} name="badge" render={({ field }) => (
+                <FormItem><FormLabel>Badge Label (Optional)</FormLabel><FormControl><Input placeholder="e.g. Bestseller, New Arrival" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>
+              )} />
+
+              <FormField control={form.control} name="description" render={({ field }) => (
+                <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea className="resize-none" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>
+              )} />
+
+              <div className="flex gap-8 py-2">
+                <FormField control={form.control} name="organic" render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <div className="space-y-1 leading-none"><FormLabel>Organic Certified</FormLabel></div>
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="active" render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <div className="space-y-1 leading-none"><FormLabel>Active (Visible to users)</FormLabel></div>
+                  </FormItem>
+                )} />
+              </div>
+
+              <DialogFooter className="pt-4 border-t">
+                <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
+                <Button type="submit" disabled={createProduct.isPending || updateProduct.isPending}>
+                  {editingId ? "Save Changes" : "Create Product"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fixed: Relocated Alert overlay completely out of the mapped rows tree */}
+      <AlertDialog open={!!deletingProduct} onOpenChange={(isOpen) => !isOpen && setDeletingProduct(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Product?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{deletingProduct?.name}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deletingProduct && handleDelete(deletingProduct.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete Product
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col h-[calc(100vh-200px)]">
         <div className="p-4 border-b bg-accent/30 flex items-center justify-between">
@@ -309,32 +330,20 @@ export default function ProductsAdmin() {
                       </Badge>
                     </td>
                     <td className="px-6 py-3">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Fixed: Set fallback display configurations so touch actions display correctly */}
+                      <div className="flex items-center justify-end gap-2 md:opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleEdit(product)}>
                           <Edit2 className="w-4 h-4" />
                         </Button>
                         
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Product?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete <strong>{product.name}</strong>? This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(product.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                Delete Product
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive" 
+                          onClick={() => setDeletingProduct(product)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </td>
                   </tr>

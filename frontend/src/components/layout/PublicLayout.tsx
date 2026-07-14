@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useGetCurrentUser } from "@workspace/api-client-react";
+import { LogOut } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { cn } from "@/lib/utils";
 
@@ -101,16 +102,24 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             {user ? (
-              <Button
-                variant="ghost"
-                className="hidden sm:flex gap-2 rounded-full px-4 font-medium"
-                onClick={() => {
-                  localStorage.removeItem("sunotal_token");
-                  window.location.reload();
-                }}
-              >
-                Hi, {user.name.split(" ")[0]}
-              </Button>
+              <div className="hidden sm:flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  className="hidden sm:flex gap-2 rounded-full px-4 font-medium"
+                  onClick={() => setLocation('/profile')}
+                >
+                  Hi, {user.name.split(" ")[0]}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-10 h-10"
+                  onClick={() => { localStorage.removeItem("sunotal_token"); window.location.reload(); }}
+                  aria-label="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </div>
             ) : (
               <Button
                 variant="outline"
@@ -363,7 +372,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   className="w-full h-12 text-base font-bold rounded-xl shadow-md shadow-primary/20"
                   onClick={() => {
                     if (!user) { closeCart(); setLocation("/login"); }
-                    else { /* TODO: checkout */ }
+                    else { closeCart(); setLocation("/checkout"); }
                   }}
                 >
                   {user ? "Proceed to Checkout" : "Login to Checkout"}

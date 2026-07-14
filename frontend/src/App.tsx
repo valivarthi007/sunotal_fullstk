@@ -10,6 +10,8 @@ import ProductsPage from "@/pages/public/Products";
 import FarmerRegistration from "@/pages/public/FarmerRegistration";
 import Login from "@/pages/public/Login";
 import Register from "@/pages/public/Register";
+import Profile from "@/pages/public/Profile";
+import Checkout from "@/pages/public/Checkout";
 
 import AdminLogin from "@/pages/admin/AdminLogin";
 import Dashboard from "@/pages/admin/Dashboard";
@@ -42,6 +44,8 @@ function Router() {
       <Route path="/dry-fruits"><ProductsPage initialCategory="Dry Fruits" /></Route>
       <Route path="/grains"><ProductsPage initialCategory="Grains" /></Route>
       <Route path="/farmer" component={FarmerRegistration} />
+      <Route path="/profile" component={Profile} />
+      <Route path="/checkout" component={Checkout} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
 

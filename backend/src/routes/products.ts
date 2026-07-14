@@ -102,7 +102,8 @@ router.put("/products/:id", requireAdmin, async (req, res) => {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const bodyParsed = UpdateProductBody.safeParse(req.body);
+  // Allow partial updates: accept any subset of UpdateProductBody fields
+  const bodyParsed = UpdateProductBody.partial().safeParse(req.body);
   if (!bodyParsed.success) {
     res.status(400).json({ error: "Invalid input" });
     return;
@@ -114,14 +115,19 @@ router.put("/products/:id", requireAdmin, async (req, res) => {
       ? Math.round(((data.originalPrice - data.price) / data.originalPrice) * 100)
       : undefined;
 
-  const updateData: Partial<typeof productsTable.$inferInsert> = {
-    ...data,
-    badge: data.badge ?? null,
-    description: data.description ?? null,
-  };
-  if (discountPercentage !== undefined) {
-    updateData.discountPercentage = discountPercentage;
-  }
+  const updateData: Partial<typeof productsTable.$inferInsert> = {};
+  // Only copy fields that are present in the request body
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.category !== undefined) updateData.category = data.category;
+  if (data.unit !== undefined) updateData.unit = data.unit;
+  if (data.price !== undefined) updateData.price = data.price;
+  if (data.originalPrice !== undefined) updateData.originalPrice = data.originalPrice;
+  if (data.image !== undefined) updateData.image = data.image;
+  if (data.badge !== undefined) updateData.badge = data.badge ?? null;
+  if (data.organic !== undefined) updateData.organic = data.organic;
+  if (data.active !== undefined) updateData.active = data.active;
+  if (data.description !== undefined) updateData.description = data.description ?? null;
+  if (discountPercentage !== undefined) updateData.discountPercentage = discountPercentage;
 
   const [product] = await db
     .update(productsTable)

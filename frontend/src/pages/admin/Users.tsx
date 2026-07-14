@@ -54,9 +54,9 @@ export default function UsersAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: users, isLoading } = useListUsers({ 
-    params: search.length > 2 ? { search } : undefined 
-  });
+  const { data: users, isLoading } = useListUsers( 
+    search.length > 2 ? { search } : undefined 
+  );
   
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();

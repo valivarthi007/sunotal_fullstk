@@ -8,10 +8,11 @@ import { format } from "date-fns";
 
 export default function Dashboard() {
   const { data: stats, isLoading } = useGetAdminStats({
-    query: {
-      refetchInterval: 30000,
-    }
-  });
+  query: {
+    queryKey: ['adminStats'], // 👈 Add this unique key array
+    refetchInterval: 30000,
+  },
+});
 
   return (
     <AdminLayout>
