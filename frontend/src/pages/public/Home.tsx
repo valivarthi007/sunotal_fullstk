@@ -50,7 +50,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("All");
 
   const { data: products, isLoading } = useListProducts(
-    { params: activeTab !== "All" ? { category: activeTab } : undefined },
+    activeTab !== "All" ? { category: activeTab } : undefined,
     { query: { queryKey: ["products", activeTab] } }
   );
 

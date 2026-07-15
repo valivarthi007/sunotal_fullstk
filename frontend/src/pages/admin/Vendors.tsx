@@ -61,11 +61,9 @@ export default function VendorsAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: vendors, isLoading } = useListVendors({ 
-    params: {
-      status: activeTab !== "All" ? activeTab.toLowerCase() : undefined,
-      search: search.length > 2 ? search : undefined
-    } 
+  const { data: vendors, isLoading } = useListVendors({
+    status: activeTab !== "All" ? activeTab.toLowerCase() : undefined,
+    search: search.length > 2 ? search : undefined,
   });
   
   const updateVendor = useUpdateVendor();

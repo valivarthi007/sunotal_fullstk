@@ -28,7 +28,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
 
   const queryClient = useQueryClient();
-  const { data: user } = useGetCurrentUser({ query: { retry: false, refetchOnWindowFocus: false } });
+  const { data: user } = useGetCurrentUser({
+    query: { queryKey: getGetCurrentUserQueryKey(), retry: false, refetchOnWindowFocus: false },
+  });
   const { items, totalItems, totalPrice, isOpen, openCart, closeCart, updateQuantity, removeItem, clearCart } = useCart();
 
   useEffect(() => {

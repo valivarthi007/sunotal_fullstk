@@ -1,13 +1,13 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { useGetCurrentUser } from "@workspace/api-client-react";
+import { getGetCurrentUserQueryKey, useGetCurrentUser } from "@workspace/api-client-react";
 import { useCart } from "@/lib/cart-context";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 export default function Checkout() {
   const [, setLocation] = useLocation();
-  const { data: user } = useGetCurrentUser({ query: { retry: false } });
+  const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
   const { items, totalItems, totalPrice, clearCart } = useCart();
 
   useEffect(() => {

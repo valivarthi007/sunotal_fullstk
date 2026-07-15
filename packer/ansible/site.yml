@@ -1,0 +1,129 @@
+---
+- name: Harden Ubuntu image and serve the Sunotal frontend
+  hosts: default
+  become: true
+  vars:
+    app_dir: /var/www/sunotal
+    repo_dir: "{{ workspace | default('/tmp/sunotal') }}"
+
+  tasks:
+    - name: Install system packages
+      apt:
+        name:
+          - nginx
+          - ufw
+          - auditd
+          - curl
+          - git
+          - ca-certificates
+          - gnupg
+          - lsb-release
+        state: present
+        update_cache: true
+
+    - name: Add NodeSource apt repository
+      shell: |
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+
+    - name: Install Node.js
+      apt:
+        name: nodejs
+        state: present
+        update_cache: true
+
+    - name: Install pnpm globally
+      shell: npm install -g pnpm
+      args:
+        creates: /usr/bin/pnpm
+
+    - name: Build frontend assets
+      shell: |
+        cd "{{ repo_dir }}/frontend"
+        pnpm install --frozen-lockfile
+        pnpm build
+      args:
+        executable: /bin/bash
+
+    - name: Ensure application directory exists
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: "0755"
+
+    - name: Copy build output to nginx document root
+      copy:
+        src: "{{ repo_dir }}/frontend/dist/"
+        dest: "{{ app_dir }}/"
+        owner: www-data
+        group: www-data
+        mode: "0644"
+
+    - name: Configure nginx site
+      copy:
+        dest: /etc/nginx/sites-available/sunotal
+        content: |
+          server {
+            listen 80 default_server;
+            listen [::]:80 default_server;
+            server_name _;
+            root /var/www/sunotal;
+            index index.html;
+
+            location / {
+              try_files $uri $uri/ /index.html;
+            }
+
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header X-Frame-Options "DENY" always;
+            add_header X-XSS-Protection "1; mode=block" always;
+          }
+
+    - name: Remove default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Enable nginx site
+      file:
+        src: /etc/nginx/sites-available/sunotal
+        dest: /etc/nginx/sites-enabled/sunotal
+        state: link
+
+    - name: Harden SSH configuration
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - { regexp: '^(#)?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^(#)?PermitRootLogin', line: 'PermitRootLogin no' }
+
+    - name: Allow SSH and web traffic
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - "22"
+        - "80"
+        - "443"
+
+    - name: Enable firewall
+      ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+
+    - name: Ensure services are started and enabled
+      systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - nginx
+        - ssh
+        - auditd

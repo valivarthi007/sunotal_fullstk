@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useGetCurrentUser } from "@workspace/api-client-react";
+import { getGetCurrentUserQueryKey, useGetCurrentUser } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +15,7 @@ interface Address {
 }
 
 export default function Profile() {
-  const { data: user } = useGetCurrentUser({ query: { retry: false } });
+  const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [editing, setEditing] = useState<null | Address>(null);
 

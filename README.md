@@ -1,139 +1,202 @@
 # Sunotal Fullstack
 
-This repository contains the Sunotal full-stack application (frontend + backend + database). The README below describes how to run locally and basic guidance for deploying to AWS.
+Sunotal is a full-stack farm produce marketplace with a React/Vite frontend, an Express backend, and a PostgreSQL database. This guide shows how to run it locally and how to deploy the frontend to AWS using Packer, Terraform, Ansible, and Jenkins.
 
-## Prerequisites
-- Node.js (v18+)
-- pnpm (recommended) or npm
-- Docker (for local Postgres)
+## 1. Local development
 
-## Local development
+### Prerequisites
+- Node.js 20+
+- pnpm
+- Docker
+- PostgreSQL (or Docker Compose)
 
-1. Start Postgres (from project root):
-
+### Start the database
 ```bash
 docker compose up -d postgres
 ```
 
-2. Backend
-
+### Start the backend
 ```bash
 cd backend
-pnpm install
-# copy .env.example -> .env and edit if needed
 cp .env.example .env
+pnpm install
 pnpm run dev
 ```
 
-Server will run at `http://localhost:5000` by default.
+The backend runs on http://localhost:5000.
 
-3. Frontend
-
+### Start the frontend
 ```bash
 cd frontend
 pnpm install
 pnpm run dev
 ```
 
-Server will run at `http://localhost:3000` by default.
+The frontend runs on http://localhost:3000.
 
-4. Seed database (optional):
-
-```bash
-cat database/seed.sql | docker exec -i sunotal-db psql -U sunotal -d sunotal
-```
-
-## Build for production
-
-Backend:
-
-```bash
-# build TS to dist
-cd backend
-pnpm run build
-```
-
-Frontend:
-
+### Build for production
 ```bash
 cd frontend
 pnpm run build
 ```
 
-The backend serves `frontend/dist` when `NODE_ENV=production`.
+```bash
+cd backend
+pnpm run build
+```
 
-## Deploying to AWS (recommended minimal approach)
+## 2. AWS deployment architecture
 
-Option A — Static frontend (S3 + CloudFront), backend on ECS/Fargate or EC2:
+The current implementation provisions a production-ready Ubuntu EC2 host for the frontend using:
+- Packer to create a custom AMI
+- Ansible to install dependencies and configure the machine
+- Terraform to create the networking and EC2 resources
+- Jenkins to automate build, test, image creation, and deployment
 
-- Build frontend (`pnpm run build`) and upload `frontend/dist` to an S3 bucket.
-- Use CloudFront in front of the S3 bucket for caching and HTTPS.
-- Containerize backend (create `Dockerfile` in `backend/`), push image to ECR, and run on ECS/Fargate or EKS.
-- Use RDS (Postgres) as the managed database and set `DATABASE_URL` accordingly.
+> This repository currently deploys the frontend through Nginx on EC2. For a full production stack, the backend should later be moved behind a load balancer or container platform with a managed database.
 
-Option B — Single docker-compose on an EC2 instance (simpler but less resilient):
+## 3. Implement the full AWS pipeline
 
-- Create production `docker-compose.prod.yml` that builds frontend and backend images and uses an external Postgres or the included service.
-- Use a reverse proxy (nginx) or load balancer to route ports and terminate TLS.
+### Step 1: Install tooling locally
+Install the following tools on the machine or CI runner that will orchestrate deployment:
+- AWS CLI
+- Packer
+- Terraform
+- Ansible
+- Jenkins (or a Jenkins agent)
 
-## Secrets and configuration
+Example on Ubuntu:
+```bash
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+```
 
-- Always set `JWT_SECRET` to a secure random value in production.
-- Do not commit `.env` files. Use AWS Secrets Manager or environment variables in your deployment platform.
+Verify access:
+```bash
+aws configure
+aws sts get-caller-identity
+```
 
-## Database migrations
+### Step 2: Build a custom AMI with Packer
+The AMI build process is defined in [packer/packer.pkr.hcl](packer/packer.pkr.hcl) and [packer/ansible/site.yml](packer/ansible/site.yml).
 
-This project uses `drizzle-kit` for schema migrations. To push schema migrations:
+Run:
+```bash
+cd packer
+packer init .
+packer build -var='aws_region=us-east-1' .
+```
+
+What the build does:
+- Launches an Ubuntu base image in AWS
+- Installs Node.js, pnpm, Nginx, and system hardening packages
+- Builds the frontend in the image
+- Copies the production build to the Nginx document root
+- Configures firewall and basic security headers
+
+After the build completes, copy the resulting AMI ID and use it in Terraform.
+
+### Step 3: Create AWS infrastructure with Terraform
+The Terraform configuration is in [terraform/main.tf](terraform/main.tf) and [terraform/variables.tf](terraform/variables.tf).
+
+Prepare the variable file:
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Edit [terraform/terraform.tfvars.example](terraform/terraform.tfvars.example) and set:
+- `ami_id`: the AMI ID from the Packer build
+- `key_name`: an existing EC2 key pair name
+- `aws_region`: your target region
+- `allowed_cidr_blocks`: the CIDRs allowed to access the instance
+
+Apply the infrastructure:
+```bash
+terraform init
+terraform plan -var-file=terraform.tfvars
+terraform apply -var-file=terraform.tfvars
+```
+
+Terraform will create:
+- A VPC and public subnet
+- An internet gateway and route table
+- A security group allowing SSH and web traffic
+- An EC2 instance running the hardened AMI
+- An Elastic IP for public access
+
+### Step 4: Configure Jenkins CI/CD
+The pipeline is defined in [Jenkinsfile](Jenkinsfile).
+
+#### Jenkins prerequisites
+Install on the agent or controller:
+- Node.js 20
+- pnpm
+- Packer
+- Terraform
+- Ansible
+- AWS CLI
+- Trivy (optional but recommended for scanning)
+
+#### Jenkins credentials
+Create the following secret text credentials:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_DEFAULT_REGION`
+- `AMI_ID` (optional if you want to inject it at runtime)
+
+#### Pipeline behavior
+The pipeline runs in this order:
+1. Checkout the repository
+2. Install Node.js tools and pnpm
+3. Install frontend and backend dependencies
+4. Run frontend type-check/build and backend build
+5. Run a basic security scan
+6. Package artifacts
+7. On the `main` branch, build the AMI with Packer and deploy with Terraform
+
+Create a Jenkins pipeline job and point it to this repository.
+
+### Step 5: Best practices
+- Store secrets in Jenkins credentials or AWS Secrets Manager, not in source control
+- Use IAM roles instead of long-lived credentials where possible
+- Keep Terraform state remote (for example, S3 + DynamoDB locking)
+- Restrict SSH and web access to known CIDRs
+- Use branch protection and code review before merging to `main`
+- Add automated tests before promoting to production
+
+## 4. Database and environment notes
+The backend uses Drizzle and PostgreSQL. For production, configure a managed PostgreSQL instance and set strong environment variables such as `JWT_SECRET`.
 
 ```bash
 cd backend
-# set DATABASE_URL and other env in .env or environment
-dotenv -e .env.production -- drizzle-kit push --config drizzle.config.ts
+pnpm run db:push
 ```
 
-## Notes
+Do not commit `.env` files. Keep environment values in CI secrets or AWS-based secret storage.
 
-- Addresses and orders: frontend currently stores addresses in `localStorage`. For production, implement server-side endpoints and persist addresses in the DB (add JSONB column and API).
-- Review `README` and environment files before deploying.
-# Sunotal Farms
+## 5. Security and hardening summary
+The current AMI build applies a baseline hardening flow:
+- SSH password authentication disabled
+- Root login disabled
+- UFW enabled
+- Nginx security headers enabled
 
-Farm-fresh produce e-commerce platform — verified Indian farmers, direct to your door.
+This is a good starting point, but production environments should be reviewed against the CIS benchmark or a company-approved baseline.
 
-## Quick start (Ubuntu)
-
+## 6. Quick start summary
 ```bash
-chmod +x setup.sh start-dev.sh
-./setup.sh        # installs Node 20, pnpm, Docker, PostgreSQL, seeds data
-./start-dev.sh    # starts backend :5000 + frontend :3000
+# local development
+docker compose up -d postgres
+cd backend && pnpm install && pnpm run dev
+cd frontend && pnpm install && pnpm run dev
+
+# AWS deployment
+cd packer && packer init . && packer build -var='aws_region=us-east-1' .
+cd ../terraform && cp terraform.tfvars.example terraform.tfvars && terraform init && terraform apply -var-file=terraform.tfvars
 ```
 
-Open **http://localhost:3000**
-
-**Admin panel:** http://localhost:3000/admin/login  
-**Credentials:** `admin@sunotal.com` / `admin123`
-
----
-
-## Features
-
-| Area | What's included |
-|---|---|
-| Public store | Hero carousel · Category grid · Live product catalogue · Search/filter |
-| Cart | Slide-in drawer · Qty controls · Running total · FREE delivery |
-| Auth | Register / Login · JWT stored in localStorage · Name shown in header |
-| Farmer portal | Registration form → vendor pending queue |
-| Admin — Dashboard | Stats cards · Category chart · Recent vendors & users |
-| Admin — Products | Full CRUD (add, edit, delete, organic badge, discount) |
-| Admin — Vendors | Approve / reject farmer applications, add notes |
-| Admin — Users | View all users, toggle active/inactive |
-
-## Tech stack
-
-| Layer | Tech |
-|---|---|
-| Frontend | React 19, Vite 7, Tailwind CSS v4, shadcn/ui, TanStack Query v5 |
-| Backend | Node.js 20, Express 5 |
-| Database | PostgreSQL 16 + Drizzle ORM |
-| Auth | JWT (jsonwebtoken + bcryptjs) |
-
-## See INSTALL.md for full instructions
+## 7. Notes
+- Addresses and orders are currently stored in the frontend for demo purposes. For production, move this state to a real backend API and database.
+- Review the application environment and secrets before deployment.
