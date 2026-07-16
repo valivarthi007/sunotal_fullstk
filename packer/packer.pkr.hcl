@@ -70,14 +70,14 @@ build {
 
   provisioner "file" {
     source      = "../frontend/dist"
-    destination = "/app/sunotal/frontend-dist"
+    destination = "~/sunotal/frontend-dist"
   }
 
   provisioner "ansible-local" {
     playbook_file = "ansible/site.yml"
     extra_arguments = [
       "--extra-vars",
-      "workspace=/app/sunotal"
+      "workspace=~/sunotal"
     ]
   }
 }
