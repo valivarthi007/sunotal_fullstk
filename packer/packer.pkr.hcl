@@ -62,16 +62,7 @@ build {
     ]
   }
 
-  provisioner "shell" {
-    inline = [
-      "mkdir -p /app"
-    ]
-  }
 
-  provisioner "file" {
-    source      = "../frontend/dist"
-    destination = "~/sunotal/frontend-dist"
-  }
 
   provisioner "ansible-local" {
     playbook_file = "ansible/site.yml"
@@ -79,5 +70,10 @@ build {
       "--extra-vars",
       "workspace=~/sunotal"
     ]
+  }
+
+  post-processor "manifest" {
+    output     = "packer-manifest.json"
+    strip_path = true
   }
 }

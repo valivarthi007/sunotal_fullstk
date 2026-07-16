@@ -1,5 +1,5 @@
 aws_region = "us-east-1"
-ami_id     = "ami-0123456789abcdef0"
+ami_id     = "ami-09afda054f620959a"
 instance_type = "t3.small"
-key_name   = "your-ec2-key-pair"
+key_name   = "jcs_raju_laptop"
 allowed_cidr_blocks = ["0.0.0.0/0"]

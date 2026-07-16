@@ -52,17 +52,9 @@
       file:
         path: "{{ app_dir }}"
         state: directory
-        owner: www-data
+        owner: ubuntu
         group: www-data
-        mode: "0755"
-
-    - name: Copy build output to nginx document root
-      copy:
-        src: "{{ frontend_dist_dir }}/"
-        dest: "{{ app_dir }}/"
-        owner: www-data
-        group: www-data
-        mode: "0644"
+        mode: "0775"
 
     - name: Configure nginx site
       copy:

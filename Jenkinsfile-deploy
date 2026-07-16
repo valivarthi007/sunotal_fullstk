@@ -4,7 +4,6 @@ pipeline {
   environment {
     NODE_VERSION = '20'
     PNPM_VERSION = '11.12.0'
-    AWS_DEFAULT_REGION = 'us-east-1'
   }
 
   options {
@@ -93,47 +92,32 @@ pipeline {
       }
     }
 
-    stage('Publish to artifact store') {
+    stage('Deploy to EC2') {
       when {
         branch 'main'
       }
       steps {
         sh '''
-          echo 'Publishing artifacts for main branch.'
-        '''
-      }
-    }
-
-    stage('Build AMI with Packer') {
-      when {
-        branch 'main'
-      }
-      steps {
-        sh '''
-          if ! command -v packer >/dev/null 2>&1; then
-            echo 'Packer is not installed in Jenkins agent; install it before running this stage.'
+          if ! command -v aws >/dev/null 2>&1; then
+            echo 'AWS CLI is not installed. Please install it on the Jenkins agent.'
             exit 1
           fi
-          cd packer
-          packer init .
-          packer build -var='aws_region=${AWS_DEFAULT_REGION}' .
-        '''
-      }
-    }
-
-    stage('Deploy with Terraform') {
-      when {
-        branch 'main'
-      }
-      steps {
-        sh '''
-          if ! command -v terraform >/dev/null 2>&1; then
-            echo 'Terraform is not installed in Jenkins agent; install it before running this stage.'
+          
+          # Find the running EC2 instance by its tag
+          EC2_IP=$(aws ec2 describe-instances --region us-east-1 \\
+            --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \\
+            --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
+          
+          if [ -z "$EC2_IP" ] || [ "$EC2_IP" == "None" ]; then
+            echo "Failed to get EC2 IP address from AWS. Make sure the instance is running."
             exit 1
           fi
-          cd terraform
-          terraform init
-          terraform apply -auto-approve -var='ami_id=${AMI_ID}'
+          
+          echo "Deploying to EC2 instance at $EC2_IP"
+          
+          # Deploy frontend to Nginx directory
+          # Assumes SSH key is configured in Jenkins for the 'ubuntu' user.
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no" frontend/dist/ ubuntu@$EC2_IP:/var/www/sunotal/
         '''
       }
     }
@@ -145,10 +129,10 @@ pipeline {
       junit allowEmptyResults: true, testResults: 'reports/**/*.xml'
     }
     success {
-      echo 'Pipeline completed successfully.'
+      echo 'Application deployed successfully.'
     }
     failure {
-      echo 'Pipeline failed. Review the logs and fix the issue.'
+      echo 'Deployment pipeline failed.'
     }
   }
 }

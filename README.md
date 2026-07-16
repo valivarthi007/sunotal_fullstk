@@ -47,11 +47,16 @@ pnpm run build
 
 ## 2. AWS deployment architecture
 
-The current implementation provisions a production-ready Ubuntu EC2 host for the frontend using:
-- Packer to create a custom AMI
-- Ansible to install dependencies and configure the machine
-- Terraform to create the networking and EC2 resources
-- Jenkins to automate build, test, image creation, and deployment
+The deployment strategy decouples infrastructure provisioning from application deployments:
+
+**Infrastructure Pipeline** (`Jenkinsfile-infra`):
+- **Packer**: Creates a reusable Ubuntu base AMI.
+- **Ansible**: Installs dependencies (Node.js, Nginx) and hardens the base image.
+- **Terraform**: Provisions the VPC, security groups, and an EC2 instance from the base AMI.
+
+**Deployment Pipeline** (`Jenkinsfile-deploy`):
+- Automatically triggered after infrastructure changes or on application code pushes.
+- Builds the frontend application and securely deploys it directly to the running EC2 instance via `rsync`.
 
 > This repository currently deploys the frontend through Nginx on EC2. For a full production stack, the backend should later be moved behind a load balancer or container platform with a managed database.
 
@@ -91,9 +96,8 @@ packer build -var='aws_region=us-east-1' .
 What the build does:
 - Launches an Ubuntu base image in AWS
 - Installs Node.js, pnpm, Nginx, and system hardening packages
-- Builds the frontend in the image
-- Copies the production build to the Nginx document root
 - Configures firewall and basic security headers
+- Prepares directory structures with proper permissions (`/var/www/sunotal`) for future app deployments
 
 After the build completes, copy the resulting AMI ID and use it in Terraform.
 
@@ -127,7 +131,7 @@ Terraform will create:
 - An Elastic IP for public access
 
 ### Step 4: Configure Jenkins CI/CD
-The pipeline is defined in [Jenkinsfile](Jenkinsfile).
+The pipeline logic is split into two distinct files to decouple infrastructure changes from application deployments.
 
 #### Jenkins prerequisites
 Install on the agent or controller:
@@ -144,19 +148,21 @@ Create the following secret text credentials:
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_DEFAULT_REGION`
-- `AMI_ID` (optional if you want to inject it at runtime)
+- SSH keys required to access the target EC2 instances.
 
-#### Pipeline behavior
-The pipeline runs in this order:
-1. Checkout the repository
-2. Install Node.js tools and pnpm
-3. Install frontend and backend dependencies
-4. Run frontend type-check/build and backend build
-5. Run a basic security scan
-6. Package artifacts
-7. On the `main` branch, build the AMI with Packer and deploy with Terraform
+#### Pipeline 1: Infrastructure Provisioning (`Jenkinsfile-infra`)
+1. Checks out the repository.
+2. Builds the base AMI with Packer (on `main`).
+3. Provisions networking and compute resources via Terraform.
+4. Triggers the deployment pipeline upon success.
+**Setup:** Create a new Jenkins Pipeline job pointing to `Jenkinsfile-infra`.
 
-Create a Jenkins pipeline job and point it to this repository.
+#### Pipeline 2: Application Deployment (`Jenkinsfile-deploy`)
+1. Checks out the repository.
+2. Installs Node.js tools and frontend/backend dependencies.
+3. Builds the frontend and runs a security scan.
+4. Discovers the target EC2 IP via AWS CLI and deploys the built frontend code directly using `rsync`.
+**Setup:** Create a new Jenkins Pipeline job named `sunotal-deploy` pointing to `Jenkinsfile-deploy`.
 
 ### Step 5: Best practices
 - Store secrets in Jenkins credentials or AWS Secrets Manager, not in source control
@@ -192,9 +198,13 @@ docker compose up -d postgres
 cd backend && pnpm install && pnpm run dev
 cd frontend && pnpm install && pnpm run dev
 
-# AWS deployment
+# AWS deployment (Infrastructure)
 cd packer && packer init . && packer build -var='aws_region=us-east-1' .
 cd ../terraform && cp terraform.tfvars.example terraform.tfvars && terraform init && terraform apply -var-file=terraform.tfvars
+
+# AWS deployment (Application Code - typically run by Jenkins)
+# Assuming EC2_IP is your terraform output public IP:
+# rsync -avz -e "ssh -o StrictHostKeyChecking=no" frontend/dist/ ubuntu@$EC2_IP:/var/www/sunotal/
 ```
 
 ## 7. Notes
