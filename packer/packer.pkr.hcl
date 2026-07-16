@@ -62,16 +62,22 @@ build {
     ]
   }
 
-  provisioner "file" {
-    source      = "../"
-    destination = "/tmp/sunotal"
+  provisioner "shell" {
+    inline = [
+      "mkdir -p /app"
+    ]
   }
 
-  provisioner "ansible" {
+  provisioner "file" {
+    source      = "../frontend/dist"
+    destination = "/app/sunotal/frontend-dist"
+  }
+
+  provisioner "ansible-local" {
     playbook_file = "ansible/site.yml"
     extra_arguments = [
       "--extra-vars",
-      "workspace=/tmp/sunotal"
+      "workspace=/app/sunotal"
     ]
   }
 }

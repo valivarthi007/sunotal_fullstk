@@ -5,7 +5,17 @@
   vars:
     app_dir: /var/www/sunotal
     repo_dir: "{{ workspace | default('/tmp/sunotal') }}"
-
+    frontend_dist_dir: "{{ repo_dir }}/frontend-dist"
+    benchmark:
+        name: "{{ 'CIS Amazon Web Services Foundations Benchmark' | replace(' ','_') }}"
+        version: 1.4.0
+        profile: "{{ }}"
+  collections:
+    - azure.azcollection
+    - ansible.posix
+  roles:
+    - role: "{{ playbook_dir }}"
+      system_is_container: "{{ is_container | default(false) }}"
   tasks:
     - name: Install system packages
       apt:
@@ -38,14 +48,6 @@
       args:
         creates: /usr/bin/pnpm
 
-    - name: Build frontend assets
-      shell: |
-        cd "{{ repo_dir }}/frontend"
-        pnpm install --frozen-lockfile
-        pnpm build
-      args:
-        executable: /bin/bash
-
     - name: Ensure application directory exists
       file:
         path: "{{ app_dir }}"
@@ -56,7 +58,7 @@
 
     - name: Copy build output to nginx document root
       copy:
-        src: "{{ repo_dir }}/frontend/dist/"
+        src: "{{ frontend_dist_dir }}/"
         dest: "{{ app_dir }}/"
         owner: www-data
         group: www-data
