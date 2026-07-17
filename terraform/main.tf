@@ -99,6 +99,22 @@ resource "aws_security_group" "web" {
     cidr_blocks = var.allowed_cidr_blocks
   }
 
+  ingress {
+    description = "Backend API"
+    from_port   = 5000
+    to_port     = 5000
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_cidr_blocks
+  }
+
+  ingress {
+    description = "PostgreSQL"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_cidr_blocks
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

@@ -28,6 +28,8 @@
           - ca-certificates
           - gnupg
           - lsb-release
+          - docker.io
+          - docker-compose-v2
         state: present
         update_cache: true
 
@@ -48,9 +50,22 @@
       args:
         creates: /usr/bin/pnpm
 
+    - name: Install pm2 globally
+      shell: npm install -g pm2
+      args:
+        creates: /usr/bin/pm2
+
     - name: Ensure application directory exists
       file:
         path: "{{ app_dir }}"
+        state: directory
+        owner: ubuntu
+        group: www-data
+        mode: "0775"
+
+    - name: Ensure backend application directory exists
+      file:
+        path: "/var/www/sunotal-backend"
         state: directory
         owner: ubuntu
         group: www-data
@@ -66,6 +81,15 @@
             server_name _;
             root /var/www/sunotal;
             index index.html;
+
+            location /api/ {
+              proxy_pass http://127.0.0.1:5000/;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection 'upgrade';
+              proxy_set_header Host $host;
+              proxy_cache_bypass $http_upgrade;
+            }
 
             location / {
               try_files $uri $uri/ /index.html;
@@ -105,6 +129,8 @@
         - "22"
         - "80"
         - "443"
+        - "5000"
+        - "5432"
 
     - name: Enable firewall
       ufw:
@@ -121,3 +147,4 @@
         - nginx
         - ssh
         - auditd
+        - docker

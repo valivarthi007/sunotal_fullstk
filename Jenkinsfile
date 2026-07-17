@@ -66,17 +66,11 @@ pipeline {
         '''
       }
     }
-
-    stage('Trigger Application Deployment') {
-      steps {
-        build job: 'sunotal-deploy', wait: false
-      }
-    }
   }
 
   post {
     success {
-      echo 'Infrastructure provisioned successfully. Triggered deployment pipeline.'
+      echo 'Infrastructure provisioned successfully.'
     }
     failure {
       echo 'Infrastructure pipeline failed. Review the logs and fix the issue.'

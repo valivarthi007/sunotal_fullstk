@@ -55,33 +55,32 @@ We utilize **HashiCorp Packer** to build a golden Amazon Machine Image (AMI) for
 
 The CI/CD workflow is heavily decoupled, adhering to modern DevOps best practices. We separate **Infrastructure Provisioning** from **Application Deployment**.
 
-### 3.1 Infrastructure Pipeline (`Jenkinsfile-infra`)
-This pipeline manages the physical servers and network.
+### 3.1 Infrastructure Pipeline (`Jenkinsfile`)
+This pipeline manages the physical servers and network. It is executed manually.
 
 1. **Checkout**: Clones the source repository.
 2. **Packer Build**: 
    - Initializes Packer.
-   - Builds the hardened Ubuntu AMI.
+   - Builds the hardened Ubuntu AMI (now pre-equipped with Docker and PM2).
    - Saves the resulting metadata (AMI ID) to `packer-manifest.json`.
 3. **Terraform Deploy**: 
    - Extracts the AMI ID from the Packer manifest.
    - Initializes Terraform.
    - Applies the Terraform configuration (`terraform apply`), provisioning the AWS infrastructure.
-4. **Trigger Deployment**: Automatically triggers the `sunotal-deploy` pipeline asynchronously.
 
-### 3.2 Application Deployment Pipeline (`Jenkinsfile-deploy`)
-This pipeline focuses purely on the software artifact lifecycle.
+### 3.2 Decommission Pipeline (`Jenkinsfile-destroy`)
+This pipeline safely tears down all AWS resources created by Terraform. It requires explicit manual confirmation.
+
+### 3.3 Application Deployment Pipeline (`Jenkinsfile-deploy`)
+This pipeline focuses purely on the software artifact lifecycle. It triggers automatically on GitHub pushes.
 
 1. **Checkout**: Clones the source repository.
-2. **Install Tools**: Installs Node.js and `pnpm`.
-3. **Install Dependencies**: Runs `pnpm install` for both the frontend and backend.
-4. **Quality Checks**: Executes TypeScript compiler type-checking.
-5. **Build**: Runs `pnpm build` to compile the React frontend and Node.js backend for production.
-6. **Security Scan**: Utilizes Trivy to scan the local filesystem for vulnerabilities and exposed secrets.
-7. **Package Artifacts**: Compresses the build directories into `frontend-build.tgz` and `backend-build.tgz`.
-8. **Deploy to EC2**: 
-   - Uses the AWS CLI to locate the EC2 instance dynamically via its AWS tags (`Name=sunotal-frontend`).
-   - Uses `rsync` over SSH to securely push the compiled frontend files directly into the Nginx document root (`/var/www/sunotal`).
+2. **Build**: Installs dependencies and runs `pnpm build` to compile the frontend and backend.
+3. **Deploy to EC2**: 
+   - Locates the EC2 instance dynamically via AWS tags.
+   - **Frontend**: Pushes compiled static files to `/var/www/sunotal`.
+   - **Database**: Copies `docker-compose.yml` and spins up PostgreSQL.
+   - **Backend**: Pushes backend code, installs production dependencies, runs Drizzle migrations, and starts the Node.js API using PM2.
 
 ---
 

@@ -14,6 +14,10 @@ pipeline {
     skipDefaultCheckout(false)
   }
 
+  triggers {
+    githubPush()
+  }
+
   stages {
     stage('Checkout') {
       steps {
@@ -119,6 +123,14 @@ pipeline {
           # Deploy frontend to Nginx directory
           # Assumes SSH key is configured in Jenkins for the 'ubuntu' user.
           rsync -avz -e "ssh -o StrictHostKeyChecking=no" frontend/dist/ ubuntu@$EC2_IP:/var/www/sunotal/
+          
+          # Deploy database config (docker-compose)
+          scp -o StrictHostKeyChecking=no docker-compose.yml ubuntu@$EC2_IP:/home/ubuntu/
+          ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP "docker compose up -d"
+          
+          # Deploy backend
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no" --exclude 'node_modules' backend/ ubuntu@$EC2_IP:/var/www/sunotal-backend/
+          ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP "cd /var/www/sunotal-backend && pnpm install --prod && pnpm run db:push && pm2 start dist/index.js --name sunotal-backend --update-env || pm2 restart sunotal-backend"
         '''
       }
     }

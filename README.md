@@ -49,16 +49,18 @@ pnpm run build
 
 The deployment strategy decouples infrastructure provisioning from application deployments:
 
-**Infrastructure Pipeline** (`Jenkinsfile-infra`):
-- **Packer**: Creates a reusable Ubuntu base AMI.
-- **Ansible**: Installs dependencies (Node.js, Nginx) and hardens the base image.
-- **Terraform**: Provisions the VPC, security groups, and an EC2 instance from the base AMI.
+**Infrastructure Pipeline** (`Jenkinsfile`):
+- **Packer**: Creates a reusable Ubuntu base AMI with Docker and PM2.
+- **Ansible**: Installs dependencies and configures the Nginx reverse proxy.
+- **Terraform**: Provisions the VPC, security groups, and EC2 instance.
+- Run this manually when you need to provision or update servers.
 
 **Deployment Pipeline** (`Jenkinsfile-deploy`):
-- Automatically triggered after infrastructure changes or on application code pushes.
-- Builds the frontend application and securely deploys it directly to the running EC2 instance via `rsync`.
+- Automatically triggered on application code pushes to GitHub.
+- Builds the frontend and backend, starts PostgreSQL via Docker, migrates the DB, and restarts the backend via PM2.
 
-> This repository currently deploys the frontend through Nginx on EC2. For a full production stack, the backend should later be moved behind a load balancer or container platform with a managed database.
+**Decommission Pipeline** (`Jenkinsfile-destroy`):
+- Safely destroys all AWS infrastructure when no longer needed.
 
 ## 3. Implement the full AWS pipeline
 
