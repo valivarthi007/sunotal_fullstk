@@ -1,6 +1,6 @@
 ---
 - name: Harden Ubuntu image and serve the Sunotal frontend
-  hosts: default
+  hosts: all
   become: true
   vars:
     app_dir: /var/www/sunotal
