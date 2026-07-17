@@ -101,7 +101,7 @@ pipeline {
               --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \\
               --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
             
-            if [ -z "$EC2_IP" ] || [ "$EC2_IP" == "None" ]; then
+            if [ -z "$EC2_IP" ] || [ "$EC2_IP" = "None" ]; then
               echo "Failed to get EC2 IP address from AWS. Make sure the instance is running."
               exit 1
             fi
