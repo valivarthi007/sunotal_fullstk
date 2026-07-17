@@ -3,8 +3,6 @@ pipeline {
 
   environment {
     AWS_CREDS = credentials('aws')
-    AWS_ACCESS_KEY_ID = "${AWS_CREDS_USR}"
-    AWS_SECRET_ACCESS_KEY = "${AWS_CREDS_PSW}"
     AWS_DEFAULT_REGION = 'us-east-1'
   }
 
@@ -28,6 +26,8 @@ pipeline {
             echo 'Packer is not installed in Jenkins agent; install it before running this stage.'
             exit 1
           fi
+          export AWS_ACCESS_KEY_ID=$AWS_CREDS_USR
+          export AWS_SECRET_ACCESS_KEY=$AWS_CREDS_PSW
           cd packer
           packer init .
           packer build -var='aws_region=${AWS_DEFAULT_REGION}' .
@@ -58,6 +58,8 @@ pipeline {
           
           echo "Using AMI ID: $AMI_ID"
           
+          export AWS_ACCESS_KEY_ID=$AWS_CREDS_USR
+          export AWS_SECRET_ACCESS_KEY=$AWS_CREDS_PSW
           cd terraform
           terraform init
           terraform apply -auto-approve -var="ami_id=${AMI_ID}"
