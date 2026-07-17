@@ -30,7 +30,7 @@ pipeline {
           export AWS_SECRET_ACCESS_KEY=$AWS_CREDS_PSW
           cd packer
           packer init .
-          packer build -var='aws_region=${AWS_DEFAULT_REGION}' .
+          packer build -var="aws_region=${AWS_DEFAULT_REGION}" .
         '''
       }
     }
