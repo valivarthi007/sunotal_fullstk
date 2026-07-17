@@ -4,46 +4,26 @@
   become: true
   vars:
     node_version: "20"
-    java_package: "openjdk-17-jdk"
+    java_package: "openjdk-21-jdk"
     aws_cli_url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
 
   tasks:
-    - name: Update apt cache and install base dependencies
-      apt:
-        name:
-          - apt-transport-https
-          - ca-certificates
-          - curl
-          - gnupg
-          - software-properties-common
-          - unzip
-          - git
-          - jq
-        state: present
-        update_cache: yes
+    - name: Clean up broken apt lists
+      shell: rm -f /etc/apt/sources.list.d/*jenkins*.list /etc/apt/sources.list.d/hashicorp.list /etc/apt/sources.list.d/trivy.list
 
-    # 1. Install Java (Required for Jenkins)
-    - name: Install Java for Jenkins
-      apt:
-        name: "{{ java_package }}"
-        state: present
+    - name: Update apt cache and install base dependencies
+      shell: apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https ca-certificates curl gnupg software-properties-common unzip git jq fontconfig {{ java_package }}
 
     # 2. Install Jenkins
-    - name: Add Jenkins apt repository key
-      get_url:
-        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
-        dest: /usr/share/keyrings/jenkins-keyring.asc
-
-    - name: Add Jenkins apt repository
-      apt_repository:
-        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
-        state: present
-
-    - name: Install Jenkins
-      apt:
-        name: jenkins
-        state: present
-        update_cache: yes
+    - name: Install Jenkins (Official Script)
+      shell: |
+        mkdir -p /etc/apt/keyrings
+        wget -O /etc/apt/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+        echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" | tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y jenkins
+      args:
+        creates: /usr/bin/jenkins
 
     - name: Ensure Jenkins service is started and enabled
       systemd:
@@ -52,87 +32,51 @@
         enabled: yes
 
     # 3. Install Node.js 20 & pnpm
-    - name: Add NodeSource apt repository
-      shell: curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x | bash -
+    - name: Install Node.js 20 & pnpm (Official Script)
+      shell: |
+        curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x | bash -
+        DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+        npm install -g pnpm
       args:
-        creates: /etc/apt/sources.list.d/nodesource.list
-
-    - name: Install Node.js
-      apt:
-        name: nodejs
-        state: present
-
-    - name: Install pnpm globally
-      npm:
-        name: pnpm
-        global: yes
-        state: present
+        creates: /usr/bin/pnpm
 
     # 4. Install HashiCorp Tools (Packer & Terraform)
-    - name: Add HashiCorp GPG key
-      get_url:
-        url: https://apt.releases.hashicorp.com/gpg
-        dest: /usr/share/keyrings/hashicorp-archive-keyring.asc
-
-    - name: Add HashiCorp apt repository
-      apt_repository:
-        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/hashicorp-archive-keyring.asc] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
-        state: present
-
-    - name: Install Packer and Terraform
-      apt:
-        name:
-          - packer
-          - terraform
-        state: present
-        update_cache: yes
+    - name: Install HashiCorp Tools (Packer & Terraform) (Official Script)
+      shell: |
+        curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg --yes
+        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y terraform packer
+      args:
+        creates: /usr/bin/terraform
 
     # 5. Install Ansible
-    - name: Add Ansible PPA
-      apt_repository:
-        repo: ppa:ansible/ansible
-        state: present
-
-    - name: Install Ansible
-      apt:
-        name: ansible
-        state: present
-        update_cache: yes
+    - name: Install Ansible (Official Script)
+      shell: |
+        apt-add-repository -y ppa:ansible/ansible
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y ansible
+      args:
+        creates: /usr/bin/ansible
 
     # 6. Install AWS CLI
-    - name: Download AWS CLI installer
-      get_url:
-        url: "{{ aws_cli_url }}"
-        dest: /tmp/awscliv2.zip
-
-    - name: Extract AWS CLI installer
-      unarchive:
-        src: /tmp/awscliv2.zip
-        dest: /tmp
-        remote_src: yes
-        creates: /tmp/aws
-
-    - name: Install AWS CLI
-      command: /tmp/aws/install --update
+    - name: Install AWS CLI (Official Script)
+      shell: |
+        curl "{{ aws_cli_url }}" -o "/tmp/awscliv2.zip"
+        unzip -q -o /tmp/awscliv2.zip -d /tmp
+        /tmp/aws/install --update
       args:
         creates: /usr/local/bin/aws
 
     # 7. Install Trivy
-    - name: Add Trivy GPG key
-      get_url:
-        url: https://aquasecurity.github.io/trivy-repo/deb/public.key
-        dest: /usr/share/keyrings/trivy.asc
-
-    - name: Add Trivy apt repository
-      apt_repository:
-        repo: "deb [signed-by=/usr/share/keyrings/trivy.asc] https://aquasecurity.github.io/trivy-repo/deb {{ ansible_distribution_release }} main"
-        state: present
-
-    - name: Install Trivy
-      apt:
-        name: trivy
-        state: present
-        update_cache: yes
+    - name: Install Trivy (Official Script)
+      shell: |
+        curl -fsSL https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor -o /usr/share/keyrings/trivy.gpg --yes
+        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/trivy.list > /dev/null
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y trivy
+      args:
+        creates: /usr/bin/trivy
 
     # 8. Post-installation steps
     - name: Add jenkins user to sudoers (Optional - Allows Jenkins to run Terraform/Ansible commands seamlessly)
