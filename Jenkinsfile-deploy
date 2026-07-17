@@ -113,7 +113,7 @@ pipeline {
             
             # Deploy database config (docker-compose)
             scp -i $SSH_KEY -o StrictHostKeyChecking=no docker-compose.yml ubuntu@$EC2_IP:/home/ubuntu/
-            ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@$EC2_IP "docker compose up -d"
+            ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@$EC2_IP "sudo docker compose up -d"
             
             # Deploy backend
             rsync -avz -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" --exclude 'node_modules' backend/ ubuntu@$EC2_IP:/var/www/sunotal-backend/

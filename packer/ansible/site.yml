@@ -33,6 +33,12 @@
         state: present
         update_cache: true
 
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
     - name: Add NodeSource apt repository
       shell: |
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
