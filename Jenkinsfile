@@ -62,6 +62,9 @@ pipeline {
           export AWS_SECRET_ACCESS_KEY=$AWS_CREDS_PSW
           cd terraform
           terraform init
+          echo "Destroying existing infrastructure first..."
+          terraform destroy -auto-approve -var="ami_id=${AMI_ID}" || true
+          echo "Applying new infrastructure..."
           terraform apply -auto-approve -var="ami_id=${AMI_ID}"
         '''
       }

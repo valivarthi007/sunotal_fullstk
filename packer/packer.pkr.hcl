@@ -75,6 +75,14 @@ build {
     ]
   }
 
+  provisioner "shell" {
+    inline = [
+      "sudo cloud-init clean",
+      "sudo rm -rf /var/lib/cloud/instances",
+      "sudo rm -f /home/ubuntu/.ssh/authorized_keys"
+    ]
+  }
+
   post-processor "manifest" {
     output     = "packer-manifest.json"
     strip_path = true
