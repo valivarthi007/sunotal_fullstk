@@ -113,12 +113,11 @@ pipeline {
             
             # Deploy database config (docker-compose)
             scp -i $SSH_KEY -o StrictHostKeyChecking=no docker-compose.yml ubuntu@$EC2_IP:/home/ubuntu/
-            scp -i $SSH_KEY -o StrictHostKeyChecking=no database/seed.sql ubuntu@$EC2_IP:/home/ubuntu/
             ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@$EC2_IP "sudo docker compose up -d"
             
             # Deploy backend
             rsync -avz -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" --exclude 'node_modules' backend/ ubuntu@$EC2_IP:/var/www/sunotal-backend/
-            ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@$EC2_IP "cd /var/www/sunotal-backend && cp -n .env.example .env && npx pnpm@${PNPM_VERSION} install && npx pnpm@${PNPM_VERSION} run db:push && sudo docker exec -i sunotal-db env PGPASSWORD=sunotalpass123 psql -U sunotal -d sunotal < /home/ubuntu/seed.sql && (pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend)"
+            ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@$EC2_IP "cd /var/www/sunotal-backend && cp -n .env.example .env && npx pnpm@${PNPM_VERSION} install && npx pnpm@${PNPM_VERSION} run db:push && npx pnpm@${PNPM_VERSION} run db:seed && (pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend)"
           '''
         }
       }
