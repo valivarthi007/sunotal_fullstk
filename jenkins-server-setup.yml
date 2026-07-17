@@ -1,0 +1,148 @@
+---
+- name: Provision Jenkins CI/CD Server
+  hosts: all
+  become: true
+  vars:
+    node_version: "20"
+    java_package: "openjdk-17-jdk"
+    aws_cli_url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+
+  tasks:
+    - name: Update apt cache and install base dependencies
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - software-properties-common
+          - unzip
+          - git
+          - jq
+        state: present
+        update_cache: yes
+
+    # 1. Install Java (Required for Jenkins)
+    - name: Install Java for Jenkins
+      apt:
+        name: "{{ java_package }}"
+        state: present
+
+    # 2. Install Jenkins
+    - name: Add Jenkins apt repository key
+      get_url:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+
+    - name: Add Jenkins apt repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        state: present
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+        update_cache: yes
+
+    - name: Ensure Jenkins service is started and enabled
+      systemd:
+        name: jenkins
+        state: started
+        enabled: yes
+
+    # 3. Install Node.js 20 & pnpm
+    - name: Add NodeSource apt repository
+      shell: curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x | bash -
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+
+    - name: Install Node.js
+      apt:
+        name: nodejs
+        state: present
+
+    - name: Install pnpm globally
+      npm:
+        name: pnpm
+        global: yes
+        state: present
+
+    # 4. Install HashiCorp Tools (Packer & Terraform)
+    - name: Add HashiCorp GPG key
+      get_url:
+        url: https://apt.releases.hashicorp.com/gpg
+        dest: /usr/share/keyrings/hashicorp-archive-keyring.asc
+
+    - name: Add HashiCorp apt repository
+      apt_repository:
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/hashicorp-archive-keyring.asc] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
+        state: present
+
+    - name: Install Packer and Terraform
+      apt:
+        name:
+          - packer
+          - terraform
+        state: present
+        update_cache: yes
+
+    # 5. Install Ansible
+    - name: Add Ansible PPA
+      apt_repository:
+        repo: ppa:ansible/ansible
+        state: present
+
+    - name: Install Ansible
+      apt:
+        name: ansible
+        state: present
+        update_cache: yes
+
+    # 6. Install AWS CLI
+    - name: Download AWS CLI installer
+      get_url:
+        url: "{{ aws_cli_url }}"
+        dest: /tmp/awscliv2.zip
+
+    - name: Extract AWS CLI installer
+      unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp
+        remote_src: yes
+        creates: /tmp/aws
+
+    - name: Install AWS CLI
+      command: /tmp/aws/install --update
+      args:
+        creates: /usr/local/bin/aws
+
+    # 7. Install Trivy
+    - name: Add Trivy GPG key
+      get_url:
+        url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+        dest: /usr/share/keyrings/trivy.asc
+
+    - name: Add Trivy apt repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/trivy.asc] https://aquasecurity.github.io/trivy-repo/deb {{ ansible_distribution_release }} main"
+        state: present
+
+    - name: Install Trivy
+      apt:
+        name: trivy
+        state: present
+        update_cache: yes
+
+    # 8. Post-installation steps
+    - name: Add jenkins user to sudoers (Optional - Allows Jenkins to run Terraform/Ansible commands seamlessly)
+      lineinfile:
+        path: /etc/sudoers.d/jenkins
+        line: "jenkins ALL=(ALL) NOPASSWD: ALL"
+        create: yes
+        validate: 'visudo -cf %s'
+        mode: 0440
+
+    - name: Display initial Jenkins admin password location
+      debug:
+        msg: "Installation complete! The initial Jenkins admin password is at: /var/lib/jenkins/secrets/initialAdminPassword"

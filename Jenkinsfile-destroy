@@ -1,0 +1,61 @@
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    ansiColor('xterm')
+    timeout(time: 60, unit: 'MINUTES')
+    skipDefaultCheckout(false)
+  }
+
+  // Adding a manual approval parameter is highly recommended for destructive pipelines
+  parameters {
+    booleanParam(name: 'CONFIRM_DESTROY', defaultValue: false, description: 'Check this box to confirm you want to destroy all infrastructure.')
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Verify Approval') {
+      steps {
+        script {
+          if (!params.CONFIRM_DESTROY) {
+            error("Destruction aborted: You must check the CONFIRM_DESTROY parameter to run this pipeline.")
+          }
+        }
+      }
+    }
+
+    stage('Destroy Infrastructure (Terraform)') {
+      steps {
+        sh '''
+          if ! command -v terraform >/dev/null 2>&1; then
+            echo 'Terraform is not installed in Jenkins agent; install it before running this stage.'
+            exit 1
+          fi
+          
+          cd terraform
+          terraform init
+          
+          echo "Starting infrastructure decommission..."
+          # We pass a dummy ami_id because Terraform still requires the variable to be defined, 
+          # even during a destroy operation (where it relies on state to know what to delete).
+          terraform destroy -auto-approve -var="ami_id=dummy_for_destroy"
+        '''
+      }
+    }
+  }
+
+  post {
+    success {
+      echo 'Infrastructure decommissioned successfully.'
+    }
+    failure {
+      echo 'Decommissioning pipeline failed. Review the logs.'
+    }
+  }
+}
