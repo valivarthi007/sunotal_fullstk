@@ -19,9 +19,6 @@ pipeline {
     }
 
     stage('Build base AMI with Packer') {
-      when {
-        branch 'main'
-      }
       steps {
         sh '''
           if ! command -v packer >/dev/null 2>&1; then
@@ -36,9 +33,6 @@ pipeline {
     }
 
     stage('Deploy infrastructure with Terraform') {
-      when {
-        branch 'main'
-      }
       steps {
         sh '''
           if ! command -v terraform >/dev/null 2>&1; then
@@ -69,9 +63,6 @@ pipeline {
     }
 
     stage('Trigger Application Deployment') {
-      when {
-        branch 'main'
-      }
       steps {
         build job: 'sunotal-deploy', wait: false
       }
