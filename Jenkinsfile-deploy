@@ -3,7 +3,7 @@ pipeline {
 
   environment {
     NODE_VERSION = '20'
-    PNPM_VERSION = '11.12.0'
+    PNPM_VERSION = '9.15.4'
     AWS_CREDS = credentials('AWS')
     AWS_DEFAULT_REGION = 'us-east-1'
   }
@@ -29,7 +29,7 @@ pipeline {
       steps {
         sh '''
           node --version
-          pnpm --version
+          npx pnpm@${PNPM_VERSION} --version
         '''
       }
     }
@@ -37,7 +37,7 @@ pipeline {
     stage('Install frontend dependencies') {
       steps {
         dir('frontend') {
-          sh 'pnpm install --frozen-lockfile'
+          sh 'npx pnpm@${PNPM_VERSION} install --frozen-lockfile'
         }
       }
     }
@@ -45,7 +45,7 @@ pipeline {
     stage('Lint and type-check frontend') {
       steps {
         dir('frontend') {
-          sh 'pnpm exec tsc --noEmit'
+          sh 'npx pnpm@${PNPM_VERSION} exec tsc --noEmit'
         }
       }
     }
@@ -53,7 +53,7 @@ pipeline {
     stage('Build frontend') {
       steps {
         dir('frontend') {
-          sh 'pnpm build'
+          sh 'npx pnpm@${PNPM_VERSION} build'
         }
       }
     }
@@ -61,7 +61,7 @@ pipeline {
     stage('Install backend dependencies') {
       steps {
         dir('backend') {
-          sh 'pnpm install --frozen-lockfile'
+          sh 'npx pnpm@${PNPM_VERSION} install --frozen-lockfile'
         }
       }
     }
@@ -69,7 +69,7 @@ pipeline {
     stage('Build backend') {
       steps {
         dir('backend') {
-          sh 'pnpm build'
+          sh 'npx pnpm@${PNPM_VERSION} build'
         }
       }
     }
@@ -129,7 +129,7 @@ pipeline {
           
           # Deploy backend
           rsync -avz -e "ssh -o StrictHostKeyChecking=no" --exclude 'node_modules' backend/ ubuntu@$EC2_IP:/var/www/sunotal-backend/
-          ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP "cd /var/www/sunotal-backend && pnpm install --prod && pnpm run db:push && pm2 start dist/index.js --name sunotal-backend --update-env || pm2 restart sunotal-backend"
+          ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP "cd /var/www/sunotal-backend && npx pnpm@${PNPM_VERSION} install --prod && npx pnpm@${PNPM_VERSION} run db:push && pm2 start dist/index.js --name sunotal-backend --update-env || pm2 restart sunotal-backend"
         '''
       }
     }

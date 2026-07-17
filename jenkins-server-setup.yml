@@ -36,7 +36,7 @@
       shell: |
         curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x | bash -
         DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
-        npm install -g pnpm
+        npm install -g pnpm@9
       args:
         creates: /usr/bin/pnpm
 

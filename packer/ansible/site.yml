@@ -46,7 +46,7 @@
         update_cache: true
 
     - name: Install pnpm globally
-      shell: npm install -g pnpm
+      shell: npm install -g pnpm@9
       args:
         creates: /usr/bin/pnpm
 
