@@ -2,7 +2,7 @@ pipeline {
   agent any
 
   environment {
-    AWS_CREDS = credentials('aws')
+    AWS_CREDS = credentials('AWS')
     AWS_DEFAULT_REGION = 'us-east-1'
   }
 
