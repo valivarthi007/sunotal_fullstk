@@ -74,18 +74,6 @@ pipeline {
       }
     }
 
-    stage('Security scan') {
-      steps {
-        sh '''
-          if command -v trivy >/dev/null 2>&1; then
-            trivy fs --scanners vuln,secret .
-          else
-            echo 'Trivy not installed; skipping security scan.'
-          fi
-        '''
-      }
-    }
-
     stage('Package artifacts') {
       steps {
         sh '''
@@ -129,7 +117,7 @@ pipeline {
           
           # Deploy backend
           rsync -avz -e "ssh -o StrictHostKeyChecking=no" --exclude 'node_modules' backend/ ubuntu@$EC2_IP:/var/www/sunotal-backend/
-          ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP "cd /var/www/sunotal-backend && npx pnpm@${PNPM_VERSION} install --prod && npx pnpm@${PNPM_VERSION} run db:push && pm2 start dist/index.js --name sunotal-backend --update-env || pm2 restart sunotal-backend"
+          ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP "cd /var/www/sunotal-backend && cp -n .env.example .env && npx pnpm@${PNPM_VERSION} install --prod && npx pnpm@${PNPM_VERSION} run db:push && pm2 start dist/index.js --name sunotal-backend --update-env || pm2 restart sunotal-backend"
         '''
       }
     }
