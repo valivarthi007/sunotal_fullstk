@@ -21,6 +21,12 @@ variable "key_name" {
   default     = null
 }
 
+variable "public_key" {
+  description = "Public SSH key to automatically create a key pair"
+  type        = string
+  default     = ""
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for the VPC"
   type        = string
