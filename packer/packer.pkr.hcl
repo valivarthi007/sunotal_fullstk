@@ -58,7 +58,10 @@ build {
   provisioner "shell" {
     inline = [
       "sudo apt-get update",
-      "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ansible ca-certificates curl git gnupg lsb-release"
+      "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common ca-certificates curl git gnupg lsb-release",
+      "sudo apt-add-repository -y ppa:ansible/ansible",
+      "sudo apt-get update",
+      "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ansible"
     ]
   }
 
