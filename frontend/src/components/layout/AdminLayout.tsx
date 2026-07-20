@@ -7,7 +7,8 @@ import {
   Store, 
   LogOut,
   Menu,
-  X
+  X,
+  ClipboardList
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { name: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
     { name: "Products", path: "/admin/products", icon: Package },
+    { name: "Inventory", path: "/admin/inventory", icon: ClipboardList },
     { name: "Vendors", path: "/admin/vendors", icon: Store },
     { name: "Users", path: "/admin/users", icon: Users },
   ];

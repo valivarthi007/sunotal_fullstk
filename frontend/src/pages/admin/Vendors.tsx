@@ -3,10 +3,12 @@ import {
   useListVendors, 
   useUpdateVendor, 
   useDeleteVendor,
+  useListProducts,
+  useCreateInventory,
   getListVendorsQueryKey,
   VendorStatus,
   VendorUpdateStatus
-} from "@workspace/api-client-react";
+} from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -36,7 +38,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { Search, Edit2, Trash2, CheckCircle2, XCircle, FileText, Store } from "lucide-react";
+import { Search, Edit2, Trash2, CheckCircle2, XCircle, FileText, Store, PackagePlus } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -56,6 +58,14 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+const inventorySchema = z.object({
+  productId: z.coerce.number().min(1, "Select a product"),
+  quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
+  notes: z.string().optional().nullable(),
+});
+
+type InventoryValues = z.infer<typeof inventorySchema>;
+
 export default function VendorsAdmin() {
   const [activeTab, setActiveTab] = useState<string>("All");
   const [search, setSearch] = useState("");
@@ -65,39 +75,33 @@ export default function VendorsAdmin() {
     status: activeTab !== "All" ? activeTab.toLowerCase() : undefined,
     search: search.length > 2 ? search : undefined,
   });
+  const { data: products } = useListProducts();
   
   const updateVendor = useUpdateVendor();
   const deleteVendor = useDeleteVendor();
+  const createInventory = useCreateInventory();
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [inventoryVendorId, setInventoryVendorId] = useState<number | null>(null);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      firstName: "",
-      lastName: "",
-      phone: "",
-      location: "",
-      produce: "",
-      email: "",
-      farmSize: "",
-      status: VendorUpdateStatus.pending,
-      notes: "",
+      firstName: "", lastName: "", phone: "", location: "", produce: "", email: "", farmSize: "", status: VendorUpdateStatus.pending, notes: "",
     },
+  });
+
+  const inventoryForm = useForm<InventoryValues>({
+    resolver: zodResolver(inventorySchema),
+    defaultValues: { productId: 0, quantity: 1, notes: "" },
   });
 
   const handleEdit = (vendor: any) => {
     form.reset({
-      firstName: vendor.firstName,
-      lastName: vendor.lastName,
-      phone: vendor.phone,
-      location: vendor.location,
-      produce: vendor.produce,
-      email: vendor.email || "",
-      farmSize: vendor.farmSize || "",
-      status: vendor.status as VendorUpdateStatus,
-      notes: vendor.notes || "",
+      firstName: vendor.firstName, lastName: vendor.lastName, phone: vendor.phone, location: vendor.location, produce: vendor.produce, email: vendor.email || "", farmSize: vendor.farmSize || "", status: vendor.status as VendorUpdateStatus, notes: vendor.notes || "",
     });
     setEditingId(vendor.id);
     setOpen(true);
@@ -112,6 +116,18 @@ export default function VendorsAdmin() {
           setOpen(false);
         },
         onError: () => toast.error("Failed to update vendor")
+      });
+    }
+  };
+
+  const onInventorySubmit = (values: InventoryValues) => {
+    if (inventoryVendorId) {
+      createInventory.mutate({ ...values, vendorId: inventoryVendorId }, {
+        onSuccess: () => {
+          toast.success("Added to inventory!");
+          setInventoryOpen(false);
+        },
+        onError: () => toast.error("Failed to add inventory")
       });
     }
   };
@@ -144,6 +160,43 @@ export default function VendorsAdmin() {
           <p className="text-muted-foreground mt-1">Manage farmer applications and approved suppliers.</p>
         </div>
       </div>
+
+      <Dialog open={inventoryOpen} onOpenChange={setInventoryOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add to Inventory</DialogTitle>
+          </DialogHeader>
+          <Form {...inventoryForm}>
+            <form onSubmit={inventoryForm.handleSubmit(onInventorySubmit)} className="space-y-6 pt-4">
+              <FormField control={inventoryForm.control} name="productId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Product</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ? String(field.value) : undefined}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {products?.map(p => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              
+              <FormField control={inventoryForm.control} name="quantity" render={({ field }) => (
+                <FormItem><FormLabel>Quantity Received</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              
+              <DialogFooter className="pt-4 border-t">
+                <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
+                <Button type="submit" disabled={createInventory.isPending} className="bg-sidebar-primary hover:bg-sidebar-primary/90 text-white">
+                  Add Stock
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -320,6 +373,22 @@ export default function VendorsAdmin() {
                           </>
                         )}
                         
+                        {vendor.status === VendorStatus.approved && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            title="Add to Inventory"
+                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-100" 
+                            onClick={() => {
+                              setInventoryVendorId(vendor.id);
+                              inventoryForm.reset({ productId: 0, quantity: 1, notes: "" });
+                              setInventoryOpen(true);
+                            }}
+                          >
+                            <PackagePlus className="w-5 h-5" />
+                          </Button>
+                        )}
+
                         <div className="w-px h-6 bg-border mx-2"></div>
                         
                         <Button 

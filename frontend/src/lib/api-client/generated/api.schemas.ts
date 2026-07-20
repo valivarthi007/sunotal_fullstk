@@ -145,6 +145,8 @@ export interface Product {
   /** @nullable */
   description?: string | null;
   createdAt: string;
+  /** @nullable */
+  location?: string | null;
 }
 
 export type ProductInputCategory = typeof ProductInputCategory[keyof typeof ProductInputCategory];
@@ -229,3 +231,43 @@ search?: string;
 status?: string;
 };
 
+export type InventoryStatus = typeof InventoryStatus[keyof typeof InventoryStatus];
+
+export const InventoryStatus = {
+  in_stock: 'in_stock',
+  low_stock: 'low_stock',
+  out_of_stock: 'out_of_stock',
+} as const;
+
+export interface InventoryItem {
+  id: number;
+  productId: number;
+  vendorId: number;
+  quantity: number;
+  status: InventoryStatus;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  productName?: string;
+  vendorName?: string;
+}
+
+export interface InventoryInput {
+  productId: number;
+  vendorId: number;
+  quantity: number;
+  status?: InventoryStatus;
+  notes?: string | null;
+}
+
+export interface InventoryUpdate {
+  quantity?: number;
+  status?: InventoryStatus;
+  notes?: string | null;
+}
+
+export type ListInventoryParams = {
+  status?: string;
+  vendorId?: number;
+  productId?: number;
+};

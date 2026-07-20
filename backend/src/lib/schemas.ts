@@ -170,7 +170,8 @@ export const ListProductsResponseItem = zod.object({
   "organic": zod.boolean(),
   "active": zod.boolean(),
   "description": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "location": zod.string().nullish()
 })
 export const ListProductsResponse = zod.array(ListProductsResponseItem)
 
@@ -207,7 +208,8 @@ export const CreateProductResponse = zod.object({
   "organic": zod.boolean(),
   "active": zod.boolean(),
   "description": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "location": zod.string().nullish()
 })
 
 
@@ -231,7 +233,8 @@ export const GetProductResponse = zod.object({
   "organic": zod.boolean(),
   "active": zod.boolean(),
   "description": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "location": zod.string().nullish()
 })
 
 
@@ -271,7 +274,8 @@ export const UpdateProductResponse = zod.object({
   "organic": zod.boolean(),
   "active": zod.boolean(),
   "description": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "location": zod.string().nullish()
 })
 
 
@@ -506,3 +510,66 @@ export const ToggleUserStatusResponse = zod.object({
 })
 
 
+
+/**
+ * @summary List all inventory
+ */
+export const ListInventoryQueryParams = zod.object({
+  "status": zod.coerce.string().optional(),
+  "vendorId": zod.coerce.number().optional(),
+  "productId": zod.coerce.number().optional()
+})
+
+export const ListInventoryResponseItem = zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "vendorId": zod.number(),
+  "quantity": zod.number(),
+  "status": zod.enum(['in_stock', 'low_stock', 'out_of_stock']),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  // Joined fields for convenience
+  "productName": zod.string().optional(),
+  "vendorName": zod.string().optional(),
+})
+export const ListInventoryResponse = zod.array(ListInventoryResponseItem)
+
+
+/**
+ * @summary Create inventory
+ */
+export const CreateInventoryBody = zod.object({
+  "productId": zod.number(),
+  "vendorId": zod.number(),
+  "quantity": zod.number(),
+  "status": zod.enum(['in_stock', 'low_stock', 'out_of_stock']).optional(),
+  "notes": zod.string().nullish()
+})
+
+export const CreateInventoryResponse = ListInventoryResponseItem
+
+
+/**
+ * @summary Update inventory
+ */
+export const UpdateInventoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateInventoryBody = zod.object({
+  "quantity": zod.number().optional(),
+  "status": zod.enum(['in_stock', 'low_stock', 'out_of_stock']).optional(),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateInventoryResponse = ListInventoryResponseItem
+
+/**
+ * @summary Delete inventory
+ */
+export const DeleteInventoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteInventoryResponse = zod.void()

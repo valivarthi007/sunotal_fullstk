@@ -2,7 +2,7 @@ import { Product } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShoppingCart, Leaf, Check } from "lucide-react";
+import { ShoppingCart, Leaf, Check, MapPin } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { useState } from "react";
 
@@ -56,6 +56,11 @@ export function ProductCard({ product }: { product: Product }) {
         <div className="mb-2">
           <p className="text-xs text-muted-foreground mb-1">{product.unit}</p>
           <h3 className="font-bold text-secondary line-clamp-2 leading-tight">{product.name}</h3>
+          {product.location && (
+            <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1 line-clamp-1">
+              <MapPin className="w-3 h-3 shrink-0" /> {product.location}
+            </p>
+          )}
         </div>
 
         <div className="mt-auto flex items-end justify-between">

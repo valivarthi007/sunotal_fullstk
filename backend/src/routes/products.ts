@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, productsTable } from "../lib/db.js";
-import { eq, ilike, and, desc, asc, SQL } from "drizzle-orm";
+import { db, productsTable, inventoryTable, vendorsTable } from "../lib/db.js";
+import { eq, ilike, and, desc, asc, SQL, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import {
   ListProductsQueryParams,
@@ -13,7 +13,7 @@ import {
 
 const router = Router();
 
-function formatProduct(p: typeof productsTable.$inferSelect) {
+function formatProduct(p: any) {
   return {
     id: p.id,
     name: p.name,
@@ -28,6 +28,7 @@ function formatProduct(p: typeof productsTable.$inferSelect) {
     active: p.active,
     description: p.description,
     createdAt: p.createdAt.toISOString(),
+    location: p.locations || null,
   };
 }
 
@@ -37,11 +38,33 @@ router.get("/products", async (req, res) => {
   const { category, search, organic, sort } = parsed.success ? parsed.data : {};
 
   const conditions: SQL[] = [eq(productsTable.active, true)];
-  if (category) conditions.push(eq(productsTable.category, category as "Vegetables" | "Fruits" | "Dairy" | "Dry Fruits" | "Grains"));
+  if (category) conditions.push(eq(productsTable.category, category as any));
   if (search) conditions.push(ilike(productsTable.name, `%${search}%`));
   if (organic !== undefined) conditions.push(eq(productsTable.organic, organic));
 
-  const query = db.select().from(productsTable).where(and(...conditions));
+  const query = db
+    .select({
+      id: productsTable.id,
+      name: productsTable.name,
+      category: productsTable.category,
+      unit: productsTable.unit,
+      price: productsTable.price,
+      originalPrice: productsTable.originalPrice,
+      discountPercentage: productsTable.discountPercentage,
+      image: productsTable.image,
+      badge: productsTable.badge,
+      organic: productsTable.organic,
+      active: productsTable.active,
+      description: productsTable.description,
+      createdAt: productsTable.createdAt,
+      locations: sql<string>`string_agg(DISTINCT ${vendorsTable.location}, ', ')`.as("locations"),
+    })
+    .from(productsTable)
+    .leftJoin(inventoryTable, eq(productsTable.id, inventoryTable.productId))
+    .leftJoin(vendorsTable, eq(inventoryTable.vendorId, vendorsTable.id))
+    .where(and(...conditions))
+    .groupBy(productsTable.id);
+
   const sortedQuery = sort === "price_asc"
     ? query.orderBy(asc(productsTable.price))
     : sort === "price_desc"
@@ -91,10 +114,29 @@ router.get("/products/:id", async (req, res) => {
     return;
   }
   const [product] = await db
-    .select()
+    .select({
+      id: productsTable.id,
+      name: productsTable.name,
+      category: productsTable.category,
+      unit: productsTable.unit,
+      price: productsTable.price,
+      originalPrice: productsTable.originalPrice,
+      discountPercentage: productsTable.discountPercentage,
+      image: productsTable.image,
+      badge: productsTable.badge,
+      organic: productsTable.organic,
+      active: productsTable.active,
+      description: productsTable.description,
+      createdAt: productsTable.createdAt,
+      locations: sql<string>`string_agg(DISTINCT ${vendorsTable.location}, ', ')`.as("locations"),
+    })
     .from(productsTable)
+    .leftJoin(inventoryTable, eq(productsTable.id, inventoryTable.productId))
+    .leftJoin(vendorsTable, eq(inventoryTable.vendorId, vendorsTable.id))
     .where(eq(productsTable.id, parsed.data.id))
+    .groupBy(productsTable.id)
     .limit(1);
+
   if (!product) {
     res.status(404).json({ error: "Product not found" });
     return;
