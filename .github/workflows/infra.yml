@@ -53,4 +53,6 @@ jobs:
         run: |
           cd terraform
           terraform init
+          echo "Deploying with AMI ID: $TF_VAR_ami_id"
+          terraform plan -var="ami_id=${TF_VAR_ami_id}"
           terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}"
