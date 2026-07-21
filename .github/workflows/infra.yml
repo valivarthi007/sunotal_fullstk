@@ -50,8 +50,11 @@ jobs:
           sudo apt update && sudo apt install terraform
 
       - name: Create infrastructure with above ami image
+        env:
+          TF_VAR_ami_id: ${{ steps.packer_build.outputs.ami_id }}
         run: |
           cd terraform
+          terraform destroy -auto-approve
           terraform init
           echo "Deploying with AMI ID: $TF_VAR_ami_id"
           terraform plan -var="ami_id=${TF_VAR_ami_id}"
