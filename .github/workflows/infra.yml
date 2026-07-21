@@ -54,8 +54,8 @@ jobs:
           TF_VAR_ami_id: ${{ steps.packer_build.outputs.ami_id }}
         run: |
           cd terraform
-          terraform destroy -auto-approve
           terraform init
+          terraform destroy -auto-approve
           echo "Deploying with AMI ID: $TF_VAR_ami_id"
           terraform plan -var="ami_id=${TF_VAR_ami_id}"
           terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}"
