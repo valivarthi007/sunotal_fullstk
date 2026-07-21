@@ -54,4 +54,5 @@ jobs:
           cd terraform
           terraform init
           terraform apply -auto-approve 
-        
+        env:
+          AMI_ID: ${{ steps.packer_build.outputs.ami_id }}
