@@ -27,6 +27,7 @@ jobs:
           version: "latest"
 
       - name: build ami image
+        id: packer_build
         run: |
           cd packer
           packer init .
@@ -35,7 +36,7 @@ jobs:
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
 
       - name: Setup `terraform`
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.6
 
