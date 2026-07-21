@@ -32,7 +32,16 @@ jobs:
           cd packer
           packer init .
           packer build .
+          MANIFEST_PATH="$GITHUB_WORKSPACE/packer/packer-manifest.json"
           
+          if [ -f "$MANIFEST_PATH" ]; then
+            AMI_ID=$(grep -o '"artifact_id": *"[^"]*"' "$MANIFEST_PATH" | tail -n1 | cut -d '"' -f4 | cut -d ':' -f2)
+            echo "Successfully found AMI ID: $AMI_ID"
+            echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
+          else
+            echo "::error::packer-manifest.json not found at $MANIFEST_PATH"
+            exit 1
+          fi
 
       - name: Setup `terraform`
         run: |
