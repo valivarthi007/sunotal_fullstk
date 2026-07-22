@@ -1,10 +1,9 @@
 name: Build
 
 on:
-  workflow_run:
-    workflow: ["Create infrastructure"]
-    types:
-    - completed
+  push:
+    branches:
+      - main
 
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
