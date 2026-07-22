@@ -107,9 +107,7 @@ jobs:
       - name: Deploy to EC2
         run: |
           # Find the running EC2 instance by its tag
-          EC2_IP=$(aws ec2 describe-instances 
-            --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \
-            --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
+          EC2_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
           
           if [ -z "$EC2_IP" ] \vert{}\vert{} [ "$EC2_IP" = "None" ]; then
             echo "Failed to get EC2 IP address from AWS. Make sure the instance is running."
