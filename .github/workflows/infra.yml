@@ -1,7 +1,7 @@
 name: Create infrastructure
 
 on:
-  push:
+  pull_request:
     branches:
     - main
 
