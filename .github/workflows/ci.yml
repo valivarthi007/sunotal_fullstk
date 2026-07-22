@@ -115,6 +115,10 @@ jobs:
           fi
           
           echo "Deploying to EC2 instance at $EC2_IP"
+
+          # 3. Test the SSH connection in verbose mode first to print details if it fails
+          echo "Testing SSH connection configuration..."
+          ssh -v -i ~/.ssh/id_rsa -o ConnectTimeout=10 ubuntu@$EC2_IP "echo 'SSH Connection Successful!'" || true
           
           # Deploy frontend to Nginx directory
           rsync -avz frontend/dist/ ubuntu@$EC2_IP:/var/www/sunotal/
