@@ -1,7 +1,7 @@
 name: Create infrastructure
 
 on:
-  pull:
+  push:
     branches:
     - main
 
@@ -52,10 +52,14 @@ jobs:
       - name: Create infrastructure with above ami image
         env:
           TF_VAR_ami_id: ${{ steps.packer_build.outputs.ami_id }}
+          RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
         run: |
           cd terraform
-          terraform init
+          # Generate public key from the provided Jenkins SSH credential
           terraform destroy -auto-approve
+          chmod 600 $RAW_PEM_KEY
+          PUB_KEY=$(ssh-keygen -y -f $RAW_PEM_KEY)
+          terraform init
           echo "Deploying with AMI ID: $TF_VAR_ami_id"
-          terraform plan -var="ami_id=${TF_VAR_ami_id}"
-          terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}"
+          terraform plan -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
+          terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
