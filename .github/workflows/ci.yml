@@ -97,9 +97,11 @@ jobs:
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
       - name: Set up SSH Key
+        env: 
+          RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           # Add a generic SSH config to ignore host key checking globally for this job run
           echo -e "Host *\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
