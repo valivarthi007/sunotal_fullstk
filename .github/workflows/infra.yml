@@ -54,10 +54,14 @@ jobs:
           TF_VAR_ami_id: ${{ steps.packer_build.outputs.ami_id }}
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
         run: |
+          mkdir -p ~/.ssh
+          echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
+          tr -d '\r' < ~/.ssh/id_rsa > ~/.ssh/id_rsa.clean
+          mv ~/.ssh/id_rsa.clean ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          PUB_KEY=$(ssh-keygen -y -f ~/.ssh/id_rsa)
+          echo "::add-mask::$PUB_KEY"
           cd terraform
-          # Generate public key from the provided Jenkins SSH credential
-          chmod 600 $RAW_PEM_KEY
-          PUB_KEY=$(ssh-keygen -y -f $RAW_PEM_KEY)
           terraform init
           echo "Deploying with AMI ID: $TF_VAR_ami_id"
           terraform plan -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
