@@ -63,6 +63,7 @@ jobs:
           echo "::add-mask::$PUB_KEY"
           cd terraform
           terraform init
+          terraform destroy -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}" || true
           echo "Deploying with AMI ID: $TF_VAR_ami_id"
           terraform plan -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
           terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
