@@ -5,17 +5,18 @@ on:
     branches:
     - main
 
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+  NODE_VERSION: 20
+  PNPM_VERSION: 9.15.4
+
 
 jobs:
-  checkout:
-    name: Checkout code
-    runs-on : ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-  build:
-    name: Build and analyze
+  sonartest:
+    name: sonartest
     runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -26,7 +27,108 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       # If you wish to fail your job when the Quality Gate is red, uncomment the
       # following lines. This would typically be used to fail a deployment.
-      # - uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b # v1.2.0
-      #   timeout-minutes: 5
-      #   env:
-      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b # v1.2.0
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  prepare_and_deploy:
+    name: Build package deploy
+    needs: sonartest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Nodejs
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+ 
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Log tool versions
+        run: |
+          node --version
+          pnpm --version
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          pnpm install --frozen-lockfile
+
+      - name: Lint and type check frontend
+        run: |
+          cd frontend
+          pnpm exec tsc --noEmit
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          pnpm build
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          pnpm install --frozen-lockfile
+
+      - name: Build backend
+        run: |
+          cd backend
+          pnpm build
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist/artifacts
+          tar -czf dist/artifacts/frontend-build.tgz -C frontend dist
+          tar -czf dist/artifacts/backend-build.tgz -C backend dist package.json
+
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Set up SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          # Add a generic SSH config to ignore host key checking globally for this job run
+          echo -e "Host *\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
+      
+      - name: Deploy to EC2
+        run: |
+          # Find the running EC2 instance by its tag
+          EC2_IP=$(aws ec2 describe-instances --region${{ env.AWS_DEFAULT_REGION }} \
+            --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \
+            --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
+          
+          if [ -z "$EC2_IP" ] \vert{}\vert{} [ "$EC2_IP" = "None" ]; then
+            echo "Failed to get EC2 IP address from AWS. Make sure the instance is running."
+            exit 1
+          fi
+          
+          echo "Deploying to EC2 instance at $EC2_IP"
+          
+          # Deploy frontend to Nginx directory
+          rsync -avz frontend/dist/ ubuntu@$EC2_IP:/var/www/sunotal/
+          
+          # Deploy database config (docker-compose)
+          scp docker-compose.yml ubuntu@$EC2_IP:/home/ubuntu/
+          ssh ubuntu@$EC2_IP "sudo docker compose up -d"
+          
+          # Hotfix nginx config if trailing slash exists
+          ssh ubuntu@$EC2_IP "sudo sed -i 's|proxy_pass http://127.0.0.1:5000/;|proxy_pass http://127.0.0.1:5000;|' /etc/nginx/sites-available/sunotal && sudo systemctl restart nginx"
+          
+          # Deploy backend
+          rsync -avz --exclude 'node_modules' backend/ ubuntu@$EC2_IP:/var/www/sunotal-backend/
+          
+          ssh ubuntu@$EC2_IP "cd /var/www/sunotal-backend && cp -n .env.example .env && npx pnpm@${PNPM_VERSION} install && npx pnpm@${PNPM_VERSION} run db:push && npx pnpm@${PNPM_VERSION} run db:seed && (pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend)"
+        
