@@ -2,7 +2,7 @@ name: Build
 
 on:
   workflow_run:
-    workflow: infra.yml
+    workflow: ["Create infrastructure"]
     types:
     - completed
 
