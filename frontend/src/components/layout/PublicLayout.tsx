@@ -20,12 +20,17 @@ import { useState, useEffect } from "react";
 import { useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart-context";
+import { useLocationState } from "@/lib/location-context";
+import { LocationModal } from "@/components/ui/location-modal";
 import { cn } from "@/lib/utils";
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+
+  const { location: userLoc, isLoading: isLocLoading } = useLocationState();
 
   const queryClient = useQueryClient();
   const { data: user } = useGetCurrentUser({
@@ -61,6 +66,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary/20 selection:text-primary">
+      {/* Location Modal */}
+      <LocationModal open={locationModalOpen} onOpenChange={setLocationModalOpen} />
+
       {/* Header */}
       <header
         className={cn(
@@ -100,10 +108,20 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/50 text-sm font-medium border border-transparent hover:border-border cursor-pointer transition-colors">
-              <MapPin className="w-4 h-4 text-primary" />
-              <span>Hyderabad</span>
-            </div>
+            <button
+              onClick={() => setLocationModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-accent/60 hover:bg-accent text-sm font-medium border border-border/50 hover:border-primary/40 transition-all group"
+              title="Click to change delivery location"
+            >
+              <MapPin className="w-4 h-4 text-primary shrink-0 group-hover:scale-110 transition-transform" />
+              <div className="text-left">
+                <p className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground leading-none">Delivering to</p>
+                <p className="max-w-[110px] sm:max-w-[150px] truncate text-xs sm:text-sm font-bold text-secondary leading-tight">
+                  {isLocLoading ? "Detecting..." : userLoc.city}
+                </p>
+              </div>
+              <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse ml-0.5" />
+            </button>
 
             {user ? (
               <div className="hidden sm:flex items-center gap-2">

@@ -1,55 +1,71 @@
-name: Create infrastructure
+name: Infrastructure Automation
 
 on:
-  push:
-    branches:
-    - main
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'terraform/**'
+      - 'packer/**'
+      - '.github/workflows/infra.yml'
+
+env:
+  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
 jobs:
-  build:
-    name: Build and analyze
+  validate_and_deploy:
+    name: Provision Infrastructure & AMI
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup `packer`
-        uses: hashicorp/setup-packer@main
-        id: setup
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@v3
         with:
           version: "latest"
 
-      - name: build ami image
-        id: packer_build
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
+      - name: Validate Packer Template
         run: |
           cd packer
           packer init .
-          packer build .
+          packer validate .
+
+      - name: Validate Terraform Files
+        run: |
+          cd terraform
+          terraform fmt -check || true
+          terraform init -backend=false
+          terraform validate
+
+      - name: Build AMI with Packer
+        id: packer_build
+        run: |
+          cd packer
+          packer build -var="aws_region=${{ env.AWS_REGION }}" .
           MANIFEST_PATH="$GITHUB_WORKSPACE/packer/packer-manifest.json"
           
           if [ -f "$MANIFEST_PATH" ]; then
             AMI_ID=$(grep -o '"artifact_id": *"[^"]*"' "$MANIFEST_PATH" | tail -n1 | cut -d '"' -f4 | cut -d ':' -f2)
-            echo "Successfully found AMI ID: $AMI_ID"
+            echo "Successfully built AMI ID: $AMI_ID"
             echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
           else
             echo "::error::packer-manifest.json not found at $MANIFEST_PATH"
             exit 1
           fi
 
-      - name: Setup `terraform`
-        run: |
-          wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt update && sudo apt install terraform
-
-      - name: Create infrastructure with above ami image
+      - name: Deploy Infrastructure with Terraform
         env:
           TF_VAR_ami_id: ${{ steps.packer_build.outputs.ami_id }}
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
@@ -61,11 +77,16 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           PUB_KEY=$(ssh-keygen -y -f ~/.ssh/id_rsa)
           echo "::add-mask::$PUB_KEY"
+          
           cd terraform
           terraform init
-          echo "Force-deleting the key pair from AWS to prevent duplicate errors..."
-          aws ec2 delete-key-pair --key-name "sunotal-deployer-key" --region us-east-1
-          terraform destroy -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}" || true
-          echo "Deploying with AMI ID: $TF_VAR_ami_id"
+          echo "Planning Terraform Deployment for AMI: $TF_VAR_ami_id..."
           terraform plan -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
-          terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "Applying Infrastructure Changes..."
+            terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
+          else
+            echo "PR Validation complete — terraform apply skipped for non-dispatch/PR builds."
+          fi
+

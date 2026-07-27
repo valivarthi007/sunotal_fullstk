@@ -18,9 +18,13 @@ const formSchema = z.object({
   city: z.string().optional(),
 });
 
+import { useLocationState } from "@/lib/location-context";
+import { Navigation } from "lucide-react";
+
 export default function Register() {
   const [, setLocation] = useLocation();
   const registerUser = useRegisterUser();
+  const { location: detectedLoc, isLoading: isLocLoading, detectLocation } = useLocationState();
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -29,9 +33,17 @@ export default function Register() {
       email: "",
       password: "",
       phone: "",
-      city: "",
+      city: detectedLoc.city || "",
     },
   });
+
+  const handleAutoDetectCity = async () => {
+    const loc = await detectLocation();
+    if (loc?.city) {
+      form.setValue("city", loc.city);
+      toast.success(`City auto-filled to ${loc.city}`);
+    }
+  };
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     registerUser.mutate({ data: values }, {
@@ -124,9 +136,19 @@ export default function Register() {
                   name="city"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>City (optional)</FormLabel>
+                      <FormLabel className="flex items-center justify-between">
+                        <span>City</span>
+                        <button
+                          type="button"
+                          onClick={handleAutoDetectCity}
+                          disabled={isLocLoading}
+                          className="text-[10px] text-primary font-bold hover:underline flex items-center gap-1"
+                        >
+                          <Navigation className="w-3 h-3" /> Detect
+                        </button>
+                      </FormLabel>
                       <FormControl>
-                        <Input placeholder="Hyderabad" className="h-11" {...field} />
+                        <Input placeholder="e.g. Bengaluru" className="h-11" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

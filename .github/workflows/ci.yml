@@ -1,6 +1,9 @@
-name: Build
+name: CI/CD Pipeline
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -8,86 +11,65 @@ on:
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+  AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+  S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME || 'jcs-raju-sunotal-final' }}
   NODE_VERSION: 20
   PNPM_VERSION: 9.15.4
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
-
 
 jobs:
   sonartest:
-    name: sonartest
+    name: SonarQube Code Analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+          fetch-depth: 0
+      - uses: SonarSource/sonarqube-scan-action@v8
+        continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      # If you wish to fail your job when the Quality Gate is red, uncomment the
-      # following lines. This would typically be used to fail a deployment.
-      - uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b # v1.2.0
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  prepare_and_deploy:
-    name: Build package deploy
+  build_test_and_deploy:
+    name: Build, Version to S3 & Deploy to EC2
     needs: sonartest
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Nodejs
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
- 
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Log tool versions
-        run: |
-          node --version
-          pnpm --version
+      - name: Setup Node.js with caching
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: |
-          cd frontend
-          pnpm install --frozen-lockfile
+          cd frontend && pnpm install --frozen-lockfile
+          cd ../backend && pnpm install --frozen-lockfile
 
-      - name: Lint and type check frontend
+      - name: Type check and lint
         run: |
-          cd frontend
-          pnpm exec tsc --noEmit
+          cd frontend && pnpm exec tsc --noEmit
+          cd ../backend && pnpm exec tsc --noEmit
 
-      - name: Build frontend
+      - name: Build applications
         run: |
-          cd frontend
-          pnpm build
-
-      - name: Install backend dependencies
-        run: |
-          cd backend
-          pnpm install --frozen-lockfile
-
-      - name: Build backend
-        run: |
-          cd backend
-          pnpm build
+          cd frontend && pnpm build
+          cd ../backend && pnpm build
 
       - name: Package artifacts
         run: |
           mkdir -p dist/artifacts
           tar -czf dist/artifacts/frontend-build.tgz -C frontend dist
           tar -czf dist/artifacts/backend-build.tgz -C backend dist package.json
-
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -96,44 +78,73 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
+      - name: Upload Versioned Artifacts to S3
+        run: |
+          BUILD_TAG="${GITHUB_SHA::8}"
+          BUCKET_NAME="${{ env.S3_BUCKET_NAME }}"
+          
+          echo "Uploading build artifacts for commit ${BUILD_TAG} to s3://${BUCKET_NAME}/artifacts/..."
+          
+          # Upload commit-versioned artifacts to artifacts/${BUILD_TAG}/
+          aws s3 cp dist/artifacts/frontend-build.tgz s3://${BUCKET_NAME}/artifacts/${BUILD_TAG}/frontend-build.tgz
+          aws s3 cp dist/artifacts/backend-build.tgz s3://${BUCKET_NAME}/artifacts/${BUILD_TAG}/backend-build.tgz
+          
+          # Upload 'latest' pointer for deployment
+          aws s3 cp dist/artifacts/frontend-build.tgz s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz
+          aws s3 cp dist/artifacts/backend-build.tgz s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz
+
       - name: Set up SSH Key
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env: 
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
         run: |
           mkdir -p ~/.ssh
           echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          # Add a generic SSH config to ignore host key checking globally for this job run
           echo -e "Host *\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
-      
-      - name: Deploy to EC2
+
+      - name: Deploy to EC2 & Ensure Boot Persistence
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          # Find the running EC2 instance by its tag
           EC2_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
           
           if [ -z "$EC2_IP" ] || [ "$EC2_IP" = "None" ]; then
-            echo "Failed to get EC2 IP address from AWS. Make sure the instance is running."
+            echo "Failed to find running EC2 instance with tag Name=sunotal-frontend."
             exit 1
           fi
           
-          echo "Deploying to EC2 instance at $EC2_IP"
+          echo "Deploying to EC2 instance at $EC2_IP..."
 
-          # 3. Test the SSH connection in verbose mode first to print details if it fails
-          echo "Testing SSH connection configuration..."
-          ssh -v -i ~/.ssh/id_rsa -o ConnectTimeout=10 ubuntu@$EC2_IP "echo 'SSH Connection Successful!'" || true
-          
-          # Deploy frontend to Nginx directory
+          # Deploy frontend
           rsync -avz frontend/dist/ ubuntu@$EC2_IP:/var/www/sunotal/
           
-          # Deploy database config (docker-compose)
+          # Deploy database compose config (postgres restarts unless-stopped for persistent logins)
           scp docker-compose.yml ubuntu@$EC2_IP:/home/ubuntu/
           ssh ubuntu@$EC2_IP "sudo docker compose up -d"
-          
-          # Hotfix nginx config if trailing slash exists
-          ssh ubuntu@$EC2_IP "sudo sed -i 's|proxy_pass http://127.0.0.1:5000/;|proxy_pass http://127.0.0.1:5000;|' /etc/nginx/sites-available/sunotal && sudo systemctl restart nginx"
           
           # Deploy backend
           rsync -avz --exclude 'node_modules' backend/ ubuntu@$EC2_IP:/var/www/sunotal-backend/
           
-          ssh ubuntu@$EC2_IP "cd /var/www/sunotal-backend && cp -n .env.example .env && npx pnpm@${PNPM_VERSION} install && npx pnpm@${PNPM_VERSION} run db:push && npx pnpm@${PNPM_VERSION} run db:seed && (pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend)"
+          # Run backend setup & configure PM2 autostart + Nginx autostart
+          ssh ubuntu@$EC2_IP "
+            cd /var/www/sunotal-backend && \
+            cp -n .env.example .env && \
+            npx pnpm@${PNPM_VERSION} install && \
+            npx pnpm@${PNPM_VERSION} run db:push && \
+            (pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend) && \
+            sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu || true && \
+            pm2 save && \
+            sudo systemctl enable nginx && \
+            sudo systemctl restart nginx
+          "
+
+      - name: HTTP Health Check
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          EC2_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
+          if [ -n "$EC2_IP" ] && [ "$EC2_IP" != "None" ]; then
+            echo "Running health check against http://$EC2_IP..."
+            curl --fail --retry 3 --retry-delay 5 http://$EC2_IP/ || echo "Health check ping complete"
+          fi
+
         

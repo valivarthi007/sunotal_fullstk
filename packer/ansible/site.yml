@@ -6,16 +6,6 @@
     app_dir: /var/www/sunotal
     repo_dir: "{{ workspace | default('/tmp/sunotal') }}"
     frontend_dist_dir: "{{ repo_dir }}/frontend-dist"
-    benchmark:
-        name: "{{ 'CIS Amazon Web Services Foundations Benchmark' | replace(' ','_') }}"
-        version: 1.4.0
-        profile: "{{ }}"
-  collections:
-    - azure.azcollection
-    - ansible.posix
-  roles:
-    - role: "{{ playbook_dir }}"
-      system_is_container: "{{ is_container | default(false) }}"
   tasks:
     - name: Install system packages
       apt:

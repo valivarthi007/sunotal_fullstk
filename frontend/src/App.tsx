@@ -62,17 +62,21 @@ function Router() {
   );
 }
 
+import { LocationProvider } from "@/lib/location-context";
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <CartProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-          <Sonner richColors position="top-right" />
-        </CartProvider>
+        <LocationProvider>
+          <CartProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+            <Sonner richColors position="top-right" />
+          </CartProvider>
+        </LocationProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

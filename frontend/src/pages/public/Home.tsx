@@ -43,11 +43,15 @@ const CATEGORIES = [
   { name: "Grains", path: "/grains", icon: "🌾", color: "bg-yellow-100 text-yellow-800" },
 ];
 
+import { useLocationState } from "@/lib/location-context";
+import { MapPin, Navigation } from "lucide-react";
+
 export default function Home() {
   const [, setLocation] = useLocation();
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("All");
+  const { location: userLoc } = useLocationState();
 
   const { data: products, isLoading } = useListProducts(
     activeTab !== "All" ? { category: activeTab } : undefined,
@@ -116,6 +120,29 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Location Express Delivery Bar */}
+        <div className="bg-gradient-to-r from-primary/15 via-primary/5 to-accent/40 border-y border-primary/20 py-3.5 px-4 mb-8">
+          <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="flex items-center gap-2.5 font-bold text-secondary">
+              <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 shadow-sm">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-muted-foreground font-normal">Delivering Fresh Produce to: </span>
+                <strong className="text-primary underline cursor-pointer">{userLoc.city}, {userLoc.state || userLoc.country}</strong>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 text-xs font-semibold text-secondary">
+              <span className="flex items-center gap-1.5 bg-background/80 px-3 py-1.5 rounded-full border shadow-2xs">
+                <Clock className="w-3.5 h-3.5 text-primary" /> Express 2-Hour Delivery
+              </span>
+              <span className="flex items-center gap-1.5 bg-background/80 px-3 py-1.5 rounded-full border shadow-2xs">
+                <ShieldCheck className="w-3.5 h-3.5 text-green-600" /> 100% Traceable Farmers
+              </span>
+            </div>
           </div>
         </div>
 

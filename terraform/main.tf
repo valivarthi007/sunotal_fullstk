@@ -7,6 +7,14 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "s3" {
+    bucket         = "jcs-raju-sunotal-final"
+    key            = "state/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "sunotal-terraform-locks"
+    encrypt        = true
+  }
 }
 
 provider "aws" {
@@ -14,6 +22,78 @@ provider "aws" {
 }
 
 data "aws_availability_zones" "available" {}
+
+resource "aws_dynamodb_table" "terraform_locks" {
+  name         = var.dynamodb_table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+
+  tags = {
+    Name      = "sunotal-terraform-locks"
+    Project   = "sunotal"
+    ManagedBy = "terraform"
+  }
+}
+
+resource "aws_iam_role" "ec2_s3_role" {
+  name = "sunotal-ec2-s3-access-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name      = "sunotal-ec2-s3-role"
+    Project   = "sunotal"
+    ManagedBy = "terraform"
+  }
+}
+
+resource "aws_iam_policy" "s3_artifacts_policy" {
+  name        = "sunotal-s3-artifacts-read-policy"
+  description = "Allows EC2 instance to download build artifacts from S3"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.s3_bucket_name}",
+          "arn:aws:s3:::${var.s3_bucket_name}/artifacts/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_s3_attach" {
+  role       = aws_iam_role.ec2_s3_role.name
+  policy_arn = aws_iam_policy.s3_artifacts_policy.arn
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "sunotal-ec2-instance-profile"
+  role = aws_iam_role.ec2_s3_role.name
+}
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
@@ -142,6 +222,7 @@ resource "aws_instance" "web" {
   vpc_security_group_ids      = [aws_security_group.web.id]
   associate_public_ip_address = true
   key_name                    = var.public_key != "" ? aws_key_pair.deployer[0].key_name : var.key_name
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
 
   tags = {
     Name      = "sunotal-frontend"
@@ -149,3 +230,4 @@ resource "aws_instance" "web" {
     ManagedBy = "terraform"
   }
 }
+

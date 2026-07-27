@@ -44,3 +44,16 @@ variable "allowed_cidr_blocks" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "s3_bucket_name" {
+  description = "Name of the S3 bucket for remote state and build artifacts"
+  type        = string
+  default     = "jcs-raju-sunotal-final"
+}
+
+variable "dynamodb_table_name" {
+  description = "Name of the DynamoDB table for Terraform state locking"
+  type        = string
+  default     = "sunotal-terraform-locks"
+}
+
