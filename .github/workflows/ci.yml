@@ -106,8 +106,12 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           echo -e "Host *\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
 
-      - name: Deploy to EC2 & Ensure Boot Persistence
+      - name: Deploy from S3 to EC2 & Ensure Boot Persistence
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REG: ${{ env.AWS_DEFAULT_REGION }}
         run: |
           EC2_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
           
@@ -117,34 +121,46 @@ jobs:
           fi
           
           BUCKET_NAME="${{ env.S3_BUCKET_NAME }}"
-          echo "Deploying S3 artifacts & application files to EC2 instance at $EC2_IP..."
+          echo "Deploying S3 artifacts directly from s3://${BUCKET_NAME}/artifacts/latest/ to EC2 instance at $EC2_IP..."
 
-          # 1. Sync frontend dist directly to /var/www/sunotal/
-          echo "Syncing frontend dist to /var/www/sunotal/..."
-          ssh ubuntu@$EC2_IP "sudo mkdir -p /var/www/sunotal /var/www/sunotal-backend && sudo chown -R ubuntu:www-data /var/www/sunotal /var/www/sunotal-backend"
-          rsync -avz --delete frontend/dist/ ubuntu@$EC2_IP:/var/www/sunotal/
-
-          # 2. Transfer docker-compose.yml for PostgreSQL DB service
-          scp docker-compose.yml ubuntu@$EC2_IP:/home/ubuntu/
-          
-          # 3. Sync backend code to /var/www/sunotal-backend/
-          rsync -avz --exclude 'node_modules' backend/ ubuntu@$EC2_IP:/var/www/sunotal-backend/
-
-          # 4. SSH into EC2 to configure services & persistence
+          # Execute S3 artifact download & extraction directly inside EC2 SSH session with AWS credentials
           ssh ubuntu@$EC2_IP "
-            echo 'Starting PostgreSQL container...' && \
-            sudo docker compose -f /home/ubuntu/docker-compose.yml up -d && \
+            set -e
+            export AWS_ACCESS_KEY_ID='$AWS_KEY'
+            export AWS_SECRET_ACCESS_KEY='$AWS_SECRET'
+            export AWS_DEFAULT_REGION='$AWS_REG'
             
-            echo 'Configuring backend & service persistence...' && \
-            cd /var/www/sunotal-backend && \
-            cp -n .env.example .env || true && \
-            npx pnpm@${PNPM_VERSION} install && \
-            npx pnpm@${PNPM_VERSION} run db:push && \
-            (pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend) && \
-            sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu || true && \
-            pm2 save && \
-            sudo systemctl enable nginx && \
+            echo 'Downloading build artifacts & docker-compose directly from S3...'
+            mkdir -p /tmp/sunotal-artifacts
+            aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz /tmp/sunotal-artifacts/frontend-build.tgz
+            aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz /tmp/sunotal-artifacts/backend-build.tgz
+            aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/docker-compose.yml /home/ubuntu/docker-compose.yml
+            
+            echo 'Extracting frontend build directly to /var/www/sunotal/...'
+            sudo mkdir -p /var/www/sunotal
+            sudo rm -rf /var/www/sunotal/*
+            sudo tar -xzf /tmp/sunotal-artifacts/frontend-build.tgz -C /var/www/sunotal/
+            
+            echo 'Extracting backend build to /var/www/sunotal-backend/...'
+            sudo mkdir -p /var/www/sunotal-backend
+            sudo rm -rf /var/www/sunotal-backend/*
+            sudo tar -xzf /tmp/sunotal-artifacts/backend-build.tgz -C /var/www/sunotal-backend/
+            sudo chown -R ubuntu:www-data /var/www/sunotal /var/www/sunotal-backend
+            
+            echo 'Starting PostgreSQL container from downloaded compose file...'
+            sudo docker compose -f /home/ubuntu/docker-compose.yml up -d
+            
+            echo 'Configuring backend & service persistence...'
+            cd /var/www/sunotal-backend
+            cp -n .env.example .env || true
+            npx pnpm@${PNPM_VERSION} install
+            npx pnpm@${PNPM_VERSION} run db:push
+            (pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend)
+            sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu || true
+            pm2 save
+            sudo systemctl enable nginx
             sudo systemctl restart nginx
+            rm -rf /tmp/sunotal-artifacts
           "
 
       - name: HTTP Health Check
