@@ -72,23 +72,43 @@ export default function Checkout() {
     await new Promise((r) => setTimeout(r, 1000));
 
     const orderRef = `SUN-${Math.floor(100000 + Math.random() * 900000)}`;
-    const confirmData = {
+    const confirmData: any = {
+      id: orderRef,
       orderId: orderRef,
-      items: [...items],
+      date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+      items: items.map((i) => ({
+        id: i.product.id,
+        name: i.product.name,
+        unit: i.product.unit,
+        price: i.product.price,
+        quantity: i.quantity,
+        image: i.product.image,
+        farmerName: "Verified Local Farmer",
+      })),
       totalPrice,
+      status: "out_for_delivery",
+      estimatedDelivery: `Express 2-Hour Delivery (${city})`,
+      deliveryAddress: streetAddress,
       city,
       state,
       pincode,
       streetAddress,
       gstin,
       poNumber,
-      paymentMethod,
-      date: new Date().toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
+      paymentMethod: paymentMethod === "card" ? "Credit / Debit Card" : paymentMethod === "upi" ? "UPI" : paymentMethod === "netbanking" ? "Net Banking" : "Corporate PO Invoice",
+      driverName: "Ramesh Kumar",
+      driverPhone: "+91 98765 43210",
+      vehicleNo: "EV-DEL-4412",
     };
+
+    // Persist to user orders in localStorage so it appears in My Orders & Tracking
+    try {
+      const existingRaw = localStorage.getItem("sunotal_user_orders");
+      const existing = existingRaw ? JSON.parse(existingRaw) : [];
+      localStorage.setItem("sunotal_user_orders", JSON.stringify([confirmData, ...existing]));
+    } catch (err) {
+      console.error("Failed to save order to storage", err);
+    }
 
     setOrderConfirmed(confirmData);
     clearCart();

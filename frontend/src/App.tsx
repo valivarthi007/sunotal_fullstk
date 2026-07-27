@@ -34,6 +34,8 @@ const queryClient = new QueryClient({
 // Export queryClient so login/register pages can invalidate the user query
 export { queryClient };
 
+import Orders from "@/pages/public/Orders";
+
 function Router() {
   return (
     <Switch>
@@ -46,6 +48,7 @@ function Router() {
       <Route path="/grains"><ProductsPage initialCategory="Grains" /></Route>
       <Route path="/farmer" component={FarmerRegistration} />
       <Route path="/profile" component={Profile} />
+      <Route path="/orders" component={Orders} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />

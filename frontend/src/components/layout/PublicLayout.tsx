@@ -126,8 +126,15 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             {user ? (
               <div className="hidden sm:flex items-center gap-2">
                 <Button
+                  variant="outline"
+                  className="rounded-full px-3.5 text-xs font-bold border-primary/30 text-primary hover:bg-primary/5 gap-1.5"
+                  onClick={() => setLocation('/orders')}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" /> My Orders
+                </Button>
+                <Button
                   variant="ghost"
-                  className="hidden sm:flex gap-2 rounded-full px-4 font-medium"
+                  className="hidden sm:flex gap-2 rounded-full px-3 font-medium"
                   onClick={() => setLocation('/profile')}
                 >
                   Hi, {user.name.split(" ")[0]}
