@@ -89,10 +89,12 @@ jobs:
           # Upload commit-versioned artifacts to artifacts/${BUILD_TAG}/
           aws s3 cp dist/artifacts/frontend-build.tgz s3://${BUCKET_NAME}/artifacts/${BUILD_TAG}/frontend-build.tgz
           aws s3 cp dist/artifacts/backend-build.tgz s3://${BUCKET_NAME}/artifacts/${BUILD_TAG}/backend-build.tgz
+          aws s3 cp docker-compose.yml s3://${BUCKET_NAME}/artifacts/${BUILD_TAG}/docker-compose.yml
           
           # Upload 'latest' pointer for deployment
           aws s3 cp dist/artifacts/frontend-build.tgz s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz
           aws s3 cp dist/artifacts/backend-build.tgz s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz
+          aws s3 cp docker-compose.yml s3://${BUCKET_NAME}/artifacts/latest/docker-compose.yml
 
       - name: Set up SSH Key
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -117,16 +119,14 @@ jobs:
           BUCKET_NAME="${{ env.S3_BUCKET_NAME }}"
           echo "Deploying S3 artifacts from s3://${BUCKET_NAME}/artifacts/latest/ to EC2 instance at $EC2_IP..."
 
-          # Transfer docker-compose.yml for PostgreSQL DB service
-          scp docker-compose.yml ubuntu@$EC2_IP:/home/ubuntu/
-          
-          # SSH into EC2 to pull artifacts from S3, extract, and start services
+          # SSH into EC2 to pull all artifacts & docker-compose from S3, extract, and start services
           ssh ubuntu@$EC2_IP "
             set -e
-            echo 'Downloading latest build artifacts directly from S3...' && \
+            echo 'Downloading latest build artifacts & docker-compose directly from S3...' && \
             mkdir -p /tmp/sunotal-artifacts && \
             aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz /tmp/sunotal-artifacts/frontend-build.tgz --region ${{ env.AWS_DEFAULT_REGION }} && \
             aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz /tmp/sunotal-artifacts/backend-build.tgz --region ${{ env.AWS_DEFAULT_REGION }} && \
+            aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/docker-compose.yml /home/ubuntu/docker-compose.yml --region ${{ env.AWS_DEFAULT_REGION }} && \
             
             echo 'Extracting frontend build to /var/www/sunotal/...' && \
             sudo mkdir -p /var/www/sunotal && \
@@ -137,7 +137,7 @@ jobs:
             sudo tar -xzf /tmp/sunotal-artifacts/backend-build.tgz -C /var/www/sunotal-backend/ && \
             sudo chown -R ubuntu:www-data /var/www/sunotal /var/www/sunotal-backend && \
             
-            echo 'Starting PostgreSQL container...' && \
+            echo 'Starting PostgreSQL container from downloaded compose file...' && \
             sudo docker compose -f /home/ubuntu/docker-compose.yml up -d && \
             
             echo 'Configuring backend & service persistence...' && \
