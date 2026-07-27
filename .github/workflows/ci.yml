@@ -123,8 +123,19 @@ jobs:
           BUCKET_NAME="${{ env.S3_BUCKET_NAME }}"
           echo "Deploying S3 artifacts directly from s3://${BUCKET_NAME}/artifacts/latest/ to EC2 instance at $EC2_IP..."
 
+          # Wait for SSH port 22 to be reachable with retries
+          echo "Verifying SSH connection to EC2..."
+          for i in {1..5}; do
+            if ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no ubuntu@$EC2_IP "echo 'SSH connection verified'"; then
+              echo "SSH connection successful."
+              break
+            fi
+            echo "Attempt $i failed: SSH timed out, retrying in 10s..."
+            sleep 10
+          done
+
           # Execute S3 artifact download & extraction directly inside EC2 SSH session with AWS credentials
-          ssh ubuntu@$EC2_IP "
+          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no ubuntu@$EC2_IP "
             export PATH=\$PATH:/usr/local/bin:/usr/bin:/bin:/snap/bin
             export AWS_ACCESS_KEY_ID='$AWS_KEY'
             export AWS_SECRET_ACCESS_KEY='$AWS_SECRET'
