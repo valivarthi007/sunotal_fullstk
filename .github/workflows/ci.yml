@@ -125,17 +125,17 @@ jobs:
 
           # Execute S3 artifact download & extraction directly inside EC2 SSH session with AWS credentials
           ssh ubuntu@$EC2_IP "
-            set -e
             export PATH=\$PATH:/usr/local/bin:/usr/bin:/bin:/snap/bin
             export AWS_ACCESS_KEY_ID='$AWS_KEY'
             export AWS_SECRET_ACCESS_KEY='$AWS_SECRET'
             export AWS_DEFAULT_REGION='$AWS_REG'
             
-            if ! command -v aws &> /dev/null; then
+            if ! which aws > /dev/null 2>&1; then
               echo 'AWS CLI not found on EC2, installing awscli...'
-              sudo apt-get update -qq && sudo apt-get install -y -qq awscli
+              sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq awscli
             fi
             
+            set -e
             echo 'Downloading build artifacts & docker-compose directly from S3...'
             mkdir -p /tmp/sunotal-artifacts
             aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz /tmp/sunotal-artifacts/frontend-build.tgz
