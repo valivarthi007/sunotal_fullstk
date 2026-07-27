@@ -69,7 +69,7 @@ jobs:
       - name: Package artifacts
         run: |
           mkdir -p dist/artifacts
-          tar -czf dist/artifacts/frontend-build.tgz -C frontend dist
+          tar -czf dist/artifacts/frontend-build.tgz -C frontend/dist .
           tar -czf dist/artifacts/backend-build.tgz -C backend dist package.json
 
       - name: Configure AWS Credentials
@@ -128,8 +128,9 @@ jobs:
             aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz /tmp/sunotal-artifacts/backend-build.tgz --region ${{ env.AWS_DEFAULT_REGION }} && \
             aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/docker-compose.yml /home/ubuntu/docker-compose.yml --region ${{ env.AWS_DEFAULT_REGION }} && \
             
-            echo 'Extracting frontend build to /var/www/sunotal/...' && \
+            echo 'Extracting frontend build directly to /var/www/sunotal/...' && \
             sudo mkdir -p /var/www/sunotal && \
+            sudo rm -rf /var/www/sunotal/* && \
             sudo tar -xzf /tmp/sunotal-artifacts/frontend-build.tgz -C /var/www/sunotal/ && \
             
             echo 'Extracting backend build to /var/www/sunotal-backend/...' && \
