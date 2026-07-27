@@ -20,6 +20,7 @@
           - lsb-release
           - docker.io
           - docker-compose-v2
+          - awscli
         state: present
         update_cache: true
 
