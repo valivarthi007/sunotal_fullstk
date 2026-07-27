@@ -70,7 +70,7 @@ jobs:
         run: |
           mkdir -p dist/artifacts
           tar -czf dist/artifacts/frontend-build.tgz -C frontend/dist .
-          tar -czf dist/artifacts/backend-build.tgz -C backend dist package.json
+          tar --exclude='node_modules' -czf dist/artifacts/backend-build.tgz -C backend .
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
