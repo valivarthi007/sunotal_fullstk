@@ -172,6 +172,7 @@ jobs:
             cp -n .env.example .env || true
             npx pnpm@${PNPM_VERSION} install
             npx pnpm@${PNPM_VERSION} run db:push
+            npx pnpm@${PNPM_VERSION} run db:seed || true
             (pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend)
             sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu || true
             pm2 save
