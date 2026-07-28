@@ -88,3 +88,6 @@ jobs:
             done
             echo "All Packer AMI resources deregistered and snapshots purged successfully!"
           fi
+
+          echo "Cleaning up EC2 Key Pair 'sunotal-deployer-key'..."
+          aws ec2 delete-key-pair --key-name "sunotal-deployer-key" --region "${{ env.AWS_REGION }}" || true
