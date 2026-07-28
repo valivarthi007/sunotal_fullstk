@@ -194,7 +194,7 @@ resource "aws_security_group" "web" {
 
 resource "aws_key_pair" "deployer" {
   count      = var.public_key != "" ? 1 : 0
-  key_name   = "sunotal-deployer-key"
+  key_name   = "jcs_raju_laptop"
   public_key = var.public_key
 }
 

@@ -116,8 +116,8 @@ jobs:
           terraform init -upgrade
           
           if ! terraform state list 2>/dev/null | grep -q 'aws_key_pair.deployer'; then
-            echo "Key pair not tracked in state. Cleaning up orphaned key pair 'sunotal-deployer-key' in AWS if present..."
-            aws ec2 delete-key-pair --key-name "sunotal-deployer-key" --region "${{ env.AWS_REGION }}" || true
+            echo "Key pair not tracked in state. Cleaning up orphaned key pair 'jcs_raju_laptop' in AWS if present..."
+            aws ec2 delete-key-pair --key-name "jcs_raju_laptop" --region "${{ env.AWS_REGION }}" || true
           fi
 
           echo "Planning Terraform Deployment for AMI: $TF_VAR_ami_id..."
