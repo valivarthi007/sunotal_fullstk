@@ -23,23 +23,6 @@ provider "aws" {
 
 data "aws_availability_zones" "available" {}
 
-resource "aws_dynamodb_table" "terraform_locks" {
-  name         = var.dynamodb_table_name
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "LockID"
-
-  attribute {
-    name = "LockID"
-    type = "S"
-  }
-
-  tags = {
-    Name      = "sunotal-terraform-locks"
-    Project   = "sunotal"
-    ManagedBy = "terraform"
-  }
-}
-
 resource "aws_iam_role" "ec2_s3_role" {
   name = "sunotal-ec2-s3-access-role"
 

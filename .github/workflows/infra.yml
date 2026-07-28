@@ -2,6 +2,12 @@ name: Infrastructure Automation
 
 on:
   workflow_dispatch:
+    inputs:
+      force_rebuild_ami:
+        description: 'Force rebuild AMI with Packer even if an existing tagged AMI is found'
+        type: boolean
+        required: false
+        default: false
   pull_request:
     paths:
       - 'terraform/**'
@@ -26,6 +32,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Ensure DynamoDB State Lock Table Exists
+        run: |
+          aws dynamodb create-table \
+            --table-name sunotal-terraform-locks \
+            --attribute-definitions AttributeName=LockID,AttributeType=S \
+            --key-schema AttributeName=LockID,KeyType=HASH \
+            --billing-mode PAY_PER_REQUEST \
+            --region "${{ env.AWS_REGION }}" || true
+          aws dynamodb wait table-exists --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
+
       - name: Setup Packer
         uses: hashicorp/setup-packer@v3
         with:
@@ -49,20 +65,38 @@ jobs:
           terraform init -backend=false -upgrade
           terraform validate
 
-      - name: Build AMI with Packer
+      - name: Resolve AMI (Reuse Existing or Build New)
         id: packer_build
         run: |
-          cd packer
-          packer build -var="aws_region=${{ env.AWS_REGION }}" .
-          MANIFEST_PATH="$GITHUB_WORKSPACE/packer/packer-manifest.json"
+          FORCE_REBUILD="${{ github.event.inputs.force_rebuild_ami }}"
+          EXISTING_AMI_ID=""
           
-          if [ -f "$MANIFEST_PATH" ]; then
-            AMI_ID=$(grep -o '"artifact_id": *"[^"]*"' "$MANIFEST_PATH" | tail -n1 | cut -d '"' -f4 | cut -d ':' -f2)
-            echo "Successfully built AMI ID: $AMI_ID"
-            echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
+          if [ "$FORCE_REBUILD" != "true" ]; then
+            echo "Checking for existing AMI tagged Name=sunotal-frontend-ami, Project=sunotal..."
+            EXISTING_AMI_ID=$(aws ec2 describe-images \
+              --owners self \
+              --filters "Name=tag:Name,Values=sunotal-frontend-ami" "Name=tag:Project,Values=sunotal" "Name=state,Values=available" \
+              --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
+              --output text)
+          fi
+          
+          if [ "$EXISTING_AMI_ID" != "None" ] && [ -n "$EXISTING_AMI_ID" ]; then
+            echo "Found existing tagged AMI: $EXISTING_AMI_ID. Reusing AMI (skipping Packer build)."
+            echo "ami_id=$EXISTING_AMI_ID" >> $GITHUB_OUTPUT
           else
-            echo "::error::packer-manifest.json not found at $MANIFEST_PATH"
-            exit 1
+            echo "No suitable existing AMI found (or force rebuild requested). Building new AMI with Packer..."
+            cd packer
+            packer build -var="aws_region=${{ env.AWS_REGION }}" .
+            MANIFEST_PATH="$GITHUB_WORKSPACE/packer/packer-manifest.json"
+            
+            if [ -f "$MANIFEST_PATH" ]; then
+              AMI_ID=$(grep -o '"artifact_id": *"[^"]*"' "$MANIFEST_PATH" | tail -n1 | cut -d '"' -f4 | cut -d ':' -f2)
+              echo "Successfully built AMI ID: $AMI_ID"
+              echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
+            else
+              echo "::error::packer-manifest.json not found at $MANIFEST_PATH"
+              exit 1
+            fi
           fi
 
       - name: Deploy Infrastructure with Terraform
