@@ -1,0 +1,46 @@
+name: Infrastructure Teardown
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: 'Type "DESTROY" to confirm teardown of infrastructure'
+        required: true
+        default: ''
+
+env:
+  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+
+jobs:
+  destroy_infrastructure:
+    name: Destroy Infrastructure with Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
+            echo "::error::Confirmation failed. You must type 'DESTROY' to execute teardown."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
+      - name: Destroy Infrastructure
+        run: |
+          cd terraform
+          terraform init
+          echo "Destroying managed infrastructure..."
+          terraform destroy -auto-approve -var="ami_id=destroy-placeholder"
