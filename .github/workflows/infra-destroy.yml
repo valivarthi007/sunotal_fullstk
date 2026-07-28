@@ -36,11 +36,11 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "latest"
+          terraform_version: "1.9.3"
 
       - name: Destroy Infrastructure
         run: |
           cd terraform
-          terraform init
+          terraform init -upgrade
           echo "Destroying managed infrastructure..."
           terraform destroy -auto-approve -var="ami_id=destroy-placeholder"

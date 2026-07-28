@@ -34,7 +34,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "latest"
+          terraform_version: "1.9.3"
 
       - name: Validate Packer Template
         run: |
@@ -46,7 +46,7 @@ jobs:
         run: |
           cd terraform
           terraform fmt -check || true
-          terraform init -backend=false
+          terraform init -backend=false -upgrade
           terraform validate
 
       - name: Build AMI with Packer
@@ -79,7 +79,7 @@ jobs:
           echo "::add-mask::$PUB_KEY"
           
           cd terraform
-          terraform init
+          terraform init -upgrade
           echo "Planning Terraform Deployment for AMI: $TF_VAR_ami_id..."
           terraform plan -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
           
