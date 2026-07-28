@@ -115,17 +115,12 @@ jobs:
           cd terraform
           terraform init -upgrade
           
-          if ! terraform state list 2>/dev/null | grep -q 'aws_key_pair.deployer'; then
-            echo "Key pair not tracked in state. Cleaning up orphaned key pair 'jcs_raju_laptop' in AWS if present..."
-            aws ec2 delete-key-pair --key-name "jcs_raju_laptop" --region "${{ env.AWS_REGION }}" || true
-          fi
-
-          echo "Planning Terraform Deployment for AMI: $TF_VAR_ami_id..."
-          terraform plan -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
+          echo "Planning Terraform Deployment for AMI: $TF_VAR_ami_id with existing key pair jcs_raju_laptop..."
+          terraform plan -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop"
           
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "Applying Infrastructure Changes..."
-            terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="public_key=${PUB_KEY}"
+            terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop"
           else
             echo "PR Validation complete — terraform apply skipped for non-dispatch/PR builds."
           fi

@@ -193,8 +193,8 @@ resource "aws_security_group" "web" {
 }
 
 resource "aws_key_pair" "deployer" {
-  count      = var.public_key != "" ? 1 : 0
-  key_name   = "jcs_raju_laptop"
+  count      = (var.key_name == null || var.key_name == "") && var.public_key != "" ? 1 : 0
+  key_name   = "sunotal-deployer-key"
   public_key = var.public_key
 }
 
@@ -204,7 +204,7 @@ resource "aws_instance" "web" {
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.web.id]
   associate_public_ip_address = true
-  key_name                    = var.public_key != "" ? aws_key_pair.deployer[0].key_name : var.key_name
+  key_name                    = var.key_name != null && var.key_name != "" ? var.key_name : (length(aws_key_pair.deployer) > 0 ? aws_key_pair.deployer[0].key_name : null)
   iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
 
   tags = {
