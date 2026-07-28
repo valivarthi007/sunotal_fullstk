@@ -3,10 +3,10 @@
 -- (bcrypt hash generated with 10 rounds)
 
 INSERT INTO users (name, email, password_hash, role, active, phone, city) VALUES
-  ('Admin User',   'admin@sunotal.com',  '$2a$10$X7VYVBmMp/m0QE9cBLyHZeHXxA0LG7.MrIUCHGHFi4L3kbT3ynTKm', 'admin', true,  '+91 98765 00001', 'Hyderabad'),
-  ('Priya Sharma', 'priya@example.com',  '$2a$10$X7VYVBmMp/m0QE9cBLyHZeHXxA0LG7.MrIUCHGHFi4L3kbT3ynTKm', 'user',  true,  '+91 98765 43210', 'Hyderabad'),
-  ('Raj Kumar',    'raj@example.com',    '$2a$10$X7VYVBmMp/m0QE9cBLyHZeHXxA0LG7.MrIUCHGHFi4L3kbT3ynTKm', 'user',  true,  '+91 87654 32109', 'Bengaluru'),
-  ('Meena Reddy',  'meena@example.com',  '$2a$10$X7VYVBmMp/m0QE9cBLyHZeHXxA0LG7.MrIUCHGHFi4L3kbT3ynTKm', 'user',  false, '+91 76543 21098', 'Mumbai')
+  ('Admin User',   'admin@sunotal.com',  '$2b$10$Hhn8rK6hQDLDbYSjo8kqeevw.DHzDTaWY.D9VCPajRbCeS6piXECy', 'admin', true,  '+91 98765 00001', 'Hyderabad'),
+  ('Priya Sharma', 'priya@example.com',  '$2b$10$Hhn8rK6hQDLDbYSjo8kqeevw.DHzDTaWY.D9VCPajRbCeS6piXECy', 'user',  true,  '+91 98765 43210', 'Hyderabad'),
+  ('Raj Kumar',    'raj@example.com',    '$2b$10$Hhn8rK6hQDLDbYSjo8kqeevw.DHzDTaWY.D9VCPajRbCeS6piXECy', 'user',  true,  '+91 87654 32109', 'Bengaluru'),
+  ('Meena Reddy',  'meena@example.com',  '$2b$10$Hhn8rK6hQDLDbYSjo8kqeevw.DHzDTaWY.D9VCPajRbCeS6piXECy', 'user',  false, '+91 76543 21098', 'Mumbai')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO products (name, category, unit, price, original_price, discount_percentage, image, badge, organic, active, description) VALUES

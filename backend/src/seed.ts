@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import bcrypt from 'bcryptjs';
 import { db, pool } from './lib/db.js';
 import { usersTable } from './schema/users.js';
 import { productsTable } from './schema/products.js';
@@ -8,14 +9,16 @@ async function seed() {
   console.log('🌱 Seeding database...');
 
   try {
+    const passwordHash = await bcrypt.hash('admin123', 10);
+
     // Users
     console.log('Seeding users...');
     await db.insert(usersTable).values([
-      { name: 'Admin User', email: 'admin@sunotal.com', passwordHash: '$2a$10$X7VYVBmMp/m0QE9cBLyHZeHXxA0LG7.MrIUCHGHFi4L3kbT3ynTKm', role: 'admin', active: true, phone: '+91 98765 00001', city: 'Hyderabad' },
-      { name: 'Priya Sharma', email: 'priya@example.com', passwordHash: '$2a$10$X7VYVBmMp/m0QE9cBLyHZeHXxA0LG7.MrIUCHGHFi4L3kbT3ynTKm', role: 'user', active: true, phone: '+91 98765 43210', city: 'Hyderabad' },
-      { name: 'Raj Kumar', email: 'raj@example.com', passwordHash: '$2a$10$X7VYVBmMp/m0QE9cBLyHZeHXxA0LG7.MrIUCHGHFi4L3kbT3ynTKm', role: 'user', active: true, phone: '+91 87654 32109', city: 'Bengaluru' },
-      { name: 'Meena Reddy', email: 'meena@example.com', passwordHash: '$2a$10$X7VYVBmMp/m0QE9cBLyHZeHXxA0LG7.MrIUCHGHFi4L3kbT3ynTKm', role: 'user', active: false, phone: '+91 76543 21098', city: 'Mumbai' }
-    ]).onConflictDoNothing({ target: usersTable.email });
+      { name: 'Admin User', email: 'admin@sunotal.com', passwordHash, role: 'admin', active: true, phone: '+91 98765 00001', city: 'Hyderabad' },
+      { name: 'Priya Sharma', email: 'priya@example.com', passwordHash, role: 'user', active: true, phone: '+91 98765 43210', city: 'Hyderabad' },
+      { name: 'Raj Kumar', email: 'raj@example.com', passwordHash, role: 'user', active: true, phone: '+91 87654 32109', city: 'Bengaluru' },
+      { name: 'Meena Reddy', email: 'meena@example.com', passwordHash, role: 'user', active: false, phone: '+91 76543 21098', city: 'Mumbai' }
+    ]).onConflictDoUpdate({ target: usersTable.email, set: { passwordHash } });
 
     // Products
     console.log('Seeding products...');
