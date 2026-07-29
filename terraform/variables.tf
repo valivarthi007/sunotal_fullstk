@@ -33,10 +33,59 @@ variable "vpc_cidr" {
   default     = "10.10.0.0/16"
 }
 
-variable "public_subnet_cidr" {
-  description = "CIDR block for the public subnet"
+variable "public_subnet_1_cidr" {
+  description = "CIDR block for public subnet 1 (AZ a)"
   type        = string
   default     = "10.10.1.0/24"
+}
+
+variable "public_subnet_2_cidr" {
+  description = "CIDR block for public subnet 2 (AZ b)"
+  type        = string
+  default     = "10.10.2.0/24"
+}
+
+variable "private_subnet_1_cidr" {
+  description = "CIDR block for private subnet 1 (AZ a)"
+  type        = string
+  default     = "10.10.10.0/24"
+}
+
+variable "private_subnet_2_cidr" {
+  description = "CIDR block for private subnet 2 (AZ b)"
+  type        = string
+  default     = "10.10.20.0/24"
+}
+
+variable "bastion_instance_type" {
+  description = "EC2 instance size for the Bastion Host"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "db_instance_class" {
+  description = "RDS Database Instance Class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "db_name" {
+  description = "PostgreSQL Database Name"
+  type        = string
+  default     = "sunotal"
+}
+
+variable "db_username" {
+  description = "PostgreSQL Database Admin Username"
+  type        = string
+  default     = "sunotal"
+}
+
+variable "db_password" {
+  description = "PostgreSQL Database Admin Password"
+  type        = string
+  sensitive   = true
+  default     = "sunotalpass123"
 }
 
 variable "allowed_cidr_blocks" {

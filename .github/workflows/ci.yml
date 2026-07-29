@@ -106,36 +106,45 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           echo -e "Host *\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
 
-      - name: Deploy from S3 to EC2 & Ensure Boot Persistence
+      - name: Deploy from S3 to Private EC2 via Bastion Host & Ensure Boot Persistence
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REG: ${{ env.AWS_DEFAULT_REGION }}
         run: |
-          EC2_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
+          BASTION_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-bastion" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
+          PRIVATE_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].PrivateIpAddress" --output text)
           
-          if [ -z "$EC2_IP" ] || [ "$EC2_IP" = "None" ]; then
-            echo "Failed to find running EC2 instance with tag Name=sunotal-frontend."
+          if [ -z "$BASTION_IP" ] || [ "$BASTION_IP" = "None" ]; then
+            echo "Failed to find running Bastion host instance with tag Name=sunotal-bastion."
+            exit 1
+          fi
+
+          if [ -z "$PRIVATE_IP" ] || [ "$PRIVATE_IP" = "None" ]; then
+            echo "Failed to find running application EC2 instance with tag Name=sunotal-frontend."
             exit 1
           fi
           
           BUCKET_NAME="${{ env.S3_BUCKET_NAME }}"
-          echo "Deploying S3 artifacts directly from s3://${BUCKET_NAME}/artifacts/latest/ to EC2 instance at $EC2_IP..."
+          echo "Deploying S3 artifacts directly to Private EC2 at $PRIVATE_IP via Bastion Host at $BASTION_IP..."
 
-          # Wait for SSH port 22 to be reachable with retries
-          echo "Verifying SSH connection to EC2..."
+          # Wait for SSH connection through Bastion host to Private EC2
+          echo "Verifying SSH ProxyJump connection..."
           for i in {1..5}; do
-            if ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no ubuntu@$EC2_IP "echo 'SSH connection verified'"; then
-              echo "SSH connection successful."
+            if ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no -J ubuntu@$BASTION_IP ubuntu@$PRIVATE_IP "echo 'SSH ProxyJump connection verified'"; then
+              echo "SSH ProxyJump connection successful."
               break
             fi
-            echo "Attempt $i failed: SSH timed out, retrying in 10s..."
+            echo "Attempt $i failed: SSH ProxyJump timed out, retrying in 10s..."
             sleep 10
           done
 
-          # Execute S3 artifact download & extraction directly inside EC2 SSH session with AWS credentials
-          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no ubuntu@$EC2_IP "
+          # Retrieve RDS endpoint address
+          DB_HOST=$(aws rds describe-db-instances --db-instance-identifier "sunotal-postgres" --query "DBInstances[0].Endpoint.Address" --output text || echo "")
+
+          # Execute S3 artifact download & extraction inside Private EC2 SSH session via ProxyJump
+          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no -J ubuntu@$BASTION_IP ubuntu@$PRIVATE_IP "
             export PATH=\$PATH:/usr/local/bin:/usr/bin:/bin:/snap/bin
             export AWS_ACCESS_KEY_ID='$AWS_KEY'
             export AWS_SECRET_ACCESS_KEY='$AWS_SECRET'
@@ -147,11 +156,10 @@ jobs:
             fi
             
             set -e
-            echo 'Downloading build artifacts & docker-compose directly from S3...'
+            echo 'Downloading build artifacts directly from S3 via Gateway Endpoint...'
             mkdir -p /tmp/sunotal-artifacts
             aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz /tmp/sunotal-artifacts/frontend-build.tgz
             aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz /tmp/sunotal-artifacts/backend-build.tgz
-            aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/docker-compose.yml /home/ubuntu/docker-compose.yml
             
             echo 'Extracting frontend build directly to /var/www/sunotal/...'
             sudo mkdir -p /var/www/sunotal
@@ -164,12 +172,20 @@ jobs:
             sudo tar -xzf /tmp/sunotal-artifacts/backend-build.tgz -C /var/www/sunotal-backend/
             sudo chown -R ubuntu:www-data /var/www/sunotal /var/www/sunotal-backend
             
-            echo 'Starting PostgreSQL container from downloaded compose file...'
-            sudo docker compose -f /home/ubuntu/docker-compose.yml up -d
-            
-            echo 'Configuring backend & service persistence...'
+            echo 'Configuring backend .env for AWS RDS PostgreSQL ($DB_HOST)...'
             cd /var/www/sunotal-backend
-            cp -n .env.example .env || true
+            if [ -n '$DB_HOST' ] && [ '$DB_HOST' != 'None' ]; then
+              echo \"DATABASE_URL=postgresql://sunotal:sunotalpass123@$DB_HOST:5432/sunotal\" > .env
+              echo \"POSTGRES_HOST=$DB_HOST\" >> .env
+              echo \"POSTGRES_PORT=5432\" >> .env
+              echo \"POSTGRES_USER=sunotal\" >> .env
+              echo \"POSTGRES_PASSWORD=sunotalpass123\" >> .env
+              echo \"POSTGRES_DB=sunotal\" >> .env
+            else
+              cp -n .env.example .env || true
+            fi
+            
+            echo 'Installing dependencies and migrating database on AWS RDS...'
             npx pnpm@${PNPM_VERSION} install
             npx pnpm@${PNPM_VERSION} run db:push
             npx pnpm@${PNPM_VERSION} run db:seed || true
@@ -181,13 +197,14 @@ jobs:
             rm -rf /tmp/sunotal-artifacts
           "
 
-      - name: HTTP Health Check
+      - name: HTTP Health Check via ALB
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          EC2_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
-          if [ -n "$EC2_IP" ] && [ "$EC2_IP" != "None" ]; then
-            echo "Running health check against http://$EC2_IP..."
-            curl --fail --retry 3 --retry-delay 5 http://$EC2_IP/ || echo "Health check ping complete"
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names "sunotal-alb" --query "LoadBalancers[0].DNSName" --output text)
+          if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
+            echo "Running health check against ALB at http://$ALB_DNS..."
+            curl --fail --retry 5 --retry-delay 5 http://$ALB_DNS/ || echo "Health check ping complete"
           fi
+
 
         
