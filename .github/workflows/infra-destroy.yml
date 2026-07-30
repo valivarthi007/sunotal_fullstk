@@ -94,3 +94,22 @@ jobs:
             done
             echo "All Packer AMI resources deregistered and snapshots purged successfully!"
           fi
+
+      - name: Delete DynamoDB State Lock Table
+        run: |
+          echo "Deleting DynamoDB lock table sunotal-terraform-locks..."
+          aws dynamodb delete-table --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
+          echo "DynamoDB lock table deleted."
+
+      - name: Purge Remaining Orphaned Resources
+        run: |
+          echo "Checking for lingering EC2 instances tagged Project=sunotal..."
+          INST_IDS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Project,Values=sunotal" "Name=instance-state-name,Values=running,pending,stopped" \
+            --query "Reservations[*].Instances[*].InstanceId" \
+            --output text)
+          if [ -n "$INST_IDS" ] && [ "$INST_IDS" != "None" ]; then
+            echo "Terminating lingering instances: $INST_IDS"
+            aws ec2 terminate-instances --instance-ids $INST_IDS || true
+          fi
+          echo "🎉 Infrastructure Teardown Complete! All resources purged."
