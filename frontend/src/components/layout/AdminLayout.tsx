@@ -8,7 +8,8 @@ import {
   LogOut,
   Menu,
   X,
-  ClipboardList
+  ClipboardList,
+  GalleryHorizontalEnd
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { name: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
     { name: "Products", path: "/admin/products", icon: Package },
+    { name: "Banners", path: "/admin/banners", icon: GalleryHorizontalEnd },
     { name: "Inventory", path: "/admin/inventory", icon: ClipboardList },
     { name: "Vendors", path: "/admin/vendors", icon: Store },
     { name: "Users", path: "/admin/users", icon: Users },

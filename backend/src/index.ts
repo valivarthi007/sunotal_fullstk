@@ -11,6 +11,8 @@ import vendorsRouter from './routes/vendors.js';
 import usersRouter   from './routes/users.js';
 import inventoryRouter from './routes/inventory.js';
 import categoriesRouter from './routes/categories.js';
+import { uploadRouter } from './routes/upload.js';
+import { bannersRouter } from './routes/banners.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -27,8 +29,9 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
 
 // ── API routes ─────────────────────────────────────────────────────────
 app.use('/api', authRouter);
@@ -38,6 +41,8 @@ app.use('/api', vendorsRouter);
 app.use('/api', usersRouter);
 app.use('/api', inventoryRouter);
 app.use('/api', categoriesRouter);
+app.use('/api', uploadRouter);
+app.use('/api/banners', bannersRouter);
 app.get('/api/healthz', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Serve built frontend in production ─────────────────────────────────

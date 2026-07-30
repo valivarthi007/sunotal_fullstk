@@ -19,6 +19,7 @@ import ProductsAdmin from "@/pages/admin/Products";
 import VendorsAdmin from "@/pages/admin/Vendors";
 import UsersAdmin from "@/pages/admin/Users";
 import InventoryAdmin from "@/pages/admin/Inventory";
+import BannersAdmin from "@/pages/admin/Banners";
 
 import NotFound from "@/pages/not-found";
 
@@ -56,6 +57,7 @@ function Router() {
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={Dashboard} />
       <Route path="/admin/products" component={ProductsAdmin} />
+      <Route path="/admin/banners" component={BannersAdmin} />
       <Route path="/admin/inventory" component={InventoryAdmin} />
       <Route path="/admin/vendors" component={VendorsAdmin} />
       <Route path="/admin/users" component={UsersAdmin} />

@@ -3,36 +3,20 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ProductCard, ProductCardSkeleton } from "@/components/ui/ProductCard";
 import { useListProducts, useListCategories } from "@workspace/api-client-react";
+import { useListBanners } from "@/lib/api-client";
 import useEmblaCarousel from "embla-carousel-react";
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { CheckCircle2, ShieldCheck, Clock, Tractor, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocationState } from "@/lib/location-context";
 
-const SLIDES = [
+const FALLBACK_SLIDES = [
   {
     bg: "#0B2914",
-    image: "https://jcs-raju-sunotal-final.s3.us-east-1.amazonaws.com/vegetables.jpg",
+    image: "",
     headline: "Fresh from Farm, Direct to Door",
     subheadline: "Harvested this morning, delivered by evening.",
     shopHref: "/products",
-    offersHref: "/vegetables",
-  },
-  {
-    bg: "#1A5C24",
-    image: "https://jcs-raju-sunotal-final.s3.us-east-1.amazonaws.com/fruits.jpg",
-    headline: "Alphonso Mangoes Season is Here",
-    subheadline: "Sweet, juicy, and 100% organic.",
-    shopHref: "/fruits",
-    offersHref: "/fruits",
-  },
-  {
-    bg: "#2A8C3F",
-    image: "https://jcs-raju-sunotal-final.s3.us-east-1.amazonaws.com/grains.jpg",
-    headline: "Organic Grains & Pulses",
-    subheadline: "Wholesome nutrition for your family.",
-    shopHref: "/grains",
-    offersHref: "/products",
   },
 ];
 
@@ -50,6 +34,20 @@ export default function Home() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("All");
   const { location: userLoc } = useLocationState();
+
+  const { data: apiBanners = [] } = useListBanners();
+
+  const SLIDES = useMemo(() => {
+    if (apiBanners.length === 0) return FALLBACK_SLIDES;
+    const BG_COLORS = ["#0B2914", "#1A5C24", "#2A8C3F", "#154C21", "#0D3A18"];
+    return apiBanners.map((b, i) => ({
+      bg: BG_COLORS[i % BG_COLORS.length],
+      image: b.imageUrl,
+      headline: b.title,
+      subheadline: b.subtitle || "",
+      shopHref: b.linkUrl || "/products",
+    }));
+  }, [apiBanners]);
 
   const { data: dbCategories = [] } = useListCategories();
   const categoriesList = useMemo(() => {
@@ -115,14 +113,6 @@ export default function Home() {
                         onClick={() => setLocation(slide.shopHref)}
                       >
                         Shop Now
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant="outline"
-                        className="rounded-full px-8 text-base border-white/30 text-secondary bg-white hover:bg-white/90 shadow-lg"
-                        onClick={() => setLocation(slide.offersHref)}
-                      >
-                        Explore Offers
                       </Button>
                     </div>
                   </div>

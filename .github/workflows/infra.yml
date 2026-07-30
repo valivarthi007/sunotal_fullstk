@@ -49,6 +49,15 @@ jobs:
             --bucket "$BUCKET_NAME" \
             --versioning-configuration Status=Enabled || true
 
+          echo "Initializing S3 folder structure..."
+          for PREFIX in images/ artifacts/ state/; do
+            if ! aws s3api head-object --bucket "$BUCKET_NAME" --key "$PREFIX" 2>/dev/null; then
+              echo "Creating folder prefix: $PREFIX"
+              echo "" | aws s3 cp - "s3://$BUCKET_NAME/$PREFIX" || true
+            fi
+          done
+          echo "✅ S3 bucket folder structure initialized (images/, artifacts/, state/)"
+
       - name: Ensure DynamoDB State Lock Table Exists
         run: |
           aws dynamodb create-table \

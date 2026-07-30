@@ -9,6 +9,7 @@ import {
   useDeleteCategory,
   getListProductsQueryKey,
 } from "@workspace/api-client-react";
+import { uploadImageToS3 } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -38,8 +39,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { Plus, Search, Edit2, Trash2, Package, FolderPlus, Tag } from "lucide-react";
-import { useState } from "react";
+import { Plus, Search, Edit2, Trash2, Package, FolderPlus, Tag, Upload, ImageIcon } from "lucide-react";
+import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const formSchema = z.object({
@@ -90,6 +91,9 @@ export default function ProductsAdmin() {
   const [newCatIcon, setNewCatIcon] = useState("📦");
 
   const [deletingProduct, setDeletingProduct] = useState<any | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -344,7 +348,79 @@ export default function ProductsAdmin() {
               </div>
 
               <FormField control={form.control} name="image" render={({ field }) => (
-                <FormItem><FormLabel>Image URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel>Product Image</FormLabel>
+                  <div className="space-y-3">
+                    {/* File Upload Area */}
+                    <div 
+                      className="border-2 border-dashed border-border rounded-xl p-4 text-center cursor-pointer hover:border-primary/50 hover:bg-accent/30 transition-all"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {(imagePreview || field.value) ? (
+                        <div className="flex items-center gap-4">
+                          <img 
+                            src={imagePreview || field.value} 
+                            alt="Product preview" 
+                            className="w-16 h-16 rounded-lg object-cover border" 
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                          <div className="flex-1 text-left">
+                            <p className="text-sm font-medium text-foreground">Image uploaded</p>
+                            <p className="text-xs text-muted-foreground truncate max-w-xs">{field.value}</p>
+                          </div>
+                          <Button type="button" variant="outline" size="sm" className="shrink-0">
+                            <Upload className="w-3.5 h-3.5 mr-1" /> Replace
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="py-2">
+                          <ImageIcon className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-sm font-medium text-muted-foreground">Click to upload product image</p>
+                          <p className="text-xs text-muted-foreground/70">PNG, JPG, or WebP (uploaded to S3)</p>
+                        </div>
+                      )}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          
+                          // Show local preview immediately
+                          const localPreview = URL.createObjectURL(file);
+                          setImagePreview(localPreview);
+                          
+                          try {
+                            setUploading(true);
+                            toast.info('Uploading image...');
+                            const url = await uploadImageToS3(file, 'images');
+                            field.onChange(url);
+                            setImagePreview(null);
+                            toast.success('Image uploaded successfully!');
+                          } catch (err) {
+                            toast.error('Image upload failed. Please try again.');
+                            setImagePreview(null);
+                          } finally {
+                            setUploading(false);
+                          }
+                        }}
+                      />
+                    </div>
+                    {uploading && (
+                      <div className="flex items-center gap-2 text-sm text-primary">
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        Uploading to S3...
+                      </div>
+                    )}
+                    {/* Manual URL Fallback */}
+                    <FormControl>
+                      <Input placeholder="Or paste image URL directly..." {...field} />
+                    </FormControl>
+                  </div>
+                  <FormMessage />
+                </FormItem>
               )} />
 
               <FormField control={form.control} name="badge" render={({ field }) => (
