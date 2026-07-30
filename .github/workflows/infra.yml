@@ -73,6 +73,36 @@ jobs:
             --region "${{ env.AWS_REGION }}" || true
           aws dynamodb wait table-exists --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
 
+      - name: Auto-Restore Terraform State Snapshot from S3 (if state is empty)
+        run: |
+          BUCKET_NAME="jcs-raju-sunotal-final"
+          KEY="state/terraform.tfstate"
+          echo "Inspecting S3 remote state file at s3://${BUCKET_NAME}/${KEY}..."
+
+          aws s3 cp "s3://${BUCKET_NAME}/${KEY}" /tmp/current-state.json 2>/dev/null || echo "{}" > /tmp/current-state.json
+
+          if ! grep -q '"type": *"aws_' /tmp/current-state.json 2>/dev/null; then
+            echo "Current state is empty or missing. Searching S3 version history for valid state snapshot..."
+            VERSIONS=$(aws s3api list-object-versions --bucket "$BUCKET_NAME" --prefix "$KEY" --query 'Versions[*].VersionId' --output text 2>/dev/null || echo "")
+            
+            for VID in $VERSIONS; do
+              if [ -n "$VID" ] && [ "$VID" != "None" ] && [ "$VID" != "null" ]; then
+                aws s3 cp "s3://${BUCKET_NAME}/${KEY}?versionId=${VID}" /tmp/candidate-state.json 2>/dev/null || true
+                if grep -q '"type": *"aws_' /tmp/candidate-state.json 2>/dev/null; then
+                  echo "Found valid state snapshot versionId: $VID. Restoring state/terraform.tfstate..."
+                  aws s3api copy-object \
+                    --bucket "$BUCKET_NAME" \
+                    --copy-source "${BUCKET_NAME}/${KEY}?versionId=${VID}" \
+                    --key "$KEY"
+                  echo "✅ Terraform remote state restored successfully!"
+                  break
+                fi
+              fi
+            done
+          else
+            echo "Current remote state file is valid."
+          fi
+
       - name: Sync & Clear Stale State Lock Digest (if checksum mismatch occurs)
         run: |
           echo "Clearing stale state lock digest in DynamoDB..."

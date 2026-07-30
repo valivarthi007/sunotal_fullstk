@@ -43,26 +43,34 @@ jobs:
             --region "${{ env.AWS_REGION }}" || true
           aws dynamodb wait table-exists --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
 
-      - name: Restore State File from S3 Version History (if Delete Marker exists)
+      - name: Restore Non-Empty State File from S3 Version History
         run: |
           BUCKET_NAME="jcs-raju-sunotal-final"
           KEY="state/terraform.tfstate"
-          echo "Checking S3 state file version history for s3://${BUCKET_NAME}/${KEY}..."
+          echo "Inspecting S3 remote state file at s3://${BUCKET_NAME}/${KEY}..."
 
-          # Fetch latest valid non-delete-marker state version ID
-          LATEST_VERSION_ID=$(aws s3api list-object-versions \
-            --bucket "$BUCKET_NAME" \
-            --prefix "$KEY" \
-            --query 'Versions[0].VersionId' \
-            --output text 2>/dev/null || echo "")
+          aws s3 cp "s3://${BUCKET_NAME}/${KEY}" /tmp/current-state.json 2>/dev/null || echo "{}" > /tmp/current-state.json
 
-          if [ -n "$LATEST_VERSION_ID" ] && [ "$LATEST_VERSION_ID" != "None" ] && [ "$LATEST_VERSION_ID" != "null" ]; then
-            echo "Restoring state/terraform.tfstate from S3 versionId: $LATEST_VERSION_ID..."
-            aws s3api copy-object \
-              --bucket "$BUCKET_NAME" \
-              --copy-source "${BUCKET_NAME}/${KEY}?versionId=${LATEST_VERSION_ID}" \
-              --key "$KEY" || true
-            echo "State file restored successfully."
+          if ! grep -q '"type": *"aws_' /tmp/current-state.json 2>/dev/null; then
+            echo "Current state is empty or missing. Searching S3 version history for valid state snapshot..."
+            VERSIONS=$(aws s3api list-object-versions --bucket "$BUCKET_NAME" --prefix "$KEY" --query 'Versions[*].VersionId' --output text 2>/dev/null || echo "")
+            
+            for VID in $VERSIONS; do
+              if [ -n "$VID" ] && [ "$VID" != "None" ] && [ "$VID" != "null" ]; then
+                aws s3 cp "s3://${BUCKET_NAME}/${KEY}?versionId=${VID}" /tmp/candidate-state.json 2>/dev/null || true
+                if grep -q '"type": *"aws_' /tmp/candidate-state.json 2>/dev/null; then
+                  echo "Found valid state snapshot versionId: $VID. Restoring state/terraform.tfstate..."
+                  aws s3api copy-object \
+                    --bucket "$BUCKET_NAME" \
+                    --copy-source "${BUCKET_NAME}/${KEY}?versionId=${VID}" \
+                    --key "$KEY"
+                  echo "✅ Terraform remote state restored successfully!"
+                  break
+                fi
+              fi
+            done
+          else
+            echo "Current remote state file is valid."
           fi
 
           echo "Clearing stale state lock digest in DynamoDB..."
