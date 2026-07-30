@@ -96,84 +96,128 @@ jobs:
           aws s3 cp dist/artifacts/backend-build.tgz s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz
           aws s3 cp docker-compose.yml s3://${BUCKET_NAME}/artifacts/latest/docker-compose.yml
 
-      - name: Deploy to Private EC2 via AWS SSM Run Command
+      - name: Deploy to Private EC2 via SSH through Bastion Host
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
         run: |
-          INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].InstanceId" --output text)
-          DB_HOST=$(aws rds describe-db-instances --db-instance-identifier "sunotal-postgres" --query "DBInstances[0].Endpoint.Address" --output text || echo "")
+          mkdir -p ~/.ssh
+          echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
+          tr -d '\r' < ~/.ssh/id_rsa > ~/.ssh/id_rsa.clean
+          mv ~/.ssh/id_rsa.clean ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          BASTION_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=sunotal-bastion" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
+
+          PRIVATE_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].PrivateIpAddress" --output text)
+
+          DB_HOST=$(aws rds describe-db-instances \
+            --db-instance-identifier "sunotal-postgres" \
+            --query "DBInstances[0].Endpoint.Address" --output text || echo "")
+
           BUCKET_NAME="${{ env.S3_BUCKET_NAME }}"
-          
-          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
-            echo "Failed to find running EC2 instance with tag Name=sunotal-frontend."
+
+          if [ -z "$BASTION_IP" ] || [ "$BASTION_IP" = "None" ]; then
+            echo "::error::Failed to find running Bastion host with tag Name=sunotal-bastion."
             exit 1
           fi
 
-          echo "Checking AWS SSM Agent registration for instance $INSTANCE_ID..."
-          SSM_ONLINE=false
+          if [ -z "$PRIVATE_IP" ] || [ "$PRIVATE_IP" = "None" ]; then
+            echo "::error::Failed to find running Private EC2 instance with tag Name=sunotal-frontend."
+            exit 1
+          fi
+
+          echo "Bastion Host Public IP : $BASTION_IP"
+          echo "Private App EC2 IP     : $PRIVATE_IP"
+          echo "RDS Database Host      : $DB_HOST"
+
+          # Configure SSH Config for jump host (bastion)
+          cat <<EOF > ~/.ssh/config
+          Host bastion
+            HostName ${BASTION_IP}
+            User ubuntu
+            IdentityFile ~/.ssh/id_rsa
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+
+          Host app-private
+            HostName ${PRIVATE_IP}
+            User ubuntu
+            IdentityFile ~/.ssh/id_rsa
+            ProxyJump bastion
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+
+          echo "Testing SSH connectivity to Private EC2 via Bastion Host..."
           for i in {1..30}; do
-            STATUS=$(aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$INSTANCE_ID" --query "InstanceInformationList[0].PingStatus" --output text 2>/dev/null || echo "")
-            if [ "$STATUS" = "Online" ]; then
-              echo "✅ AWS SSM Agent is Online on instance $INSTANCE_ID!"
-              SSM_ONLINE=true
+            if ssh app-private "echo SSH connection test successful" 2>/dev/null; then
+              echo "✅ SSH connection to Private EC2 established!"
               break
             fi
-            echo "Attempt $i/30: SSM Agent status is '$STATUS'. Waiting 10s for initialization..."
-            sleep 10
+            echo "Attempt $i/30: SSH connection pending. Waiting 5s..."
+            sleep 5
           done
 
-          if [ "$SSM_ONLINE" != "true" ]; then
-            echo "::error::Instance $INSTANCE_ID is running but SSM Agent is not Online in AWS Systems Manager."
-            exit 1
-          fi
+          echo "Executing deployment on Private EC2 instance over SSH..."
+          ssh app-private bash -s <<REMOTE_SCRIPT
+            set -e
+            export PATH=\$PATH:/usr/local/bin:/usr/bin:/bin:/snap/bin:~/.local/share/pnpm
+            export NODE_OPTIONS='--max-old-space-size=2048'
 
-          echo "Deploying S3 artifacts directly to Private EC2 instance ($INSTANCE_ID) via AWS SSM..."
+            echo "Ensuring 2GB swap file exists on EC2 instance..."
+            if [ ! -f /swapfile ]; then
+              sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+            fi
 
-          # Send deployment command directly to Private EC2 via AWS SSM API
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --comment "Deploy Sunotal S3 build artifacts directly to Private EC2" \
-            --parameters commands="[
-              \"export PATH=\\\$PATH:/usr/local/bin:/usr/bin:/bin:/snap/bin:~/.local/share/pnpm\",
-              \"export NODE_OPTIONS='--max-old-space-size=2048'\",
-              \"set -e\",
-              \"echo 'Ensuring swap file exists on EC2 instance...'\",
-              \"if [ ! -f /swapfile ]; then sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048; sudo chmod 600 /swapfile; sudo mkswap /swapfile; sudo swapon /swapfile; fi\",
-              \"echo 'Downloading build artifacts directly from S3 via Gateway Endpoint...'\",
-              \"mkdir -p /tmp/sunotal-artifacts\",
-              \"aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz /tmp/sunotal-artifacts/frontend-build.tgz\",
-              \"aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz /tmp/sunotal-artifacts/backend-build.tgz\",
-              \"echo 'Extracting frontend build to /var/www/sunotal/...'\",
-              \"sudo mkdir -p /var/www/sunotal && sudo rm -rf /var/www/sunotal/*\",
-              \"sudo tar -xzf /tmp/sunotal-artifacts/frontend-build.tgz -C /var/www/sunotal/\",
-              \"echo 'Extracting backend build to /var/www/sunotal-backend/...'\",
-              \"sudo mkdir -p /var/www/sunotal-backend && sudo rm -rf /var/www/sunotal-backend/*\",
-              \"sudo tar -xzf /tmp/sunotal-artifacts/backend-build.tgz -C /var/www/sunotal-backend/\",
-              \"sudo chown -R ubuntu:www-data /var/www/sunotal /var/www/sunotal-backend\",
-              \"cd /var/www/sunotal-backend\",
-              \"if [ -n '${DB_HOST}' ] && [ '${DB_HOST}' != 'None' ]; then echo 'DATABASE_URL=postgresql://sunotal:sunotalpass123@${DB_HOST}:5432/sunotal' > .env; else cp -n .env.example .env || true; fi\",
-              \"command -v pnpm >/dev/null 2>&1 && pnpm install || npx --yes pnpm@${PNPM_VERSION} install\",
-              \"command -v pnpm >/dev/null 2>&1 && pnpm run db:push || npx --yes pnpm@${PNPM_VERSION} run db:push\",
-              \"(command -v pnpm >/dev/null 2>&1 && pnpm run db:seed || npx --yes pnpm@${PNPM_VERSION} run db:seed || true)\",
-              \"(pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend)\",
-              \"sudo env PATH=\\\$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu || true\",
-              \"pm2 save || true\",
-              \"sudo systemctl enable nginx && sudo systemctl restart nginx\",
-              \"rm -rf /tmp/sunotal-artifacts\"
-            ]" \
-            --query "Command.CommandId" --output text)
+            echo "Downloading build artifacts directly from S3..."
+            mkdir -p /tmp/sunotal-artifacts
+            aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz /tmp/sunotal-artifacts/frontend-build.tgz
+            aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz /tmp/sunotal-artifacts/backend-build.tgz
 
-          echo "SSM Command dispatched with CommandId: $COMMAND_ID. Waiting for execution completion..."
-          if ! aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID"; then
-            echo "::error::SSM Command failed! Fetching stdout logs from EC2 instance..."
-            aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query "StandardOutputContent" --output text || true
-            echo "::error::SSM Command failed! Fetching stderr logs from EC2 instance..."
-            aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query "StandardErrorContent" --output text || true
-            exit 1
-          fi
-          echo "Deployment successfully executed via AWS SSM!"
-          echo "SSM Execution Logs:"
-          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query "StandardOutputContent" --output text || true
+            echo "Extracting frontend build to /var/www/sunotal/..."
+            sudo mkdir -p /var/www/sunotal && sudo rm -rf /var/www/sunotal/*
+            sudo tar -xzf /tmp/sunotal-artifacts/frontend-build.tgz -C /var/www/sunotal/
+
+            echo "Extracting backend build to /var/www/sunotal-backend/..."
+            sudo mkdir -p /var/www/sunotal-backend && sudo rm -rf /var/www/sunotal-backend/*
+            sudo tar -xzf /tmp/sunotal-artifacts/backend-build.tgz -C /var/www/sunotal-backend/
+            sudo chown -R ubuntu:www-data /var/www/sunotal /var/www/sunotal-backend
+
+            cd /var/www/sunotal-backend
+            if [ -n "${DB_HOST}" ] && [ "${DB_HOST}" != "None" ]; then
+              echo "DATABASE_URL=postgresql://sunotal:sunotalpass123@${DB_HOST}:5432/sunotal" > .env
+            else
+              cp -n .env.example .env || true
+            fi
+
+            echo "Installing backend node modules..."
+            command -v pnpm >/dev/null 2>&1 && pnpm install || npx --yes pnpm@${PNPM_VERSION} install
+
+            echo "Pushing database schema..."
+            command -v pnpm >/dev/null 2>&1 && pnpm run db:push || npx --yes pnpm@${PNPM_VERSION} run db:push
+
+            echo "Seeding database..."
+            (command -v pnpm >/dev/null 2>&1 && pnpm run db:seed || npx --yes pnpm@${PNPM_VERSION} run db:seed || true)
+
+            echo "Starting / Restarting backend service with PM2..."
+            (pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend)
+            sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu || true
+            pm2 save || true
+
+            echo "Restarting NGINX..."
+            sudo systemctl enable nginx && sudo systemctl restart nginx
+            rm -rf /tmp/sunotal-artifacts
+            echo "✅ Deployment completed successfully on Private EC2!"
+REMOTE_SCRIPT
 
       - name: HTTP Health Check via ALB
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'

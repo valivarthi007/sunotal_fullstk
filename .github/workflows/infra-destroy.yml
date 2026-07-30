@@ -48,16 +48,22 @@ jobs:
         with:
           terraform_version: "1.9.3"
 
-      - name: Destroy Infrastructure
+      - name: Empty S3 Bucket Build Artifacts
+        run: |
+          BUCKET_NAME="jcs-raju-sunotal-final"
+          echo "Emptying all build artifacts and objects in s3://${BUCKET_NAME}..."
+          aws s3 rm s3://${BUCKET_NAME} --recursive || true
+
+      - name: Destroy Infrastructure with Terraform
         run: |
           cd terraform
           terraform init -upgrade
           echo "Destroying managed infrastructure..."
-          terraform destroy -auto-approve -var="ami_id=destroy-placeholder"
+          terraform destroy -auto-approve -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop"
 
       - name: Deregister Packer AMIs & Delete EBS Snapshots
         run: |
-          echo "Searching for AMIs tagged Name=sunotal-frontend-ami or Project=sunotal..."
+          echo "Searching for AMIs tagged Project=sunotal or Name=sunotal-frontend-ami..."
           
           AMI_IDS=$(aws ec2 describe-images \
             --owners self \
