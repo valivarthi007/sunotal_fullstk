@@ -42,6 +42,14 @@ jobs:
             --region "${{ env.AWS_REGION }}" || true
           aws dynamodb wait table-exists --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
 
+      - name: Sync & Clear Stale State Lock Digest (if checksum mismatch occurs)
+        run: |
+          echo "Clearing stale state lock digest in DynamoDB..."
+          aws dynamodb delete-item \
+            --table-name sunotal-terraform-locks \
+            --key '{"LockID": {"S": "jcs-raju-sunotal-final/state/terraform.tfstate-md5"}}' \
+            --region "${{ env.AWS_REGION }}" || true
+
       - name: Setup Packer
         uses: hashicorp/setup-packer@v3
         with:

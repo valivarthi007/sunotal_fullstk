@@ -43,16 +43,24 @@ jobs:
             --region "${{ env.AWS_REGION }}" || true
           aws dynamodb wait table-exists --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
 
+      - name: Sync & Clear Stale State Lock Digest (if checksum mismatch occurs)
+        run: |
+          echo "Clearing stale state lock digest in DynamoDB..."
+          aws dynamodb delete-item \
+            --table-name sunotal-terraform-locks \
+            --key '{"LockID": {"S": "jcs-raju-sunotal-final/state/terraform.tfstate-md5"}}' \
+            --region "${{ env.AWS_REGION }}" || true
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.3"
 
-      - name: Empty S3 Bucket Build Artifacts
+      - name: Empty S3 Bucket Build Artifacts (Preserve State)
         run: |
           BUCKET_NAME="jcs-raju-sunotal-final"
-          echo "Emptying all build artifacts and objects in s3://${BUCKET_NAME}..."
-          aws s3 rm s3://${BUCKET_NAME} --recursive || true
+          echo "Emptying build artifacts in s3://${BUCKET_NAME}/artifacts..."
+          aws s3 rm s3://${BUCKET_NAME}/artifacts --recursive || true
 
       - name: Destroy Infrastructure with Terraform
         run: |
@@ -94,12 +102,6 @@ jobs:
             done
             echo "All Packer AMI resources deregistered and snapshots purged successfully!"
           fi
-
-      - name: Delete DynamoDB State Lock Table
-        run: |
-          echo "Deleting DynamoDB lock table sunotal-terraform-locks..."
-          aws dynamodb delete-table --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
-          echo "DynamoDB lock table deleted."
 
       - name: Purge Remaining Orphaned Resources
         run: |
