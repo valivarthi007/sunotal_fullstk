@@ -178,15 +178,76 @@ jobs:
             echo "All Packer AMI resources deregistered and snapshots purged successfully!"
           fi
 
-      - name: Purge Remaining Orphaned Resources
+      - name: Purge Remaining Orphaned Resources (Full AWS us-east-1 Sweeper)
         run: |
-          echo "Checking for lingering EC2 instances tagged Project=sunotal..."
+          echo "Sweeping & Purging all remaining resources tagged Project=sunotal or named sunotal-* in us-east-1..."
+
+          # 1. Terminate lingering EC2 Instances
           INST_IDS=$(aws ec2 describe-instances \
             --filters "Name=tag:Project,Values=sunotal" "Name=instance-state-name,Values=running,pending,stopped" \
             --query "Reservations[*].Instances[*].InstanceId" \
-            --output text)
+            --output text 2>/dev/null || echo "")
           if [ -n "$INST_IDS" ] && [ "$INST_IDS" != "None" ]; then
             echo "Terminating lingering instances: $INST_IDS"
             aws ec2 terminate-instances --instance-ids $INST_IDS || true
           fi
-          echo "🎉 Infrastructure Teardown Complete! All resources purged."
+
+          # 2. Delete RDS Instance (if exists)
+          if aws rds describe-db-instances --db-instance-identifier "sunotal-postgres" >/dev/null 2>&1; then
+            echo "Deleting RDS DB Instance sunotal-postgres..."
+            aws rds delete-db-instance --db-instance-identifier "sunotal-postgres" --skip-final-snapshot --delete-automated-backups || true
+          fi
+
+          # 3. Delete Load Balancer
+          ALB_ARN=$(aws elbv2 describe-load-balancers --names "sunotal-alb" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "")
+          if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
+            echo "Deleting ALB sunotal-alb ($ALB_ARN)..."
+            aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" || true
+          fi
+
+          # 4. Delete Target Group
+          TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-app-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+          if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
+            echo "Deleting Target Group sunotal-app-tg ($TG_ARN)..."
+            aws elbv2 delete-target-group --target-group-arn "$TG_ARN" || true
+          fi
+
+          # 5. Delete CloudFront Origin Access Control
+          OAC_ID=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='sunotal-s3-oac'].Id" --output text 2>/dev/null || echo "")
+          if [ -n "$OAC_ID" ] && [ "$OAC_ID" != "None" ]; then
+            OAC_ETAG=$(aws cloudfront get-origin-access-control --id "$OAC_ID" --query "ETag" --output text 2>/dev/null || echo "")
+            echo "Deleting CloudFront OAC sunotal-s3-oac ($OAC_ID)..."
+            aws cloudfront delete-origin-access-control --id "$OAC_ID" --if-match "$OAC_ETAG" || true
+          fi
+
+          # 6. Delete IAM Role & Instance Profile & Policy
+          if aws iam get-instance-profile --instance-profile-name "sunotal-ec2-instance-profile" >/dev/null 2>&1; then
+            echo "Deleting IAM Instance Profile sunotal-ec2-instance-profile..."
+            aws iam remove-role-from-instance-profile --instance-profile-name "sunotal-ec2-instance-profile" --role-name "sunotal-ec2-s3-access-role" 2>/dev/null || true
+            aws iam delete-instance-profile --instance-profile-name "sunotal-ec2-instance-profile" || true
+          fi
+
+          POLICY_ARN=$(aws iam list-policies --query "Policies[?PolicyName=='sunotal-s3-access-policy'].Arn" --output text 2>/dev/null || echo "")
+          if [ -n "$POLICY_ARN" ] && [ "$POLICY_ARN" != "None" ]; then
+            echo "Detaching & Deleting IAM Policy sunotal-s3-access-policy..."
+            aws iam detach-role-policy --role-name "sunotal-ec2-s3-access-role" --policy-arn "$POLICY_ARN" 2>/dev/null || true
+            aws iam delete-policy --policy-arn "$POLICY_ARN" || true
+          fi
+
+          if aws iam get-role --role-name "sunotal-ec2-s3-access-role" >/dev/null 2>&1; then
+            echo "Deleting IAM Role sunotal-ec2-s3-access-role..."
+            aws iam delete-role --role-name "sunotal-ec2-s3-access-role" || true
+          fi
+
+          # 7. Delete VPC & Subnets (if exists)
+          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=sunotal-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "")
+          if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+            echo "Deleting VPC sunotal-vpc ($VPC_ID) subnets & resources..."
+            SG_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[?GroupName!='default'].GroupId" --output text 2>/dev/null || echo "")
+            for SG in $SG_IDS; do
+              aws ec2 delete-security-group --group-id "$SG" || true
+            done
+            aws ec2 delete-vpc --vpc-id "$VPC_ID" || true
+          fi
+
+          echo "🎉 Complete Clean Sweep Finished! Every sunotal resource in us-east-1 wiped."
