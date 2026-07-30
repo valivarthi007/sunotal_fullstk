@@ -37,6 +37,18 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Ensure S3 Backend Bucket Exists & Versioning Enabled
+        run: |
+          BUCKET_NAME="jcs-raju-sunotal-final"
+          echo "Ensuring S3 backend bucket $BUCKET_NAME exists..."
+          aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null || \
+          aws s3api create-bucket --bucket "$BUCKET_NAME" --region "${{ env.AWS_REGION }}" || true
+          
+          echo "Enabling S3 bucket versioning..."
+          aws s3api put-bucket-versioning \
+            --bucket "$BUCKET_NAME" \
+            --versioning-configuration Status=Enabled || true
+
       - name: Ensure DynamoDB State Lock Table Exists
         run: |
           aws dynamodb create-table \
