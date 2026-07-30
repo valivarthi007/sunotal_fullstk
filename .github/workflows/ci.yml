@@ -135,7 +135,10 @@ jobs:
             --comment "Deploy Sunotal S3 build artifacts directly to Private EC2" \
             --parameters commands="[
               \"export PATH=\\\$PATH:/usr/local/bin:/usr/bin:/bin:/snap/bin:~/.local/share/pnpm\",
+              \"export NODE_OPTIONS='--max-old-space-size=512'\",
               \"set -e\",
+              \"echo 'Ensuring swap file exists on EC2 instance...'\",
+              \"if [ ! -f /swapfile ]; then sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048; sudo chmod 600 /swapfile; sudo mkswap /swapfile; sudo swapon /swapfile; fi\",
               \"echo 'Downloading build artifacts directly from S3 via Gateway Endpoint...'\",
               \"mkdir -p /tmp/sunotal-artifacts\",
               \"aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz /tmp/sunotal-artifacts/frontend-build.tgz\",

@@ -28,6 +28,18 @@
       delay: 10
       until: apt_system_packages is success
 
+    - name: Ensure 2GB swap file exists
+      shell: |
+        if [ ! -f /swapfile ]; then
+          fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+          chmod 600 /swapfile
+          mkswap /swapfile
+          swapon /swapfile
+          echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        fi
+      args:
+        creates: /swapfile
+
     - name: Add ubuntu user to docker group
       user:
         name: ubuntu
