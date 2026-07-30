@@ -16,8 +16,8 @@ import {
   ShoppingBag,
   LogOut,
 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { useState, useEffect, useMemo } from "react";
+import { useGetCurrentUser, getGetCurrentUserQueryKey, useListCategories } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart-context";
 import { useLocationState } from "@/lib/location-context";
@@ -50,14 +50,26 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
     return () => { document.body.style.overflow = ""; };
   }, [isOpen, mobileMenuOpen]);
 
+  const { data: dbCategories = [] } = useListCategories();
+  const categoryNavLinks = useMemo(() => {
+    const defaults = [
+      { name: "Vegetables", path: "/vegetables" },
+      { name: "Fruits", path: "/fruits" },
+      { name: "Dairy", path: "/dairy" },
+      { name: "Dry Fruits", path: "/dry-fruits" },
+      { name: "Grains", path: "/grains" },
+    ];
+    if (!dbCategories || dbCategories.length === 0) return defaults;
+    return dbCategories.map((c) => ({
+      name: c.name,
+      path: c.name === "Vegetables" ? "/vegetables" : c.name === "Fruits" ? "/fruits" : c.name === "Dairy" ? "/dairy" : c.name === "Dry Fruits" ? "/dry-fruits" : c.name === "Grains" ? "/grains" : `/products?category=${encodeURIComponent(c.name)}`,
+    }));
+  }, [dbCategories]);
+
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "All Products", path: "/products" },
-    { name: "Vegetables", path: "/vegetables" },
-    { name: "Fruits", path: "/fruits" },
-    { name: "Dairy", path: "/dairy" },
-    { name: "Dry Fruits", path: "/dry-fruits" },
-    { name: "Grains", path: "/grains" },
+    ...categoryNavLinks,
     { name: "For Farmers", path: "/farmer" },
   ];
 

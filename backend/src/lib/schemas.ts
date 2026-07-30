@@ -160,7 +160,7 @@ export const ListProductsQueryParams = zod.object({
 export const ListProductsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['Vegetables', 'Fruits', 'Dairy', 'Dry Fruits', 'Grains']),
+  "category": zod.string(),
   "unit": zod.string(),
   "price": zod.number(),
   "originalPrice": zod.number(),
@@ -184,7 +184,7 @@ export const ListProductsResponse = zod.array(ListProductsResponseItem)
 
 export const CreateProductBody = zod.object({
   "name": zod.string().min(1),
-  "category": zod.enum(['Vegetables', 'Fruits', 'Dairy', 'Dry Fruits', 'Grains']),
+  "category": zod.string(),
   "unit": zod.string(),
   "price": zod.number(),
   "originalPrice": zod.number(),
@@ -198,7 +198,7 @@ export const CreateProductBody = zod.object({
 export const CreateProductResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['Vegetables', 'Fruits', 'Dairy', 'Dry Fruits', 'Grains']),
+  "category": zod.string(),
   "unit": zod.string(),
   "price": zod.number(),
   "originalPrice": zod.number(),
@@ -223,7 +223,7 @@ export const GetProductParams = zod.object({
 export const GetProductResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['Vegetables', 'Fruits', 'Dairy', 'Dry Fruits', 'Grains']),
+  "category": zod.string(),
   "unit": zod.string(),
   "price": zod.number(),
   "originalPrice": zod.number(),
@@ -250,7 +250,7 @@ export const UpdateProductParams = zod.object({
 
 export const UpdateProductBody = zod.object({
   "name": zod.string().min(1),
-  "category": zod.enum(['Vegetables', 'Fruits', 'Dairy', 'Dry Fruits', 'Grains']),
+  "category": zod.string(),
   "unit": zod.string(),
   "price": zod.number(),
   "originalPrice": zod.number(),
@@ -264,7 +264,7 @@ export const UpdateProductBody = zod.object({
 export const UpdateProductResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['Vegetables', 'Fruits', 'Dairy', 'Dry Fruits', 'Grains']),
+  "category": zod.string(),
   "unit": zod.string(),
   "price": zod.number(),
   "originalPrice": zod.number(),

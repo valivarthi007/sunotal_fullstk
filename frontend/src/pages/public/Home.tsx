@@ -2,11 +2,12 @@ import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ProductCard, ProductCardSkeleton } from "@/components/ui/ProductCard";
-import { useListProducts } from "@workspace/api-client-react";
+import { useListProducts, useListCategories } from "@workspace/api-client-react";
 import useEmblaCarousel from "embla-carousel-react";
-import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ShieldCheck, Clock, Tractor } from "lucide-react";
+import { useCallback, useEffect, useState, useMemo } from "react";
+import { CheckCircle2, ShieldCheck, Clock, Tractor, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLocationState } from "@/lib/location-context";
 
 const SLIDES = [
   {
@@ -35,7 +36,7 @@ const SLIDES = [
   },
 ];
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   { name: "Vegetables", path: "/vegetables", icon: "🥬", color: "bg-emerald-100 text-emerald-800" },
   { name: "Fruits", path: "/fruits", icon: "🍎", color: "bg-orange-100 text-orange-800" },
   { name: "Dairy", path: "/dairy", icon: "🥛", color: "bg-blue-100 text-blue-800" },
@@ -43,15 +44,23 @@ const CATEGORIES = [
   { name: "Grains", path: "/grains", icon: "🌾", color: "bg-yellow-100 text-yellow-800" },
 ];
 
-import { useLocationState } from "@/lib/location-context";
-import { MapPin, Navigation } from "lucide-react";
-
 export default function Home() {
   const [, setLocation] = useLocation();
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("All");
   const { location: userLoc } = useLocationState();
+
+  const { data: dbCategories = [] } = useListCategories();
+  const categoriesList = useMemo(() => {
+    if (!dbCategories || dbCategories.length === 0) return DEFAULT_CATEGORIES;
+    return dbCategories.map((c) => ({
+      name: c.name,
+      path: c.name === "Vegetables" ? "/vegetables" : c.name === "Fruits" ? "/fruits" : c.name === "Dairy" ? "/dairy" : c.name === "Dry Fruits" ? "/dry-fruits" : c.name === "Grains" ? "/grains" : `/products?category=${encodeURIComponent(c.name)}`,
+      icon: c.icon || "📦",
+      color: "bg-emerald-100 text-emerald-800",
+    }));
+  }, [dbCategories]);
 
   const { data: products, isLoading } = useListProducts(
     activeTab !== "All" ? { category: activeTab } : undefined,
@@ -165,7 +174,7 @@ export default function Home() {
       <section className="py-12 bg-background border-b">
         <div className="container mx-auto px-4">
           <div className="flex gap-4 md:grid md:grid-cols-5 overflow-x-auto no-scrollbar pb-4 md:pb-0">
-            {CATEGORIES.map((cat) => (
+            {categoriesList.map((cat) => (
               <Link
                 key={cat.name}
                 href={cat.path}
@@ -191,7 +200,7 @@ export default function Home() {
             </div>
 
             <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2 md:pb-0">
-              {["All", ...CATEGORIES.map((c) => c.name)].map((tab) => (
+              {["All", ...categoriesList.map((c) => c.name)].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}

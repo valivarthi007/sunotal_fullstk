@@ -1,6 +1,6 @@
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { ProductCard, ProductCardSkeleton } from "@/components/ui/ProductCard";
-import { useListProducts } from "@workspace/api-client-react";
+import { useListProducts, useListCategories } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -27,7 +27,7 @@ const categoryToPath = (category: string) => {
     case "Grains":
       return "/grains";
     default:
-      return "/products";
+      return `/products?category=${encodeURIComponent(category)}`;
   }
 };
 
@@ -53,7 +53,19 @@ export default function ProductsPage({ initialCategory = "All" }: ProductsPagePr
   const [search, setSearch] = useState("");
   const currentCategory = initialCategory !== "All" ? initialCategory : pathToCategory(location.split("?")[0]);
 
-  const categories = ["All", "Vegetables", "Fruits", "Dairy", "Dry Fruits", "Grains"];
+  const { data: dbCategories = [] } = useListCategories();
+  const categories = useMemo(() => {
+    const list = ["All"];
+    const set = new Set<string>();
+    for (const c of dbCategories) {
+      if (c.name && !set.has(c.name)) {
+        set.add(c.name);
+        list.push(c.name);
+      }
+    }
+    return list;
+  }, [dbCategories]);
+
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [onlyOrganic, setOnlyOrganic] = useState(false);
   const [sortBy, setSortBy] = useState<'relevance'|'price_asc'|'price_desc'|'newest'>('relevance');

@@ -4,8 +4,10 @@ import {
   useCreateProduct, 
   useUpdateProduct, 
   useDeleteProduct,
+  useListCategories,
+  useCreateCategory,
+  useDeleteCategory,
   getListProductsQueryKey,
-  ProductCategory
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,13 +38,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { Plus, Search, Edit2, Trash2, Package } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Package, FolderPlus, Tag } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const formSchema = z.object({
   name: z.string().min(2, "Product name must be at least 2 characters"),
-  category: z.nativeEnum(ProductCategory),
+  category: z.string().min(1, "Category is required"),
   unit: z.string().min(1, "Unit is required (e.g., 1 kg, 500g, 1 Dozen)"),
   price: z.coerce.number().min(1, "Selling price must be greater than 0"),
   originalPrice: z.coerce.number().min(0, "MRP cannot be negative"),
@@ -70,6 +72,10 @@ export default function ProductsAdmin() {
   const { data: products, isLoading } = useListProducts( 
     search.length > 2 ? { search } : undefined 
   );
+
+  const { data: categories = [] } = useListCategories();
+  const createCategory = useCreateCategory();
+  const deleteCategory = useDeleteCategory();
   
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -78,14 +84,18 @@ export default function ProductsAdmin() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   
-  // Fixed: State controller added to move delete prompts cleanly out of row bounds
+  // Category management modal states
+  const [catModalOpen, setCatModalOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatIcon, setNewCatIcon] = useState("📦");
+
   const [deletingProduct, setDeletingProduct] = useState<any | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      category: ProductCategory.Vegetables,
+      category: "Vegetables",
       unit: "1 kg",
       price: 0,
       originalPrice: 0,
@@ -115,9 +125,10 @@ export default function ProductsAdmin() {
   };
 
   const handleCreateNew = () => {
+    const defaultCat = categories.length > 0 ? categories[0].name : "Vegetables";
     form.reset({
       name: "",
-      category: ProductCategory.Vegetables,
+      category: defaultCat,
       unit: "1 kg",
       price: 0,
       originalPrice: 0,
@@ -131,9 +142,42 @@ export default function ProductsAdmin() {
     setOpen(true);
   };
 
+  const handleAddCategorySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) {
+      toast.error("Please enter a category name");
+      return;
+    }
+
+    createCategory.mutate(
+      { name: newCatName.trim(), icon: newCatIcon.trim() || "📦" },
+      {
+        onSuccess: (added) => {
+          toast.success(`Category "${added.name}" added successfully!`);
+          form.setValue("category", added.name);
+          setNewCatName("");
+          setNewCatIcon("📦");
+          setCatModalOpen(false);
+        },
+        onError: (err: any) => {
+          toast.error(err?.data?.error || err.message || "Failed to create category");
+        },
+      }
+    );
+  };
+
+  const handleDeleteCategory = (id: number, name: string) => {
+    deleteCategory.mutate(id, {
+      onSuccess: () => {
+        toast.success(`Category "${name}" deleted`);
+      },
+      onError: () => toast.error("Failed to delete category"),
+    });
+  };
+
   const onSubmit = (values: FormValues) => {
     if (editingId) {
-      updateProduct.mutate({ id: editingId, data: values }, {
+      updateProduct.mutate({ id: editingId, data: values as any }, {
         onSuccess: () => {
           toast.success("Product updated successfully");
           queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
@@ -142,7 +186,7 @@ export default function ProductsAdmin() {
         onError: () => toast.error("Failed to update product")
       });
     } else {
-      createProduct.mutate({ data: values }, {
+      createProduct.mutate({ data: values as any }, {
         onSuccess: () => {
           toast.success("Product created successfully");
           queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
@@ -169,16 +213,86 @@ export default function ProductsAdmin() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-sidebar-foreground tracking-tight">Products</h1>
-          <p className="text-muted-foreground mt-1">Manage your catalog, pricing, and inventory.</p>
+          <p className="text-muted-foreground mt-1">Manage your catalog, categories, pricing, and inventory.</p>
         </div>
         
-        {/* Fixed: Simplified button declaration, avoiding conflicting DialogTrigger event signals */}
-        <Button onClick={handleCreateNew} className="gap-2 bg-sidebar-primary hover:bg-sidebar-primary/90 text-white rounded-xl shadow-sm">
-          <Plus className="w-4 h-4" /> Add Product
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setCatModalOpen(true)}
+            className="gap-2 border-sidebar-border rounded-xl"
+          >
+            <FolderPlus className="w-4 h-4 text-primary" /> Manage Categories
+          </Button>
+          <Button onClick={handleCreateNew} className="gap-2 bg-sidebar-primary hover:bg-sidebar-primary/90 text-white rounded-xl shadow-sm">
+            <Plus className="w-4 h-4" /> Add Product
+          </Button>
+        </div>
       </div>
 
-      {/* Main Creation / Modification Dialog */}
+      {/* MODAL 1: Manage Categories Dialog */}
+      <Dialog open={catModalOpen} onOpenChange={setCatModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="w-5 h-5 text-primary" /> Manage Product Categories
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6 pt-2">
+            {/* Add New Category Form */}
+            <form onSubmit={handleAddCategorySubmit} className="p-4 rounded-2xl bg-accent/30 border space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Add New Category</h3>
+              <div className="grid grid-cols-4 gap-2">
+                <Input
+                  placeholder="Icon (Emoji)"
+                  value={newCatIcon}
+                  onChange={(e) => setNewCatIcon(e.target.value)}
+                  className="col-span-1 text-center"
+                />
+                <Input
+                  placeholder="Category Name (e.g. Spices)"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              <Button type="submit" size="sm" className="w-full font-bold rounded-xl" disabled={createCategory.isPending}>
+                {createCategory.isPending ? "Adding..." : "+ Create Category"}
+              </Button>
+            </form>
+
+            {/* List Existing Categories */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Active Categories ({categories.length})
+              </h3>
+              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                {categories.map((cat) => (
+                  <div key={cat.id || cat.name} className="flex items-center justify-between p-3 rounded-xl bg-card border text-sm">
+                    <div className="flex items-center gap-2 font-medium">
+                      <span>{cat.icon || "📦"}</span>
+                      <span>{cat.name}</span>
+                    </div>
+                    {cat.id && cat.id > 5 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 2: Main Creation / Modification Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -192,12 +306,23 @@ export default function ProductsAdmin() {
                 )} />
                 <FormField control={form.control} name="category" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Category</FormLabel>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Category</FormLabel>
+                      <button
+                        type="button"
+                        onClick={() => setCatModalOpen(true)}
+                        className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                      >
+                        + New Category
+                      </button>
+                    </div>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        {Object.values(ProductCategory).map(cat => (
-                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.name} value={cat.name}>
+                            {cat.icon ? `${cat.icon} ` : ""}{cat.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

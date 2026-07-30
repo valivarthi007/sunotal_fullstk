@@ -49,11 +49,9 @@ export default function Register() {
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     registerUser.mutate({ data: values }, {
-      onSuccess: (data) => {
-        localStorage.setItem("sunotal_token", data.token);
-        queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-        toast.success(`Welcome, ${data.user.name.split(" ")[0]}! Account created.`);
-        setLocation("/");
+      onSuccess: () => {
+        toast.success("Account created successfully! Please sign in to your account.");
+        setLocation("/login");
       },
       onError: (error: any) => {
         toast.error(error?.data?.error || error.message || "Registration failed. Please try again.");

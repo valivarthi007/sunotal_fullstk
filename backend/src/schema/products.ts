@@ -5,9 +5,7 @@ import { z } from "zod/v4";
 export const productsTable = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  category: text("category", {
-    enum: ["Vegetables", "Fruits", "Dairy", "Dry Fruits", "Grains"],
-  }).notNull(),
+  category: text("category").notNull(),
   unit: text("unit").notNull(),
   price: real("price").notNull(),
   originalPrice: real("original_price").notNull(),

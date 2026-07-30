@@ -177,20 +177,7 @@ export default function Profile() {
       if (storedGrievances) {
         setGrievances(JSON.parse(storedGrievances));
       } else {
-        const defaultGrv: Grievance[] = [
-          {
-            ticketId: "GRV-2026-1049",
-            orderId: "SUN-761204",
-            type: "Packaging Issue",
-            description: "Milk seal was slightly loose upon delivery.",
-            preferredResolution: "Replacement Bottle",
-            status: "Resolved",
-            createdAt: "24 Jul 2026",
-            responseMsg: "Apologies! We credited ₹75 to your Sunotal wallet and replaced your bottle.",
-          },
-        ];
-        setGrievances(defaultGrv);
-        localStorage.setItem(STORAGE_GRIEVANCES_KEY, JSON.stringify(defaultGrv));
+        setGrievances([]);
       }
     } catch (e) {
       console.error(e);
