@@ -43,12 +43,32 @@ jobs:
             --region "${{ env.AWS_REGION }}" || true
           aws dynamodb wait table-exists --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
 
-      - name: Sync & Clear Stale State Lock Digest (if checksum mismatch occurs)
+      - name: Restore State File from S3 Version History (if Delete Marker exists)
         run: |
+          BUCKET_NAME="jcs-raju-sunotal-final"
+          KEY="state/terraform.tfstate"
+          echo "Checking S3 state file version history for s3://${BUCKET_NAME}/${KEY}..."
+
+          # Fetch latest valid non-delete-marker state version ID
+          LATEST_VERSION_ID=$(aws s3api list-object-versions \
+            --bucket "$BUCKET_NAME" \
+            --prefix "$KEY" \
+            --query 'Versions[0].VersionId' \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$LATEST_VERSION_ID" ] && [ "$LATEST_VERSION_ID" != "None" ] && [ "$LATEST_VERSION_ID" != "null" ]; then
+            echo "Restoring state/terraform.tfstate from S3 versionId: $LATEST_VERSION_ID..."
+            aws s3api copy-object \
+              --bucket "$BUCKET_NAME" \
+              --copy-source "${BUCKET_NAME}/${KEY}?versionId=${LATEST_VERSION_ID}" \
+              --key "$KEY" || true
+            echo "State file restored successfully."
+          fi
+
           echo "Clearing stale state lock digest in DynamoDB..."
           aws dynamodb delete-item \
             --table-name sunotal-terraform-locks \
-            --key '{"LockID": {"S": "jcs-raju-sunotal-final/state/terraform.tfstate-md5"}}' \
+            --key '{"LockID": {"S": "'"${BUCKET_NAME}"'/state/terraform.tfstate-md5"}}' \
             --region "${{ env.AWS_REGION }}" || true
 
       - name: Setup Terraform
