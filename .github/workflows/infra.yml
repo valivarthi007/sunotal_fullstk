@@ -49,20 +49,6 @@ jobs:
             --bucket "$BUCKET_NAME" \
             --versioning-configuration Status=Enabled || true
 
-      - name: Auto-Restore Soft-Deleted S3 Product Images & Assets
-        run: |
-          BUCKET_NAME="jcs-raju-sunotal-final"
-          echo "Scanning for soft-deleted product images & assets in s3://${BUCKET_NAME}..."
-          aws s3api list-object-versions --bucket "$BUCKET_NAME" \
-            --query 'DeleteMarkers[?IsLatest==`true`].[Key, VersionId]' \
-            --output text 2>/dev/null | while read -r KEY VERSION_ID; do
-              if [ -n "$KEY" ] && [ "$KEY" != "None" ] && [ "$KEY" != "null" ]; then
-                echo "Un-deleting asset: $KEY (removing DeleteMarker: $VERSION_ID)..."
-                aws s3api delete-object --bucket "$BUCKET_NAME" --key "$KEY" --version-id "$VERSION_ID" || true
-              fi
-            done
-          echo "✅ All product images and S3 assets restored successfully!"
-
       - name: Ensure DynamoDB State Lock Table Exists
         run: |
           aws dynamodb create-table \
@@ -72,44 +58,6 @@ jobs:
             --billing-mode PAY_PER_REQUEST \
             --region "${{ env.AWS_REGION }}" || true
           aws dynamodb wait table-exists --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
-
-      - name: Auto-Restore Terraform State Snapshot from S3 (if state is empty)
-        run: |
-          BUCKET_NAME="jcs-raju-sunotal-final"
-          KEY="state/terraform.tfstate"
-          echo "Inspecting S3 remote state file at s3://${BUCKET_NAME}/${KEY}..."
-
-          aws s3 cp "s3://${BUCKET_NAME}/${KEY}" /tmp/current-state.json 2>/dev/null || echo "{}" > /tmp/current-state.json
-
-          if ! grep -q '"type": *"aws_' /tmp/current-state.json 2>/dev/null; then
-            echo "Current state is empty or missing. Searching S3 version history for valid state snapshot..."
-            VERSIONS=$(aws s3api list-object-versions --bucket "$BUCKET_NAME" --prefix "$KEY" --query 'Versions[*].VersionId' --output text 2>/dev/null || echo "")
-            
-            for VID in $VERSIONS; do
-              if [ -n "$VID" ] && [ "$VID" != "None" ] && [ "$VID" != "null" ]; then
-                aws s3 cp "s3://${BUCKET_NAME}/${KEY}?versionId=${VID}" /tmp/candidate-state.json 2>/dev/null || true
-                if grep -q '"type": *"aws_' /tmp/candidate-state.json 2>/dev/null; then
-                  echo "Found valid state snapshot versionId: $VID. Restoring state/terraform.tfstate..."
-                  aws s3api copy-object \
-                    --bucket "$BUCKET_NAME" \
-                    --copy-source "${BUCKET_NAME}/${KEY}?versionId=${VID}" \
-                    --key "$KEY"
-                  echo "✅ Terraform remote state restored successfully!"
-                  break
-                fi
-              fi
-            done
-          else
-            echo "Current remote state file is valid."
-          fi
-
-      - name: Sync & Clear Stale State Lock Digest (if checksum mismatch occurs)
-        run: |
-          echo "Clearing stale state lock digest in DynamoDB..."
-          aws dynamodb delete-item \
-            --table-name sunotal-terraform-locks \
-            --key '{"LockID": {"S": "jcs-raju-sunotal-final/state/terraform.tfstate-md5"}}' \
-            --region "${{ env.AWS_REGION }}" || true
 
       - name: Setup Packer
         uses: hashicorp/setup-packer@v3
@@ -176,7 +124,7 @@ jobs:
             fi
           fi
 
-      - name: Deploy Infrastructure with Terraform (Skip if already active)
+      - name: Deploy Infrastructure with Terraform
         env:
           TF_VAR_ami_id: ${{ steps.packer_build.outputs.ami_id }}
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
@@ -191,52 +139,6 @@ jobs:
           
           cd terraform
           terraform init -upgrade
-
-          echo "Syncing existing AWS resources into Terraform state..."
-          STATE_LIST=$(terraform state list 2>/dev/null || echo "")
-
-          # 1. IAM Role: sunotal-ec2-s3-access-role
-          if ! echo "$STATE_LIST" | grep -q "module.iam.aws_iam_role.ec2_s3_role"; then
-            if aws iam get-role --role-name sunotal-ec2-s3-access-role >/dev/null 2>&1; then
-              echo "Importing existing IAM Role sunotal-ec2-s3-access-role..."
-              terraform import -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop" module.iam.aws_iam_role.ec2_s3_role sunotal-ec2-s3-access-role || true
-            fi
-          fi
-
-          # 2. IAM Policy: sunotal-s3-access-policy
-          if ! echo "$STATE_LIST" | grep -q "module.iam.aws_iam_policy.s3_artifacts_policy"; then
-            POLICY_ARN=$(aws iam list-policies --query "Policies[?PolicyName=='sunotal-s3-access-policy'].Arn" --output text 2>/dev/null || echo "")
-            if [ -n "$POLICY_ARN" ] && [ "$POLICY_ARN" != "None" ]; then
-              echo "Importing existing IAM Policy sunotal-s3-access-policy..."
-              terraform import -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop" module.iam.aws_iam_policy.s3_artifacts_policy "$POLICY_ARN" || true
-            fi
-          fi
-
-          # 3. IAM Instance Profile: sunotal-ec2-instance-profile
-          if ! echo "$STATE_LIST" | grep -q "module.iam.aws_iam_instance_profile.ec2_profile"; then
-            if aws iam get-instance-profile --instance-profile-name sunotal-ec2-instance-profile >/dev/null 2>&1; then
-              echo "Importing existing IAM Instance Profile sunotal-ec2-instance-profile..."
-              terraform import -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop" module.iam.aws_iam_instance_profile.ec2_profile sunotal-ec2-instance-profile || true
-            fi
-          fi
-
-          # 4. CloudFront OAC: sunotal-s3-oac
-          if ! echo "$STATE_LIST" | grep -q "module.cdn.aws_cloudfront_origin_access_control.s3_oac"; then
-            OAC_ID=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='sunotal-s3-oac'].Id" --output text 2>/dev/null || echo "")
-            if [ -n "$OAC_ID" ] && [ "$OAC_ID" != "None" ]; then
-              echo "Importing existing CloudFront OAC sunotal-s3-oac ($OAC_ID)..."
-              terraform import -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop" module.cdn.aws_cloudfront_origin_access_control.s3_oac "$OAC_ID" || true
-            fi
-          fi
-
-          # 5. VPC: sunotal-vpc
-          if ! echo "$STATE_LIST" | grep -q "module.vpc.aws_vpc.main"; then
-            VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=sunotal-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "")
-            if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
-              echo "Importing existing VPC sunotal-vpc ($VPC_ID)..."
-              terraform import -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop" module.vpc.aws_vpc.main "$VPC_ID" || true
-            fi
-          fi
 
           EXISTING_INSTANCE=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \
@@ -266,4 +168,3 @@ jobs:
               echo "PR Validation complete — terraform apply skipped for non-dispatch/PR builds."
             fi
           fi
-
