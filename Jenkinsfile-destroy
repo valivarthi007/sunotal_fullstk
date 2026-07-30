@@ -2,66 +2,139 @@ pipeline {
   agent any
 
   environment {
-    AWS_CREDS = credentials('AWS')
-    AWS_DEFAULT_REGION = 'us-east-1'
+    AWS_REGION     = 'us-east-1'
+    S3_BUCKET_NAME = 'jcs-raju-sunotal-final'
   }
 
   options {
     timestamps()
-    timeout(time: 60, unit: 'MINUTES')
-    skipDefaultCheckout(false)
+    timeout(time: 45, unit: 'MINUTES')
+    disableConcurrentBuilds()
   }
 
-  // Adding a manual approval parameter is highly recommended for destructive pipelines
   parameters {
-    booleanParam(name: 'CONFIRM_DESTROY', defaultValue: false, description: 'Check this box to confirm you want to destroy all infrastructure.')
+    booleanParam(name: 'CONFIRM_DESTROY', defaultValue: false, description: 'Check this box to confirm teardown of all infrastructure in us-east-1.')
   }
 
   stages {
-    stage('Checkout') {
+    stage('Checkout & Verify Approval') {
       steps {
         checkout scm
+        script {
+          if (!params.CONFIRM_DESTROY) {
+            error("Destruction aborted: You must check CONFIRM_DESTROY to run this teardown pipeline.")
+          }
+        }
       }
     }
 
-    stage('Verify Approval') {
+    stage('Restore S3 State & Purge Build Artifacts') {
       steps {
-        script {
-          if (!params.CONFIRM_DESTROY) {
-            error("Destruction aborted: You must check the CONFIRM_DESTROY parameter to run this pipeline.")
-          }
+        withCredentials([usernamePassword(credentialsId: 'AWS', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+          sh '''
+            set -e
+            echo "Inspecting S3 remote state file at s3://${S3_BUCKET_NAME}/state/terraform.tfstate..."
+            aws s3 cp "s3://${S3_BUCKET_NAME}/state/terraform.tfstate" /tmp/current-state.json 2>/dev/null || echo "{}" > /tmp/current-state.json
+
+            if ! grep -q '"type": *"aws_' /tmp/current-state.json 2>/dev/null; then
+              echo "Searching S3 version history for valid non-empty state snapshot..."
+              VERSIONS=$(aws s3api list-object-versions --bucket "${S3_BUCKET_NAME}" --prefix "state/terraform.tfstate" --query 'Versions[*].VersionId' --output text 2>/dev/null || echo "")
+              for VID in $VERSIONS; do
+                if [ -n "$VID" ] && [ "$VID" != "None" ] && [ "$VID" != "null" ]; then
+                  aws s3 cp "s3://${S3_BUCKET_NAME}/state/terraform.tfstate?versionId=${VID}" /tmp/candidate-state.json 2>/dev/null || true
+                  if grep -q '"type": *"aws_' /tmp/candidate-state.json 2>/dev/null; then
+                    echo "Restoring valid state version: $VID..."
+                    aws s3api copy-object --bucket "${S3_BUCKET_NAME}" --copy-source "${S3_BUCKET_NAME}/state/terraform.tfstate?versionId=${VID}" --key "state/terraform.tfstate"
+                    break
+                  fi
+                fi
+              done
+            fi
+
+            echo "Clearing stale state lock digest in DynamoDB..."
+            aws dynamodb delete-item \
+              --table-name sunotal-terraform-locks \
+              --key '{"LockID": {"S": "'"${S3_BUCKET_NAME}"'/state/terraform.tfstate-md5"}}' \
+              --region "${AWS_REGION}" || true
+
+            echo "Emptying build artifacts in s3://${S3_BUCKET_NAME}/artifacts..."
+            aws s3 rm s3://${S3_BUCKET_NAME}/artifacts --recursive || true
+          '''
         }
       }
     }
 
     stage('Destroy Infrastructure (Terraform)') {
       steps {
-        sh '''
-          if ! command -v terraform >/dev/null 2>&1; then
-            echo 'Terraform is not installed in Jenkins agent; install it before running this stage.'
-            exit 1
-          fi
-          
-          export AWS_ACCESS_KEY_ID=$AWS_CREDS_USR
-          export AWS_SECRET_ACCESS_KEY=$AWS_CREDS_PSW
-          cd terraform
-          terraform init
-          
-          echo "Starting infrastructure decommission..."
-          # We pass a dummy ami_id because Terraform still requires the variable to be defined, 
-          # even during a destroy operation (where it relies on state to know what to delete).
-          terraform destroy -auto-approve -var="ami_id=dummy_for_destroy"
-        '''
+        withCredentials([usernamePassword(credentialsId: 'AWS', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+          sh '''
+            set -e
+            cd terraform
+            terraform init -upgrade
+
+            echo "Syncing existing AWS resources into Terraform state before destroy..."
+            STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+
+            if ! echo "$STATE_LIST" | grep -q "aws_iam_role.ec2_s3_role"; then
+              if aws iam get-role --role-name sunotal-ec2-s3-access-role >/dev/null 2>&1; then
+                terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.iam.aws_iam_role.ec2_s3_role sunotal-ec2-s3-access-role || true
+              fi
+            fi
+
+            if ! echo "$STATE_LIST" | grep -q "aws_vpc.main"; then
+              VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=sunotal-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "")
+              if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+                terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.vpc.aws_vpc.main "$VPC_ID" || true
+              fi
+            fi
+
+            terraform destroy -auto-approve -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop"
+          '''
+        }
+      }
+    }
+
+    stage('Purge Packer AMIs & Full Sweeper') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'AWS', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+          sh '''
+            set -e
+            echo "Deregistering Packer AMIs and deleting EBS snapshots..."
+            AMI_IDS=$(aws ec2 describe-images --owners self --filters "Name=tag:Project,Values=sunotal" --query 'Images[*].ImageId' --output text)
+            for AMI_ID in $AMI_IDS; do
+              if [ -n "$AMI_ID" ] && [ "$AMI_ID" != "None" ]; then
+                SNAP_IDS=$(aws ec2 describe-images --image-ids "$AMI_ID" --query 'Images[0].BlockDeviceMappings[*].Ebs.SnapshotId' --output text)
+                aws ec2 deregister-image --image-id "$AMI_ID" || true
+                for SNAP_ID in $SNAP_IDS; do
+                  [ "$SNAP_ID" != "None" ] && aws ec2 delete-snapshot --snapshot-id "$SNAP_ID" || true
+                done
+              fi
+            done
+
+            echo "Running full AWS us-east-1 resource sweeper..."
+            INST_IDS=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=sunotal" "Name=instance-state-name,Values=running,pending,stopped" --query "Reservations[*].Instances[*].InstanceId" --output text 2>/dev/null || echo "")
+            [ -n "$INST_IDS" ] && [ "$INST_IDS" != "None" ] && aws ec2 terminate-instances --instance-ids $INST_IDS || true
+
+            if aws rds describe-db-instances --db-instance-identifier "sunotal-postgres" >/dev/null 2>&1; then
+              aws rds delete-db-instance --db-instance-identifier "sunotal-postgres" --skip-final-snapshot --delete-automated-backups || true
+            fi
+
+            echo "🎉 Complete Clean Sweep Finished!"
+          '''
+        }
       }
     }
   }
 
   post {
+    always {
+      cleanWs()
+    }
     success {
-      echo 'Infrastructure decommissioned successfully.'
+      echo '🎉 Infrastructure successfully decommissioned.'
     }
     failure {
-      echo 'Decommissioning pipeline failed. Review the logs.'
+      echo '❌ Decommissioning pipeline failed. Review execution logs.'
     }
   }
 }

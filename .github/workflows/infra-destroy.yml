@@ -99,45 +99,45 @@ jobs:
           STATE_LIST=$(terraform state list 2>/dev/null || echo "")
 
           # 1. IAM Role: sunotal-ec2-s3-access-role
-          if ! echo "$STATE_LIST" | grep -q "aws_iam_role.ec2_s3_role"; then
+          if ! echo "$STATE_LIST" | grep -q "module.iam.aws_iam_role.ec2_s3_role"; then
             if aws iam get-role --role-name sunotal-ec2-s3-access-role >/dev/null 2>&1; then
               echo "Importing existing IAM Role sunotal-ec2-s3-access-role..."
-              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" aws_iam_role.ec2_s3_role sunotal-ec2-s3-access-role || true
+              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.iam.aws_iam_role.ec2_s3_role sunotal-ec2-s3-access-role || true
             fi
           fi
 
           # 2. IAM Policy: sunotal-s3-access-policy
-          if ! echo "$STATE_LIST" | grep -q "aws_iam_policy.s3_artifacts_policy"; then
+          if ! echo "$STATE_LIST" | grep -q "module.iam.aws_iam_policy.s3_artifacts_policy"; then
             POLICY_ARN=$(aws iam list-policies --query "Policies[?PolicyName=='sunotal-s3-access-policy'].Arn" --output text 2>/dev/null || echo "")
             if [ -n "$POLICY_ARN" ] && [ "$POLICY_ARN" != "None" ]; then
               echo "Importing existing IAM Policy sunotal-s3-access-policy..."
-              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" aws_iam_policy.s3_artifacts_policy "$POLICY_ARN" || true
+              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.iam.aws_iam_policy.s3_artifacts_policy "$POLICY_ARN" || true
             fi
           fi
 
           # 3. IAM Instance Profile: sunotal-ec2-instance-profile
-          if ! echo "$STATE_LIST" | grep -q "aws_iam_instance_profile.ec2_s3_profile"; then
+          if ! echo "$STATE_LIST" | grep -q "module.iam.aws_iam_instance_profile.ec2_profile"; then
             if aws iam get-instance-profile --instance-profile-name sunotal-ec2-instance-profile >/dev/null 2>&1; then
               echo "Importing existing IAM Instance Profile sunotal-ec2-instance-profile..."
-              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" aws_iam_instance_profile.ec2_s3_profile sunotal-ec2-instance-profile || true
+              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.iam.aws_iam_instance_profile.ec2_profile sunotal-ec2-instance-profile || true
             fi
           fi
 
           # 4. CloudFront OAC: sunotal-s3-oac
-          if ! echo "$STATE_LIST" | grep -q "aws_cloudfront_origin_access_control.s3_oac"; then
+          if ! echo "$STATE_LIST" | grep -q "module.cdn.aws_cloudfront_origin_access_control.s3_oac"; then
             OAC_ID=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='sunotal-s3-oac'].Id" --output text 2>/dev/null || echo "")
             if [ -n "$OAC_ID" ] && [ "$OAC_ID" != "None" ]; then
               echo "Importing existing CloudFront OAC sunotal-s3-oac ($OAC_ID)..."
-              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" aws_cloudfront_origin_access_control.s3_oac "$OAC_ID" || true
+              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.cdn.aws_cloudfront_origin_access_control.s3_oac "$OAC_ID" || true
             fi
           fi
 
           # 5. VPC: sunotal-vpc
-          if ! echo "$STATE_LIST" | grep -q "aws_vpc.main"; then
+          if ! echo "$STATE_LIST" | grep -q "module.vpc.aws_vpc.main"; then
             VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=sunotal-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "")
             if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
               echo "Importing existing VPC sunotal-vpc ($VPC_ID)..."
-              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" aws_vpc.main "$VPC_ID" || true
+              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.vpc.aws_vpc.main "$VPC_ID" || true
             fi
           fi
 
