@@ -108,6 +108,24 @@ jobs:
             exit 1
           fi
 
+          echo "Checking AWS SSM Agent registration for instance $INSTANCE_ID..."
+          SSM_ONLINE=false
+          for i in {1..30}; do
+            STATUS=$(aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$INSTANCE_ID" --query "InstanceInformationList[0].PingStatus" --output text 2>/dev/null || echo "")
+            if [ "$STATUS" = "Online" ]; then
+              echo "✅ AWS SSM Agent is Online on instance $INSTANCE_ID!"
+              SSM_ONLINE=true
+              break
+            fi
+            echo "Attempt $i/30: SSM Agent status is '$STATUS'. Waiting 10s for initialization..."
+            sleep 10
+          done
+
+          if [ "$SSM_ONLINE" != "true" ]; then
+            echo "::error::Instance $INSTANCE_ID is running but SSM Agent is not Online in AWS Systems Manager."
+            exit 1
+          fi
+
           echo "Deploying S3 artifacts directly to Private EC2 instance ($INSTANCE_ID) via AWS SSM..."
 
           # Send deployment command directly to Private EC2 via AWS SSM API
