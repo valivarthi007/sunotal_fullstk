@@ -10,13 +10,15 @@ import { toast } from "sonner";
 import { Leaf, Users, TrendingUp, HandCoins } from "lucide-react";
 
 const formSchema = z.object({
-  firstName: z.string().min(2, "First name is required"),
-  lastName: z.string().min(2, "Last name is required"),
-  phone: z.string().min(10, "Valid phone number required"),
-  location: z.string().min(3, "Village/Town is required"),
-  produce: z.string().min(3, "Primary produce is required"),
+  firstName: z.string().min(2, "First name must be at least 2 characters"),
+  lastName: z.string().min(2, "Last name must be at least 2 characters"),
+  phone: z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number"),
+  location: z.string().min(3, "Village/Town must be at least 3 characters"),
+  produce: z.string().min(3, "Primary produce must be at least 3 characters"),
   farmSize: z.string().optional(),
-  email: z.string().email().optional().or(z.literal("")),
+  email: z.string().optional().refine((val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), {
+    message: "Enter a valid email address",
+  }),
 });
 
 export default function FarmerRegistration() {

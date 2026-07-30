@@ -42,8 +42,10 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
-  name: z.string().min(2, "Name required"),
-  phone: z.string().optional().nullable(),
+  name: z.string().min(2, "Full name must be at least 2 characters"),
+  phone: z.string().optional().nullable().refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+    message: "Enter a valid 10-digit mobile number",
+  }),
   city: z.string().optional().nullable(),
   role: z.nativeEnum(UserUpdateRole),
 });

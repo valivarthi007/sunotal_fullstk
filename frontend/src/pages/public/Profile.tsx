@@ -204,12 +204,29 @@ export default function Profile() {
   }
 
   const handleSaveAddr = (addr: Address) => {
+    if (!addr.label || addr.label.trim().length < 2) {
+      toast.error("Address label is required (e.g. Home, Office)");
+      return;
+    }
+    if (!addr.line1 || addr.line1.trim().length < 5) {
+      toast.error("Address line 1 must be at least 5 characters long");
+      return;
+    }
+    if (!addr.city || addr.city.trim().length < 2) {
+      toast.error("City is required");
+      return;
+    }
+    if (addr.phone && !/^[6-9]\d{9}$/.test(addr.phone.trim())) {
+      toast.error("Please enter a valid 10-digit mobile number");
+      return;
+    }
+
     const next = addresses.some((a) => a.id === addr.id)
       ? addresses.map((a) => (a.id === addr.id ? addr : a))
       : [...addresses, addr];
     persistAddresses(next);
     setEditingAddr(null);
-    toast.success("Address saved");
+    toast.success("Address saved successfully");
   };
 
   const handleDeleteAddr = (id: string) => {
@@ -221,8 +238,8 @@ export default function Profile() {
   const handleRaiseGrievanceSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!grievanceOrder) return;
-    if (!grievanceDesc.trim()) {
-      toast.error("Please describe your issue");
+    if (!grievanceDesc || grievanceDesc.trim().length < 10) {
+      toast.error("Please describe your issue in detail (at least 10 characters)");
       return;
     }
 

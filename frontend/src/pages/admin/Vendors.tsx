@@ -45,12 +45,14 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  phone: z.string().min(1, "Phone is required"),
-  location: z.string().min(1, "Location is required"),
-  produce: z.string().min(1, "Produce is required"),
-  email: z.string().email().optional().or(z.literal("")),
+  firstName: z.string().min(2, "First name must be at least 2 characters"),
+  lastName: z.string().min(2, "Last name must be at least 2 characters"),
+  phone: z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number"),
+  location: z.string().min(3, "Location must be at least 3 characters"),
+  produce: z.string().min(3, "Primary produce must be at least 3 characters"),
+  email: z.string().optional().nullable().refine((val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), {
+    message: "Enter a valid email address",
+  }),
   farmSize: z.string().optional().nullable(),
   status: z.nativeEnum(VendorUpdateStatus),
   notes: z.string().optional().nullable(),
@@ -59,7 +61,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const inventorySchema = z.object({
-  productId: z.coerce.number().min(1, "Select a product"),
+  productId: z.coerce.number().min(1, "Please select a product"),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
   notes: z.string().optional().nullable(),
 });

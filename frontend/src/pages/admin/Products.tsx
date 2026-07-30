@@ -41,16 +41,24 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const formSchema = z.object({
-  name: z.string().min(2, "Name required"),
+  name: z.string().min(2, "Product name must be at least 2 characters"),
   category: z.nativeEnum(ProductCategory),
-  unit: z.string().min(1, "Unit required (e.g. kg, dozen)"),
-  price: z.coerce.number().min(1, "Price must be > 0"),
-  originalPrice: z.coerce.number().min(0),
-  image: z.string().url("Must be a valid URL"),
+  unit: z.string().min(1, "Unit is required (e.g., 1 kg, 500g, 1 Dozen)"),
+  price: z.coerce.number().min(1, "Selling price must be greater than 0"),
+  originalPrice: z.coerce.number().min(0, "MRP cannot be negative"),
+  image: z.string().url("Must be a valid URL (e.g. https://...)"),
   badge: z.string().optional().nullable(),
   organic: z.boolean().default(false),
   active: z.boolean().default(true),
   description: z.string().optional().nullable(),
+}).superRefine((val, ctx) => {
+  if (val.originalPrice > 0 && val.originalPrice < val.price) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["originalPrice"],
+      message: "MRP (Original Price) should be greater than or equal to Selling Price",
+    });
+  }
 });
 
 type FormValues = z.infer<typeof formSchema>;
