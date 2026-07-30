@@ -49,6 +49,20 @@ jobs:
             --bucket "$BUCKET_NAME" \
             --versioning-configuration Status=Enabled || true
 
+      - name: Auto-Restore Soft-Deleted S3 Product Images & Assets
+        run: |
+          BUCKET_NAME="jcs-raju-sunotal-final"
+          echo "Scanning for soft-deleted product images & assets in s3://${BUCKET_NAME}..."
+          aws s3api list-object-versions --bucket "$BUCKET_NAME" \
+            --query 'DeleteMarkers[?IsLatest==`true`].[Key, VersionId]' \
+            --output text 2>/dev/null | while read -r KEY VERSION_ID; do
+              if [ -n "$KEY" ] && [ "$KEY" != "None" ] && [ "$KEY" != "null" ]; then
+                echo "Un-deleting asset: $KEY (removing DeleteMarker: $VERSION_ID)..."
+                aws s3api delete-object --bucket "$BUCKET_NAME" --key "$KEY" --version-id "$VERSION_ID" || true
+              fi
+            done
+          echo "✅ All product images and S3 assets restored successfully!"
+
       - name: Ensure DynamoDB State Lock Table Exists
         run: |
           aws dynamodb create-table \
