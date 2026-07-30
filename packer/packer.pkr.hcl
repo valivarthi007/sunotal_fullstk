@@ -57,10 +57,18 @@ build {
 
   provisioner "shell" {
     inline = [
-      "sudo apt-get update",
+      "echo 'Waiting for cloud-init completion...'",
+      "sudo cloud-init status --wait || true",
+      "sudo systemctl stop apt-daily.service apt-daily-upgrade.service || true",
+      "sudo systemctl disable apt-daily.timer apt-daily-upgrade.timer || true",
+      "sudo killall -9 apt-get apt || true",
+      "sudo rm -f /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock",
+      "sudo rm -rf /var/lib/apt/lists/*",
+      "sudo apt-get clean",
+      "sudo apt-get update -y",
       "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common ca-certificates curl git gnupg lsb-release",
       "sudo apt-add-repository -y ppa:ansible/ansible",
-      "sudo apt-get update",
+      "sudo apt-get update -y",
       "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ansible"
     ]
   }

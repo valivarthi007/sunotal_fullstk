@@ -23,6 +23,10 @@
           - awscli
         state: present
         update_cache: true
+      register: apt_system_packages
+      retries: 5
+      delay: 10
+      until: apt_system_packages is success
 
     - name: Add ubuntu user to docker group
       user:
@@ -41,6 +45,10 @@
         name: nodejs
         state: present
         update_cache: true
+      register: apt_nodejs
+      retries: 5
+      delay: 10
+      until: apt_nodejs is success
 
     - name: Install pnpm globally
       shell: npm install -g pnpm@9
