@@ -8,6 +8,11 @@ on:
         type: boolean
         required: false
         default: false
+      force_reapply_infra:
+        description: 'Force re-apply Terraform even if active running infrastructure is detected'
+        type: boolean
+        required: false
+        default: false
   pull_request:
     paths:
       - 'terraform/**'
@@ -80,16 +85,24 @@ jobs:
           EXISTING_AMI_ID=""
           
           if [ "$FORCE_REBUILD" != "true" ]; then
-            echo "Checking for existing AMI tagged Name=sunotal-frontend-ami, Project=sunotal..."
+            echo "Checking for existing AMI tagged Name=sunotal-frontend-ami or Project=sunotal..."
             EXISTING_AMI_ID=$(aws ec2 describe-images \
               --owners self \
-              --filters "Name=tag:Name,Values=sunotal-frontend-ami" "Name=tag:Project,Values=sunotal" "Name=state,Values=available" \
+              --filters "Name=tag:Project,Values=sunotal" "Name=state,Values=available" \
               --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
               --output text)
+            
+            if [ -z "$EXISTING_AMI_ID" ] || [ "$EXISTING_AMI_ID" = "None" ]; then
+              EXISTING_AMI_ID=$(aws ec2 describe-images \
+                --owners self \
+                --filters "Name=tag:Name,Values=sunotal-frontend-ami" "Name=state,Values=available" \
+                --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
+                --output text)
+            fi
           fi
           
           if [ "$EXISTING_AMI_ID" != "None" ] && [ -n "$EXISTING_AMI_ID" ]; then
-            echo "Found existing tagged AMI: $EXISTING_AMI_ID. Reusing AMI (skipping Packer build)."
+            echo "✅ Found existing tagged AMI: $EXISTING_AMI_ID. Reusing AMI (skipping Packer build)."
             echo "ami_id=$EXISTING_AMI_ID" >> $GITHUB_OUTPUT
           else
             echo "No suitable existing AMI found (or force rebuild requested). Building new AMI with Packer..."
@@ -107,7 +120,7 @@ jobs:
             fi
           fi
 
-      - name: Deploy Infrastructure with Terraform
+      - name: Deploy Infrastructure with Terraform (Skip if already active)
         env:
           TF_VAR_ami_id: ${{ steps.packer_build.outputs.ami_id }}
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
@@ -122,14 +135,33 @@ jobs:
           
           cd terraform
           terraform init -upgrade
-          
-          echo "Planning Terraform Deployment for AMI: $TF_VAR_ami_id with existing key pair jcs_raju_laptop..."
-          terraform plan -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop"
-          
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "Applying Infrastructure Changes..."
-            terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop"
+
+          EXISTING_INSTANCE=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text 2>/dev/null || echo "")
+
+          EXISTING_ALB=$(aws elbv2 describe-load-balancers \
+            --names "sunotal-alb" \
+            --query "LoadBalancers[0].DNSName" \
+            --output text 2>/dev/null || echo "")
+
+          FORCE_REAPPLY="${{ github.event.inputs.force_reapply_infra }}"
+
+          if [ -n "$EXISTING_INSTANCE" ] && [ "$EXISTING_INSTANCE" != "None" ] && \
+             [ -n "$EXISTING_ALB" ] && [ "$EXISTING_ALB" != "None" ] && \
+             [ "$FORCE_REAPPLY" != "true" ]; then
+            echo "✅ Active infrastructure detected (EC2: $EXISTING_INSTANCE, ALB: $EXISTING_ALB)."
+            echo "Skipping terraform apply since infrastructure is already active (set force_reapply_infra=true to override)."
           else
-            echo "PR Validation complete — terraform apply skipped for non-dispatch/PR builds."
+            echo "Planning & Applying Infrastructure Changes..."
+            terraform plan -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop"
+            
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "Applying Infrastructure Changes..."
+              terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop"
+            else
+              echo "PR Validation complete — terraform apply skipped for non-dispatch/PR builds."
+            fi
           fi
 
