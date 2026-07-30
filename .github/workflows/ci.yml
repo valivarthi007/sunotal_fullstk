@@ -134,7 +134,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "Deploy Sunotal S3 build artifacts directly to Private EC2" \
             --parameters commands="[
-              \"export PATH=\\\$PATH:/usr/local/bin:/usr/bin:/bin:/snap/bin\",
+              \"export PATH=\\\$PATH:/usr/local/bin:/usr/bin:/bin:/snap/bin:~/.local/share/pnpm\",
               \"set -e\",
               \"echo 'Downloading build artifacts directly from S3 via Gateway Endpoint...'\",
               \"mkdir -p /tmp/sunotal-artifacts\",
@@ -149,20 +149,28 @@ jobs:
               \"sudo chown -R ubuntu:www-data /var/www/sunotal /var/www/sunotal-backend\",
               \"cd /var/www/sunotal-backend\",
               \"if [ -n '${DB_HOST}' ] && [ '${DB_HOST}' != 'None' ]; then echo 'DATABASE_URL=postgresql://sunotal:sunotalpass123@${DB_HOST}:5432/sunotal' > .env; else cp -n .env.example .env || true; fi\",
-              \"npx pnpm@${PNPM_VERSION} install\",
-              \"npx pnpm@${PNPM_VERSION} run db:push\",
-              \"npx pnpm@${PNPM_VERSION} run db:seed || true\",
+              \"command -v pnpm >/dev/null 2>&1 && pnpm install || npx --yes pnpm@${PNPM_VERSION} install\",
+              \"command -v pnpm >/dev/null 2>&1 && pnpm run db:push || npx --yes pnpm@${PNPM_VERSION} run db:push\",
+              \"(command -v pnpm >/dev/null 2>&1 && pnpm run db:seed || npx --yes pnpm@${PNPM_VERSION} run db:seed || true)\",
               \"(pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend)\",
               \"sudo env PATH=\\\$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu || true\",
-              \"pm2 save\",
+              \"pm2 save || true\",
               \"sudo systemctl enable nginx && sudo systemctl restart nginx\",
               \"rm -rf /tmp/sunotal-artifacts\"
             ]" \
             --query "Command.CommandId" --output text)
 
           echo "SSM Command dispatched with CommandId: $COMMAND_ID. Waiting for execution completion..."
-          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID"
+          if ! aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID"; then
+            echo "::error::SSM Command failed! Fetching stdout logs from EC2 instance..."
+            aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query "StandardOutputContent" --output text || true
+            echo "::error::SSM Command failed! Fetching stderr logs from EC2 instance..."
+            aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query "StandardErrorContent" --output text || true
+            exit 1
+          fi
           echo "Deployment successfully executed via AWS SSM!"
+          echo "SSM Execution Logs:"
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query "StandardOutputContent" --output text || true
 
       - name: HTTP Health Check via ALB
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
