@@ -12,6 +12,12 @@ env:
   S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME || 'jcs-raju-sunotal-final' }}
   NODE_VERSION: 20
   PNPM_VERSION: 9.15.4
+  
+  # Database Configuration (Overrides via GitHub Secrets)
+  DB_IDENTIFIER: ${{ secrets.DB_IDENTIFIER || 'sunotal-postgres' }}
+  DB_USER: ${{ secrets.DB_USER || 'sunotal' }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD || 'sunotalpass123' }}
+  DB_NAME: ${{ secrets.DB_NAME || 'sunotal' }}
 
 jobs:
   sonartest:
@@ -126,8 +132,9 @@ jobs:
             --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \
             --query "Reservations[0].Instances[0].PrivateIpAddress" --output text)
 
+          DB_IDENTIFIER="${{ env.DB_IDENTIFIER }}"
           DB_HOST=$(aws rds describe-db-instances \
-            --db-instance-identifier "sunotal-postgres" \
+            --db-instance-identifier "$DB_IDENTIFIER" \
             --query "DBInstances[0].Endpoint.Address" --output text || echo "")
 
           BUCKET_NAME="${{ env.S3_BUCKET_NAME }}"
@@ -205,7 +212,7 @@ jobs:
 
             cd /var/www/sunotal-backend
             if [ -n "${DB_HOST}" ] && [ "${DB_HOST}" != "None" ]; then
-              echo "DATABASE_URL=postgresql://sunotal:sunotalpass123@${DB_HOST}:5432/sunotal" > .env
+              echo "DATABASE_URL=postgresql://${{ env.DB_USER }}:${{ env.DB_PASSWORD }}@${DB_HOST}:5432/${{ env.DB_NAME }}?sslmode=require" > .env
             else
               cp -n .env.example .env || true
             fi
