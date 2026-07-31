@@ -212,7 +212,7 @@ jobs:
 
             cd /var/www/sunotal-backend
             if [ -n "${DB_HOST}" ] && [ "${DB_HOST}" != "None" ]; then
-              echo "DATABASE_URL=postgresql://${{ env.DB_USER }}:${{ env.DB_PASSWORD }}@${DB_HOST}:5432/${{ env.DB_NAME }}?sslmode=require" > .env
+              echo "DATABASE_URL=postgresql://${{ env.DB_USER }}:${{ env.DB_PASSWORD }}@${DB_HOST}:5432/${{ env.DB_NAME }}?sslmode=require&uselibpqcompat=true" > .env
             else
               cp -n .env.example .env || true
             fi
