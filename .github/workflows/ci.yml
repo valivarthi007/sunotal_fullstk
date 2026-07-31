@@ -228,7 +228,7 @@ jobs:
             sudo systemctl enable nginx && sudo systemctl restart nginx
             rm -rf /tmp/sunotal-artifacts
             echo "✅ Deployment completed successfully on Private EC2!"
-REMOTE_SCRIPT
+          REMOTE_SCRIPT
 
       - name: HTTP Health Check via ALB
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
