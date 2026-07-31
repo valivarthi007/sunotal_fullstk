@@ -28,24 +28,22 @@ uploadRouter.post('/upload', async (req, res) => {
 
     let imageUrl = '';
 
-    // Attempt S3 upload if AWS credentials / environment available
-    if (process.env.AWS_ACCESS_KEY_ID || process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI || process.env.AWS_EXECUTION_ENV) {
-      try {
-        const s3Client = new S3Client({ region: REGION });
-        const contentType = filename.endsWith('.png') ? 'image/png' : (filename.endsWith('.webp') ? 'image/webp' : 'image/jpeg');
+    // Attempt S3 upload
+    try {
+      const s3Client = new S3Client({ region: REGION });
+      const contentType = filename.endsWith('.png') ? 'image/png' : (filename.endsWith('.webp') ? 'image/webp' : 'image/jpeg');
 
-        await s3Client.send(new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: objectKey,
-          Body: buffer,
-          ContentType: contentType
-        }));
+      await s3Client.send(new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: objectKey,
+        Body: buffer,
+        ContentType: contentType
+      }));
 
-        imageUrl = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${objectKey}`;
-        console.log(`✅ Uploaded image to S3: ${imageUrl}`);
-      } catch (s3Error) {
-        console.warn('⚠️ S3 upload failed, falling back to local storage:', s3Error);
-      }
+      imageUrl = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${objectKey}`;
+      console.log(`✅ Uploaded image to S3: ${imageUrl}`);
+    } catch (s3Error) {
+      console.warn('⚠️ S3 upload failed, falling back to local storage:', s3Error);
     }
 
     // Local Fallback if S3 is not reachable or local dev mode

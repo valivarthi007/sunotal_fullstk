@@ -93,6 +93,7 @@ export default function ProductsAdmin() {
   const [deletingProduct, setDeletingProduct] = useState<any | null>(null);
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<FormValues>({
@@ -125,6 +126,8 @@ export default function ProductsAdmin() {
       description: product.description || "",
     });
     setEditingId(product.id);
+    setSelectedFile(null);
+    setImagePreview(null);
     setOpen(true);
   };
 
@@ -143,6 +146,8 @@ export default function ProductsAdmin() {
       description: "",
     });
     setEditingId(null);
+    setSelectedFile(null);
+    setImagePreview(null);
     setOpen(true);
   };
 
@@ -179,9 +184,42 @@ export default function ProductsAdmin() {
     });
   };
 
-  const onSubmit = (values: FormValues) => {
+  const onSubmit = async (values: FormValues) => {
+    let finalValues = { ...values };
+
+    if (selectedFile) {
+      try {
+        setUploading(true);
+        toast.info("Uploading image to S3...");
+        
+        // Generate object name based on sanitized product name
+        const productSlug = values.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)+/g, "");
+        const ext = selectedFile.name.split(".").pop() || "jpg";
+        const sanitizedFilename = `${productSlug || "product"}-${Date.now()}.${ext}`;
+
+        // Create renamed file object
+        const renamedFile = new File([selectedFile], sanitizedFilename, { type: selectedFile.type });
+
+        const s3Url = await uploadImageToS3(renamedFile, "images");
+        finalValues.image = s3Url;
+        
+        setSelectedFile(null);
+        setImagePreview(null);
+        toast.success("Image uploaded successfully!");
+      } catch (err) {
+        toast.error("Image upload failed. Please try again.");
+        setUploading(false);
+        return; // Abort submit
+      } finally {
+        setUploading(false);
+      }
+    }
+
     if (editingId) {
-      updateProduct.mutate({ id: editingId, data: values as any }, {
+      updateProduct.mutate({ id: editingId, data: finalValues as any }, {
         onSuccess: () => {
           toast.success("Product updated successfully");
           queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
@@ -190,7 +228,7 @@ export default function ProductsAdmin() {
         onError: () => toast.error("Failed to update product")
       });
     } else {
-      createProduct.mutate({ data: values as any }, {
+      createProduct.mutate({ data: finalValues as any }, {
         onSuccess: () => {
           toast.success("Product created successfully");
           queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
@@ -384,27 +422,14 @@ export default function ProductsAdmin() {
                         type="file"
                         accept="image/png,image/jpeg,image/webp"
                         className="hidden"
-                        onChange={async (e) => {
+                        onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
                           
-                          // Show local preview immediately
+                          setSelectedFile(file);
                           const localPreview = URL.createObjectURL(file);
                           setImagePreview(localPreview);
-                          
-                          try {
-                            setUploading(true);
-                            toast.info('Uploading image...');
-                            const url = await uploadImageToS3(file, 'images');
-                            field.onChange(url);
-                            setImagePreview(null);
-                            toast.success('Image uploaded successfully!');
-                          } catch (err) {
-                            toast.error('Image upload failed. Please try again.');
-                            setImagePreview(null);
-                          } finally {
-                            setUploading(false);
-                          }
+                          field.onChange("PENDING_UPLOAD");
                         }}
                       />
                     </div>
