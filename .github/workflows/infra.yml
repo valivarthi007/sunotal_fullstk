@@ -87,7 +87,7 @@ jobs:
       - name: Clean Corrupted State
         run: |
           echo "Checking for stale DynamoDB lock and empty state files..."
-          # Remove stale digest
+          # Remove stale db item digest
           aws dynamodb update-item \
             --table-name sunotal-terraform-locks \
             --key '{"LockID":{"S":"state/terraform.tfstate"}}' \
