@@ -88,12 +88,6 @@ export default function AdminLogin() {
               </Button>
             </form>
           </Form>
-
-          <div className="mt-6 p-4 rounded-xl bg-accent/50 text-xs text-muted-foreground text-center">
-            <strong>Demo Credentials:</strong><br/>
-            admin@sunotal.com / admin123
-          </div>
-          
           <div className="mt-8 pt-6 border-t text-center">
             <Link href="/" className="text-sm font-medium text-sidebar-primary hover:underline">
               Return to Public Store
