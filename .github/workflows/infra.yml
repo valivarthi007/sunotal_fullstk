@@ -49,13 +49,13 @@ jobs:
             --bucket "$BUCKET_NAME" \
             --versioning-configuration Status=Enabled || true
 
-          echo "Initializing S3 folder structure..."
-          for PREFIX in images/ artifacts/ state/; do
-            if ! aws s3api head-object --bucket "$BUCKET_NAME" --key "$PREFIX" 2>/dev/null; then
-              echo "Creating folder prefix: $PREFIX"
-              echo "" | aws s3 cp - "s3://$BUCKET_NAME/$PREFIX" || true
-            fi
-          done
+          echo "Ensuring backend folder structure (no empty objects)…"
+          # We *do not* create zero‑byte objects for prefixes.
+          # Terraform will create the `state/terraform.tfstate` file
+          # automatically on the first `terraform init/apply`.
+          # If you need a placeholder for other tooling, create a
+          # *named* object (e.g. `state/.keep`) instead of the bare prefix.
+          # No further actions are required here.
           echo "✅ S3 bucket folder structure initialized (images/, artifacts/, state/)"
 
       - name: Ensure DynamoDB State Lock Table Exists
