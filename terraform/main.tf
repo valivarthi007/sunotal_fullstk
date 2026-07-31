@@ -30,12 +30,19 @@ locals {
   }
 }
 
+module "lambda" {
+  source         = "./modules/lambda"
+  s3_bucket_name = var.s3_bucket_name
+  tags           = local.common_tags
+}
+
 module "iam" {
   source                = "./modules/iam"
   s3_bucket_name        = var.s3_bucket_name
   role_name             = "sunotal-ec2-s3-access-role"
   policy_name           = "sunotal-s3-access-policy"
   instance_profile_name = "sunotal-ec2-instance-profile"
+  lambda_arn            = module.lambda.lambda_arn
   tags                  = local.common_tags
 }
 

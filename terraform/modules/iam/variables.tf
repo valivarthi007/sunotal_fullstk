@@ -26,3 +26,9 @@ variable "tags" {
   description = "Tags to assign to IAM resources"
   default     = {}
 }
+
+variable "lambda_arn" {
+  type        = string
+  description = "The ARN of the S3 delete lambda function"
+  default     = ""
+}

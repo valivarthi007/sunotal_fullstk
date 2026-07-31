@@ -21,7 +21,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 resource "aws_iam_policy" "s3_artifacts_policy" {
   name        = var.policy_name
-  description = "Allows EC2 instance to read and write build artifacts and product assets in S3"
+  description = "Allows EC2 instance to read and write build artifacts and product assets in S3 and invoke S3 delete lambda"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -38,6 +38,13 @@ resource "aws_iam_policy" "s3_artifacts_policy" {
           "arn:aws:s3:::${var.s3_bucket_name}",
           "arn:aws:s3:::${var.s3_bucket_name}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = var.lambda_arn != "" ? [var.lambda_arn] : ["*"]
       }
     ]
   })

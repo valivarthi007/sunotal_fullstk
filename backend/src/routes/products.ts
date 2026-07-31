@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, productsTable, inventoryTable, vendorsTable } from "../lib/db.js";
 import { eq, ilike, and, desc, asc, SQL, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import {
   ListProductsQueryParams,
   CreateProductBody,
@@ -12,6 +13,7 @@ import {
 } from "../lib/schemas.js";
 
 const router = Router();
+const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || "us-east-1" });
 
 function formatProduct(p: any) {
   return {
@@ -198,14 +200,44 @@ router.delete("/products/:id", requireAdmin, async (req, res) => {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const result = await db
-    .delete(productsTable)
+
+  // 1. Fetch product to check if it exists and retrieve its image
+  const [product] = await db
+    .select({ image: productsTable.image })
+    .from(productsTable)
     .where(eq(productsTable.id, parsed.data.id))
-    .returning();
-  if (result.length === 0) {
+    .limit(1);
+
+  if (!product) {
     res.status(404).json({ error: "Product not found" });
     return;
   }
+
+  // 2. Trigger Lambda function to delete object from S3 if it exists and is an S3 URL
+  if (product.image && (product.image.startsWith("http://") || product.image.startsWith("https://"))) {
+    try {
+      const url = new URL(product.image);
+      const key = url.pathname.startsWith("/") ? url.pathname.substring(1) : url.pathname;
+      const bucket = process.env.S3_BUCKET_NAME || "jcs-raju-sunotal-final";
+      const functionName = process.env.DELETE_LAMBDA_FUNCTION_NAME || "sunotal-delete-s3-object";
+
+      console.log(`[Lambda] Triggering ${functionName} for S3 object deletion (bucket: ${bucket}, key: ${key})`);
+      const command = new InvokeCommand({
+        FunctionName: functionName,
+        Payload: JSON.stringify({ bucket, key }),
+      });
+      await lambdaClient.send(command);
+      console.log(`[Lambda] Successfully invoked deletion Lambda for key: ${key}`);
+    } catch (err) {
+      console.error("[Lambda] Failed to invoke deletion Lambda:", err);
+    }
+  }
+
+  // 3. Delete from database
+  await db
+    .delete(productsTable)
+    .where(eq(productsTable.id, parsed.data.id));
+
   res.status(204).end();
 });
 
