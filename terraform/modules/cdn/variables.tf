@@ -34,3 +34,9 @@ variable "tags" {
   description = "Tags for CDN resources"
   default     = {}
 }
+
+variable "ssl_certificate_arn" {
+  type        = string
+  description = "ARN of the SSL certificate for ALB HTTPS listener"
+  default     = ""
+}
