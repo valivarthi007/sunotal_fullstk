@@ -49,7 +49,7 @@ const formSchema = z.object({
   unit: z.string().min(1, "Unit is required (e.g., 1 kg, 500g, 1 Dozen)"),
   price: z.coerce.number().min(1, "Selling price must be greater than 0"),
   originalPrice: z.coerce.number().min(0, "MRP cannot be negative"),
-  image: z.string().url("Must be a valid URL (e.g. https://...)"),
+  image: z.string().min(1, "Product image is required"),
   badge: z.string().optional().nullable(),
   organic: z.boolean().default(false),
   active: z.boolean().default(true),
