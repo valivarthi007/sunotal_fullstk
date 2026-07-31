@@ -40,7 +40,12 @@ uploadRouter.post('/upload', async (req, res) => {
         ContentType: contentType
       }));
 
-      imageUrl = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${objectKey}`;
+      const cdnDomain = process.env.CLOUDFRONT_DOMAIN;
+      if (cdnDomain) {
+        imageUrl = `${cdnDomain}/${objectKey}`;
+      } else {
+        imageUrl = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${objectKey}`;
+      }
       console.log(`✅ Uploaded image to S3: ${imageUrl}`);
     } catch (s3Error) {
       console.warn('⚠️ S3 upload failed, falling back to local storage:', s3Error);
