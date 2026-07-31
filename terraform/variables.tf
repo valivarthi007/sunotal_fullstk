@@ -109,6 +109,6 @@ variable "dynamodb_table_name" {
 variable "ssl_certificate_arn" {
   description = "ARN of the SSL certificate for ALB HTTPS listener"
   type        = string
-  default     = ""
+  default     = "arn:aws:acm:us-east-1:143797622495:certificate/62ed25b2-ce70-402a-aa8d-ea00a11188e7"
 }
 
