@@ -84,6 +84,35 @@ jobs:
           packer init .
           packer validate .
 
+      - name: Clean Corrupted State
+        run: |
+          echo "Checking for stale DynamoDB lock and empty state files..."
+          # Remove stale digest
+          aws dynamodb update-item \
+            --table-name sunotal-terraform-locks \
+            --key '{"LockID":{"S":"state/terraform.tfstate"}}' \
+            --update-expression "REMOVE Digest" \
+            --condition-expression "attribute_exists(Digest)" || echo "No stale Digest found"
+            
+          # Remove the empty folder marker if it exists (which breaks Terraform)
+          aws s3api delete-object --bucket jcs-raju-sunotal-final --key state/ || true
+          
+          # If the state file itself is 0 bytes (corrupted upload), we should delete it so Terraform
+          # can start fresh or you can restore from a backup.
+          STATE_SIZE=$(aws s3api head-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate --query ContentLength --output text 2>/dev/null || echo "Missing")
+          if [ "$STATE_SIZE" = "0" ]; then
+            echo "State file is 0 bytes! Deleting corrupted state file..."
+            aws s3api delete-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate || true
+          fi
+          
+          # If there is a backup state and the current one is missing/deleted, restore it
+          if ! aws s3api head-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate 2>/dev/null; then
+            if aws s3api head-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate.backup 2>/dev/null; then
+               echo "Restoring state from backup..."
+               aws s3 cp s3://jcs-raju-sunotal-final/state/terraform.tfstate.backup s3://jcs-raju-sunotal-final/state/terraform.tfstate || true
+            fi
+          fi
+            
       - name: Validate Terraform Files
         run: |
           cd terraform
