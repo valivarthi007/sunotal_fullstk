@@ -34,25 +34,25 @@ export default function Dashboard() {
               title="Total Products" 
               value={stats.totalProducts} 
               icon={<Package className="w-5 h-5 text-blue-500" />} 
-              trend="+12% this month"
+              trend={stats.totalProducts > 0 ? "+12% this month" : ""}
             />
             <StatCard 
               title="Total Vendors" 
               value={stats.totalVendors} 
               icon={<Store className="w-5 h-5 text-purple-500" />} 
-              trend="+4 new this week"
+              trend={stats.totalVendors > 0 ? "+4 new this week" : ""}
             />
             <StatCard 
               title="Total Users" 
               value={stats.totalUsers} 
               icon={<Users className="w-5 h-5 text-orange-500" />} 
-              trend="+124 this month"
+              trend={stats.totalUsers > 1 ? `+${stats.totalUsers - 1} this month` : ""}
             />
             <StatCard 
               title="Active Vendors" 
               value={stats.activeVendors} 
               icon={<CheckCircle2 className="w-5 h-5 text-green-500" />} 
-              trend="94% approval rate"
+              trend={stats.activeVendors > 0 ? "94% approval rate" : ""}
             />
           </div>
 
@@ -156,7 +156,7 @@ function StatCard({ title, value, icon, trend }: { title: string, value: number,
       </div>
       <div>
         <h4 className="text-3xl font-bold text-foreground mb-1">{value}</h4>
-        <p className="text-xs text-muted-foreground">{trend}</p>
+        {trend && <p className="text-xs text-muted-foreground">{trend}</p>}
       </div>
     </div>
   );

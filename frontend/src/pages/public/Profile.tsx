@@ -84,42 +84,7 @@ export interface Grievance {
   responseMsg?: string;
 }
 
-const SAMPLE_ORDERS: Order[] = [
-  {
-    id: "SUN-894210",
-    date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
-    items: [
-      { id: 1, name: "Organic Farm Fresh Spinach", unit: "500g", price: 45, quantity: 2, image: "https://jcs-raju-sunotal-final.s3.us-east-1.amazonaws.com/vegetables.jpg", farmerName: "Raju Farmer (Jubilee Hub)" },
-      { id: 2, name: "Premium Alphonso Mangoes", unit: "1 kg", price: 320, quantity: 1, image: "https://jcs-raju-sunotal-final.s3.us-east-1.amazonaws.com/fruits.jpg", farmerName: "Venkatesh Organic Orchards" },
-    ],
-    totalPrice: 410,
-    status: "out_for_delivery",
-    estimatedDelivery: "In 25-35 mins",
-    deliveryAddress: "Flat 402, Sunotal Tech Park, Hitec City",
-    city: "Hyderabad",
-    state: "Telangana",
-    pincode: "500081",
-    paymentMethod: "Corporate PO / Card",
-    driverName: "Srinivas Rao",
-    driverPhone: "+91 98765 43210",
-    vehicleNo: "TG-09-EV-8842",
-  },
-  {
-    id: "SUN-761204",
-    date: "24 Jul 2026",
-    items: [
-      { id: 3, name: "Pure Cow Milk A2", unit: "1 L", price: 75, quantity: 2, image: "https://jcs-raju-sunotal-final.s3.us-east-1.amazonaws.com/grains.jpg", farmerName: "Green Pastures Dairy" },
-    ],
-    totalPrice: 150,
-    status: "delivered",
-    estimatedDelivery: "Delivered on Jul 24",
-    deliveryAddress: "Building 3B, Mindspace, Madhapur",
-    city: "Hyderabad",
-    state: "Telangana",
-    pincode: "500081",
-    paymentMethod: "UPI",
-  },
-];
+const SAMPLE_ORDERS: Order[] = [];
 
 const STORAGE_ORDERS_KEY = "sunotal_user_orders";
 const STORAGE_GRIEVANCES_KEY = "sunotal_user_grievances";
@@ -168,8 +133,8 @@ export default function Profile() {
       if (storedOrders) {
         setOrders(JSON.parse(storedOrders));
       } else {
-        setOrders(SAMPLE_ORDERS);
-        localStorage.setItem(STORAGE_ORDERS_KEY, JSON.stringify(SAMPLE_ORDERS));
+        setOrders([]);
+        localStorage.setItem(STORAGE_ORDERS_KEY, JSON.stringify([]));
       }
 
       // Load grievances
@@ -317,7 +282,7 @@ export default function Profile() {
             className="border-white/20 text-white hover:bg-white/10 rounded-xl gap-2 text-xs font-bold"
             onClick={() => {
               localStorage.removeItem("sunotal_token");
-              queryClient.removeQueries({ queryKey: getGetCurrentUserQueryKey() });
+              queryClient.clear();
               setLocation("/");
             }}
           >

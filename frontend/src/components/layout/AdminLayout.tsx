@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -38,8 +39,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  const queryClient = useQueryClient();
+
   const handleLogout = () => {
     localStorage.removeItem("sunotal_admin_token");
+    queryClient.clear();
     setLocation("/admin/login");
   };
 

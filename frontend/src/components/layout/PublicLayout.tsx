@@ -157,7 +157,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   className="w-10 h-10"
                   onClick={() => {
                     localStorage.removeItem("sunotal_token");
-                    queryClient.removeQueries({ queryKey: getGetCurrentUserQueryKey() });
+                    queryClient.clear();
                     setLocation("/");
                   }}
                   aria-label="Logout"
@@ -273,7 +273,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     className="text-xs text-muted-foreground"
                     onClick={() => {
                       localStorage.removeItem("sunotal_token");
-                      queryClient.removeQueries({ queryKey: getGetCurrentUserQueryKey() });
+                      queryClient.clear();
                       setLocation("/login");
                     }}
                   >

@@ -75,6 +75,17 @@ s3://jcs-raju-sunotal-final/
 - **Locking Table**: `sunotal-terraform-locks` configured with **`PAY_PER_REQUEST` (On-Demand)** billing mode ($0 fixed monthly cost for trial accounts).
 - **EC2 IAM Role & Policy**: Automatically provisions an IAM Role (`sunotal-ec2-s3-access-role`), IAM Policy (`sunotal-s3-artifacts-read-policy`), and Instance Profile allowing the EC2 instance to download build packages from `s3://jcs-raju-sunotal-final/artifacts/*`.
 
+### AWS Lambda S3 Auto-Deletion Function
+- **Trigger**: Automatically triggered by the Backend API (`@aws-sdk/client-lambda`) when an admin deletes a product to remove its associated S3 image.
+- **Function Name**: `sunotal-delete-s3-object` (configured via Terraform, running in Python 3.11).
+- **Permissions**:
+  - Provisions an IAM Role (`sunotal-lambda-s3-delete-role`) and Policy (`sunotal-lambda-s3-delete-policy`) allowing the Lambda function to perform `s3:DeleteObject` on the `s3://jcs-raju-sunotal-final/` bucket.
+  - Grants the EC2 instance policy (`sunotal-s3-access-policy`) permission to call `lambda:InvokeFunction` on the auto-deletion Lambda.
+
+### HTTPS Redirection & Load Balancer Listener Rules
+- **HTTP (Port 80) Listener**: Configured to automatically redirect all incoming HTTP web requests to HTTPS (Port 443) using a `HTTP_301` status code.
+- **HTTPS (Port 443) Listener**: Secured via SSL certificate integration (`ssl_certificate_arn`), forwarding all decrypted traffic to the backend application's EC2 target group.
+
 ---
 
 ## 4. Pipeline Execution Strategy
@@ -133,6 +144,7 @@ To run the workflows in your repository, configure the following secrets under *
 | `EC2_SSH_KEY` | Raw PEM SSH private key for EC2 deployment access | `-----BEGIN RSA PRIVATE KEY-----...` |
 | `SONAR_TOKEN` | (Optional) SonarQube authentication token | `sqp_...` |
 | `SONAR_HOST_URL` | (Optional) SonarQube host URL | `https://sonarcloud.io` |
+| `SSL_CERTIFICATE_ARN` | (Optional) AWS Certificate Manager ARN for the HTTPS listener | `arn:aws:acm:us-east-1:123456789012:certificate/...` |
 
 ---
 

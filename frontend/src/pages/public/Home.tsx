@@ -94,7 +94,7 @@ export default function Home() {
                 <img
                   src={slide.image}
                   alt={slide.headline}
-                  className="absolute inset-0 w-full h-full object-cover z-0"
+                  className="absolute inset-0 w-full h-full object-contain z-0"
                 />
                 <div className="absolute inset-0 bg-gradient-to-r from-secondary/90 via-secondary/70 to-transparent z-10" />
 
