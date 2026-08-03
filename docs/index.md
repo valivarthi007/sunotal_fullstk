@@ -1,25 +1,33 @@
-# Sunotal Comprehensive Documentation Hub
+# Sunotal End-to-End System Documentation Hub
 
-Welcome to the documentation hub for the Sunotal Corporate Fullstack E-Commerce & DevOps application.
+Welcome to the comprehensive documentation hub for the Sunotal E-Commerce farm produce marketplace and its AWS cloud infrastructure.
 
 ---
 
-## 1. Document Directory Map
+## 1. Structured Document Directory
 
-We have grouped all technical guides into the `docs/` directory for streamlined reference:
+For detailed step-by-step instructions on each aspect of the application, follow the structured guides below:
 
-- **[Installation Guide](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/INSTALL.md)**: Steps to get the frontend, backend database, and environment variables configured locally.
-- **[System Architecture Guide](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/DOCUMENTATION.md)**: Explains the high-level application layout, Jenkins pipeline steps, and mutable vs. immutable infrastructure operations.
-- **[Application Stack Tutorial](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/app.md)**: In-depth guide to the React client, location context, stateless JWT auth token isolation, Express routes, and Drizzle/PostgreSQL schema configuration.
-- **[AWS & DevOps Tutorial](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/devops_doc.md)**: Details the Packer base AMI baking, Terraform module topology, remote state locking, ALB HTTPS routing, and AWS Lambda auto-deletion function.
-- **[Enterprise DevOps Reference Guide](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/DEVOPS_GUIDE.md)**: Advanced training manual on S3 bucket structure segregation, networking, IAM security, and troubleshooting procedures.
-- **[Maintenance & Enhancements Guide](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/maintenance_and_enhancements.md)**: Troubleshooting PM2 processes, log streams, database backups, and step-by-step instructions on implementing future code features and expanding CI/CD automation tools.
+1. **[Local Setup & Installation](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/1-local-setup-and-installation.md)**
+   * Local dependencies, starting the PostgreSQL container, schema migrations, and initial database seeds.
+2. **[Frontend Client Architecture](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/2-frontend-architecture.md)**
+   * React/TypeScript layout routing, HTML5 GPS/IP geolocation auto-detection, and session token isolation.
+3. **[Backend REST API & Database Design](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/3-backend-and-database.md)**
+   * REST endpoints, token verification middleware, validation schemas, and Drizzle ORM models.
+4. **[AWS Cloud Infrastructure & Terraform](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/4-cloud-infrastructure-and-terraform.md)**
+   * Private VPC subnets, remote state configurations, ALB routing rules, and HTTPS redirection.
+5. **[Base Machine Image Provisioning](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/5-packer-ansible-and-amis.md)**
+   * Packer templates, Ansible playbook dependencies, OS shell hardening, Nginx proxying, and PM2 persistence.
+6. **[CI/CD Pipeline Automation](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/6-cicd-pipelines.md)**
+   * Automated infrastructure workflows (Packer/Terraform) and app deployments (GitHub Actions/Jenkins).
+7. **[Operational Runbook & Troubleshooting](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/7-operations-maintenance-and-troubleshooting.md)**
+   * Runtime monitoring, PM2/Nginx logs auditing, database backup/recovery scripts, SSL rotations, and error fixes.
 
 ---
 
 ## 2. End-to-End System Design Overview
 
-Sunotal leverages a modern, secure, and fully automated cloud hosting structure. Below is a high-level representation of how the application code interacts with the AWS DevOps pipelines:
+Sunotal leverages a secure, modern, and fully automated cloud hosting structure. Below is the system flow mapping developer code releases to AWS production deployments:
 
 ```mermaid
 graph TD
@@ -51,4 +59,4 @@ graph TD
     LAMBDA -->|Delete Photo| S3
 ```
 
-For detailed specifications, follow the individual guides linked above.
+Refer to the individual documents above to review configuration parameters, environment settings, and code details.
