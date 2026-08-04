@@ -29,7 +29,7 @@ export const RegisterUserBody = zod.object({
   "name": zod.string().min(registerUserBodyNameMin),
   "email": zod.string(),
   "password": zod.string().min(registerUserBodyPasswordMin),
-  "phone": zod.string().nullish(),
+  "phone": zod.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number"),
   "city": zod.string().nullish()
 })
 

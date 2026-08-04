@@ -14,9 +14,7 @@ const formSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Enter a valid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  phone: z.string().optional().refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
-    message: "Enter a valid 10-digit mobile number",
-  }),
+  phone: z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number"),
   city: z.string().optional(),
 });
 
@@ -123,7 +121,7 @@ export default function Register() {
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone (optional)</FormLabel>
+                      <FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel>
                       <FormControl>
                         <Input placeholder="10 digits" type="tel" className="h-11" {...field} />
                       </FormControl>

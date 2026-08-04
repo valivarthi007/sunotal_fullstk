@@ -19,8 +19,7 @@ export interface RegisterInput {
   email: string;
   /** @minLength 6 */
   password: string;
-  /** @nullable */
-  phone?: string | null;
+  phone: string;
   /** @nullable */
   city?: string | null;
 }
