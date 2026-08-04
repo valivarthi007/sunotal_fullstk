@@ -496,10 +496,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <ul className="flex flex-col gap-4 text-secondary-foreground/70">
                 <li className="flex items-start gap-3">
                   <MapPin className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                  <span>Sunotal Hub, Jubilee Hills,<br />Hyderabad, TG 500033</span>
+                  <span>current office road, 76-16-53,<br />Bhavani Puram, RR Nagar,<br />Vijayawada, Andhra Pradesh 520012</span>
                 </li>
                 <li>Email: <a href="mailto:support@sunotal.com" className="text-white hover:text-primary transition-colors">support@sunotal.com</a></li>
-                <li>Phone: <a href="tel:1800555FARM" className="text-white hover:text-primary transition-colors font-medium">1800-555-FARM</a></li>
+                <li>Phone: <a href="tel:09090007108" className="text-white hover:text-primary transition-colors font-medium">090900 07108</a></li>
               </ul>
             </div>
           </div>
