@@ -31,6 +31,7 @@ function formatProduct(p: any) {
     description: p.description,
     createdAt: p.createdAt.toISOString(),
     location: p.locations || null,
+    stock: Number(p.stock) || 0,
   };
 }
 
@@ -60,6 +61,7 @@ router.get("/products", async (req, res) => {
       description: productsTable.description,
       createdAt: productsTable.createdAt,
       locations: sql<string>`string_agg(DISTINCT ${vendorsTable.location}, ', ')`.as("locations"),
+      stock: sql<number>`COALESCE(SUM(${inventoryTable.quantity}), 0)::integer`.as("stock"),
     })
     .from(productsTable)
     .leftJoin(inventoryTable, eq(productsTable.id, inventoryTable.productId))
@@ -131,6 +133,7 @@ router.get("/products/:id", async (req, res) => {
       description: productsTable.description,
       createdAt: productsTable.createdAt,
       locations: sql<string>`string_agg(DISTINCT ${vendorsTable.location}, ', ')`.as("locations"),
+      stock: sql<number>`COALESCE(SUM(${inventoryTable.quantity}), 0)::integer`.as("stock"),
     })
     .from(productsTable)
     .leftJoin(inventoryTable, eq(productsTable.id, inventoryTable.productId))

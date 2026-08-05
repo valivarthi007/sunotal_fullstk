@@ -147,6 +147,7 @@ export interface Product {
   createdAt: string;
   /** @nullable */
   location?: string | null;
+  stock?: number;
 }
 
 export type ProductInputCategory = typeof ProductInputCategory[keyof typeof ProductInputCategory];

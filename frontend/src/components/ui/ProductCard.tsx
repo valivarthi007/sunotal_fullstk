@@ -61,6 +61,11 @@ export function ProductCard({ product }: { product: Product }) {
               <MapPin className="w-3 h-3 shrink-0" /> {product.location}
             </p>
           )}
+          {product.stock !== undefined && (
+            <p className={`text-[10px] font-semibold mt-1.5 ${product.stock > 0 ? "text-green-600" : "text-destructive"}`}>
+              {product.stock > 0 ? `${product.stock} kg available` : "Out of stock"}
+            </p>
+          )}
         </div>
 
         <div className="mt-auto flex items-end justify-between">
@@ -82,8 +87,11 @@ export function ProductCard({ product }: { product: Product }) {
         <Button
           className={`w-full shadow-lg gap-2 font-semibold transition-all ${added ? "bg-green-600 hover:bg-green-700" : ""}`}
           onClick={handleAddToCart}
+          disabled={product.stock === 0}
         >
-          {added ? (
+          {product.stock === 0 ? (
+            "Out of stock"
+          ) : added ? (
             <><Check className="w-4 h-4" /> Added!</>
           ) : (
             <><ShoppingCart className="w-4 h-4" /> Add to Cart</>
