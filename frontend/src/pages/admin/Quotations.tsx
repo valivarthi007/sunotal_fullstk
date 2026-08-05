@@ -49,15 +49,30 @@ export default function QuotationsAdmin() {
     setLoading(true);
     try {
       const token = localStorage.getItem("sunotal_admin_token");
+      if (!token) {
+        toast.error("Not authenticated as admin");
+        setLocation("/admin/login");
+        return;
+      }
       const res = await fetch("/api/admin/quotations", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
         setQuotations(data.reverse());
+      } else {
+        if (res.status === 401 || res.status === 403) {
+          toast.error("Admin session expired or unauthorized. Please login again.");
+          localStorage.removeItem("sunotal_admin_token");
+          setLocation("/admin/login");
+          return;
+        }
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to load quotations", err);
+      toast.error(err.message || "Failed to load quotations");
     } finally {
       setLoading(false);
     }
