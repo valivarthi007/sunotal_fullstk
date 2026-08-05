@@ -38,9 +38,12 @@ function formatProduct(p: any) {
 // GET /api/products
 router.get("/products", async (req, res) => {
   const parsed = ListProductsQueryParams.safeParse(req.query);
-  const { category, search, organic, sort } = parsed.success ? parsed.data : {};
+  const { category, search, organic, sort, all } = parsed.success ? parsed.data : {};
 
-  const conditions: SQL[] = [eq(productsTable.active, true)];
+  const conditions: SQL[] = [];
+  if (!all) {
+    conditions.push(eq(productsTable.active, true));
+  }
   if (category) conditions.push(eq(productsTable.category, category as any));
   if (search) conditions.push(ilike(productsTable.name, `%${search}%`));
   if (organic !== undefined) conditions.push(eq(productsTable.organic, organic));

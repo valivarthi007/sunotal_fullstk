@@ -220,6 +220,7 @@ export type ListProductsParams = {
   search?: string;
   organic?: boolean;
   sort?: 'price_asc' | 'price_desc' | 'newest';
+  all?: boolean;
 };
 
 export type ListVendorsParams = {

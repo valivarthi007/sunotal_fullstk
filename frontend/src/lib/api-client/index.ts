@@ -4,3 +4,4 @@ export * from './custom-fetch';
 export * from './inventory';
 export * from './categories';
 export * from './banners';
+export * from './product-definitions';

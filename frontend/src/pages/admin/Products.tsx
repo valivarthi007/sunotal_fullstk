@@ -9,7 +9,7 @@ import {
   useDeleteCategory,
   getListProductsQueryKey,
 } from "@workspace/api-client-react";
-import { uploadImageToS3 } from "@/lib/api-client";
+import { uploadImageToS3, useListInventory, useListProductDefinitions, useCreateProductDefinition, useDeleteProductDefinition } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -39,11 +39,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { Plus, Search, Edit2, Trash2, Package, FolderPlus, Tag, Upload, ImageIcon } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Package, FolderPlus, Tag, Upload, ImageIcon, ClipboardList, FolderKanban } from "lucide-react";
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const formSchema = z.object({
+  productId: z.string().optional(),
   name: z.string().min(2, "Product name must be at least 2 characters"),
   category: z.string().min(1, "Category is required"),
   unit: z.string().min(1, "Unit is required (e.g., 1 kg, 500g, 1 Dozen)"),
@@ -70,13 +71,16 @@ export default function ProductsAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: products, isLoading } = useListProducts( 
-    search.length > 2 ? { search } : undefined 
-  );
+  const { data: products, isLoading } = useListProducts({ all: true });
 
   const { data: categories = [] } = useListCategories();
   const createCategory = useCreateCategory();
   const deleteCategory = useDeleteCategory();
+  
+  const { data: inventory = [] } = useListInventory({});
+  const { data: productDefs = [] } = useListProductDefinitions();
+  const createProductDef = useCreateProductDefinition();
+  const deleteProductDef = useDeleteProductDefinition();
   
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -96,9 +100,15 @@ export default function ProductsAdmin() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Product definitions modal states
+  const [prodDefModalOpen, setProdDefModalOpen] = useState(false);
+  const [newDefName, setNewDefName] = useState("");
+  const [newDefCategory, setNewDefCategory] = useState("");
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      productId: "",
       name: "",
       category: "Vegetables",
       unit: "1 kg",
@@ -114,6 +124,7 @@ export default function ProductsAdmin() {
 
   const handleEdit = (product: any) => {
     form.reset({
+      productId: String(product.id),
       name: product.name,
       category: product.category,
       unit: product.unit,
@@ -134,6 +145,7 @@ export default function ProductsAdmin() {
   const handleCreateNew = () => {
     const defaultCat = categories.length > 0 ? categories[0].name : "Vegetables";
     form.reset({
+      productId: "",
       name: "",
       category: defaultCat,
       unit: "1 kg",
@@ -149,6 +161,39 @@ export default function ProductsAdmin() {
     setSelectedFile(null);
     setImagePreview(null);
     setOpen(true);
+  };
+
+  const handleAddProdDefSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDefName.trim()) {
+      toast.error("Please enter a product name");
+      return;
+    }
+    if (!newDefCategory) {
+      toast.error("Please select a category");
+      return;
+    }
+    createProductDef.mutate(
+      { name: newDefName.trim(), category: newDefCategory },
+      {
+        onSuccess: () => {
+          toast.success("Product name added successfully!");
+          setNewDefName("");
+        },
+        onError: (err: any) => {
+          toast.error(err?.data?.error || err.message || "Failed to create product definition");
+        },
+      }
+    );
+  };
+
+  const handleDeleteProductDef = (id: number, name: string) => {
+    deleteProductDef.mutate(id, {
+      onSuccess: () => {
+        toast.success(`Product definition "${name}" deleted`);
+      },
+      onError: () => toast.error("Failed to delete product definition"),
+    });
   };
 
   const handleAddCategorySubmit = (e: React.FormEvent) => {
@@ -228,14 +273,19 @@ export default function ProductsAdmin() {
         onError: () => toast.error("Failed to update product")
       });
     } else {
-      createProduct.mutate({ data: finalValues as any }, {
-        onSuccess: () => {
-          toast.success("Product created successfully");
-          queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
-          setOpen(false);
-        },
-        onError: () => toast.error("Failed to create product")
-      });
+      const selectedProductId = form.getValues("productId");
+      if (selectedProductId) {
+        updateProduct.mutate({ id: Number(selectedProductId), data: { ...finalValues, active: true } as any }, {
+          onSuccess: () => {
+            toast.success("Product activated on storefront successfully");
+            queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+            setOpen(false);
+          },
+          onError: () => toast.error("Failed to activate product")
+        });
+      } else {
+        toast.error("Please select a product from inventory");
+      }
     }
   };
 
@@ -249,6 +299,12 @@ export default function ProductsAdmin() {
       onError: () => toast.error("Failed to delete product")
     });
   };
+  // Find all inactive products that have stock in the inventory:
+  const productsWithStock = inventory.filter((item: any) => item.quantity > 0);
+  const productsWithStockIds = new Set(productsWithStock.map((item: any) => item.productId));
+  const draftProductsInInventory = (products || []).filter(
+    (p: any) => !p.active && productsWithStockIds.has(p.id)
+  );
 
   return (
     <AdminLayout>
@@ -265,6 +321,13 @@ export default function ProductsAdmin() {
             className="gap-2 border-sidebar-border rounded-xl"
           >
             <FolderPlus className="w-4 h-4 text-primary" /> Manage Categories
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setProdDefModalOpen(true)}
+            className="gap-2 border-sidebar-border rounded-xl"
+          >
+            <ClipboardList className="w-4 h-4 text-primary" /> Manage Product Names
           </Button>
           <Button onClick={handleCreateNew} className="gap-2 bg-sidebar-primary hover:bg-sidebar-primary/90 text-white rounded-xl shadow-sm">
             <Plus className="w-4 h-4" /> Add Product
@@ -334,6 +397,71 @@ export default function ProductsAdmin() {
         </DialogContent>
       </Dialog>
 
+      {/* MODAL 1B: Manage Product Definitions Dialog */}
+      <Dialog open={prodDefModalOpen} onOpenChange={setProdDefModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" /> Manage Product Names
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6 pt-2">
+            {/* Add New Product Definition Form */}
+            <form onSubmit={handleAddProdDefSubmit} className="p-4 rounded-2xl bg-accent/30 border space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Add Product Name</h3>
+              <div className="space-y-2">
+                <Input
+                  placeholder="Product Name (e.g. Alphonso Mangoes)"
+                  value={newDefName}
+                  onChange={(e) => setNewDefName(e.target.value)}
+                  className="w-full"
+                />
+                <Select value={newDefCategory} onValueChange={setNewDefCategory}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id || cat.name} value={cat.name}>{cat.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="submit" size="sm" className="w-full font-bold rounded-xl" disabled={createProductDef.isPending}>
+                {createProductDef.isPending ? "Adding..." : "+ Add to Catalog Options"}
+              </Button>
+            </form>
+
+            {/* List Existing Product Definitions */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Product Names ({productDefs.length})
+              </h3>
+              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                {productDefs.map((def) => (
+                  <div key={def.id} className="flex items-center justify-between p-3 rounded-xl bg-card border text-sm">
+                    <div className="flex flex-col font-medium">
+                      <span>{def.name}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase mt-0.5">{def.category}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDeleteProductDef(def.id, def.name)}
+                      disabled={deleteProductDef.isPending}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* MODAL 2: Main Creation / Modification Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -343,26 +471,68 @@ export default function ProductsAdmin() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={form.control} name="name" render={({ field }) => (
-                  <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
+                {!editingId ? (
+                  <FormField control={form.control} name="productId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Select Product from Inventory</FormLabel>
+                      <Select 
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          const selectedProd = draftProductsInInventory.find(p => String(p.id) === val);
+                          if (selectedProd) {
+                            form.setValue("name", selectedProd.name);
+                            form.setValue("category", selectedProd.category);
+                            form.setValue("unit", selectedProd.unit || "1 kg");
+                            form.setValue("price", selectedProd.price || 0);
+                            form.setValue("originalPrice", selectedProd.originalPrice || 0);
+                          }
+                        }} 
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose a stocked item" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {draftProductsInInventory.length > 0 ? (
+                            draftProductsInInventory.map((p) => {
+                              const stockItem = productsWithStock.find((item: any) => item.productId === p.id);
+                              const qty = stockItem ? stockItem.quantity : 0;
+                              return (
+                                <SelectItem key={p.id} value={String(p.id)}>
+                                  {p.name} ({p.category}) - {qty / 100} Quintals available
+                                </SelectItem>
+                              );
+                            })
+                          ) : (
+                            <SelectItem value="none" disabled>No stocked items available to list</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                ) : (
+                  <FormField control={form.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Product Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} disabled />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                )}
+
                 <FormField control={form.control} name="category" render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between">
-                      <FormLabel>Category</FormLabel>
-                      <button
-                        type="button"
-                        onClick={() => setCatModalOpen(true)}
-                        className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
-                      >
-                        + New Category
-                      </button>
-                    </div>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl>
+                    <FormLabel>Category</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger></FormControl>
                       <SelectContent>
                         {categories.map((cat) => (
-                          <SelectItem key={cat.name} value={cat.name}>
+                          <SelectItem key={cat.id || cat.name} value={cat.name}>
                             {cat.icon ? `${cat.icon} ` : ""}{cat.name}
                           </SelectItem>
                         ))}

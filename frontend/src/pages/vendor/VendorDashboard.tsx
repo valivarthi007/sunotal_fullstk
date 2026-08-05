@@ -27,6 +27,7 @@ import {
   Scale
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useListProductDefinitions } from "@/lib/api-client";
 
 const quotationSchema = z.object({
   category: z.string().min(1, "Please select a category"),
@@ -50,6 +51,8 @@ export default function VendorDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isProfileLoading, setIsProfileLoading] = useState(true);
 
+  const { data: productDefs = [] } = useListProductDefinitions();
+
   const form = useForm<z.infer<typeof quotationSchema>>({
     resolver: zodResolver(quotationSchema),
     defaultValues: {
@@ -59,6 +62,15 @@ export default function VendorDashboard() {
       price: 1,
     },
   });
+
+  const selectedCategory = form.watch("category");
+  const filteredDefs = productDefs.filter(
+    (def) => def.category.toLowerCase() === selectedCategory?.toLowerCase()
+  );
+
+  useEffect(() => {
+    form.setValue("produce", "");
+  }, [selectedCategory]);
 
   // Redirect if not vendor
   useEffect(() => {
@@ -272,9 +284,22 @@ export default function VendorDashboard() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Produce Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g. Organic Carrots" {...field} />
-                          </FormControl>
+                          <Select 
+                            onValueChange={field.onChange} 
+                            value={field.value}
+                            disabled={!selectedCategory}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={selectedCategory ? "Select Produce Item" : "Select Category First"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {filteredDefs.map((def) => (
+                                <SelectItem key={def.id} value={def.name}>{def.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}

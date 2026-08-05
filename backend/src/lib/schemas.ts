@@ -154,7 +154,8 @@ export const ListProductsQueryParams = zod.object({
   "category": zod.coerce.string().optional(),
   "search": zod.coerce.string().optional(),
   "organic": zod.coerce.boolean().optional(),
-  "sort": zod.enum(["price_asc", "price_desc", "newest"]).optional()
+  "sort": zod.enum(["price_asc", "price_desc", "newest"]).optional(),
+  "all": zod.coerce.boolean().optional()
 })
 
 export const ListProductsResponseItem = zod.object({
