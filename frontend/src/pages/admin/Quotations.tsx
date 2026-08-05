@@ -48,7 +48,7 @@ export default function QuotationsAdmin() {
   const fetchQuotations = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("sunotal_token");
+      const token = localStorage.getItem("sunotal_admin_token");
       const res = await fetch("/api/admin/quotations", {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -72,7 +72,7 @@ export default function QuotationsAdmin() {
       setAccepting(true);
     }
     try {
-      const token = localStorage.getItem("sunotal_token");
+      const token = localStorage.getItem("sunotal_admin_token");
       const body: any = { status };
       if (productId && productId !== "auto") {
         body.productId = Number(productId);
@@ -104,7 +104,7 @@ export default function QuotationsAdmin() {
 
   const handleGenerateInvoice = async (id: number) => {
     try {
-      const token = localStorage.getItem("sunotal_token");
+      const token = localStorage.getItem("sunotal_admin_token");
       const res = await fetch(`/api/admin/quotations/${id}/invoice`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
@@ -124,7 +124,7 @@ export default function QuotationsAdmin() {
 
   const handlePayout = async (id: number) => {
     try {
-      const token = localStorage.getItem("sunotal_token");
+      const token = localStorage.getItem("sunotal_admin_token");
       const res = await fetch(`/api/admin/quotations/${id}/payout`, {
         method: "PUT",
         headers: {
