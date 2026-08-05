@@ -71,7 +71,8 @@ router.post("/vendors/register", async (req, res) => {
     location,
     farmSize,
     aadhar,
-    gstin
+    gstin,
+    notes
   } = req.body;
 
   if (!email || !password || !firstName || !lastName || !phone || !location || !aadhar) {
@@ -112,6 +113,7 @@ router.post("/vendors/register", async (req, res) => {
       aadhar,
       gstin: gstin || null,
       status: "pending",
+      notes: notes || null,
     });
 
     res.status(201).json({ success: true, message: "Vendor application submitted successfully. Pending admin approval." });

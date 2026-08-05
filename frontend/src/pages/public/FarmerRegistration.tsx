@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
 
 const formSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
@@ -25,6 +26,7 @@ const formSchema = z.object({
   gstin: z.string().optional().refine((val) => !val || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i.test(val), {
     message: "Invalid GSTIN format (e.g. 36AAACB1234C1ZV)",
   }),
+  notes: z.string().optional(),
 });
 
 export default function FarmerRegistration() {
@@ -51,6 +53,7 @@ export default function FarmerRegistration() {
       password: "",
       aadhar: "",
       gstin: "",
+      notes: "",
     },
   });
 
@@ -290,6 +293,20 @@ export default function FarmerRegistration() {
                       <FormControl>
                         <Input placeholder="e.g. 5 Acres" {...field} />
                       </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description / Tell us about your farm</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Describe the types of crops you grow, farming methods, and capacity..." className="resize-none" {...field} />
+                      </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
