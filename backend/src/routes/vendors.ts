@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { db, vendorsTable, usersTable, vendorQuotationsTable, invoicesTable, productsTable, inventoryTable } from "../lib/db.js";
 import { eq, ilike, and, SQL } from "drizzle-orm";
-import { requireAdmin, requireAuth, signToken } from "../lib/auth.js";
+import { requireAdmin, requireAuth, signToken, verifyToken } from "../lib/auth.js";
 import bcrypt from "bcryptjs";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import fs from "fs";
 import path from "path";
 import {
@@ -206,6 +206,68 @@ router.get("/vendors/invoices", requireAuth, async (req, res) => {
 
   const invoices = await db.select().from(invoicesTable).where(eq(invoicesTable.vendorId, vendor.id));
   res.json(invoices);
+});
+
+// GET /api/vendors/invoices/:id/download - Stream invoice file to browser securely
+router.get("/vendors/invoices/:id/download", async (req, res) => {
+  const { id } = req.params;
+  const token = req.query.token as string || req.headers.authorization?.slice(7);
+
+  if (!token) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const payload = verifyToken(token);
+    
+    // 1. Fetch invoice
+    const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, Number(id))).limit(1);
+    if (!invoice) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+
+    // 2. Authorize: user must be admin OR the vendor who owns the invoice
+    if (payload.role !== "admin") {
+      const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, invoice.vendorId)).limit(1);
+      if (!vendor || vendor.userId !== payload.userId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+    }
+
+    // 3. Determine if it is stored in S3 or locally
+    if (invoice.s3Url.startsWith("http")) {
+      // It is an S3 URL. Extract the object key.
+      const urlObj = new URL(invoice.s3Url);
+      const objectKey = urlObj.pathname.startsWith("/") ? urlObj.pathname.slice(1) : urlObj.pathname;
+
+      const s3Client = new S3Client({ region: REGION });
+      const s3Response = await s3Client.send(new GetObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: objectKey,
+      }));
+
+      const bodyContents = await s3Response.Body?.transformToString();
+      res.setHeader("Content-Type", "text/html");
+      res.setHeader("Content-Disposition", `inline; filename="invoice-${invoice.invoiceNumber}.html"`);
+      res.send(bodyContents);
+    } else {
+      // It is a local file
+      const localPath = path.join(process.cwd(), invoice.s3Url);
+      if (fs.existsSync(localPath)) {
+        res.setHeader("Content-Type", "text/html");
+        res.setHeader("Content-Disposition", `inline; filename="invoice-${invoice.invoiceNumber}.html"`);
+        res.sendFile(localPath);
+      } else {
+        res.status(404).json({ error: "Invoice file not found locally" });
+      }
+    }
+  } catch (error) {
+    console.error("Download invoice error:", error);
+    res.status(401).json({ error: "Unauthorized or Invalid session" });
+  }
 });
 
 // GET /api/admin/quotations - Admin lists all quotations

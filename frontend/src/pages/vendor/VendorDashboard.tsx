@@ -443,7 +443,7 @@ export default function VendorDashboard() {
                       </div>
 
                       <a 
-                        href={inv.s3Url} 
+                        href={`/api/vendors/invoices/${inv.id}/download?token=${localStorage.getItem("sunotal_token")}`} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline"
