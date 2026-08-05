@@ -38,6 +38,7 @@ function formatProduct(p: any) {
 // GET /api/products
 router.get("/products", async (req, res) => {
   const parsed = ListProductsQueryParams.safeParse(req.query);
+  console.log("GET /products query:", req.query, "parsed:", parsed.success ? parsed.data : parsed.error);
   const { category, search, organic, sort, all } = parsed.success ? parsed.data : {};
 
   const conditions: SQL[] = [];
