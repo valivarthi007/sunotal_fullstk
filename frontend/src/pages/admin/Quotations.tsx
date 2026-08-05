@@ -1,5 +1,6 @@
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { useListProducts } from "@/lib/api-client";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 export default function QuotationsAdmin() {
+  const [, setLocation] = useLocation();
   const [quotations, setQuotations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>("All");
