@@ -375,22 +375,6 @@ export default function VendorsAdmin() {
                           </>
                         )}
                         
-                        {vendor.status === VendorStatus.approved && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            title="Add to Inventory"
-                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-100" 
-                            onClick={() => {
-                              setInventoryVendorId(vendor.id);
-                              inventoryForm.reset({ productId: 0, quantity: 1, notes: "" });
-                              setInventoryOpen(true);
-                            }}
-                          >
-                            <PackagePlus className="w-5 h-5" />
-                          </Button>
-                        )}
-
                         <div className="w-px h-6 bg-border mx-2"></div>
                         
                         <Button 
