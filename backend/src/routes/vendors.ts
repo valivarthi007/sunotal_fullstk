@@ -225,56 +225,59 @@ router.put("/admin/quotations/:id/status", requireAdmin, async (req, res) => {
   }
 
   try {
-    const [quotation] = await db.select().from(vendorQuotationsTable).where(eq(vendorQuotationsTable.id, Number(id))).limit(1);
-    if (!quotation) {
-      res.status(404).json({ error: "Quotation not found" });
-      return;
-    }
-
-    const [updated] = await db.update(vendorQuotationsTable).set({ status }).where(eq(vendorQuotationsTable.id, Number(id))).returning();
-
-    // If accepted, add to inventory
-    if (status === "accepted") {
-      let targetProductId = productId ? Number(productId) : null;
-
-      // Auto-create product in catalog if not mapped
-      if (!targetProductId) {
-        // Check if there is an existing active product with the same name
-        const [existingProduct] = await db.select().from(productsTable).where(ilike(productsTable.name, quotation.produce)).limit(1);
-        if (existingProduct) {
-          targetProductId = existingProduct.id;
-        } else {
-          // Create product draft
-          const [newProduct] = await db.insert(productsTable).values({
-            name: quotation.produce,
-            category: quotation.category,
-            unit: "kg",
-            price: Math.round(quotation.price * 1.3), // 30% markup
-            originalPrice: Math.round(quotation.price * 1.3),
-            image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=200", // placeholder fresh grocery image
-            active: false, // Draft state by default
-            organic: false,
-            badge: "Fresh Arrival",
-            description: `Freshly supplied ${quotation.produce} from local vendor ${quotation.name}.`,
-          }).returning();
-          targetProductId = newProduct.id;
-        }
+    const result = await db.transaction(async (tx) => {
+      const [quotation] = await tx.select().from(vendorQuotationsTable).where(eq(vendorQuotationsTable.id, Number(id))).limit(1);
+      if (!quotation) {
+        throw new Error("Quotation not found");
       }
 
-      // Add to inventory
-      await db.insert(inventoryTable).values({
-        productId: targetProductId,
-        vendorId: quotation.vendorId,
-        quantity: quotation.quantity,
-        status: "in_stock",
-        notes: `Accepted from quotation #${quotation.id}`,
-      });
-    }
+      const [updated] = await tx.update(vendorQuotationsTable).set({ status }).where(eq(vendorQuotationsTable.id, Number(id))).returning();
 
-    res.json(updated);
-  } catch (error) {
+      // If accepted, add to inventory
+      if (status === "accepted") {
+        let targetProductId = (productId && productId !== "auto") ? Number(productId) : null;
+
+        // Auto-create product in catalog if not mapped
+        if (!targetProductId || isNaN(targetProductId)) {
+          // Check if there is an existing active product with the same name
+          const [existingProduct] = await tx.select().from(productsTable).where(ilike(productsTable.name, quotation.produce)).limit(1);
+          if (existingProduct) {
+            targetProductId = existingProduct.id;
+          } else {
+            // Create product draft
+            const [newProduct] = await tx.insert(productsTable).values({
+              name: quotation.produce,
+              category: quotation.category,
+              unit: "kg",
+              price: Math.round(quotation.price * 1.3), // 30% markup
+              originalPrice: Math.round(quotation.price * 1.3),
+              image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=200", // placeholder fresh grocery image
+              active: false, // Draft state by default
+              organic: false,
+              badge: "Fresh Arrival",
+              description: `Freshly supplied ${quotation.produce} from local vendor ${quotation.name}.`,
+            }).returning();
+            targetProductId = newProduct.id;
+          }
+        }
+
+        // Add to inventory
+        await tx.insert(inventoryTable).values({
+          productId: targetProductId,
+          vendorId: quotation.vendorId,
+          quantity: quotation.quantity,
+          status: "in_stock",
+          notes: `Accepted from quotation #${quotation.id}`,
+        });
+      }
+
+      return updated;
+    });
+
+    res.json(result);
+  } catch (error: any) {
     console.error("Error updating quotation status:", error);
-    res.status(500).json({ error: "Failed to update quotation status" });
+    res.status(500).json({ error: error.message || "Failed to update quotation status" });
   }
 });
 

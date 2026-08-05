@@ -9,6 +9,8 @@ import { useLoginUser, getGetCurrentUserQueryKey } from "@workspace/api-client-r
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { queryClient } from "@/App";
+import { useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const formSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -18,6 +20,7 @@ const formSchema = z.object({
 export default function Login() {
   const [, setLocation] = useLocation();
   const loginUser = useLoginUser();
+  const [selectedRole, setSelectedRole] = useState<"user" | "vendor" | "admin">("user");
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -29,13 +32,26 @@ export default function Login() {
       { data: values },
       {
         onSuccess: (data) => {
-          localStorage.setItem("sunotal_token", data.token);
-          // Force re-fetch of current user so header shows the name immediately
-          queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-          toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
-          if (data.user.role === "vendor") {
+          if (data.user.role !== selectedRole) {
+            toast.error(`Invalid login. Your account type is not "${selectedRole.toUpperCase()}".`);
+            return;
+          }
+
+          // Store token in correct key
+          if (selectedRole === "admin") {
+            localStorage.setItem("sunotal_admin_token", data.token);
+            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+            toast.success(`Welcome back Admin, ${data.user.name.split(" ")[0]}!`);
+            setLocation("/admin/dashboard");
+          } else if (selectedRole === "vendor") {
+            localStorage.setItem("sunotal_token", data.token);
+            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+            toast.success(`Welcome back Farmer, ${data.user.name.split(" ")[0]}!`);
             setLocation("/vendor");
           } else {
+            localStorage.setItem("sunotal_token", data.token);
+            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+            toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
             setLocation("/");
           }
         },
@@ -64,6 +80,22 @@ export default function Login() {
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <FormItem>
+                <FormLabel>Login As</FormLabel>
+                <Select value={selectedRole} onValueChange={(val: any) => setSelectedRole(val)}>
+                  <FormControl>
+                    <SelectTrigger className="h-12 rounded-xl">
+                      <SelectValue placeholder="Login As" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="user">Customer / B2B Buyer</SelectItem>
+                    <SelectItem value="vendor">Farmer / Vendor</SelectItem>
+                    <SelectItem value="admin">Administrator</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormItem>
+
               <FormField
                 control={form.control}
                 name="email"
@@ -107,9 +139,6 @@ export default function Login() {
             <p className="text-sm text-muted-foreground">
               Don't have an account?{" "}
               <Link href="/register" className="font-bold text-primary hover:underline">Sign up</Link>
-            </p>
-            <p className="text-xs text-muted-foreground/60">
-              <Link href="/admin/login" className="hover:underline">Admin? Login here</Link>
             </p>
           </div>
         </div>
