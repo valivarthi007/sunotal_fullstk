@@ -282,7 +282,7 @@ router.put("/admin/quotations/:id/status", requireAdmin, async (req, res) => {
 });
 
 // POST /api/admin/quotations/:id/invoice - Admin generates invoice and uploads to S3
-router.post("/api/admin/quotations/:id/invoice", requireAdmin, async (req, res) => {
+router.post("/admin/quotations/:id/invoice", requireAdmin, async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -404,7 +404,7 @@ router.post("/api/admin/quotations/:id/invoice", requireAdmin, async (req, res) 
 });
 
 // PUT /api/admin/quotations/:id/payout - Admin marks payout paid
-router.put("/api/admin/quotations/:id/payout", requireAdmin, async (req, res) => {
+router.put("/admin/quotations/:id/payout", requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { paymentStatus } = req.body;
 
