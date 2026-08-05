@@ -25,17 +25,12 @@ const formSchema = z.object({
   gstin: z.string().optional().refine((val) => !val || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i.test(val), {
     message: "Invalid GSTIN format (e.g. 36AAACB1234C1ZV)",
   }),
-  category: z.string().min(1, "Please select a category"),
-  produce: z.string().min(2, "Produce name must be at least 2 characters"),
-  quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
-  price: z.coerce.number().min(1, "Price must be at least 1"),
 });
 
 export default function FarmerRegistration() {
   const [, setLocation] = useLocation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
-  const { data: categories } = useListCategories();
   
   // Redirect logged-in users away from registration page
   useEffect(() => {
@@ -56,28 +51,16 @@ export default function FarmerRegistration() {
       password: "",
       aadhar: "",
       gstin: "",
-      category: "",
-      produce: "",
-      quantity: 1,
-      price: 1,
     },
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
-      // Convert Quintal to Kilograms (1 Quintal = 100 kg)
-      // Convert Price per Quintal to Price per Kilogram
-      const convertedValues = {
-        ...values,
-        quantity: Number(values.quantity) * 100,
-        price: Number(values.price) / 100,
-      };
-
       const response = await fetch("/api/vendors/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(convertedValues),
+        body: JSON.stringify(values),
       });
 
       if (!response.ok) {
@@ -311,93 +294,13 @@ export default function FarmerRegistration() {
                   )}
                 />
                 
-                <div className="border-t pt-4">
-                  <h3 className="text-lg font-bold mb-4 text-primary">Initial Produce Quotation</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="category"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Category <span className="text-destructive">*</span></FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select category" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {categories?.map((c) => (
-                                <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                              )) || (
-                                <>
-                                  <SelectItem value="Vegetables">Vegetables</SelectItem>
-                                  <SelectItem value="Fruits">Fruits</SelectItem>
-                                  <SelectItem value="Dairy">Dairy</SelectItem>
-                                  <SelectItem value="Dry Fruits">Dry Fruits</SelectItem>
-                                  <SelectItem value="Grains">Grains</SelectItem>
-                                </>
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="produce"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Produce Name <span className="text-destructive">*</span></FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g. Red Tomatoes" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                    <FormField
-                      control={form.control}
-                      name="quantity"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Quantity (in Quintals) <span className="text-destructive">*</span></FormLabel>
-                          <FormControl>
-                            <Input type="number" min="1" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Quoted Price per Quintal (₹) <span className="text-destructive">*</span></FormLabel>
-                          <FormControl>
-                            <Input type="number" min="1" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
                 <Button 
                   type="submit" 
                   size="lg" 
                   className="w-full text-base font-bold h-12"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "Submitting Application..." : "Submit Application & Offer"}
+                  {isSubmitting ? "Submitting Application..." : "Submit Application"}
                 </Button>
               </form>
             </Form>

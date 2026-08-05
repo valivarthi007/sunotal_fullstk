@@ -71,11 +71,7 @@ router.post("/vendors/register", async (req, res) => {
     location,
     farmSize,
     aadhar,
-    gstin,
-    category,
-    produce,
-    quantity,
-    price
+    gstin
   } = req.body;
 
   if (!email || !password || !firstName || !lastName || !phone || !location || !aadhar) {
@@ -104,38 +100,19 @@ router.post("/vendors/register", async (req, res) => {
     }).returning();
 
     // 2. Create Vendor Profile
-    const [vendor] = await db.insert(vendorsTable).values({
+    await db.insert(vendorsTable).values({
       userId: user.id,
       firstName,
       lastName,
       phone,
       location,
-      produce: produce || "N/A",
+      produce: "Pending Verification",
       email,
       farmSize: farmSize || null,
       aadhar,
       gstin: gstin || null,
       status: "pending",
-    }).returning();
-
-    // 3. Create initial quotation if provided
-    if (produce && quantity && price) {
-      await db.insert(vendorQuotationsTable).values({
-        vendorId: vendor.id,
-        name: `${firstName} ${lastName}`,
-        address: location,
-        phone,
-        email,
-        aadhar,
-        gstin: gstin || null,
-        category: category || "Fruits",
-        produce,
-        quantity: Number(quantity),
-        price: Number(price),
-        status: "pending",
-        paymentStatus: "unpaid",
-      });
-    }
+    });
 
     res.status(201).json({ success: true, message: "Vendor application submitted successfully. Pending admin approval." });
   } catch (error) {
