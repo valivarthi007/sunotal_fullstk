@@ -13,6 +13,13 @@ on:
         type: boolean
         required: false
         default: false
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - 'packer/**'
+      - '.github/workflows/infra.yml'
   pull_request:
     paths:
       - 'terraform/**'

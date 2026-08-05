@@ -93,52 +93,74 @@ export default function Checkout() {
     }
 
     setIsSubmitting(true);
-    // Simulate payment authorization & order generation delay
-    await new Promise((r) => setTimeout(r, 1000));
-
-    const orderRef = `SUN-${Math.floor(100000 + Math.random() * 900000)}`;
-    const confirmData: any = {
-      id: orderRef,
-      orderId: orderRef,
-      date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
-      items: items.map((i) => ({
-        id: i.product.id,
-        name: i.product.name,
-        unit: i.product.unit,
-        price: i.product.price,
-        quantity: i.quantity,
-        image: i.product.image,
-        farmerName: "Verified Local Farmer",
-      })),
-      totalPrice,
-      status: "out_for_delivery",
-      estimatedDelivery: `Express 2-Hour Delivery (${values.city})`,
-      deliveryAddress: values.streetAddress,
-      city: values.city,
-      state: values.state,
-      pincode: values.pincode,
-      streetAddress: values.streetAddress,
-      gstin: values.gstin,
-      poNumber: values.poNumber,
-      paymentMethod: values.paymentMethod === "card" ? "Credit / Debit Card" : values.paymentMethod === "upi" ? "UPI" : values.paymentMethod === "netbanking" ? "Net Banking" : "Corporate PO Invoice",
-      driverName: "Ramesh Kumar",
-      driverPhone: "+91 98765 43210",
-      vehicleNo: "EV-DEL-4412",
-    };
-
-    // Persist to user orders in localStorage so it appears in My Orders & Tracking
     try {
-      const existingRaw = localStorage.getItem("sunotal_user_orders");
-      const existing = existingRaw ? JSON.parse(existingRaw) : [];
-      localStorage.setItem("sunotal_user_orders", JSON.stringify([confirmData, ...existing]));
-    } catch (err) {
-      console.error("Failed to save order to storage", err);
-    }
+      const token = localStorage.getItem("sunotal_token");
+      const checkoutItems = items.map(i => ({
+        productId: i.product.id,
+        quantity: i.quantity
+      }));
 
-    setOrderConfirmed(confirmData);
-    clearCart();
-    setIsSubmitting(false);
-    toast.success(`Order ${orderRef} placed successfully!`);
+      const res = await fetch("/api/orders/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ items: checkoutItems })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to process stock deduction for this order");
+      }
+
+      const orderRef = `SUN-${Math.floor(100000 + Math.random() * 900000)}`;
+      const confirmData: any = {
+        id: orderRef,
+        orderId: orderRef,
+        date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+        items: items.map((i) => ({
+          id: i.product.id,
+          name: i.product.name,
+          unit: i.product.unit,
+          price: i.product.price,
+          quantity: i.quantity,
+          image: i.product.image,
+          farmerName: "Verified Local Farmer",
+        })),
+        totalPrice,
+        status: "out_for_delivery",
+        estimatedDelivery: `Express 2-Hour Delivery (${values.city})`,
+        deliveryAddress: values.streetAddress,
+        city: values.city,
+        state: values.state,
+        pincode: values.pincode,
+        streetAddress: values.streetAddress,
+        gstin: values.gstin,
+        poNumber: values.poNumber,
+        paymentMethod: values.paymentMethod === "card" ? "Credit / Debit Card" : values.paymentMethod === "upi" ? "UPI" : values.paymentMethod === "netbanking" ? "Net Banking" : "Corporate PO Invoice",
+        driverName: "Ramesh Kumar",
+        driverPhone: "+91 98765 43210",
+        vehicleNo: "EV-DEL-4412",
+      };
+
+      // Persist to user orders in localStorage so it appears in My Orders & Tracking
+      try {
+        const existingRaw = localStorage.getItem("sunotal_user_orders");
+        const existing = existingRaw ? JSON.parse(existingRaw) : [];
+        localStorage.setItem("sunotal_user_orders", JSON.stringify([confirmData, ...existing]));
+      } catch (err) {
+        console.error("Failed to save order to storage", err);
+      }
+
+      setOrderConfirmed(confirmData);
+      clearCart();
+      toast.success(`Order ${orderRef} placed successfully!`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to place order.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (orderConfirmed) {

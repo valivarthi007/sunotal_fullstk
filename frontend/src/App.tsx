@@ -20,7 +20,9 @@ import VendorsAdmin from "@/pages/admin/Vendors";
 import UsersAdmin from "@/pages/admin/Users";
 import InventoryAdmin from "@/pages/admin/Inventory";
 import BannersAdmin from "@/pages/admin/Banners";
+import QuotationsAdmin from "@/pages/admin/Quotations";
 
+import VendorDashboard from "@/pages/vendor/VendorDashboard";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -54,12 +56,15 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
 
+      <Route path="/vendor" component={VendorDashboard} />
+
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={Dashboard} />
       <Route path="/admin/products" component={ProductsAdmin} />
       <Route path="/admin/banners" component={BannersAdmin} />
       <Route path="/admin/inventory" component={InventoryAdmin} />
       <Route path="/admin/vendors" component={VendorsAdmin} />
+      <Route path="/admin/quotations" component={QuotationsAdmin} />
       <Route path="/admin/users" component={UsersAdmin} />
 
       <Route component={NotFound} />

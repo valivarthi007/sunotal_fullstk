@@ -13,6 +13,7 @@ import inventoryRouter from './routes/inventory.js';
 import categoriesRouter from './routes/categories.js';
 import { uploadRouter } from './routes/upload.js';
 import { bannersRouter } from './routes/banners.js';
+import ordersRouter from './routes/orders.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -43,6 +44,7 @@ app.use('/api', inventoryRouter);
 app.use('/api', categoriesRouter);
 app.use('/api', uploadRouter);
 app.use('/api/banners', bannersRouter);
+app.use('/api', ordersRouter);
 app.get('/api/healthz', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Serve built frontend in production ─────────────────────────────────

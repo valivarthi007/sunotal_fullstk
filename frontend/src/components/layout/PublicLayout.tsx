@@ -70,7 +70,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
     { name: "Home", path: "/" },
     { name: "All Products", path: "/products" },
     ...categoryNavLinks,
-    { name: "For Farmers", path: "/farmer" },
+    ...(user ? [] : [{ name: "For Farmers", path: "/farmer" }]),
   ];
 
   const fmt = (n: number) =>
@@ -475,7 +475,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <h4 className="font-bold text-lg mb-6">Company</h4>
               <ul className="flex flex-col gap-3">
                 <li><Link href="/about" className="text-secondary-foreground/70 hover:text-white transition-colors">About Us</Link></li>
-                <li><Link href="/farmer" className="text-secondary-foreground/70 hover:text-white transition-colors">For Farmers</Link></li>
+                {!user && <li><Link href="/farmer" className="text-secondary-foreground/70 hover:text-white transition-colors">For Farmers</Link></li>}
                 <li><Link href="/careers" className="text-secondary-foreground/70 hover:text-white transition-colors">Careers</Link></li>
                 <li><Link href="/press" className="text-secondary-foreground/70 hover:text-white transition-colors">Press</Link></li>
               </ul>

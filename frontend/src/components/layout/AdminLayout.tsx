@@ -9,7 +9,8 @@ import {
   Menu,
   X,
   ClipboardList,
-  GalleryHorizontalEnd
+  GalleryHorizontalEnd,
+  FileText
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     { name: "Banners", path: "/admin/banners", icon: GalleryHorizontalEnd },
     { name: "Inventory", path: "/admin/inventory", icon: ClipboardList },
     { name: "Vendors", path: "/admin/vendors", icon: Store },
+    { name: "Quotations", path: "/admin/quotations", icon: FileText },
     { name: "Users", path: "/admin/users", icon: Users },
   ];
 

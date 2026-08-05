@@ -33,7 +33,11 @@ export default function Login() {
           // Force re-fetch of current user so header shows the name immediately
           queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
           toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
-          setLocation("/");
+          if (data.user.role === "vendor") {
+            setLocation("/vendor");
+          } else {
+            setLocation("/");
+          }
         },
         onError: (error: any) => {
           toast.error(error?.data?.error || error.message || "Login failed. Check your credentials.");
