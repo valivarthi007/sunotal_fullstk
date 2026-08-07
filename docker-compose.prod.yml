@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: ${ECR_REGISTRY}/sunotal-frontend:${IMAGE_TAG}
+    container_name: sunotal-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - auth-service
+      - operations-service
+      - inventory-service
+      - user-service
+
+  auth-service:
+    image: ${ECR_REGISTRY}/sunotal-auth:${IMAGE_TAG}
+    container_name: sunotal-auth
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      - PORT=5001
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
+      - FRONTEND_URL=${FRONTEND_URL}
+
+  operations-service:
+    image: ${ECR_REGISTRY}/sunotal-operations:${IMAGE_TAG}
+    container_name: sunotal-operations
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    environment:
+      - PORT=5002
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
+      - FRONTEND_URL=${FRONTEND_URL}
+
+  inventory-service:
+    image: ${ECR_REGISTRY}/sunotal-inventory:${IMAGE_TAG}
+    container_name: sunotal-inventory
+    restart: unless-stopped
+    ports:
+      - "5003:5003"
+    environment:
+      - PORT=5003
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
+      - FRONTEND_URL=${FRONTEND_URL}
+
+  user-service:
+    image: ${ECR_REGISTRY}/sunotal-user:${IMAGE_TAG}
+    container_name: sunotal-user
+    restart: unless-stopped
+    ports:
+      - "5004:5004"
+    environment:
+      - PORT=5004
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
+      - FRONTEND_URL=${FRONTEND_URL}

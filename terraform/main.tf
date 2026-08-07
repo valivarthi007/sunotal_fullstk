@@ -105,3 +105,27 @@ module "cdn" {
   ssl_certificate_arn   = var.ssl_certificate_arn
   tags                  = local.common_tags
 }
+
+module "ecr" {
+  source = "./modules/ecr"
+  tags   = local.common_tags
+}
+
+module "sonarqube" {
+  source              = "./modules/sonarqube"
+  vpc_id              = module.vpc.vpc_id
+  public_subnet_id    = module.vpc.public_subnet_2_id
+  allowed_cidr_blocks = var.allowed_cidr_blocks
+  key_name            = var.key_name
+  tags                = local.common_tags
+}
+
+module "test_server" {
+  source              = "./modules/test_server"
+  vpc_id              = module.vpc.vpc_id
+  public_subnet_id    = module.vpc.public_subnet_1_id
+  allowed_cidr_blocks = var.allowed_cidr_blocks
+  key_name            = var.key_name
+  tags                = local.common_tags
+}
+

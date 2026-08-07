@@ -54,12 +54,6 @@ jobs:
           cd frontend && pnpm build
           cd ../backend && pnpm build
 
-      - name: Package artifacts
-        run: |
-          mkdir -p dist/artifacts
-          tar -czf dist/artifacts/frontend-build.tgz -C frontend/dist .
-          tar --exclude='node_modules' -czf dist/artifacts/backend-build.tgz -C backend .
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -67,26 +61,32 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-      - name: Upload Versioned Artifacts to S3
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push ECR images
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          BUILD_TAG="${GITHUB_SHA::8}"
-          BUCKET_NAME="${{ env.S3_BUCKET_NAME }}"
+          docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG ./frontend
+          docker build -t $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG ./backend/services/auth-service
+          docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG ./backend/services/operations-service
+          docker build -t $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG ./backend/services/inventory-service
+          docker build -t $ECR_REGISTRY/sunotal-user:$IMAGE_TAG ./backend/services/user-service
           
-          echo "Uploading build artifacts for commit ${BUILD_TAG} to s3://${BUCKET_NAME}/artifacts/..."
-          
-          # Upload commit-versioned artifacts
-          aws s3 cp dist/artifacts/frontend-build.tgz s3://${BUCKET_NAME}/artifacts/${BUILD_TAG}/frontend-build.tgz
-          aws s3 cp dist/artifacts/backend-build.tgz s3://${BUCKET_NAME}/artifacts/${BUILD_TAG}/backend-build.tgz
-          aws s3 cp docker-compose.yml s3://${BUCKET_NAME}/artifacts/${BUILD_TAG}/docker-compose.yml
-          
-          # Upload 'latest' pointer for deployment
-          aws s3 cp dist/artifacts/frontend-build.tgz s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz
-          aws s3 cp dist/artifacts/backend-build.tgz s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz
-          aws s3 cp docker-compose.yml s3://${BUCKET_NAME}/artifacts/latest/docker-compose.yml
+          docker push $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-user:$IMAGE_TAG
 
       - name: Deploy to Private EC2 via SSH through Bastion Host
         env:
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
           mkdir -p ~/.ssh
           echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
@@ -107,8 +107,6 @@ jobs:
             --db-instance-identifier "$DB_IDENTIFIER" \
             --query "DBInstances[0].Endpoint.Address" --output text || echo "")
 
-          BUCKET_NAME="${{ env.S3_BUCKET_NAME }}"
-
           CLOUDFRONT_DOMAIN=$(aws cloudfront list-distributions \
             --query "DistributionList.Items[?Comment=='CloudFront CDN for Sunotal S3 Product Assets'].DomainName" \
             --output text || echo "")
@@ -122,11 +120,6 @@ jobs:
             echo "::error::Failed to find running Private EC2 instance with tag Name=sunotal-frontend."
             exit 1
           fi
-
-          echo "Bastion Host Public IP : $BASTION_IP"
-          echo "Private App EC2 IP     : $PRIVATE_IP"
-          echo "RDS Database Host      : $DB_HOST"
-          echo "CloudFront Domain Name : $CLOUDFRONT_DOMAIN"
 
           # Configure SSH Config for jump host (bastion)
           cat <<EOF > ~/.ssh/config
@@ -147,75 +140,37 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
 
-          echo "Testing SSH connectivity to Private EC2 via Bastion Host..."
-          for i in {1..30}; do
-            if ssh app-private "echo SSH connection test successful" 2>/dev/null; then
-              echo "✅ SSH connection to Private EC2 established!"
-              break
-            fi
-            echo "Attempt $i/30: SSH connection pending. Waiting 5s..."
-            sleep 5
-          done
+          # Transfer docker-compose.prod.yml to the app host
+          scp docker-compose.prod.yml app-private:/home/ubuntu/docker-compose.prod.yml
 
-          echo "Executing deployment on Private EC2 instance over SSH..."
+          echo "Executing Docker Compose deployment on Private EC2 instance..."
           ssh app-private bash -s <<REMOTE_SCRIPT
             set -e
-            export PATH=\$PATH:/usr/local/bin:/usr/bin:/bin:/snap/bin:~/.local/share/pnpm
-            export NODE_OPTIONS='--max-old-space-size=2048'
+            
+            # Log in to ECR on remote EC2
+            aws ecr get-login-password --region ${{ env.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+            
+            # Create environment configuration
+            cat <<EOF > .env
+            ECR_REGISTRY=${ECR_REGISTRY}
+            IMAGE_TAG=${IMAGE_TAG}
+            DATABASE_URL=postgresql://${{ env.DB_USER }}:${{ env.DB_PASSWORD }}@${DB_HOST}:5432/${{ env.DB_NAME }}?sslmode=require&uselibpqcompat=true
+            SESSION_SECRET=${{ secrets.SESSION_SECRET || 'sunotal-session-secret-corporate-prod' }}
+            CLOUDFRONT_DOMAIN=https://${CLOUDFRONT_DOMAIN}
+            FRONTEND_URL=http://localhost
+            EOF
 
-            echo "Ensuring 2GB swap file exists on EC2 instance..."
-            if [ ! -f /swapfile ]; then
-              sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
-              sudo chmod 600 /swapfile
-              sudo mkswap /swapfile
-              sudo swapon /swapfile
-            fi
+            # Run docker compose up
+            docker compose -f docker-compose.prod.yml --env-file .env up -d --pull always
+            
+            # Wait for backend container to be healthy and run database migrations/seeds
+            docker exec sunotal-auth pnpm run db:push || true
+            docker exec sunotal-auth pnpm run db:seed || true
 
-            echo "Downloading build artifacts directly from S3..."
-            mkdir -p /tmp/sunotal-artifacts
-            aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/frontend-build.tgz /tmp/sunotal-artifacts/frontend-build.tgz
-            aws s3 cp s3://${BUCKET_NAME}/artifacts/latest/backend-build.tgz /tmp/sunotal-artifacts/backend-build.tgz
-
-            echo "Extracting frontend build to /var/www/sunotal/..."
-            sudo mkdir -p /var/www/sunotal && sudo rm -rf /var/www/sunotal/*
-            sudo tar -xzf /tmp/sunotal-artifacts/frontend-build.tgz -C /var/www/sunotal/
-
-            echo "Extracting backend build to /var/www/sunotal-backend/..."
-            sudo mkdir -p /var/www/sunotal-backend && sudo rm -rf /var/www/sunotal-backend/*
-            sudo tar -xzf /tmp/sunotal-artifacts/backend-build.tgz -C /var/www/sunotal-backend/
-            sudo chown -R ubuntu:www-data /var/www/sunotal /var/www/sunotal-backend
-
-            cd /var/www/sunotal-backend
-            if [ -n "${DB_HOST}" ] && [ "${DB_HOST}" != "None" ]; then
-              echo "DATABASE_URL=postgresql://${{ env.DB_USER }}:${{ env.DB_PASSWORD }}@${DB_HOST}:5432/${{ env.DB_NAME }}?sslmode=require&uselibpqcompat=true" > .env
-              if [ -n "${CLOUDFRONT_DOMAIN}" ] && [ "${CLOUDFRONT_DOMAIN}" != "None" ]; then
-                echo "CLOUDFRONT_DOMAIN=https://${CLOUDFRONT_DOMAIN}" >> .env
-              fi
-            else
-              cp -n .env.example .env || true
-              if [ -n "${CLOUDFRONT_DOMAIN}" ] && [ "${CLOUDFRONT_DOMAIN}" != "None" ]; then
-                echo "CLOUDFRONT_DOMAIN=https://${CLOUDFRONT_DOMAIN}" >> .env
-              fi
-            fi
-
-            echo "Installing backend node modules..."
-            command -v pnpm >/dev/null 2>&1 && pnpm install || npx --yes pnpm@${PNPM_VERSION} install
-
-            echo "Pushing database schema..."
-            command -v pnpm >/dev/null 2>&1 && pnpm run db:push || npx --yes pnpm@${PNPM_VERSION} run db:push
-
-            echo "Seeding database..."
-            (command -v pnpm >/dev/null 2>&1 && pnpm run db:seed || npx --yes pnpm@${PNPM_VERSION} run db:seed || true)
-
-            echo "Starting / Restarting backend service with PM2..."
-            (pm2 restart sunotal-backend --update-env || pm2 start dist/src/index.js --name sunotal-backend)
-            sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu || true
-            pm2 save || true
-
-            echo "Restarting NGINX..."
-            sudo systemctl enable nginx && sudo systemctl restart nginx
-            rm -rf /tmp/sunotal-artifacts
-            echo "✅ Deployment completed successfully on Private EC2!"
+            # Prune unused docker objects to keep disk clean
+            docker system prune -f
+            
+            echo "✅ Docker Compose deployment completed successfully on Private EC2!"
           REMOTE_SCRIPT
 
       - name: HTTP Health Check via ALB

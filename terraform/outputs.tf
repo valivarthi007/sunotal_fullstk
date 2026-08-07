@@ -37,3 +37,39 @@ output "cloudfront_distribution_id" {
   description = "ID of the CloudFront distribution"
   value       = module.cdn.cloudfront_distribution_id
 }
+
+output "ecr_frontend_url" {
+  description = "ECR Repository URL for frontend"
+  value       = module.ecr.frontend_repository_url
+}
+
+output "ecr_auth_url" {
+  description = "ECR Repository URL for auth service"
+  value       = module.ecr.auth_repository_url
+}
+
+output "ecr_operations_url" {
+  description = "ECR Repository URL for operations service"
+  value       = module.ecr.operations_repository_url
+}
+
+output "ecr_inventory_url" {
+  description = "ECR Repository URL for inventory service"
+  value       = module.ecr.inventory_repository_url
+}
+
+output "ecr_user_url" {
+  description = "ECR Repository URL for user service"
+  value       = module.ecr.user_repository_url
+}
+
+output "sonarqube_public_ip" {
+  description = "Public IP address of the SonarQube server"
+  value       = module.sonarqube.sonarqube_public_ip
+}
+
+output "test_server_public_ip" {
+  description = "Public IP address of the Test Server"
+  value       = module.test_server.test_server_public_ip
+}
+

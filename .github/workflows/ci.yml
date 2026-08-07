@@ -90,40 +90,53 @@ jobs:
           cd frontend && pnpm run test:e2e
         continue-on-error: true
 
-      - name: Build applications
-        run: |
-          cd frontend && pnpm build
-          cd ../backend && pnpm build
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Run Trivy vulnerability scanner (Filesystem)
+        uses: aquasecurity/trivy-action@master
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+          scan-type: 'fs'
+          scan-ref: '.'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
 
-      - name: Publish Test Reports to S3
-        if: always()
+      - name: Build Docker images
         run: |
-          BUCKET_NAME="${{ env.S3_BUCKET_NAME }}"
-          BUILD_TAG="${GITHUB_SHA::8}"
-          
-          echo "Publishing test reports to s3://${BUCKET_NAME}/test_reports/..."
-          
-          # Upload Backend JSON report
-          if [ -f backend/backend-report.json ]; then
-            aws s3 cp backend/backend-report.json s3://${BUCKET_NAME}/test_reports/${BUILD_TAG}/backend/backend-report.json
-            aws s3 cp backend/backend-report.json s3://${BUCKET_NAME}/test_reports/latest/backend/backend-report.json
-          fi
-          
-          # Upload Frontend JSON report
-          if [ -f frontend/frontend-report.json ]; then
-            aws s3 cp frontend/frontend-report.json s3://${BUCKET_NAME}/test_reports/${BUILD_TAG}/frontend/frontend-report.json
-            aws s3 cp frontend/frontend-report.json s3://${BUCKET_NAME}/test_reports/latest/frontend/frontend-report.json
-          fi
-          
-          # Upload Playwright E2E HTML reports
-          if [ -d frontend/playwright-report ]; then
-            aws s3 cp frontend/playwright-report/ s3://${BUCKET_NAME}/test_reports/${BUILD_TAG}/e2e/ --recursive
-            aws s3 cp frontend/playwright-report/ s3://${BUCKET_NAME}/test_reports/latest/e2e/ --recursive
-          fi
+          docker build -t sunotal-frontend:latest ./frontend
+          docker build -t sunotal-auth:latest ./backend/services/auth-service
+          docker build -t sunotal-operations:latest ./backend/services/operations-service
+          docker build -t sunotal-inventory:latest ./backend/services/inventory-service
+          docker build -t sunotal-user:latest ./backend/services/user-service
+
+      - name: Run Trivy vulnerability scanner (Frontend Image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sunotal-frontend:latest'
+          exit-code: '1'
+          severity: 'CRITICAL'
+
+      - name: Run Trivy vulnerability scanner (Auth Image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sunotal-auth:latest'
+          exit-code: '1'
+          severity: 'CRITICAL'
+
+      - name: Run Trivy vulnerability scanner (Operations Image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sunotal-operations:latest'
+          exit-code: '1'
+          severity: 'CRITICAL'
+
+      - name: Run Trivy vulnerability scanner (Inventory Image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sunotal-inventory:latest'
+          exit-code: '1'
+          severity: 'CRITICAL'
+
+      - name: Run Trivy vulnerability scanner (User Image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sunotal-user:latest'
+          exit-code: '1'
+          severity: 'CRITICAL'
