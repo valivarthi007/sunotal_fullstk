@@ -1,5 +1,6 @@
 # Stage 1: Build
-FROM node:20-alpine AS builder
+FROM node:20-alpine
+RUN apk update && apk upgrade --no-cache AS builder
 RUN npm install -g pnpm
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
@@ -9,6 +10,7 @@ RUN pnpm build
 
 # Stage 2: Production
 FROM node:20-alpine
+RUN apk update && apk upgrade --no-cache
 RUN npm install -g pnpm
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./

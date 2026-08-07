@@ -9,6 +9,7 @@ RUN pnpm build
 
 # Stage 2: Production
 FROM nginx:1.27-alpine
+RUN apk update && apk upgrade --no-cache
 COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
