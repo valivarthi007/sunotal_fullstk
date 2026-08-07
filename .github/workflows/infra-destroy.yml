@@ -72,59 +72,8 @@ jobs:
         run: |
           cd terraform
           terraform init -upgrade || true
-
-          echo "Syncing existing AWS resources into Terraform state before destroy..."
-          STATE_LIST=$(terraform state list 2>/dev/null || echo "")
-
-          if ! echo "$STATE_LIST" | grep -q "aws_iam_role.ec2_s3_role"; then
-            if aws iam get-role --role-name sunotal-ec2-s3-access-role >/dev/null 2>&1; then
-              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.iam.aws_iam_role.ec2_s3_role sunotal-ec2-s3-access-role || true
-            fi
-          fi
-
-          if ! echo "$STATE_LIST" | grep -q "aws_vpc.main"; then
-            VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=sunotal-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "")
-            if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
-              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.vpc.aws_vpc.main "$VPC_ID" || true
-            fi
-          fi
-
           echo "Destroying managed infrastructure..."
-          terraform destroy -auto-approve -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" || true
-
-      - name: Deregister Packer AMIs & Delete EBS Snapshots
-        run: |
-          echo "Searching for AMIs tagged Project=sunotal or Name=sunotal-frontend-ami..."
-          
-          AMI_IDS=$(aws ec2 describe-images \
-            --owners self \
-            --filters "Name=tag:Project,Values=sunotal" \
-            --query 'Images[*].ImageId' \
-            --output text 2>/dev/null || echo "")
-          
-          if [ -z "$AMI_IDS" ] || [ "$AMI_IDS" = "None" ]; then
-            echo "No tagged AMIs found to deregister."
-          else
-            for AMI_ID in $AMI_IDS; do
-              echo "Processing AMI: $AMI_ID"
-              
-              SNAPSHOT_IDS=$(aws ec2 describe-images \
-                --image-ids "$AMI_ID" \
-                --query 'Images[0].BlockDeviceMappings[*].Ebs.SnapshotId' \
-                --output text 2>/dev/null || echo "")
-              
-              echo "Deregistering AMI: $AMI_ID..."
-              aws ec2 deregister-image --image-id "$AMI_ID" || true
-              
-              for SNAP_ID in $SNAPSHOT_IDS; do
-                if [ "$SNAP_ID" != "None" ] && [ -n "$SNAP_ID" ]; then
-                  echo "Deleting associated EBS snapshot: $SNAP_ID..."
-                  aws ec2 delete-snapshot --snapshot-id "$SNAP_ID" || true
-                fi
-              done
-            done
-            echo "All Packer AMI resources deregistered and snapshots purged successfully!"
-          fi
+          terraform destroy -auto-approve -var="key_name=jcs_raju_laptop" || true
 
       - name: Purge Remaining Orphaned Resources (Full AWS us-east-1 Sweeper)
         run: |

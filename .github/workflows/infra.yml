@@ -3,11 +3,6 @@ name: Infrastructure Automation
 on:
   workflow_dispatch:
     inputs:
-      force_rebuild_ami:
-        description: 'Force rebuild AMI with Packer even if an existing tagged AMI is found'
-        type: boolean
-        required: false
-        default: false
       force_reapply_infra:
         description: 'Force re-apply Terraform even if active running infrastructure is detected'
         type: boolean
@@ -18,12 +13,10 @@ on:
       - main
     paths:
       - 'terraform/**'
-      - 'packer/**'
       - '.github/workflows/infra.yml'
   pull_request:
     paths:
       - 'terraform/**'
-      - 'packer/**'
       - '.github/workflows/infra.yml'
 
 env:
@@ -31,7 +24,7 @@ env:
 
 jobs:
   validate_and_deploy:
-    name: Provision Infrastructure & AMI
+    name: Provision Infrastructure
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -56,14 +49,7 @@ jobs:
             --bucket "$BUCKET_NAME" \
             --versioning-configuration Status=Enabled || true
 
-          echo "Ensuring backend folder structure (no empty objects)…"
-          # We *do not* create zero‑byte objects for prefixes.
-          # Terraform will create the `state/terraform.tfstate` file
-          # automatically on the first `terraform init/apply`.
-          # If you need a placeholder for other tooling, create a
-          # *named* object (e.g. `state/.keep`) instead of the bare prefix.
-          # No further actions are required here.
-          echo "✅ S3 bucket folder structure initialized (images/, artifacts/, state/)"
+          echo "✅ S3 bucket folder structure initialized"
 
       - name: Ensure DynamoDB State Lock Table Exists
         run: |
@@ -75,44 +61,28 @@ jobs:
             --region "${{ env.AWS_REGION }}" || true
           aws dynamodb wait table-exists --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
 
-      - name: Setup Packer
-        uses: hashicorp/setup-packer@v3
-        with:
-          version: "latest"
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.3"
 
-      - name: Validate Packer Template
-        run: |
-          cd packer
-          packer init .
-          packer validate .
-
       - name: Clean Corrupted State
         run: |
           echo "Checking for stale DynamoDB lock and empty state files..."
-          # Remove stale db item digest
           aws dynamodb update-item \
             --table-name sunotal-terraform-locks \
             --key '{"LockID":{"S":"state/terraform.tfstate"}}' \
             --update-expression "REMOVE Digest" \
             --condition-expression "attribute_exists(Digest)" || echo "No stale Digest found"
             
-          # Remove the empty folder marker if it exists (which breaks Terraform)
           aws s3api delete-object --bucket jcs-raju-sunotal-final --key state/ || true
           
-          # If the state file itself is 0 bytes (corrupted upload), we should delete it so Terraform
-          # can start fresh or you can restore from a backup.
           STATE_SIZE=$(aws s3api head-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate --query ContentLength --output text 2>/dev/null || echo "Missing")
           if [ "$STATE_SIZE" = "0" ]; then
             echo "State file is 0 bytes! Deleting corrupted state file..."
             aws s3api delete-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate || true
           fi
           
-          # If there is a backup state and the current one is missing/deleted, restore it
           if ! aws s3api head-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate 2>/dev/null; then
             if aws s3api head-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate.backup 2>/dev/null; then
                echo "Restoring state from backup..."
@@ -127,51 +97,8 @@ jobs:
           terraform init -backend=false -upgrade
           terraform validate
 
-      - name: Resolve AMI (Reuse Existing or Build New)
-        id: packer_build
-        run: |
-          FORCE_REBUILD="${{ github.event.inputs.force_rebuild_ami }}"
-          EXISTING_AMI_ID=""
-          
-          if [ "$FORCE_REBUILD" != "true" ]; then
-            echo "Checking for existing AMI tagged Name=sunotal-frontend-ami or Project=sunotal..."
-            EXISTING_AMI_ID=$(aws ec2 describe-images \
-              --owners self \
-              --filters "Name=tag:Project,Values=sunotal" "Name=state,Values=available" \
-              --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
-              --output text)
-            
-            if [ -z "$EXISTING_AMI_ID" ] || [ "$EXISTING_AMI_ID" = "None" ]; then
-              EXISTING_AMI_ID=$(aws ec2 describe-images \
-                --owners self \
-                --filters "Name=tag:Name,Values=sunotal-frontend-ami" "Name=state,Values=available" \
-                --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
-                --output text)
-            fi
-          fi
-          
-          if [ "$EXISTING_AMI_ID" != "None" ] && [ -n "$EXISTING_AMI_ID" ]; then
-            echo "✅ Found existing tagged AMI: $EXISTING_AMI_ID. Reusing AMI (skipping Packer build)."
-            echo "ami_id=$EXISTING_AMI_ID" >> $GITHUB_OUTPUT
-          else
-            echo "No suitable existing AMI found (or force rebuild requested). Building new AMI with Packer..."
-            cd packer
-            packer build -var="aws_region=${{ env.AWS_REGION }}" .
-            MANIFEST_PATH="$GITHUB_WORKSPACE/packer/packer-manifest.json"
-            
-            if [ -f "$MANIFEST_PATH" ]; then
-              AMI_ID=$(grep -o '"artifact_id": *"[^"]*"' "$MANIFEST_PATH" | tail -n1 | cut -d '"' -f4 | cut -d ':' -f2)
-              echo "Successfully built AMI ID: $AMI_ID"
-              echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
-            else
-              echo "::error::packer-manifest.json not found at $MANIFEST_PATH"
-              exit 1
-            fi
-          fi
-
       - name: Deploy Infrastructure with Terraform
         env:
-          TF_VAR_ami_id: ${{ steps.packer_build.outputs.ami_id }}
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
         run: |
           mkdir -p ~/.ssh
@@ -204,11 +131,11 @@ jobs:
             echo "Skipping terraform apply since infrastructure is already active (set force_reapply_infra=true to override)."
           else
             echo "Planning & Applying Infrastructure Changes..."
-            terraform plan -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop"
+            terraform plan -var="key_name=jcs_raju_laptop"
             
             if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
               echo "Applying Infrastructure Changes..."
-              terraform apply -auto-approve -var="ami_id=${TF_VAR_ami_id}" -var="key_name=jcs_raju_laptop"
+              terraform apply -auto-approve -var="key_name=jcs_raju_laptop"
             else
               echo "PR Validation complete — terraform apply skipped for non-dispatch/PR builds."
             fi

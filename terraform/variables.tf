@@ -4,11 +4,6 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "ami_id" {
-  description = "AMI ID produced by the Packer build"
-  type        = string
-}
-
 variable "instance_type" {
   description = "EC2 instance size"
   type        = string

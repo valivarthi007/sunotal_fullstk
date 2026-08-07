@@ -1,3 +1,0 @@
----
-- name: "SECTION | 4 | Monitoring"
-  include: cis_4.x.yml

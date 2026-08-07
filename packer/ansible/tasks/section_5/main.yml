@@ -1,3 +1,0 @@
----
-- name: "SECTION | 5 | Networking"
-  include: cis_5.x.yml

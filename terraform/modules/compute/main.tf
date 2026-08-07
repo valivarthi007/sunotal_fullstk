@@ -33,13 +33,24 @@ resource "aws_instance" "bastion" {
 }
 
 resource "aws_instance" "web" {
-  ami                         = var.ami_id
+  ami                         = data.aws_ami.ubuntu_bastion.id
   instance_type               = var.instance_type
   subnet_id                   = var.private_subnet_id
   vpc_security_group_ids      = [var.web_security_group_id]
   associate_public_ip_address = false
   key_name                    = var.key_name != null && var.key_name != "" ? var.key_name : (length(aws_key_pair.deployer) > 0 ? aws_key_pair.deployer[0].key_name : null)
   iam_instance_profile        = var.iam_instance_profile_name
+
+  user_data = <<-EOF
+              #!/bin/bash
+              apt-get update -y
+              apt-get install -y docker.io git curl awscli
+              systemctl start docker
+              systemctl enable docker
+              
+              # Allow ubuntu user to run Docker commands
+              usermod -aG docker ubuntu
+              EOF
 
   tags = merge(var.tags, {
     Name = "sunotal-frontend"

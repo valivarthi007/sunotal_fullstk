@@ -67,7 +67,6 @@ module "security" {
 
 module "compute" {
   source                    = "./modules/compute"
-  ami_id                    = var.ami_id
   instance_type             = var.instance_type
   bastion_instance_type     = var.bastion_instance_type
   public_subnet_id          = module.vpc.public_subnet_1_id
