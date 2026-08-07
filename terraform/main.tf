@@ -101,7 +101,6 @@ module "cdn" {
   alb_security_group_id = module.security.alb_security_group_id
   web_instance_id       = module.compute.web_instance_id
   s3_bucket_name        = var.s3_bucket_name
-  ssl_certificate_arn   = var.ssl_certificate_arn
   tags                  = local.common_tags
 }
 

@@ -101,9 +101,3 @@ variable "dynamodb_table_name" {
   default     = "sunotal-terraform-locks"
 }
 
-variable "ssl_certificate_arn" {
-  description = "ARN of the SSL certificate for ALB HTTPS listener"
-  type        = string
-  default     = "arn:aws:acm:us-east-1:143797622495:certificate/62ed25b2-ce70-402a-aa8d-ea00a11188e7"
-}
-
