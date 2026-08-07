@@ -38,9 +38,33 @@ jobs:
         with:
           terraform_version: "1.9.3"
 
-      - name: Empty S3 Bucket Build Artifacts (Preserve State)
+      - name: Restore S3 State & Purge Build Artifacts
         run: |
           BUCKET_NAME="jcs-raju-sunotal-final"
+          echo "Inspecting S3 remote state file at s3://${BUCKET_NAME}/state/terraform.tfstate..."
+          aws s3 cp "s3://${BUCKET_NAME}/state/terraform.tfstate" /tmp/current-state.json 2>/dev/null || echo "{}" > /tmp/current-state.json
+
+          if ! grep -q '"type": *"aws_' /tmp/current-state.json 2>/dev/null; then
+            echo "Searching S3 version history for valid non-empty state snapshot..."
+            VERSIONS=$(aws s3api list-object-versions --bucket "${BUCKET_NAME}" --prefix "state/terraform.tfstate" --query 'Versions[*].VersionId' --output text 2>/dev/null || echo "")
+            for VID in $VERSIONS; do
+              if [ -n "$VID" ] && [ "$VID" != "None" ] && [ "$VID" != "null" ]; then
+                aws s3 cp "s3://${BUCKET_NAME}/state/terraform.tfstate?versionId=${VID}" /tmp/candidate-state.json 2>/dev/null || true
+                if grep -q '"type": *"aws_' /tmp/candidate-state.json 2>/dev/null; then
+                  echo "Restoring valid state version: $VID..."
+                  aws s3api copy-object --bucket "${BUCKET_NAME}" --copy-source "${BUCKET_NAME}/state/terraform.tfstate?versionId=${VID}" --key "state/terraform.tfstate"
+                  break
+                fi
+              fi
+            done
+          fi
+
+          echo "Clearing stale state lock digest in DynamoDB..."
+          aws dynamodb delete-item \
+            --table-name sunotal-terraform-locks \
+            --key '{"LockID": {"S": "'"${BUCKET_NAME}"'/state/terraform.tfstate-md5"}}' \
+            --region "${{ env.AWS_REGION }}" || true
+
           echo "Emptying build artifacts in s3://${BUCKET_NAME}/artifacts..."
           aws s3 rm s3://${BUCKET_NAME}/artifacts --recursive || true
 
@@ -48,6 +72,23 @@ jobs:
         run: |
           cd terraform
           terraform init -upgrade || true
+
+          echo "Syncing existing AWS resources into Terraform state before destroy..."
+          STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+
+          if ! echo "$STATE_LIST" | grep -q "aws_iam_role.ec2_s3_role"; then
+            if aws iam get-role --role-name sunotal-ec2-s3-access-role >/dev/null 2>&1; then
+              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.iam.aws_iam_role.ec2_s3_role sunotal-ec2-s3-access-role || true
+            fi
+          fi
+
+          if ! echo "$STATE_LIST" | grep -q "aws_vpc.main"; then
+            VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=sunotal-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "")
+            if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+              terraform import -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" module.vpc.aws_vpc.main "$VPC_ID" || true
+            fi
+          fi
+
           echo "Destroying managed infrastructure..."
           terraform destroy -auto-approve -var="ami_id=destroy-placeholder" -var="key_name=jcs_raju_laptop" || true
 
@@ -157,4 +198,43 @@ jobs:
             aws ec2 delete-vpc --vpc-id "$VPC_ID" || true
           fi
 
+          # 8. Delete Lambda Function (if exists)
+          if aws lambda get-function --function-name "sunotal-delete-s3-object" >/dev/null 2>&1; then
+            echo "Deleting Lambda function sunotal-delete-s3-object..."
+            aws lambda delete-function --function-name "sunotal-delete-s3-object" || true
+          fi
+
           echo "🎉 Complete Clean Sweep Finished! Every sunotal resource in us-east-1 wiped."
+
+      - name: Destroy Terraform Backend Infrastructure
+        run: |
+          BUCKET_NAME="jcs-raju-sunotal-final"
+          
+          # Delete DynamoDB Locks Table
+          echo "Deleting DynamoDB table sunotal-terraform-locks..."
+          aws dynamodb delete-table --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
+          aws dynamodb wait table-not-exists --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" || true
+
+          # Empty and delete the versioned S3 bucket
+          if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+            echo "Emptying versioned S3 bucket $BUCKET_NAME..."
+            
+            # Fetch all object versions
+            VERSIONS=$(aws s3api list-object-versions --bucket "$BUCKET_NAME" --output json --query '{Objects: Versions[].{Key: Key, VersionId: VersionId}}')
+            if [ "$VERSIONS" != "null" ] && [ -n "$VERSIONS" ] && echo "$VERSIONS" | grep -q "Key"; then
+              echo "Deleting object versions..."
+              aws s3api delete-objects --bucket "$BUCKET_NAME" --delete "$VERSIONS" 2>/dev/null || true
+            fi
+            
+            # Fetch all delete markers
+            MARKERS=$(aws s3api list-object-versions --bucket "$BUCKET_NAME" --output json --query '{Objects: DeleteMarkers[].{Key: Key, VersionId: VersionId}}')
+            if [ "$MARKERS" != "null" ] && [ -n "$MARKERS" ] && echo "$MARKERS" | grep -q "Key"; then
+              echo "Deleting delete markers..."
+              aws s3api delete-objects --bucket "$BUCKET_NAME" --delete "$MARKERS" 2>/dev/null || true
+            fi
+
+            echo "Deleting S3 bucket $BUCKET_NAME..."
+            aws s3api delete-bucket --bucket "$BUCKET_NAME" --region "${{ env.AWS_REGION }}" || true
+          fi
+          
+          echo "🎉 Terraform backend S3 bucket and DynamoDB table destroyed successfully."
