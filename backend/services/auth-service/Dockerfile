@@ -15,5 +15,6 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --prod --frozen-lockfile
 COPY --from=builder /app/dist ./dist
 COPY drizzle.config.ts tsconfig.json ./
-COPY src/db ./src/db
+COPY src/lib ./src/lib
+COPY src/schema ./src/schema
 CMD ["node", "dist/src/index.js"]
