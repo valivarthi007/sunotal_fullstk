@@ -1,24 +1,35 @@
 version: '3.8'
 
 services:
-  frontend:
-    image: ${ECR_REGISTRY}/sunotal-frontend:${IMAGE_TAG}
-    container_name: sunotal-frontend
+  gateway:
+    image: nginx:1.25-alpine
+    container_name: sunotal-gateway
     restart: unless-stopped
     ports:
       - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
+      - frontend
       - auth-service
       - operations-service
       - inventory-service
       - user-service
 
+  frontend:
+    image: ${ECR_REGISTRY}/sunotal-frontend:${IMAGE_TAG}
+    container_name: sunotal-frontend
+    restart: unless-stopped
+    # Expose internally, no direct host binding
+    expose:
+      - "80"
+
   auth-service:
     image: ${ECR_REGISTRY}/sunotal-auth:${IMAGE_TAG}
     container_name: sunotal-auth
     restart: unless-stopped
-    ports:
-      - "5001:5001"
+    expose:
+      - "5001"
     environment:
       - PORT=5001
       - NODE_ENV=production
@@ -31,8 +42,8 @@ services:
     image: ${ECR_REGISTRY}/sunotal-operations:${IMAGE_TAG}
     container_name: sunotal-operations
     restart: unless-stopped
-    ports:
-      - "5002:5002"
+    expose:
+      - "5002"
     environment:
       - PORT=5002
       - NODE_ENV=production
@@ -45,8 +56,8 @@ services:
     image: ${ECR_REGISTRY}/sunotal-inventory:${IMAGE_TAG}
     container_name: sunotal-inventory
     restart: unless-stopped
-    ports:
-      - "5003:5003"
+    expose:
+      - "5003"
     environment:
       - PORT=5003
       - NODE_ENV=production
@@ -59,8 +70,8 @@ services:
     image: ${ECR_REGISTRY}/sunotal-user:${IMAGE_TAG}
     container_name: sunotal-user
     restart: unless-stopped
-    ports:
-      - "5004:5004"
+    expose:
+      - "5004"
     environment:
       - PORT=5004
       - NODE_ENV=production

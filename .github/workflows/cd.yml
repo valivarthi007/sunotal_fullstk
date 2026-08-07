@@ -140,8 +140,9 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
 
-          # Transfer docker-compose.prod.yml to the app host
+          # Transfer docker-compose.prod.yml and nginx.conf to the app host
           scp docker-compose.prod.yml app-private:/home/ubuntu/docker-compose.prod.yml
+          scp nginx.conf app-private:/home/ubuntu/nginx.conf
 
           echo "Executing Docker Compose deployment on Private EC2 instance..."
           ssh app-private bash -s <<REMOTE_SCRIPT
