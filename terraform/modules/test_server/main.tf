@@ -54,7 +54,7 @@ resource "aws_security_group" "test_server" {
 
 resource "aws_instance" "test_server" {
   ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t3.medium" # Needs enough capacity to build and run test suites
+  instance_type               = "t3.micro" # Satisfies Free Tier constraints
   subnet_id                   = var.public_subnet_id
   vpc_security_group_ids      = [aws_security_group.test_server.id]
   associate_public_ip_address = true
