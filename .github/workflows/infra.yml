@@ -122,21 +122,12 @@ jobs:
             --query "LoadBalancers[0].DNSName" \
             --output text 2>/dev/null || echo "")
 
-          FORCE_REAPPLY="${{ github.event.inputs.force_reapply_infra }}"
-
-          if [ -n "$EXISTING_INSTANCE" ] && [ "$EXISTING_INSTANCE" != "None" ] && \
-             [ -n "$EXISTING_ALB" ] && [ "$EXISTING_ALB" != "None" ] && \
-             [ "$FORCE_REAPPLY" != "true" ]; then
-            echo "✅ Active infrastructure detected (EC2: $EXISTING_INSTANCE, ALB: $EXISTING_ALB)."
-            echo "Skipping terraform apply since infrastructure is already active (set force_reapply_infra=true to override)."
+          echo "Planning & Applying Infrastructure Changes..."
+          terraform plan -var="key_name=jcs_raju_laptop"
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "Applying Infrastructure Changes..."
+            terraform apply -auto-approve -var="key_name=jcs_raju_laptop"
           else
-            echo "Planning & Applying Infrastructure Changes..."
-            terraform plan -var="key_name=jcs_raju_laptop"
-            
-            if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              echo "Applying Infrastructure Changes..."
-              terraform apply -auto-approve -var="key_name=jcs_raju_laptop"
-            else
-              echo "PR Validation complete — terraform apply skipped for non-dispatch/PR builds."
-            fi
+            echo "PR Validation complete — terraform apply skipped for non-dispatch/PR builds."
           fi
