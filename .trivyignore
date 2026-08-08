@@ -1,0 +1,2 @@
+# Ignore CVE-2022-23529 as it is a rejected CVE and version 9.0.2 is the latest secure version of jsonwebtoken.
+CVE-2022-23529
