@@ -19,34 +19,12 @@ env:
 
 jobs:
   deploy:
-    name: Build, Push & Deploy to ECS Fargate
+    name: Deploy & Release to ECS Fargate
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js with caching
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          cache-dependency-path: '**/pnpm-lock.yaml'
-
-      - name: Install dependencies
-        run: |
-          cd frontend && pnpm install --frozen-lockfile
-          cd ../backend && pnpm install --frozen-lockfile
-
-      - name: Build applications
-        run: |
-          cd frontend && pnpm build
-          cd ../backend && pnpm build
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -54,38 +32,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
-
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, tag, and push ECR images
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          # Build and tag both SHA and latest
-          docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest ./frontend
-          docker build -t $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-auth:latest ./backend/services/auth-service
-          docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-operations:latest ./backend/services/operations-service
-          docker build -t $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-inventory:latest ./backend/services/inventory-service
-          docker build -t $ECR_REGISTRY/sunotal-user:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user:latest ./backend/services/user-service
-          
-          # Push both SHA and latest
-          docker push $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG
-          docker push $ECR_REGISTRY/sunotal-frontend:latest
-          
-          docker push $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG
-          docker push $ECR_REGISTRY/sunotal-auth:latest
-          
-          docker push $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG
-          docker push $ECR_REGISTRY/sunotal-operations:latest
-          
-          docker push $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG
-          docker push $ECR_REGISTRY/sunotal-inventory:latest
-          
-          docker push $ECR_REGISTRY/sunotal-user:$IMAGE_TAG
-          docker push $ECR_REGISTRY/sunotal-user:latest
 
       - name: Deploy to ECS Fargate
         run: |

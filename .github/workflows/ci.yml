@@ -63,6 +63,30 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: '**/pnpm-lock.yaml'
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Log in to AWS CodeArtifact
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          aws codeartifact login --tool npm \
+            --repository ${{ secrets.CODEARTIFACT_REPO || 'sunotal-repo' }} \
+            --domain ${{ secrets.CODEARTIFACT_DOMAIN || 'sunotal-domain' }} \
+            --domain-owner ${AWS_ACCOUNT_ID} \
+            --region ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Copy .npmrc for Docker build contexts
+        run: |
+          cp ~/.npmrc ./frontend/.npmrc
+          cp ~/.npmrc ./backend/services/auth-service/.npmrc
+          cp ~/.npmrc ./backend/services/operations-service/.npmrc
+          cp ~/.npmrc ./backend/services/inventory-service/.npmrc
+          cp ~/.npmrc ./backend/services/user-service/.npmrc
+
       - name: Install dependencies
         run: |
           cd frontend && pnpm install --frozen-lockfile
@@ -98,45 +122,73 @@ jobs:
           exit-code: '0'
           severity: 'CRITICAL,HIGH'
 
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Build Docker images
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t sunotal-frontend:latest ./frontend
-          docker build -t sunotal-auth:latest ./backend/services/auth-service
-          docker build -t sunotal-operations:latest ./backend/services/operations-service
-          docker build -t sunotal-inventory:latest ./backend/services/inventory-service
-          docker build -t sunotal-user:latest ./backend/services/user-service
+          docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest ./frontend
+          docker build -t $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-auth:latest ./backend/services/auth-service
+          docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-operations:latest ./backend/services/operations-service
+          docker build -t $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-inventory:latest ./backend/services/inventory-service
+          docker build -t $ECR_REGISTRY/sunotal-user:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user:latest ./backend/services/user-service
 
       - name: Run Trivy vulnerability scanner (Frontend Image)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'sunotal-frontend:latest'
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/sunotal-frontend:latest
           exit-code: '1'
           severity: 'CRITICAL'
 
       - name: Run Trivy vulnerability scanner (Auth Image)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'sunotal-auth:latest'
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/sunotal-auth:latest
           exit-code: '1'
           severity: 'CRITICAL'
 
       - name: Run Trivy vulnerability scanner (Operations Image)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'sunotal-operations:latest'
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/sunotal-operations:latest
           exit-code: '1'
           severity: 'CRITICAL'
 
       - name: Run Trivy vulnerability scanner (Inventory Image)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'sunotal-inventory:latest'
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/sunotal-inventory:latest
           exit-code: '1'
           severity: 'CRITICAL'
 
       - name: Run Trivy vulnerability scanner (User Image)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'sunotal-user:latest'
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/sunotal-user:latest
           exit-code: '1'
           severity: 'CRITICAL'
+
+      - name: Push Docker images to Amazon ECR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-frontend:latest
+          
+          docker push $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-auth:latest
+          
+          docker push $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-operations:latest
+          
+          docker push $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-inventory:latest
+          
+          docker push $ECR_REGISTRY/sunotal-user:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-user:latest
