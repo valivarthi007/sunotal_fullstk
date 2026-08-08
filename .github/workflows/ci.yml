@@ -77,15 +77,20 @@ jobs:
             --repository ${{ secrets.CODEARTIFACT_REPO || 'sunotal-repo' }} \
             --domain ${{ secrets.CODEARTIFACT_DOMAIN || 'sunotal-domain' }} \
             --domain-owner ${AWS_ACCOUNT_ID} \
-            --region ${{ env.AWS_DEFAULT_REGION }}
+            --region ${{ env.AWS_DEFAULT_REGION }} || echo "⚠️ Warning: CodeArtifact login failed. Falling back to public npm registry."
 
       - name: Copy .npmrc for Docker build contexts
         run: |
-          cp ~/.npmrc ./frontend/.npmrc
-          cp ~/.npmrc ./backend/services/auth-service/.npmrc
-          cp ~/.npmrc ./backend/services/operations-service/.npmrc
-          cp ~/.npmrc ./backend/services/inventory-service/.npmrc
-          cp ~/.npmrc ./backend/services/user-service/.npmrc
+          if [ -f ~/.npmrc ]; then
+            echo "Copying .npmrc to build contexts..."
+            cp ~/.npmrc ./frontend/.npmrc
+            cp ~/.npmrc ./backend/services/auth-service/.npmrc
+            cp ~/.npmrc ./backend/services/operations-service/.npmrc
+            cp ~/.npmrc ./backend/services/inventory-service/.npmrc
+            cp ~/.npmrc ./backend/services/user-service/.npmrc
+          else
+            echo "No ~/.npmrc found. Proceeding with default public npm configuration."
+          fi
 
       - name: Install dependencies
         run: |
