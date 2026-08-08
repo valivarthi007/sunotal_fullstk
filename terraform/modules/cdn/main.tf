@@ -328,9 +328,10 @@ data "aws_route53_zone" "primary" {
 }
 
 resource "aws_route53_record" "sunotal" {
-  zone_id = data.aws_route53_zone.primary.zone_id
-  name    = "sunotal.automateuniverse.space"
-  type    = "A"
+  zone_id         = data.aws_route53_zone.primary.zone_id
+  name            = "sunotal.automateuniverse.space"
+  type            = "A"
+  allow_overwrite = true
 
   alias {
     name                   = aws_lb.main.dns_name
