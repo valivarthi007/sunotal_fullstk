@@ -45,7 +45,7 @@ jobs:
       - name: Run Database Migrations & Seeds on ECS Fargate
         run: |
           # Fetch Subnet and Security Group for running task
-          SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=sunotal-vpc-private-1" --query "Subnets[0].SubnetId" --output text)
+          SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=sunotal-vpc-private-subnet-1" --query "Subnets[0].SubnetId" --output text)
           SECURITY_GROUP_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=sunotal-ecs-sg" --query "SecurityGroups[0].GroupId" --output text)
           
           if [ -n "$SUBNET_ID" ] && [ "$SUBNET_ID" != "None" ] && [ -n "$SECURITY_GROUP_ID" ] && [ "$SECURITY_GROUP_ID" != "None" ]; then
