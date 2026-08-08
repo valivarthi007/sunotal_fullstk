@@ -8,11 +8,11 @@ RUN pnpm install --frozen-lockfile
 RUN rm -f .npmrc
 COPY . .
 RUN pnpm build
-RUN pnpm prune --prod
+
 
 # Stage 2: Production
 FROM node:20-alpine
-RUN apk update && apk upgrade --no-cache && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+RUN apk update && apk upgrade --no-cache && npm install -g pnpm
 WORKDIR /app
 COPY package.json ./
 COPY --from=builder /app/node_modules ./node_modules
