@@ -122,6 +122,12 @@ jobs:
             --query "LoadBalancers[0].DNSName" \
             --output text 2>/dev/null || echo "")
 
+          echo "=== Route 53 Hosted Zones ==="
+          aws route53 list-hosted-zones --query "HostedZones[*].{Name:Name,Id:Id}" --output table || echo "Failed to list Route 53 zones"
+          
+          echo "=== ACM Certificates ==="
+          aws acm list-certificates --query "CertificateSummaryList[*].{DomainName:DomainName,CertificateArn:CertificateArn}" --output table || echo "Failed to list ACM certificates"
+
           echo "Planning & Applying Infrastructure Changes..."
           terraform plan -var="key_name=jcs_raju_laptop"
           
