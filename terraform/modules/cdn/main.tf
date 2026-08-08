@@ -10,6 +10,14 @@ resource "aws_lb" "main" {
   })
 }
 
+# Temporarily restore to break deletion deadlock
+resource "aws_lb_target_group" "app" {
+  name     = "sunotal-app-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+}
+
 # Frontend Target Group
 resource "aws_lb_target_group" "frontend" {
   name        = "sunotal-frontend-tg"
