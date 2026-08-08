@@ -323,19 +323,19 @@ resource "aws_s3_bucket_policy" "allow_cloudfront" {
 }
 
 data "aws_route53_zone" "primary" {
-  name         = "automateuniverse.com"
+  name         = "automateuniverse.space"
   private_zone = false
 }
 
 data "aws_acm_certificate" "cert" {
-  domain      = "sunotal.automateuniverse.com"
+  domain      = "sunotal.automateuniverse.space"
   statuses    = ["ISSUED"]
   most_recent = true
 }
 
 resource "aws_route53_record" "sunotal" {
   zone_id = data.aws_route53_zone.primary.zone_id
-  name    = "sunotal.automateuniverse.com"
+  name    = "sunotal.automateuniverse.space"
   type    = "A"
 
   alias {
