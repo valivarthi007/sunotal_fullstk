@@ -17,3 +17,8 @@ output "db_security_group_id" {
   value       = aws_security_group.db.id
   description = "ID of Database security group"
 }
+
+output "ecs_security_group_id" {
+  value       = aws_security_group.ecs.id
+  description = "ID of ECS Fargate security group"
+}

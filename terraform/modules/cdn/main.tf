@@ -10,11 +10,13 @@ resource "aws_lb" "main" {
   })
 }
 
-resource "aws_lb_target_group" "app" {
-  name     = "sunotal-app-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+# Frontend Target Group
+resource "aws_lb_target_group" "frontend" {
+  name        = "sunotal-frontend-tg"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
 
   health_check {
     enabled             = true
@@ -29,14 +31,108 @@ resource "aws_lb_target_group" "app" {
   }
 
   tags = merge(var.tags, {
-    Name = "sunotal-app-tg"
+    Name = "sunotal-frontend-tg"
   })
 }
 
-resource "aws_lb_target_group_attachment" "app" {
-  target_group_arn = aws_lb_target_group.app.arn
-  target_id        = var.web_instance_id
-  port             = 80
+# Auth Target Group
+resource "aws_lb_target_group" "auth" {
+  name        = "sunotal-auth-tg"
+  port        = 5001
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    path                = "/api/healthz"
+    protocol            = "HTTP"
+    port                = "5001"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    matcher             = "200-399"
+  }
+
+  tags = merge(var.tags, {
+    Name = "sunotal-auth-tg"
+  })
+}
+
+# Operations Target Group
+resource "aws_lb_target_group" "operations" {
+  name        = "sunotal-operations-tg"
+  port        = 5002
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    path                = "/"
+    protocol            = "HTTP"
+    port                = "5002"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    matcher             = "200-499"
+  }
+
+  tags = merge(var.tags, {
+    Name = "sunotal-operations-tg"
+  })
+}
+
+# Inventory Target Group
+resource "aws_lb_target_group" "inventory" {
+  name        = "sunotal-inventory-tg"
+  port        = 5003
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    path                = "/"
+    protocol            = "HTTP"
+    port                = "5003"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    matcher             = "200-499"
+  }
+
+  tags = merge(var.tags, {
+    Name = "sunotal-inventory-tg"
+  })
+}
+
+# User Target Group
+resource "aws_lb_target_group" "user" {
+  name        = "sunotal-user-tg"
+  port        = 5004
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    path                = "/"
+    protocol            = "HTTP"
+    port                = "5004"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    matcher             = "200-499"
+  }
+
+  tags = merge(var.tags, {
+    Name = "sunotal-user-tg"
+  })
 }
 
 resource "aws_lb_listener" "http" {
@@ -64,7 +160,85 @@ resource "aws_lb_listener" "https" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    target_group_arn = aws_lb_target_group.frontend.arn
+  }
+}
+
+# Listener Rules for path routing
+resource "aws_lb_listener_rule" "auth" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 10
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.auth.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/auth/*", "/api/healthz"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "operations" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 20
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.operations.arn
+  }
+
+  condition {
+    path_pattern {
+      values = [
+        "/api/products/*",
+        "/api/categories/*",
+        "/api/banners/*",
+        "/api/upload/*",
+        "/api/productDefinitions/*"
+      ]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "inventory" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 30
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.inventory.arn
+  }
+
+  condition {
+    path_pattern {
+      values = [
+        "/api/inventory/*",
+        "/api/orders/*"
+      ]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "user" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 40
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.user.arn
+  }
+
+  condition {
+    path_pattern {
+      values = [
+        "/api/users/*",
+        "/api/vendors/*",
+        "/api/admin/*"
+      ]
+    }
   }
 }
 
@@ -149,19 +323,19 @@ resource "aws_s3_bucket_policy" "allow_cloudfront" {
 }
 
 data "aws_route53_zone" "primary" {
-  name         = "automateuniverse.space"
+  name         = "automateuniverse.com"
   private_zone = false
 }
 
 data "aws_acm_certificate" "cert" {
-  domain      = "sunotal.automateuniverse.space"
+  domain      = "sunotal.automateuniverse.com"
   statuses    = ["ISSUED"]
   most_recent = true
 }
 
 resource "aws_route53_record" "sunotal" {
   zone_id = data.aws_route53_zone.primary.zone_id
-  name    = "sunotal.automateuniverse.space"
+  name    = "sunotal.automateuniverse.com"
   type    = "A"
 
   alias {

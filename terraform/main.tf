@@ -65,20 +65,6 @@ module "security" {
   tags                = local.common_tags
 }
 
-module "compute" {
-  source                    = "./modules/compute"
-  instance_type             = var.instance_type
-  bastion_instance_type     = var.bastion_instance_type
-  public_subnet_id          = module.vpc.public_subnet_1_id
-  private_subnet_id         = module.vpc.private_subnet_1_id
-  bastion_security_group_id = module.security.bastion_security_group_id
-  web_security_group_id     = module.security.web_security_group_id
-  key_name                  = var.key_name
-  public_key                = var.public_key
-  iam_instance_profile_name = module.iam.instance_profile_name
-  tags                      = local.common_tags
-}
-
 module "database" {
   source                = "./modules/database"
   identifier            = "sunotal-postgres"
@@ -99,7 +85,6 @@ module "cdn" {
   vpc_id                = module.vpc.vpc_id
   public_subnet_ids     = [module.vpc.public_subnet_1_id, module.vpc.public_subnet_2_id]
   alb_security_group_id = module.security.alb_security_group_id
-  web_instance_id       = module.compute.web_instance_id
   s3_bucket_name        = var.s3_bucket_name
   tags                  = local.common_tags
 }
@@ -107,6 +92,30 @@ module "cdn" {
 module "ecr" {
   source = "./modules/ecr"
   tags   = local.common_tags
+}
+
+module "ecs" {
+  source                      = "./modules/ecs"
+  aws_region                  = var.aws_region
+  vpc_id                      = module.vpc.vpc_id
+  private_subnet_ids          = [module.vpc.private_subnet_1_id, module.vpc.private_subnet_2_id]
+  ecs_security_group_id       = module.security.ecs_security_group_id
+  tags                        = local.common_tags
+
+  ecr_frontend_url            = module.ecr.frontend_repository_url
+  ecr_auth_url                = module.ecr.auth_repository_url
+  ecr_operations_url          = module.ecr.operations_repository_url
+  ecr_inventory_url           = module.ecr.inventory_repository_url
+  ecr_user_url                = module.ecr.user_repository_url
+
+  frontend_target_group_arn   = module.cdn.frontend_target_group_arn
+  auth_target_group_arn       = module.cdn.auth_target_group_arn
+  operations_target_group_arn = module.cdn.operations_target_group_arn
+  inventory_target_group_arn  = module.cdn.inventory_target_group_arn
+  user_target_group_arn       = module.cdn.user_target_group_arn
+
+  database_url                = "postgresql://${var.db_username}:${var.db_password}@${module.database.db_instance_address}:5432/${var.db_name}?sslmode=require&uselibpqcompat=true"
+  cloudfront_domain           = module.cdn.cloudfront_domain_name
 }
 
 module "sonarqube" {
@@ -126,4 +135,3 @@ module "test_server" {
   key_name            = var.key_name
   tags                = local.common_tags
 }
-

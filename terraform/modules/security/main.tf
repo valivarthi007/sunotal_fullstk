@@ -97,6 +97,31 @@ resource "aws_security_group" "web" {
   })
 }
 
+resource "aws_security_group" "ecs" {
+  name        = "sunotal-ecs-sg"
+  description = "Security group for ECS Fargate services"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description     = "Ports allowed from ALB"
+    from_port       = 0
+    to_port         = 65535
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(var.tags, {
+    Name = "sunotal-ecs-sg"
+  })
+}
+
 resource "aws_security_group" "db" {
   name        = "sunotal-db-sg"
   description = "Security group for RDS PostgreSQL database"
@@ -108,6 +133,14 @@ resource "aws_security_group" "db" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
+  }
+
+  ingress {
+    description     = "PostgreSQL from ECS Fargate"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs.id]
   }
 
   egress {

@@ -19,11 +19,6 @@ variable "alb_security_group_id" {
   description = "ALB Security Group ID"
 }
 
-variable "web_instance_id" {
-  type        = string
-  description = "Private Web EC2 Instance ID"
-}
-
 variable "s3_bucket_name" {
   type        = string
   description = "S3 Bucket Name for asset CDN"

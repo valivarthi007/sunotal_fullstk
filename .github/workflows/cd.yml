@@ -16,16 +16,10 @@ env:
   S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME || 'jcs-raju-sunotal-final' }}
   NODE_VERSION: 20
   PNPM_VERSION: 9.15.4
-  
-  # Database Configuration (Overrides via GitHub Secrets)
-  DB_IDENTIFIER: ${{ secrets.DB_IDENTIFIER || 'sunotal-postgres' }}
-  DB_USER: ${{ secrets.DB_USER || 'sunotal' }}
-  DB_PASSWORD: ${{ secrets.DB_PASSWORD || 'sunotalpass123' }}
-  DB_NAME: ${{ secrets.DB_NAME || 'sunotal' }}
 
 jobs:
   deploy:
-    name: Package, Version, Upload & Deploy
+    name: Build, Push & Deploy to ECS Fargate
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
@@ -70,109 +64,63 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG ./frontend
-          docker build -t $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG ./backend/services/auth-service
-          docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG ./backend/services/operations-service
-          docker build -t $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG ./backend/services/inventory-service
-          docker build -t $ECR_REGISTRY/sunotal-user:$IMAGE_TAG ./backend/services/user-service
+          # Build and tag both SHA and latest
+          docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest ./frontend
+          docker build -t $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-auth:latest ./backend/services/auth-service
+          docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-operations:latest ./backend/services/operations-service
+          docker build -t $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-inventory:latest ./backend/services/inventory-service
+          docker build -t $ECR_REGISTRY/sunotal-user:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user:latest ./backend/services/user-service
           
+          # Push both SHA and latest
           docker push $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-frontend:latest
+          
           docker push $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-auth:latest
+          
           docker push $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-operations:latest
+          
           docker push $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-inventory:latest
+          
           docker push $ECR_REGISTRY/sunotal-user:$IMAGE_TAG
+          docker push $ECR_REGISTRY/sunotal-user:latest
 
-      - name: Deploy to Private EC2 via SSH through Bastion Host
-        env:
-          RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Deploy to ECS Fargate
         run: |
-          mkdir -p ~/.ssh
-          echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
-          tr -d '\r' < ~/.ssh/id_rsa > ~/.ssh/id_rsa.clean
-          mv ~/.ssh/id_rsa.clean ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          echo "Updating ECS Services to pull latest images..."
+          aws ecs update-service --cluster sunotal-cluster --service sunotal-frontend --force-new-deployment
+          aws ecs update-service --cluster sunotal-cluster --service sunotal-auth --force-new-deployment
+          aws ecs update-service --cluster sunotal-cluster --service sunotal-operations --force-new-deployment
+          aws ecs update-service --cluster sunotal-cluster --service sunotal-inventory --force-new-deployment
+          aws ecs update-service --cluster sunotal-cluster --service sunotal-user --force-new-deployment
 
-          BASTION_IP=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=sunotal-bastion" "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
-
-          PRIVATE_IP=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].PrivateIpAddress" --output text)
-
-          DB_IDENTIFIER="${{ env.DB_IDENTIFIER }}"
-          DB_HOST=$(aws rds describe-db-instances \
-            --db-instance-identifier "$DB_IDENTIFIER" \
-            --query "DBInstances[0].Endpoint.Address" --output text || echo "")
-
-          CLOUDFRONT_DOMAIN=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?Comment=='CloudFront CDN for Sunotal S3 Product Assets'].DomainName" \
-            --output text || echo "")
-
-          if [ -z "$BASTION_IP" ] || [ "$BASTION_IP" = "None" ]; then
-            echo "::error::Failed to find running Bastion host with tag Name=sunotal-bastion."
-            exit 1
+      - name: Run Database Migrations & Seeds on ECS Fargate
+        run: |
+          # Fetch Subnet and Security Group for running task
+          SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=sunotal-vpc-private-1" --query "Subnets[0].SubnetId" --output text)
+          SECURITY_GROUP_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=sunotal-ecs-sg" --query "SecurityGroups[0].GroupId" --output text)
+          
+          if [ -n "$SUBNET_ID" ] && [ "$SUBNET_ID" != "None" ] && [ -n "$SECURITY_GROUP_ID" ] && [ "$SECURITY_GROUP_ID" != "None" ]; then
+            echo "Running one-off task for DB Push..."
+            aws ecs run-task \
+              --cluster sunotal-cluster \
+              --task-definition sunotal-auth \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID],securityGroups=[$SECURITY_GROUP_ID],assignPublicIp=ENABLED}" \
+              --overrides '{"containerOverrides": [{"name": "auth", "command": ["pnpm", "run", "db:push"]}]}'
+            
+            echo "Running one-off task for DB Seed..."
+            aws ecs run-task \
+              --cluster sunotal-cluster \
+              --task-definition sunotal-auth \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID],securityGroups=[$SECURITY_GROUP_ID],assignPublicIp=ENABLED}" \
+              --overrides '{"containerOverrides": [{"name": "auth", "command": ["pnpm", "run", "db:seed"]}]}'
+          else
+            echo "Warning: Could not fetch Subnet ID or Security Group ID for running DB migration task."
           fi
-
-          if [ -z "$PRIVATE_IP" ] || [ "$PRIVATE_IP" = "None" ]; then
-            echo "::error::Failed to find running Private EC2 instance with tag Name=sunotal-frontend."
-            exit 1
-          fi
-
-          # Configure SSH Config for jump host (bastion)
-          cat <<EOF > ~/.ssh/config
-          Host bastion
-            HostName ${BASTION_IP}
-            User ubuntu
-            IdentityFile ~/.ssh/id_rsa
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-
-          Host app-private
-            HostName ${PRIVATE_IP}
-            User ubuntu
-            IdentityFile ~/.ssh/id_rsa
-            ProxyJump bastion
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-
-          # Transfer docker-compose.prod.yml and nginx.conf to the app host
-          scp docker-compose.prod.yml app-private:/home/ubuntu/docker-compose.prod.yml
-          scp nginx.conf app-private:/home/ubuntu/nginx.conf
-
-          echo "Executing Docker Compose deployment on Private EC2 instance..."
-          ssh app-private bash -s <<REMOTE_SCRIPT
-            set -e
-            
-            # Log in to ECR on remote EC2
-            aws ecr get-login-password --region ${{ env.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-            
-            # Create environment configuration
-            cat <<EOF > .env
-            ECR_REGISTRY=${ECR_REGISTRY}
-            IMAGE_TAG=${IMAGE_TAG}
-            DATABASE_URL=postgresql://${{ env.DB_USER }}:${{ env.DB_PASSWORD }}@${DB_HOST}:5432/${{ env.DB_NAME }}?sslmode=require&uselibpqcompat=true
-            SESSION_SECRET=${{ secrets.SESSION_SECRET || 'sunotal-session-secret-corporate-prod' }}
-            CLOUDFRONT_DOMAIN=https://${CLOUDFRONT_DOMAIN}
-            FRONTEND_URL=http://localhost
-            EOF
-
-            # Run docker compose up
-            docker compose -f docker-compose.prod.yml --env-file .env up -d --pull always
-            
-            # Wait for backend container to be healthy and run database migrations/seeds
-            docker exec sunotal-auth pnpm run db:push || true
-            docker exec sunotal-auth pnpm run db:seed || true
-
-            # Prune unused docker objects to keep disk clean
-            docker system prune -f
-            
-            echo "✅ Docker Compose deployment completed successfully on Private EC2!"
-          REMOTE_SCRIPT
 
       - name: HTTP Health Check via ALB
         run: |

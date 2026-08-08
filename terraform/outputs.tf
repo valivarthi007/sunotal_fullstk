@@ -1,16 +1,31 @@
-output "instance_id" {
-  description = "Application EC2 instance ID"
-  value       = module.compute.web_instance_id
+output "ecs_cluster_name" {
+  description = "ECS Cluster Name"
+  value       = module.ecs.cluster_name
 }
 
-output "private_ip" {
-  description = "Private IP address of the application EC2 host"
-  value       = module.compute.web_private_ip
+output "ecs_frontend_service" {
+  description = "Frontend ECS Service Name"
+  value       = module.ecs.frontend_service_name
 }
 
-output "bastion_public_ip" {
-  description = "Public IP address of the Bastion / Jump Host"
-  value       = module.compute.bastion_public_ip
+output "ecs_auth_service" {
+  description = "Auth ECS Service Name"
+  value       = module.ecs.auth_service_name
+}
+
+output "ecs_operations_service" {
+  description = "Operations ECS Service Name"
+  value       = module.ecs.operations_service_name
+}
+
+output "ecs_inventory_service" {
+  description = "Inventory ECS Service Name"
+  value       = module.ecs.inventory_service_name
+}
+
+output "ecs_user_service" {
+  description = "User ECS Service Name"
+  value       = module.ecs.user_service_name
 }
 
 output "alb_dns_name" {
@@ -72,4 +87,3 @@ output "test_server_public_ip" {
   description = "Public IP address of the Test Server"
   value       = module.test_server.test_server_public_ip
 }
-
