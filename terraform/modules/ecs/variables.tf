@@ -77,13 +77,11 @@ variable "user_target_group_arn" {
 variable "database_url" {
   type        = string
   description = "Database URL for backend services"
-  sensitive   = true
 }
 
 variable "session_secret" {
   type        = string
   description = "Session secret for session management"
-  sensitive   = true
   default     = "sunotal-session-secret-corporate-prod"
 }
 
