@@ -10,6 +10,7 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/ci.yml'
+      - '.trivyignore'
   pull_request:
     branches:
       - main
@@ -19,6 +20,7 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/ci.yml'
+      - '.trivyignore'
 
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
