@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 RUN rm -f .npmrc
 COPY . .
 RUN pnpm build
-
+RUN pnpm prune --prod
 
 # Stage 2: Production
 FROM node:20-alpine
