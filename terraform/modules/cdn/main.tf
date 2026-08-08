@@ -156,7 +156,7 @@ resource "aws_lb_listener" "https" {
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = data.aws_acm_certificate.cert.arn
+  certificate_arn   = "arn:aws:acm:us-east-1:143797622495:certificate/62ed25b2-ce70-402a-aa8d-ea00a11188e7"
 
   default_action {
     type             = "forward"
@@ -325,12 +325,6 @@ resource "aws_s3_bucket_policy" "allow_cloudfront" {
 data "aws_route53_zone" "primary" {
   name         = "automateuniverse.space"
   private_zone = false
-}
-
-data "aws_acm_certificate" "cert" {
-  domain      = "sunotal.automateuniverse.space"
-  statuses    = ["ISSUED"]
-  most_recent = true
 }
 
 resource "aws_route53_record" "sunotal" {
