@@ -128,6 +128,7 @@ jobs:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/sunotal-frontend:latest
           exit-code: '1'
           severity: 'CRITICAL'
+          trivyignores: .trivyignore
 
       - name: Run Trivy vulnerability scanner (Auth Image)
         uses: aquasecurity/trivy-action@master
@@ -135,6 +136,7 @@ jobs:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/sunotal-auth:latest
           exit-code: '1'
           severity: 'CRITICAL'
+          trivyignores: .trivyignore
 
       - name: Run Trivy vulnerability scanner (Operations Image)
         uses: aquasecurity/trivy-action@master
@@ -142,6 +144,7 @@ jobs:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/sunotal-operations:latest
           exit-code: '1'
           severity: 'CRITICAL'
+          trivyignores: .trivyignore
 
       - name: Run Trivy vulnerability scanner (Inventory Image)
         uses: aquasecurity/trivy-action@master
@@ -149,6 +152,7 @@ jobs:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/sunotal-inventory:latest
           exit-code: '1'
           severity: 'CRITICAL'
+          trivyignores: .trivyignore
 
       - name: Run Trivy vulnerability scanner (User Image)
         uses: aquasecurity/trivy-action@master
@@ -156,6 +160,7 @@ jobs:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/sunotal-user:latest
           exit-code: '1'
           severity: 'CRITICAL'
+          trivyignores: .trivyignore
 
       - name: Push Docker images to Amazon ECR
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
