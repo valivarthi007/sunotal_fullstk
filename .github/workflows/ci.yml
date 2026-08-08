@@ -1,4 +1,4 @@
-name: CI Pipeline # Triggered for ECS Fargate Deploy
+name: CI Pipeline # Triggered for ECS Deployment Run
 
 on:
   push:
