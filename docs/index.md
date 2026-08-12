@@ -10,8 +10,10 @@ The documentation is structured to guide developers, QA engineers, and system ad
 
 ### 1. Core Architecture & System Execution
 * **[Microservice Architecture & Interactions](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/1-microservice-architecture.md)**: Details the design of the decoupled microservices, ports, request routing flow via Nginx, and system component interactions.
+* **[Request Routing & Load Balancing Architecture](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/routing-documentation.md)**: Explains the roles of Vite dev-proxy locally, Nginx host reverse proxy on staging, and AWS ALB path-based routing in production.
 * **[AWS Cloud Services & Command Cheat Sheet](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/4-aws-services-ops-cheat-sheet.md)**: Explains ALB configurations, ECS task parameters, RDS database setups, and contains an AWS CLI reference commands table.
 * **[Test Server Infrastructure & Deployment](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/8-test-server-documentation.md)**: Outlines the design, firewall rules, and bootstrap operations for the staging EC2 environment.
+
 
 ### 2. Infrastructure-as-Code & Containerization
 * **[Infrastructure Code Documentation (Terraform & Docker)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/2-infrastructure-docker-terraform.md)**: Outlines basic multi-stage builds and Terraform structures.
