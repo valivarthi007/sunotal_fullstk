@@ -1,65 +1,24 @@
-# Sunotal End-to-End System Documentation Hub
+# Sunotal Documentation Hub
 
-Welcome to the comprehensive documentation hub for the Sunotal E-Commerce farm produce marketplace and its AWS cloud infrastructure.
-
----
-
-## 1. Structured Document Directory
-
-For detailed step-by-step instructions on each aspect of the application, follow the structured guides below:
-
-1. **[Local Setup & Installation](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/1-local-setup-and-installation.md)**
-   * Local dependencies, starting the PostgreSQL container, schema migrations, and initial database seeds.
-2. **[Frontend Client Architecture](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/2-frontend-architecture.md)**
-   * React/TypeScript layout routing, HTML5 GPS/IP geolocation auto-detection, and session token isolation.
-3. **[Backend REST API & Database Design](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/3-backend-and-database.md)**
-   * REST endpoints, token verification middleware, validation schemas, and Drizzle ORM models.
-4. **[AWS Cloud Infrastructure & Terraform](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/4-cloud-infrastructure-and-terraform.md)**
-   * Private VPC subnets, remote state configurations, ALB routing rules, and HTTPS redirection.
-5. **[Base Machine Image Provisioning](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/5-packer-ansible-and-amis.md)**
-   * Packer templates, Ansible playbook dependencies, OS shell hardening, Nginx proxying, and PM2 persistence.
-6. **[CI/CD Pipeline Automation](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/6-cicd-pipelines.md)**
-   * Automated infrastructure workflows (Packer/Terraform) and app deployments (GitHub Actions/Jenkins).
-7. **[Operational Runbook & Troubleshooting](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/7-operations-maintenance-and-troubleshooting.md)**
-   * Runtime monitoring, PM2/Nginx logs auditing, database backup/recovery scripts, SSL rotations, and error fixes.
-8. **[System Architecture, Microservices & Ops Runbooks (KA Hub)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/8-system-architecture-and-ops.md)**
-   * Complete microservices blueprints, CLI scripts, Terraform/Docker blueprints, and Support Knowledge Artifacts (KAs).
-
+Welcome to the comprehensive, in-depth documentation hub for the Sunotal E-Commerce farm produce marketplace and its AWS cloud infrastructure.
 
 ---
 
-## 2. End-to-End System Design Overview
+## Guide Index
 
-Sunotal leverages a secure, modern, and fully automated cloud hosting structure. Below is the system flow mapping developer code releases to AWS production deployments:
+Click on the guides below to navigate to the detailed system specifications:
 
-```mermaid
-graph TD
-    subgraph "Local Development"
-        DEV["💻 Local Dev (pnpm / Docker Compose)"]
-    end
-
-    subgraph "CI/CD Orchestration"
-        GHA["⚙️ GitHub Actions (PR & Push checks)"]
-        JENK["🛡️ Jenkins Server (Deploy & Provisioning)"]
-    end
-
-    subgraph "AWS Production Cloud"
-        ALB["🌐 Application Load Balancer (Port 80/443)"]
-        EC2["🖥️ App Instance (Private Subnet)"]
-        RDS["🗄️ PostgreSQL RDS (Private Subnet)"]
-        S3["📦 S3 Bucket (Artifacts & State)"]
-        LAMBDA["⚡ AWS Lambda (S3 Photo Deletion)"]
-    end
-
-    DEV -->|git push| GHA
-    GHA -->|Trigger / SSH| JENK
-    JENK -->|Packer AMI / Terraform| EC2
-    ALB -->|HTTP 301 Redirect to HTTPS| ALB
-    ALB -->|Forward HTTPS| EC2
-    EC2 -->|Query| RDS
-    EC2 -->|Fetch Builds| S3
-    EC2 -->|Trigger Deletion| LAMBDA
-    LAMBDA -->|Delete Photo| S3
-```
-
-Refer to the individual documents above to review configuration parameters, environment settings, and code details.
+1. **[Microservice Architecture & Interactions](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/1-microservice-architecture.md)**
+   * Outlines the backend services (Auth, Operations, Inventory, User), exposed ports, API mapping, data workflows, and request flows.
+2. **[Infrastructure Code Documentation (Terraform & Docker)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/2-infrastructure-docker-terraform.md)**
+   * Explains module layouts, remote state locking policies with DynamoDB, and multi-stage container build templates.
+3. **[Security, QA, and Quality Gate Configurations](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/3-security-quality-scans.md)**
+   * Details static application analysis via SonarQube, security policies, test host configs, and container vulnerability scans.
+4. **[AWS Cloud Services & Command Cheat Sheet](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/4-aws-services-ops-cheat-sheet.md)**
+   * Maps ALB routing rules, ECS Fargate runtime parameters, RDS instances, S3 object deletion Lambdas, and contains an AWS CLI commands cheat sheet.
+5. **[Automation Pipelines & Workflow Topologies](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/5-pipelines-automation.md)**
+   * Topology diagrams mapping the pure CI verification flows, CD deployment actions, and infrastructure lifecycle workflows (provisioning/decommissioning).
+6. **[Change Management & Safe Enhancement Guidelines](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/6-safe-enhancements-guide.md)**
+   * Details workflows for introducing application updates, DB migrations using Drizzle, and pipeline modifications safely.
+7. **[Operational Knowledge Artifacts (KA) & Runbooks](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/7-operations-ka-hub.md)**
+   * Step-by-step Knowledge Artifact runbooks for disk cleanup, SSL rotations, database backups, and process recovery.
