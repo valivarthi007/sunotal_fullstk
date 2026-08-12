@@ -13,21 +13,11 @@ Sunotal is a corporate farm-to-door grocery e-commerce web application featuring
 
 ### Quick Start
 ```bash
-# 1. Start PostgreSQL Container
-docker compose up -d
+# 1. Run automated setup (installs dependencies, builds/seeds DB, creates env configs)
+./setup.sh
 
-# 2. Run Backend API Server (Port 5000)
-cd backend
-cp -n .env.example .env
-pnpm install
-pnpm run db:push
-pnpm run db:seed
-pnpm run dev
-
-# 3. Run Frontend Web App (Port 3000)
-cd ../frontend
-pnpm install
-pnpm run dev
+# 2. Start the local development environment (automatically runs PostgreSQL in Docker and boots dev servers)
+./start-dev.sh
 ```
 
 ---
@@ -98,13 +88,24 @@ s3://jcs-raju-sunotal-final/
   3. Provisions VPC, public subnets, security groups, IAM instance profiles, and EC2 instance via Terraform using S3 remote state.
   4. **No Destructive Action**: Safe plan & apply without deleting running infrastructure.
 
-### B. CI/CD Code Pipeline (`.github/workflows/ci.yml`)
+### B. CI Pipeline (`.github/workflows/ci.yml`)
 - **Trigger**: **Every Code Change** (`push` to `main` and `pull_request` to `main`).
 - **Responsibilities**:
   1. **Quality & Analysis**: Runs TypeScript type checking (`tsc --noEmit`) and SonarQube static code scanning.
-  2. **Build & Package**: Compiles frontend & backend, creates tarballs (`frontend-build.tgz`, `backend-build.tgz`).
-  3. **Versioned S3 Upload**: Uploads versioned artifacts to `s3://jcs-raju-sunotal-final/artifacts/${BUILD_TAG}/` and `s3://jcs-raju-sunotal-final/artifacts/latest/`.
-  4. **Automated EC2 Deployment**: Deploys frontend code to `/var/www/sunotal`, backend code to `/var/www/sunotal-backend`, executes database schema migration (`db:push`), restarts PM2 daemon, enables system autostart, and executes an HTTP health check.
+  2. **Test execution**: Verifies local unit tests.
+
+### C. CD Pipeline (`.github/workflows/cd.yml`)
+- **Trigger**: **CI Success** or manual run.
+- **Responsibilities**:
+  1. **Build & Package**: Compiles frontend & backend, creates tarballs (`frontend-build.tgz`, `backend-build.tgz`).
+  2. **Versioned S3 Upload**: Uploads versioned artifacts to `s3://jcs-raju-sunotal-final/artifacts/${BUILD_TAG}/` and `s3://jcs-raju-sunotal-final/artifacts/latest/`.
+  3. **Automated EC2 Deployment**: Deploys frontend code to `/var/www/sunotal`, backend code to `/var/www/sunotal-backend`, executes database schema migration (`db:push`), restarts PM2 daemon, and executes an HTTP health check.
+
+### D. Teardown Pipeline (`.github/workflows/infra-destroy.yml`)
+- **Trigger**: **Manual (`workflow_dispatch`)** with confirmation input.
+- **Responsibilities**:
+  1. Destroys all AWS infrastructure created by Terraform in the `terraform` directory.
+  2. **Exclusion**: The S3 remote state bucket and DynamoDB locking table are preserved/excluded from deletion to maintain the backend state lock registry safely.
 
 ---
 

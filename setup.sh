@@ -76,6 +76,13 @@ docker exec -i sunotal-db psql -U sunotal -d sunotal < "$SCRIPT_DIR/database/see
 # ── 7. Frontend setup ─────────────────────────────────────────────────
 info "Setting up frontend…"
 cd "$SCRIPT_DIR/frontend"
+
+if [[ ! -f .env ]]; then
+  echo "VITE_API_URL=http://localhost:5000" > .env
+  info "frontend/.env created automatically."
+fi
+
+info "Installing frontend dependencies…"
 pnpm install
 
 # ── Done ──────────────────────────────────────────────────────────────

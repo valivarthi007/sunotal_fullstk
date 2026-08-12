@@ -8,6 +8,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Load .env so backend can connect to DB
 set -a; source "$SCRIPT_DIR/backend/.env" 2>/dev/null || true; set +a
 
+# Ensure PostgreSQL container is running
+if ! command -v docker &>/dev/null; then
+  echo "Error: docker is not installed. Please run ./setup.sh first."
+  exit 1
+fi
+
+if ! docker ps --filter "name=sunotal-db" --filter "status=running" --format "{{.Names}}" | grep -q "sunotal-db"; then
+  echo "PostgreSQL container (sunotal-db) is not running. Starting it..."
+  docker compose up -d postgres
+fi
+
+# Wait for PostgreSQL to be ready
+echo "Verifying PostgreSQL database readiness..."
+for i in $(seq 1 15); do
+  if docker exec sunotal-db pg_isready -U sunotal &>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+
 echo "Starting Sunotal Farms dev servers…"
 echo ""
 
