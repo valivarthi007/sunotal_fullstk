@@ -22,6 +22,9 @@ For detailed step-by-step instructions on each aspect of the application, follow
    * Automated infrastructure workflows (Packer/Terraform) and app deployments (GitHub Actions/Jenkins).
 7. **[Operational Runbook & Troubleshooting](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/7-operations-maintenance-and-troubleshooting.md)**
    * Runtime monitoring, PM2/Nginx logs auditing, database backup/recovery scripts, SSL rotations, and error fixes.
+8. **[System Architecture, Microservices & Ops Runbooks (KA Hub)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/8-system-architecture-and-ops.md)**
+   * Complete microservices blueprints, CLI scripts, Terraform/Docker blueprints, and Support Knowledge Artifacts (KAs).
+
 
 ---
 
