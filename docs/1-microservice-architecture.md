@@ -8,7 +8,7 @@ This document describes the microservices topology, individual service responsib
 
 ```mermaid
 graph TD
-    Client["🌐 Client Browser"] -->|HTTPS (Port 443) / HTTP (Port 80)| ALB["🌐 Application Load Balancer"]
+    Client["🌐 Client Browser"] -->|"HTTPS (Port 443) / HTTP (Port 80)"| ALB["🌐 Application Load Balancer"]
     
     subgraph "AWS ECS Fargate Cluster"
         ALB -->|/| FE["💻 Frontend Container (Port 80)"]

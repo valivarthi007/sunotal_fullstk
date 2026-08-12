@@ -15,7 +15,7 @@ graph TD
         ci_install --> ci_lint["Run Linter & TypeScript Check"]
         ci_lint --> ci_unit_test["Execute Unit & Integration Tests"]
         ci_unit_test --> ci_sonar["Upload Reports to SonarQube"]
-        ci_sonar --> ci_reports["Publish Test Reports to S3 (test_reports/)"]
+        ci_sonar --> ci_reports["Publish Test Reports to S3"]
     end
 
     %% CD Flow
@@ -25,18 +25,18 @@ graph TD
         cd_package --> cd_upload["Upload Release Artifacts to S3"]
         cd_upload --> cd_ssh["SSH Connection to EC2 Target"]
         cd_ssh --> cd_deploy["Deploy App & Restart PM2 Services"]
-        cd_deploy --> cd_health["Verify Application Health (ALB)"]
+        cd_deploy --> cd_health["Verify Application Health"]
     end
 
     %% Infrastructure Flow
     subgraph "Infrastructure Pipeline (infra.yml)"
         infra_trigger["🛠️ Infra Change or Manual Run"] --> infra_ami["Build Base Machine Image with Packer"]
-        infra_ami --> infra_tf["Apply Terraform Changes (Auto-Approve)"]
+        infra_ami --> infra_tf["Apply Terraform Changes"]
     end
 
     %% Destroy Flow
     subgraph "Destroy Pipeline (infra-destroy.yml)"
-        destroy_trigger["⚠️ Manual Decommission Run"] --> destroy_tf["Terraform Destroy (Tear Down Resources)"]
+        destroy_trigger["⚠️ Manual Decommission Run"] --> destroy_tf["Terraform Destroy"]
     end
 ```
 
