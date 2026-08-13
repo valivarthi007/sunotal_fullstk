@@ -46,7 +46,7 @@ resource "aws_security_group" "sonarqube" {
 
 resource "aws_instance" "sonarqube" {
   ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t3.micro" # Satisfies Free Tier constraints
+  instance_type               = "t3.medium" # Requires more memory than t3.micro
   subnet_id                   = var.public_subnet_id
   vpc_security_group_ids      = [aws_security_group.sonarqube.id]
   associate_public_ip_address = true

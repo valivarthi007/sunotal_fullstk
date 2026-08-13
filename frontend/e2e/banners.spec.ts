@@ -16,7 +16,7 @@ test('admin can log in, create a banner, and view it', async ({ page }) => {
   await page.goto('/admin/banners');
 
   // 5. Check if banners page loads
-  await expect(page.locator('h1')).toContainText('Hero Banners');
+  await expect(page.getByRole('heading', { name: 'Hero Banners' })).toBeVisible();
 
   // 6. Click on Add Banner
   await page.click('button:has-text("Add Banner")');
