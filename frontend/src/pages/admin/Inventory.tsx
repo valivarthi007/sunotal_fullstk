@@ -52,7 +52,7 @@ export default function InventoryAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: inventory, isLoading } = useListInventory({});
+  const { data: inventory, isLoading } = useListInventory({}, { retry: false, throwOnError: false });
   const updateInventory = useUpdateInventory();
   const deleteInventory = useDeleteInventory();
 

@@ -45,7 +45,7 @@ export default function QuotationsAdmin() {
   const [selectedProductId, setSelectedProductId] = useState<string>("auto");
   const [accepting, setAccepting] = useState(false);
 
-  const { data: products } = useListProducts();
+  const { data: products } = useListProducts(undefined, { retry: false, throwOnError: false });
 
   const fetchQuotations = async () => {
     setLoading(true);
