@@ -33,27 +33,14 @@ env:
   PNPM_VERSION: 9.15.4
 
 jobs:
-  sonartest:
-    name: SonarQube Code Analysis
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: SonarSource/sonarqube-scan-action@v8
-        continue-on-error: true
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
   ci_verify:
     name: Install, Lint, Test & Build
-    needs: sonartest
-    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -74,7 +61,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-
+      - name: SonarQube Code Analysis
+        uses: SonarSource/sonarqube-scan-action@v8
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       - name: Install dependencies
         run: |
@@ -110,6 +102,21 @@ jobs:
           scan-ref: '.'
           exit-code: '0'
           severity: 'CRITICAL,HIGH'
+          format: 'json'
+          output: 'trivy-report.json'
+
+      - name: Upload Test Reports to S3
+        run: |
+          if [ -f backend/backend-report.json ]; then
+            aws s3 cp backend/backend-report.json s3://${{ env.S3_BUCKET_NAME }}/test_result/node/backend-report.json
+          fi
+          if [ -f trivy-report.json ]; then
+            aws s3 cp trivy-report.json s3://${{ env.S3_BUCKET_NAME }}/test_result/trivy/trivy-report.json
+          fi
+          if [ -f .scannerwork/report-task.txt ]; then
+            aws s3 cp .scannerwork/report-task.txt s3://${{ env.S3_BUCKET_NAME }}/test_result/sonar/report-task.txt
+          fi
+        continue-on-error: true
 
       - name: Log in to Amazon ECR
         id: login-ecr

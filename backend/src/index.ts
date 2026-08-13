@@ -15,6 +15,10 @@ import { uploadRouter } from './routes/upload.js';
 import { bannersRouter } from './routes/banners.js';
 import ordersRouter from './routes/orders.js';
 import productDefinitionsRouter from './routes/productDefinitions.js';
+import { db } from './lib/db.js';
+import { usersTable } from './schema/users.js';
+import { eq } from 'drizzle-orm';
+import bcrypt from 'bcryptjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const app = express();
@@ -70,6 +74,30 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅  Sunotal API running → http://localhost:${PORT}`);
+async function autoSeedAdmin() {
+  try {
+    const admins = await db.select().from(usersTable).where(eq(usersTable.role, 'admin')).limit(1);
+    if (admins.length === 0) {
+      console.log('🌱 No admin user found in database. Auto-seeding default admin...');
+      const passwordHash = await bcrypt.hash('admin123', 10);
+      await db.insert(usersTable).values({
+        name: 'Admin User',
+        email: 'admin@sunotal.com',
+        passwordHash,
+        role: 'admin',
+        active: true,
+        phone: '+91 98765 00001',
+        city: 'Hyderabad'
+      });
+      console.log('✅ Default admin account seeded: admin@sunotal.com / admin123');
+    }
+  } catch (err) {
+    console.error('⚠️ Failed to check/seed admin user:', err);
+  }
+}
+
+autoSeedAdmin().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅  Sunotal API running → http://localhost:${PORT}`);
+  });
 });

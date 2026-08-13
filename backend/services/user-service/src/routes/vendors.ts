@@ -255,7 +255,7 @@ router.get("/vendors/invoices/:id/download", async (req, res) => {
       res.send(bodyContents);
     } else {
       // It is a local file
-      const localPath = path.join(process.cwd(), invoice.s3Url);
+      const localPath = path.join(process.cwd(), 'public', invoice.s3Url);
       if (fs.existsSync(localPath)) {
         res.setHeader("Content-Type", "text/html");
         res.setHeader("Content-Disposition", `inline; filename="invoice-${invoice.invoiceNumber}.html"`);
