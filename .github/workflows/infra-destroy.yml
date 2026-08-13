@@ -47,6 +47,6 @@ jobs:
       - name: Destroy Infrastructure with Terraform
         run: |
           cd terraform
-          terraform init -upgrade || true
+          terraform init -upgrade
           echo "Destroying managed infrastructure..."
-          terraform destroy -auto-approve -var="key_name=jcs_raju_laptop" || true
+          terraform destroy -auto-approve -var="key_name=jcs_raju_laptop"

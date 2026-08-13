@@ -68,10 +68,26 @@ jobs:
             echo "Warning: Could not fetch Subnet ID or Security Group ID for running DB migration task."
           fi
 
-      - name: HTTP Health Check via ALB
+      - name: Wait for ECS Services Rollout
+        run: |
+          echo "Waiting for services to become stable..."
+          aws ecs wait services-stable --cluster sunotal-cluster --services sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user
+
+      - name: Strict HTTP Health Check
         run: |
           ALB_DNS=$(aws elbv2 describe-load-balancers --names "sunotal-alb" --query "LoadBalancers[0].DNSName" --output text)
           if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
-            echo "Running health check against ALB at http://$ALB_DNS..."
-            curl --fail --retry 5 --retry-delay 5 http://$ALB_DNS/ || echo "Health check ping complete"
+            echo "Running strict health checks against ALB..."
+            # Check Frontend
+            curl --fail --retry 3 --retry-delay 5 "http://$ALB_DNS/"
+            # Check Auth Service Health
+            curl --fail --retry 3 --retry-delay 5 "http://$ALB_DNS/api/auth/healthz"
+            # Check Operations Service & DB connection
+            curl --fail --retry 3 --retry-delay 5 "http://$ALB_DNS/api/products"
+            # Check Inventory Service & DB connection
+            curl --fail --retry 3 --retry-delay 5 "http://$ALB_DNS/api/inventory"
+            echo "✅ All services, database connections, and API endpoints are healthy and running!"
+          else
+            echo "Error: Could not retrieve ALB DNS Name."
+            exit 1
           fi

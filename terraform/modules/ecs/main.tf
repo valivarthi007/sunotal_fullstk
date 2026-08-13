@@ -299,7 +299,10 @@ resource "aws_ecs_service" "frontend" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.frontend.arn
   desired_count   = 1
-  launch_type     = "FARGATE"
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 100
+  }
 
   network_configuration {
     subnets          = var.public_subnet_ids
@@ -322,7 +325,10 @@ resource "aws_ecs_service" "auth" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.auth.arn
   desired_count   = 1
-  launch_type     = "FARGATE"
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 100
+  }
 
   network_configuration {
     subnets          = var.public_subnet_ids
@@ -345,7 +351,10 @@ resource "aws_ecs_service" "operations" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.operations.arn
   desired_count   = 1
-  launch_type     = "FARGATE"
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 100
+  }
 
   network_configuration {
     subnets          = var.public_subnet_ids
@@ -368,7 +377,10 @@ resource "aws_ecs_service" "inventory" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.inventory.arn
   desired_count   = 1
-  launch_type     = "FARGATE"
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 100
+  }
 
   network_configuration {
     subnets          = var.public_subnet_ids
@@ -391,7 +403,10 @@ resource "aws_ecs_service" "user" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.user.arn
   desired_count   = 1
-  launch_type     = "FARGATE"
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 100
+  }
 
   network_configuration {
     subnets          = var.public_subnet_ids

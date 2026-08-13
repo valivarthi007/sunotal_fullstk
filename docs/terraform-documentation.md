@@ -15,12 +15,12 @@ terraform/
 ├── outputs.tf              # Returns load balancer URLs, instance IPs, and ECR URIs
 ├── terraform.tfvars        # Environment-specific values (Gitignored in production)
 └── modules/
-    ├── vpc/                # Configures subnets, route tables, and gateways
+    ├── vpc/                # Configures subnets, route tables, and gateways (EIP/NAT Gateway deleted)
     ├── security/           # Establishes firewalls and SG mapping rules
     ├── database/           # Configures Amazon RDS PostgreSQL instance
     ├── cdn/                # Configures the Application Load Balancer & CloudFront CDN
     ├── ecr/                # Configures ECR container repositories
-    ├── ecs/                # Sets up ECS Fargate clusters, services, and tasks
+    ├── ecs/                # Sets up ECS Fargate clusters, services, and tasks (Fargate Spot)
     ├── lambda/             # Provisions Python auto-delete triggers
     ├── iam/                # Sets up instance profiles, execution roles, and access rules
     ├── sonarqube/          # Provisions EC2 instance for static code analysis
@@ -58,9 +58,9 @@ state/terraform.tfstate    (Prevents simultaneous applys)
 
 ### 3.1 Network Module (`vpc`)
 Sets up a Virtual Private Cloud (VPC) with segregated subnets:
-* **Public Subnets**: Two subnets exposed to the internet. Hosts the ALB, SonarQube, and Test Server.
-* **Private Subnets**: Two isolated subnets. Hosts the RDS PostgreSQL database and the ECS Fargate tasks.
-* **Gateways**: Internet Gateway (IGW) for public subnets, and NAT Gateway routing rules to give private resources outbound internet access (e.g., to pull packages).
+* **Public Subnets**: Two subnets exposed to the internet. Hosts the ALB, ECS Fargate tasks, SonarQube, and Test Server.
+* **Private Subnets**: Two isolated subnets. Hosts the RDS PostgreSQL database.
+* **Gateways & Cost Optimization**: Internet Gateway (IGW) for public subnets. **The NAT Gateway and Elastic IP have been removed** to save ~$390/year. Private subnets are completely isolated from the internet (industry standard for databases), while public subnets run tasks using public IPs to draw ECR images and post CloudWatch logs.
 
 ### 3.2 Security Module (`security`)
 Sets up security group firewalls restricting inbound and outbound traffic:
@@ -85,7 +85,7 @@ Creates the ECR repositories (`aws_ecr_repository`) for the frontend and each of
 ### 3.6 Container Orchestration Module (`ecs`)
 * **Cluster**: Sets up the `sunotal-cluster` ECS cluster.
 * **Task Definitions**: Declares `aws_ecs_task_definition` templates defining ports, env variables, logging directories, and ECR repository images for each service.
-* **Services**: Configures Fargate deployment parameters, target groups, and network profiles.
+* **Services & Fargate Spot**: Configures ECS services to use **Fargate Spot capacity providers** (`FARGATE_SPOT`), reducing container compute costs by up to 70%. Tasks are deployed in public subnets with public IPs assigned to communicate with AWS APIs.
 
 ### 3.7 Lambda & IAM Modules (`lambda` & `iam`)
 * **Lambda**: Sets up the Python-based `sunotal-delete-s3-object` script and registers bucket event triggers.

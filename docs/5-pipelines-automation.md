@@ -1,6 +1,6 @@
 # 5. Automation Pipelines & Workflow Topologies
 
-This document explains the workflows, triggers, actions, and task execution logic for the continuous integration, continuous delivery, infrastructure provisioning, and decommissioning (destroy) pipelines.
+This document explains the workflows, triggers, actions, and task execution logic for continuous integration, continuous delivery, infrastructure provisioning, and decommissioning (destroy) pipelines.
 
 ---
 
@@ -12,31 +12,28 @@ graph TD
     subgraph "CI Pipeline (ci.yml)"
         ci_trigger["💻 Code Commit / PR"] --> ci_setup["Setup Node.js & pnpm"]
         ci_setup --> ci_install["Install Project Dependencies"]
-        ci_install --> ci_lint["Run Linter & TypeScript Check"]
-        ci_lint --> ci_unit_test["Execute Unit & Integration Tests"]
-        ci_unit_test --> ci_sonar["Upload Reports to SonarQube"]
-        ci_sonar --> ci_reports["Publish Test Reports to S3"]
+        ci_install --> ci_db["Spin up PostgreSQL Service Container"]
+        ci_db --> ci_test["Execute Unit & Playwright E2E Tests"]
+        ci_test --> ci_build["Build Docker Images & Scan with Trivy"]
+        ci_build --> ci_push["Push Images to Amazon ECR"]
     end
 
     %% CD Flow
     subgraph "CD Pipeline (cd.yml)"
-        cd_trigger["⚙️ CI Succeeds on main"] --> cd_build["Build Production Assets"]
-        cd_build --> cd_package["Compress Build Tarballs"]
-        cd_package --> cd_upload["Upload Release Artifacts to S3"]
-        cd_upload --> cd_ssh["SSH Connection to EC2 Target"]
-        cd_ssh --> cd_deploy["Deploy App & Restart PM2 Services"]
-        cd_deploy --> cd_health["Verify Application Health"]
+        cd_trigger["⚙️ CI Succeeds on main"] --> cd_update["Force New ECS Fargate Deployment"]
+        cd_update --> cd_db_run["Run One-off ECS Tasks (DB Push & Seed)"]
+        cd_db_run --> cd_wait["Wait for ECS Services to be Stable"]
+        cd_wait --> cd_health["Strict HTTP health checks against ALB"]
     end
 
     %% Infrastructure Flow
     subgraph "Infrastructure Pipeline (infra.yml)"
-        infra_trigger["🛠️ Infra Change or Manual Run"] --> infra_ami["Build Base Machine Image with Packer"]
-        infra_ami --> infra_tf["Apply Terraform Changes"]
+        infra_trigger["🛠️ Infra Change or Manual Run"] --> infra_tf["Apply Terraform Changes (Fargate Spot, ALB, RDS)"]
     end
 
     %% Destroy Flow
     subgraph "Destroy Pipeline (infra-destroy.yml)"
-        destroy_trigger["⚠️ Manual Decommission Run"] --> destroy_tf["Terraform Destroy"]
+        destroy_trigger["⚠️ Manual Decommission Run"] --> destroy_tf["Terraform Destroy (Purge Resources)"]
     end
 ```
 
@@ -47,27 +44,28 @@ graph TD
 ### 2.1 CI Pipeline (`ci.yml`)
 * **Trigger Conditions**: Every push and pull request targeted at the `main` branch containing changes inside `/backend`, `/frontend`, `package.json`, or pipeline configs.
 * **Core Job Steps**:
-  1. **Sonartest**: Initiates SonarQube static code scanner to evaluate security issues.
-  2. **Install & Verify**: Runs `pnpm install`, checks type parameters (`tsc --noEmit`), and executes tests.
-  3. **Reporting**: Test results are formatted as JSON files and uploaded to S3 (`s3://jcs-raju-sunotal-final/test_reports/<commit_sha>/`) to retain historical build verification records.
+  1. **PostgreSQL Service**: Launches a live PostgreSQL database container in the runner context.
+  2. **Install & Verify**: Runs `pnpm install`, checks type parameters (`tsc --noEmit`), and executes backend unit tests.
+  3. **Playwright E2E Tests**: Deploys migrations/seeds onto the test database, launches the backend service in the background, and runs strict Playwright E2E browser tests to verify frontend-backend-database integration.
+  4. **Docker Build & Security Gates**: Compiles Docker images for the frontend and all microservices, and runs **Trivy Vulnerability Scans** on each container. If any container contains critical vulnerabilities, the pipeline fails.
+  5. **ECR Release**: Successfully scanned images are pushed to AWS ECR.
 
 ### 2.2 CD Pipeline (`cd.yml`)
 * **Trigger Conditions**: Automatically runs when the **CI Pipeline** completes with a `success` conclusion on the `main` branch, or via manual trigger.
 * **Core Job Steps**:
-  1. **Packaging**: Compiles code production bundles and creates tarball archives (`backend-build.tgz`, `frontend-build.tgz`).
-  2. **S3 Release**: Versioned tarballs are saved inside S3 under `/artifacts/latest/` and `/artifacts/${GITHUB_SHA::8}/`.
-  3. **Bastion SSH Tunneling**: Configures temporary SSH keys and tunnels onto the private EC2 application server using the Bastion host as a jump box.
-  4. **Live Deploy**: Downloads tarballs from S3 directly onto the EC2 instance, runs database schema migrations (`pnpm run db:push`), and triggers PM2 process reload (`pm2 restart sunotal-backend`).
+  1. **ECS Deployment**: Invokes `aws ecs update-service` to trigger rolling updates for all microservices to fetch latest ECR images.
+  2. **DB Migration Tasks**: Launches serverless one-off tasks in Fargate to execute database schema syncs (`pnpm run db:push`) and seed entries (`pnpm run db:seed`).
+  3. **Deployment Stability Wait**: Blocks pipeline execution using `aws ecs wait services-stable` until all rolling containers are healthy.
+  4. **Strict HTTP Health Check**: Makes strict curl requests against the ALB for the frontend, auth service health endpoint, operations service `/api/products` route, and inventory service `/api/inventory` route. The build fails if any request returns non-200, protecting production from bad code updates.
 
 ### 2.3 Infrastructure Pipeline (`infra.yml`)
-* **Trigger Conditions**: Changes to files in the `terraform/` or `packer/` directories.
+* **Trigger Conditions**: Changes to files in the `terraform/` directory.
 * **Core Job Steps**:
-  1. **Packer Build**: Provisions the base machine image (AMI) with Node, PM2, and Nginx preinstalled.
-  2. **Terraform Validate**: Checks HCL format correctness.
-  3. **Terraform Apply**: Provisions network components, security groups, RDS instances, ALB target groups, and updates the EC2 instance with the newly built AMI.
+  1. **Terraform Validate**: Checks HCL format correctness.
+  2. **Terraform Apply**: Provisions network components, security groups, RDS databases, Application Load Balancers, and ECS tasks using cost-efficient **Fargate Spot** capacity providers.
 
 ### 2.4 Infrastructure Destroy Pipeline (`infra-destroy.yml`)
-* **Trigger Conditions**: Manual activation via the GitHub Actions dashboard.
+* **Trigger Conditions**: Manual activation via the GitHub Actions dashboard requiring typing "DESTROY" to confirm.
 * **Core Job Steps**:
-  1. **Terraform Destroy**: Removes EC2 instances, target groups, RDS databases, ALBs, subnets, and routes.
-  2. **DynamoDB Lock Clear**: Automatically releases any state locks to prevent locking issues on future redeployments.
+  1. **Artifact Clean**: Deletes build artifacts from S3.
+  2. **Terraform Destroy**: Deconstructs all AWS-managed infrastructure. Error-silencing is disabled to prevent orphan resource leaks.

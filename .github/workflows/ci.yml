@@ -36,6 +36,20 @@ jobs:
   ci_verify:
     name: Install, Lint, Test & Build
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sunotal
+          POSTGRES_PASSWORD: sunotalpass123
+          POSTGRES_DB: sunotal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,6 +97,8 @@ jobs:
           cd ../backend && pnpm exec tsc --noEmit
 
       - name: Run Backend Tests
+        env:
+          DATABASE_URL: postgresql://sunotal:sunotalpass123@localhost:5432/sunotal
         run: |
           cd backend && pnpm run test -- --reporter=json --outputFile=backend-report.json
 
@@ -91,9 +107,14 @@ jobs:
           cd frontend && pnpm run test -- --reporter=json --outputFile=frontend-report.json
 
       - name: Run Frontend E2E Tests
+        env:
+          DATABASE_URL: postgresql://sunotal:sunotalpass123@localhost:5432/sunotal
+          JWT_SECRET: test-jwt-secret-not-production
         run: |
-          cd frontend && pnpm run test:e2e
-        continue-on-error: true
+          cd backend && pnpm db:push && pnpm db:seed
+          pnpm dev &
+          sleep 5
+          cd ../frontend && pnpm run test:e2e
 
       - name: Run Trivy vulnerability scanner (Filesystem)
         uses: aquasecurity/trivy-action@master

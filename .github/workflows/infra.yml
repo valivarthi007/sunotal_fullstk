@@ -66,29 +66,7 @@ jobs:
         with:
           terraform_version: "1.9.3"
 
-      - name: Clean Corrupted State
-        run: |
-          echo "Checking for stale DynamoDB lock and empty state files..."
-          aws dynamodb update-item \
-            --table-name sunotal-terraform-locks \
-            --key '{"LockID":{"S":"state/terraform.tfstate"}}' \
-            --update-expression "REMOVE Digest" \
-            --condition-expression "attribute_exists(Digest)" || echo "No stale Digest found"
-            
-          aws s3api delete-object --bucket jcs-raju-sunotal-final --key state/ || true
-          
-          STATE_SIZE=$(aws s3api head-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate --query ContentLength --output text 2>/dev/null || echo "Missing")
-          if [ "$STATE_SIZE" = "0" ]; then
-            echo "State file is 0 bytes! Deleting corrupted state file..."
-            aws s3api delete-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate || true
-          fi
-          
-          if ! aws s3api head-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate 2>/dev/null; then
-            if aws s3api head-object --bucket jcs-raju-sunotal-final --key state/terraform.tfstate.backup 2>/dev/null; then
-               echo "Restoring state from backup..."
-               aws s3 cp s3://jcs-raju-sunotal-final/state/terraform.tfstate.backup s3://jcs-raju-sunotal-final/state/terraform.tfstate || true
-            fi
-          fi
+
             
       - name: Validate Terraform Files
         run: |
