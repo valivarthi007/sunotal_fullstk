@@ -83,14 +83,6 @@ resource "aws_instance" "sonarqube" {
   }
 }
 
-resource "aws_eip" "sonarqube_eip" {
-  instance = aws_instance.sonarqube.id
-  domain   = "vpc"
-  tags = merge(var.tags, {
-    Name = "sunotal-sonarqube-eip"
-  })
-}
-
 variable "vpc_id" {
   type        = string
   description = "VPC ID"
@@ -117,5 +109,5 @@ variable "tags" {
 }
 
 output "sonarqube_public_ip" {
-  value = aws_eip.sonarqube_eip.public_ip
+  value = aws_instance.sonarqube.public_ip
 }
