@@ -32,3 +32,9 @@ variable "lambda_arn" {
   description = "The ARN of the S3 delete lambda function"
   default     = ""
 }
+
+variable "github_repo" {
+  type        = string
+  description = "GitHub repository in the form owner/repo used to restrict OIDC trust"
+  default     = "valivarthi007/sunotal_fullstk"
+}
