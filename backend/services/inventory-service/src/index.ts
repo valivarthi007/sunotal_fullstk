@@ -19,8 +19,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api', inventoryRouter);
 app.use('/api', ordersRouter);
 
+// Public healthz – no auth required (used by ALB target group and CD pipeline)
 app.get('/api/healthz', (req, res) => {
-  res.status(200).json({ status: "ok" });
+  res.status(200).json({ status: "ok", service: "inventory" });
+});
+app.get('/api/inventory/healthz', (req, res) => {
+  res.status(200).json({ status: "ok", service: "inventory" });
 });
 
 app.listen(PORT, '0.0.0.0', () => {

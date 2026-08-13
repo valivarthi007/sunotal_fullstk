@@ -46,7 +46,8 @@ resource "aws_security_group" "sonarqube" {
 
 resource "aws_instance" "sonarqube" {
   ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t3.micro" # Free Tier eligible, uses swap for memory
+  # c5.large: 2 vCPU, 4 GB RAM — fully supports SonarQube + Elasticsearch (~$0.085/hr)
+  instance_type               = "c5.large"
   subnet_id                   = var.public_subnet_id
   vpc_security_group_ids      = [aws_security_group.sonarqube.id]
   associate_public_ip_address = true
@@ -54,22 +55,22 @@ resource "aws_instance" "sonarqube" {
 
   user_data = <<-EOF
               #!/bin/bash
-              # Create a 4GB swap space to allow SonarQube to run on t3.micro (1GB RAM) without OOM crashing
-              fallocate -l 4G /swapfile
-              chmod 600 /swapfile
-              mkswap /swapfile
-              swapon /swapfile
-              echo '/swapfile none swap sw 0 0' >> /etc/fstab
-
               apt-get update -y
               apt-get install -y docker.io
               systemctl start docker
               systemctl enable docker
-              # Increase virtual memory max map count (required for Elasticsearch in SonarQube)
+              # Required for Elasticsearch embedded in SonarQube
               sysctl -w vm.max_map_count=262144
               echo "vm.max_map_count=262144" >> /etc/sysctl.conf
-              # Start SonarQube
-              docker run -d --name sonarqube -p 9000:9000 -v sonarqube_data:/opt/sonarqube/data sonarqube:community
+              # Pull and start SonarQube Community Edition
+              docker run -d \
+                --name sonarqube \
+                --restart unless-stopped \
+                -p 9000:9000 \
+                -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=false \
+                -v sonarqube_data:/opt/sonarqube/data \
+                -v sonarqube_logs:/opt/sonarqube/logs \
+                sonarqube:community
               EOF
 
   tags = merge(var.tags, {
@@ -78,7 +79,7 @@ resource "aws_instance" "sonarqube" {
 
   root_block_device {
     volume_size           = 20
-    volume_type           = "gp3"
+    volume_type           = "gp3" # c5 supports gp3
     delete_on_termination = true
   }
 }
