@@ -117,6 +117,10 @@ module "ecs" {
   database_url      = "postgresql://${var.db_username}:${var.db_password}@${module.database.db_instance_address}:5432/${var.db_name}?sslmode=require&uselibpqcompat=true"
   cloudfront_domain = module.cdn.cloudfront_domain_name
 
+  s3_bucket_name    = var.s3_bucket_name
+  s3_policy_arn     = module.iam.policy_arn
+  frontend_url      = "https://sunotal.automateuniverse.space"
+
   depends_on = [module.cdn]
 }
 

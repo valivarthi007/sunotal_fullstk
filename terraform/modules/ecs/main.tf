@@ -48,6 +48,12 @@ resource "aws_iam_role" "ecs_task" {
   tags = var.tags
 }
 
+resource "aws_iam_role_policy_attachment" "ecs_s3_attach" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = var.s3_policy_arn
+}
+
+
 # Cloudwatch Log Groups
 resource "aws_cloudwatch_log_group" "ecs_logs" {
   for_each          = toset(["frontend", "auth", "operations", "inventory", "user"])
@@ -122,7 +128,7 @@ resource "aws_ecs_task_definition" "auth" {
         { name = "DATABASE_URL", value = var.database_url },
         { name = "SESSION_SECRET", value = var.session_secret },
         { name = "CLOUDFRONT_DOMAIN", value = var.cloudfront_domain },
-        { name = "FRONTEND_URL", value = "http://localhost" }
+        { name = "FRONTEND_URL", value = var.frontend_url }
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -169,7 +175,9 @@ resource "aws_ecs_task_definition" "operations" {
         { name = "DATABASE_URL", value = var.database_url },
         { name = "SESSION_SECRET", value = var.session_secret },
         { name = "CLOUDFRONT_DOMAIN", value = var.cloudfront_domain },
-        { name = "FRONTEND_URL", value = "http://localhost" }
+        { name = "FRONTEND_URL", value = var.frontend_url },
+        { name = "S3_BUCKET_NAME", value = var.s3_bucket_name },
+        { name = "AWS_REGION", value = var.aws_region }
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -216,7 +224,7 @@ resource "aws_ecs_task_definition" "inventory" {
         { name = "DATABASE_URL", value = var.database_url },
         { name = "SESSION_SECRET", value = var.session_secret },
         { name = "CLOUDFRONT_DOMAIN", value = var.cloudfront_domain },
-        { name = "FRONTEND_URL", value = "http://localhost" }
+        { name = "FRONTEND_URL", value = var.frontend_url }
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -263,7 +271,9 @@ resource "aws_ecs_task_definition" "user" {
         { name = "DATABASE_URL", value = var.database_url },
         { name = "SESSION_SECRET", value = var.session_secret },
         { name = "CLOUDFRONT_DOMAIN", value = var.cloudfront_domain },
-        { name = "FRONTEND_URL", value = "http://localhost" }
+        { name = "FRONTEND_URL", value = var.frontend_url },
+        { name = "S3_BUCKET_NAME", value = var.s3_bucket_name },
+        { name = "AWS_REGION", value = var.aws_region }
       ]
       logConfiguration = {
         logDriver = "awslogs"

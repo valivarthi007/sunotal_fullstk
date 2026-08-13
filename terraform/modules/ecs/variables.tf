@@ -90,3 +90,20 @@ variable "cloudfront_domain" {
   description = "CloudFront domain name"
   default     = ""
 }
+
+variable "s3_bucket_name" {
+  type        = string
+  description = "Name of the S3 bucket for remote state and build artifacts"
+}
+
+variable "s3_policy_arn" {
+  type        = string
+  description = "ARN of the S3 access policy to attach to the ECS Task Role"
+}
+
+variable "frontend_url" {
+  type        = string
+  description = "Public URL of the frontend application for CORS configuration"
+  default     = "https://sunotal.automateuniverse.space"
+}
+
