@@ -46,89 +46,72 @@ Sunotal is a corporate farm-to-door grocery e-commerce web application featuring
 
 ---
 
-## 3. DevOps & Infrastructure Architecture
+### 3. DevOps & Infrastructure Architecture
 
 ### AWS S3 Storage Segregation (`jcs-raju-sunotal-final`)
 All storage needs are organized inside the single bucket `s3://jcs-raju-sunotal-final`:
 
 ```
 s3://jcs-raju-sunotal-final/
-├── [Product Images]       <-- Existing website images (kept at root)
-├── artifacts/             <-- Versioned CI/CD build packages
-│   ├── ${BUILD_TAG}/      <-- Commit-specific frontend & backend tarballs
-│   └── latest/            <-- Pointer for quick retrieval
+├── [Product Images]       <-- User-uploaded assets (images/invoices)
+├── test_result/           <-- Versioned test report documents (vitest/trivy)
 └── state/                 <-- Terraform Remote State (terraform.tfstate)
 ```
 
 ### Terraform Remote State & DynamoDB Locking
 - **State File**: Stored remotely at `s3://jcs-raju-sunotal-final/state/terraform.tfstate`.
-- **Locking Table**: `sunotal-terraform-locks` configured with **`PAY_PER_REQUEST` (On-Demand)** billing mode ($0 fixed monthly cost for trial accounts).
-- **EC2 IAM Role & Policy**: Automatically provisions an IAM Role (`sunotal-ec2-s3-access-role`), IAM Policy (`sunotal-s3-artifacts-read-policy`), and Instance Profile allowing the EC2 instance to download build packages from `s3://jcs-raju-sunotal-final/artifacts/*`.
+- **Locking Table**: `sunotal-terraform-locks` configured with **`PAY_PER_REQUEST` (On-Demand)** billing mode to manage state concurrency.
+- **ECS Task IAM Role & Policy**: Automatically provisions an IAM Role (`sunotal-ecs-task-role`) and Policy allowing container tasks to access S3 media and invoke operational services securely.
 
 ### AWS Lambda S3 Auto-Deletion Function
-- **Trigger**: Automatically triggered by the Backend API (`@aws-sdk/client-lambda`) when an admin deletes a product to remove its associated S3 image.
+- **Trigger**: Automatically triggered by the Operations Service (`@aws-sdk/client-lambda`) when an admin deletes a product to remove its associated S3 image.
 - **Function Name**: `sunotal-delete-s3-object` (configured via Terraform, running in Python 3.11).
-- **Permissions**:
-  - Provisions an IAM Role (`sunotal-lambda-s3-delete-role`) and Policy (`sunotal-lambda-s3-delete-policy`) allowing the Lambda function to perform `s3:DeleteObject` on the `s3://jcs-raju-sunotal-final/` bucket.
-  - Grants the EC2 instance policy (`sunotal-s3-access-policy`) permission to call `lambda:InvokeFunction` on the auto-deletion Lambda.
 
 ### HTTPS Redirection & Load Balancer Listener Rules
 - **HTTP (Port 80) Listener**: Configured to automatically redirect all incoming HTTP web requests to HTTPS (Port 443) using a `HTTP_301` status code.
-- **HTTPS (Port 443) Listener**: Secured via SSL certificate integration (`ssl_certificate_arn`), forwarding all decrypted traffic to the backend application's EC2 target group.
+- **HTTPS (Port 443) Listener**: Secured via SSL certificate integration, forwarding decrypted traffic to the ECS Fargate service target groups based on request path matching.
 
 ---
 
 ## 4. Pipeline Execution Strategy
 
 ### A. Infrastructure Pipeline (`.github/workflows/infra.yml`)
-- **Trigger**: **Manual (`workflow_dispatch`)** or on explicit `terraform/**` / `packer/**` pull requests.
+- **Trigger**: **Manual (`workflow_dispatch`)** or on explicit `terraform/**` pull requests.
 - **Responsibilities**:
-  1. Validates Packer templates (`packer validate`) and Terraform files (`terraform validate`).
-  2. Builds custom hardened base AMI using Packer & Ansible.
-  3. Provisions VPC, public subnets, security groups, IAM instance profiles, and EC2 instance via Terraform using S3 remote state.
-  4. **No Destructive Action**: Safe plan & apply without deleting running infrastructure.
+  1. Validates Terraform HCL files (`terraform validate`).
+  2. Provisions VPC, public subnets, security groups, IAM execution roles, ALB target groups, RDS databases, and ECS clusters using cost-optimized **Fargate Spot** instances.
 
 ### B. CI Pipeline (`.github/workflows/ci.yml`)
 - **Trigger**: **Every Code Change** (`push` to `main` and `pull_request` to `main`).
 - **Responsibilities**:
   1. **Quality & Analysis**: Runs TypeScript type checking (`tsc --noEmit`) and SonarQube static code scanning.
-  2. **Test execution**: Verifies local unit tests.
+  2. **Playwright E2E Tests**: Boots a live PostgreSQL service container in the runner, applies migrations/seeds, starts the backend, and runs Playwright browser E2E tests strictly.
+  3. **Docker Security Gate**: Builds container images and executes Trivy scans for critical vulnerabilities before ECR push.
 
 ### C. CD Pipeline (`.github/workflows/cd.yml`)
-- **Trigger**: **CI Success** or manual run.
+- **Trigger**: **CI Success** on `main` branch.
 - **Responsibilities**:
-  1. **Build & Package**: Compiles frontend & backend, creates tarballs (`frontend-build.tgz`, `backend-build.tgz`).
-  2. **Versioned S3 Upload**: Uploads versioned artifacts to `s3://jcs-raju-sunotal-final/artifacts/${BUILD_TAG}/` and `s3://jcs-raju-sunotal-final/artifacts/latest/`.
-  3. **Automated EC2 Deployment**: Deploys frontend code to `/var/www/sunotal`, backend code to `/var/www/sunotal-backend`, executes database schema migration (`db:push`), restarts PM2 daemon, and executes an HTTP health check.
+  1. **ECS Rolling Deployment**: Invokes `aws ecs update-service` to trigger rolling updates for ECS Fargate Spot tasks.
+  2. **DB Migration Tasks**: Launches serverless one-off tasks in Fargate to execute database schema syncs (`db:push`) and seed entries.
+  3. **Stability & Health Gates**: Blocks pipeline completion using `aws ecs wait services-stable` and performs strict HTTP endpoint health checks against the ALB for all services.
 
 ### D. Teardown Pipeline (`.github/workflows/infra-destroy.yml`)
 - **Trigger**: **Manual (`workflow_dispatch`)** with confirmation input.
 - **Responsibilities**:
-  1. Destroys all AWS infrastructure created by Terraform in the `terraform` directory.
-  2. **Exclusion**: The S3 remote state bucket and DynamoDB locking table are preserved/excluded from deletion to maintain the backend state lock registry safely.
+  1. Destroys all AWS infrastructure created by Terraform (excluding state backend S3 bucket and DynamoDB locking table). Error-silencing is disabled to prevent resource leaks.
 
 ---
 
-## 5. EC2 Service Persistence & Reboot Autostart
+## 5. ECS Fargate Container Service Persistence
 
-To guarantee that the backend API, Nginx web server, and PostgreSQL database automatically start up when the EC2 instance is **stopped, booted, or restarted**, without losing user logins or data:
+To guarantee that the backend services, Nginx load balancer, and PostgreSQL database automatically maintain state and run with high availability:
 
-### 1. Database Persistence (Docker & PostgreSQL)
-- **Docker Compose**: Service uses `restart: unless-stopped` with named volume `sunotal_pgdata:/var/lib/postgresql/data`.
-- **Intact Logins**: PostgreSQL data files persist across container/server restarts, ensuring all registered accounts, passwords, and sessions remain 100% intact.
+### 1. Database Persistence (RDS PostgreSQL)
+- **AWS RDS**: Database tables and assets are hosted on managed Amazon RDS PostgreSQL instances with automated volume autoscaling (from 20GB up to 100GB), decoupled from the lifespan of Fargate container tasks.
 
-### 2. Backend API Service Persistence (PM2 Daemon)
-- **PM2 Autostart**: Automated deployment executes:
-  ```bash
-  pm2 start dist/src/index.js --name sunotal-backend
-  sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
-  pm2 save
-  ```
-- Ensures the Node.js backend automatically starts upon system boot.
-
-### 3. Frontend Web Server Persistence (Nginx)
-- **Nginx Systemd**: Configured with `sudo systemctl enable nginx`.
-- Starts automatically on boot and proxies web traffic (`/` to frontend static dist, `/api/` to `http://127.0.0.1:5000`).
+### 2. High Availability & Spot Billing
+- **Fargate Spot**: ECS Fargate services run using Fargate Spot capacity providers, giving up to a **70% discount** on standard CPU/Memory pricing.
+- **Task Resilience**: Container restarts and rolling updates automatically register new healthy tasks into target groups before draining traffic from old ones.
 
 ---
 
