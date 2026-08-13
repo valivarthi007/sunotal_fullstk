@@ -40,6 +40,39 @@ bannersRouter.post('/', async (req, res) => {
   }
 });
 
+// PUT update a banner
+bannersRouter.put('/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid banner ID.' });
+    }
+
+    const { title, subtitle, imageUrl, linkUrl, active } = req.body;
+
+    const [updatedBanner] = await db
+      .update(bannersTable)
+      .set({
+        title: title !== undefined ? title : undefined,
+        subtitle: subtitle !== undefined ? subtitle : undefined,
+        imageUrl: imageUrl !== undefined ? imageUrl : undefined,
+        linkUrl: linkUrl !== undefined ? linkUrl : undefined,
+        active: active !== undefined ? active : undefined,
+      })
+      .where(eq(bannersTable.id, id))
+      .returning();
+
+    if (!updatedBanner) {
+      return res.status(404).json({ error: 'Banner not found.' });
+    }
+
+    return res.status(200).json(updatedBanner);
+  } catch (error) {
+    console.error('Failed to update banner:', error);
+    return res.status(500).json({ error: 'Failed to update hero banner.' });
+  }
+});
+
 // DELETE a banner
 bannersRouter.delete('/:id', async (req, res) => {
   try {
