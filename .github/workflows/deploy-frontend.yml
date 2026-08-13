@@ -79,3 +79,54 @@ jobs:
           aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --task-definition "$NEW_TD_ARN" --force-new-deployment
 
           echo "Deployment triggered"
+
+      - name: Wait for ECS service to stabilize
+        env:
+          CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          SERVICE: ${{ secrets.ECS_SERVICE }}
+        run: |
+          echo "Waiting for service $SERVICE to become stable..."
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          echo "Service is stable."
+
+      - name: Invalidate CloudFront (optional)
+        if: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID != '' }}
+        env:
+          DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          echo "Creating CloudFront invalidation for distribution $DISTRIBUTION_ID"
+          aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+
+      - name: Smoke test deployed site
+        env:
+          HOST: ${{ secrets.APP_HOST }}
+        run: |
+          set -e
+          if [ -z "$HOST" ]; then echo "APP_HOST secret is not set; skipping smoke tests"; exit 0; fi
+          echo "Checking root and important routes..."
+          for path in "/" "/admin/products" "/vendor" "/api/healthz"; do
+            echo "GET $HOST$path"
+            http_status=$(curl -s -o /dev/null -w "%{http_code}" -L "$HOST$path")
+            echo "$path -> $http_status"
+            if [ "$path" = "/api/healthz" ]; then
+              if [ "$http_status" != "200" ]; then echo "API health check failed"; exit 1; fi
+            else
+              if [ "$http_status" != "200" ]; then echo "Page $path returned $http_status"; exit 1; fi
+            fi
+          done
+
+          # verify assets are not HTML (avoid stale index.html being served as asset)
+          ASSET_PATHS=("/assets/index-*.js" "/assets/index-*.css")
+          for p in "${ASSET_PATHS[@]}"; do
+            echo "Checking asset glob $p"
+            # Resolve a single asset by listing directory (requires directory listing enabled); fall back to known hashed name if provided via secret
+            if [ -n "${{ secrets.KNOWN_ASSET_PATH }}" ]; then
+              asset="${{ secrets.KNOWN_ASSET_PATH }}"
+            else
+              # try a couple of common names
+              asset="/assets/index-CUOjj7vI.css"
+            fi
+            ct=$(curl -sI -L "$HOST$asset" | tr -d '\r' | awk -F": " '/Content-Type/ {print $2}' | head -n1 || true)
+            echo "$asset content-type: $ct"
+            if echo "$ct" | grep -q "text/html"; then echo "Asset $asset served HTML (likely stale deploy)"; exit 1; fi
+          done
