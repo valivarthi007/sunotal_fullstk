@@ -46,7 +46,7 @@ resource "aws_security_group" "sonarqube" {
 
 resource "aws_instance" "sonarqube" {
   ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t3.medium" # Requires more memory than t3.micro
+  instance_type               = "t3.micro" # Free Tier eligible, uses swap for memory
   subnet_id                   = var.public_subnet_id
   vpc_security_group_ids      = [aws_security_group.sonarqube.id]
   associate_public_ip_address = true
@@ -54,6 +54,13 @@ resource "aws_instance" "sonarqube" {
 
   user_data = <<-EOF
               #!/bin/bash
+              # Create a 4GB swap space to allow SonarQube to run on t3.micro (1GB RAM) without OOM crashing
+              fallocate -l 4G /swapfile
+              chmod 600 /swapfile
+              mkswap /swapfile
+              swapon /swapfile
+              echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
               apt-get update -y
               apt-get install -y docker.io
               systemctl start docker
