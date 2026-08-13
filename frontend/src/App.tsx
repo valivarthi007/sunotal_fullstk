@@ -24,12 +24,17 @@ import QuotationsAdmin from "@/pages/admin/Quotations";
 
 import VendorDashboard from "@/pages/vendor/VendorDashboard";
 import NotFound from "@/pages/not-found";
+import Redirect from "@/lib/redirect";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: false,
       staleTime: 1000 * 60, // 1 minute
+      throwOnError: false,  // Never crash the component tree on API errors (401, 500, etc.)
+    },
+    mutations: {
+      throwOnError: false,
     },
   },
 });
@@ -42,6 +47,13 @@ import Orders from "@/pages/public/Orders";
 function Router() {
   return (
     <Switch>
+      {/* Redirect legacy /admin/product -> /admin/products */}
+      <Route path="/admin/product">
+        <Redirect to="/admin/products" />
+      </Route>
+      <Route path="/admin/product/:rest+">
+        <Redirect to="/admin/products" />
+      </Route>
       <Route path="/" component={Home} />
       <Route path="/products"><ProductsPage initialCategory="All" /></Route>
       <Route path="/vegetables"><ProductsPage initialCategory="Vegetables" /></Route>
@@ -73,6 +85,7 @@ function Router() {
 }
 
 import { LocationProvider } from "@/lib/location-context";
+import { ApiStatusProvider } from "@/lib/api-status";
 
 function App() {
   return (
@@ -80,9 +93,11 @@ function App() {
       <TooltipProvider>
         <LocationProvider>
           <CartProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
+            <ApiStatusProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+              </WouterRouter>
+            </ApiStatusProvider>
             <Toaster />
             <Sonner richColors position="top-right" />
           </CartProvider>
