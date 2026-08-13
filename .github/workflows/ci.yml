@@ -1,6 +1,7 @@
 name: CI Pipeline # Triggered for ECS Deployment Run
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
