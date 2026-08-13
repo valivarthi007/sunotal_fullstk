@@ -29,6 +29,8 @@ jobs:
           # ensure a modern pnpm and allow native build scripts in CI
           npm install -g pnpm@latest
           pnpm set config auto-approve-builds true
+          # Clean any stray installs or lockfiles that can break native bindings
+          rm -rf node_modules package-lock.json
           pnpm install --frozen-lockfile
           pnpm build
 
