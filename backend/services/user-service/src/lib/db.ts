@@ -8,7 +8,12 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is required.');
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL.includes('sslmode=require') || process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: false }
+    : undefined
+});
 export const db = drizzle(pool, { schema });
 
 // Re-export schema tables so routes can import from one place
