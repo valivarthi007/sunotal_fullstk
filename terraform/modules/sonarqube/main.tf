@@ -75,6 +75,12 @@ resource "aws_instance" "sonarqube" {
   tags = merge(var.tags, {
     Name = "sunotal-sonarqube"
   })
+
+  root_block_device {
+    volume_size           = 20
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
 }
 
 resource "aws_eip" "sonarqube_eip" {
