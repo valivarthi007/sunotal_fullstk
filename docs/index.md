@@ -19,6 +19,7 @@ The documentation is structured to guide developers, QA engineers, and system ad
 * **[Infrastructure Code Documentation (Terraform & Docker)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/2-infrastructure-docker-terraform.md)**: Outlines basic multi-stage builds and Terraform structures.
 * **[Docker, ECR, and ECS Deployment Documentation](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/docker-documentation.md)**: Explains the microservice Dockerfiles, ECR repositories, ECS task definitions, one-off DB push/seed tasks, and ALB path-based routing rules.
 * **[Terraform Infrastructure-as-Code Documentation](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/terraform-documentation.md)**: Explains the modular directory layout, S3 remote state tracking, and DynamoDB locks.
+* **[Amazon S3 Storage Integration & Architecture](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/s3-documentation.md)**: Details how S3 is used for asset storage and document management, including Terraform provisioning, CloudFront OAC caching, local storage fallbacks, and lambda-based cleanup.
 
 ### 3. Security, Quality Assurance & Scanning
 * **[Security, QA, and Quality Gate Configurations](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/3-security-quality-scans.md)**: Summarizes SonarQube quality analysis, staging server verifications, and Trivy image scanning rules.

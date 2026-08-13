@@ -95,18 +95,18 @@ module "ecr" {
 }
 
 module "ecs" {
-  source                      = "./modules/ecs"
-  aws_region                  = var.aws_region
-  vpc_id                      = module.vpc.vpc_id
-  private_subnet_ids          = [module.vpc.private_subnet_1_id, module.vpc.private_subnet_2_id]
-  ecs_security_group_id       = module.security.ecs_security_group_id
-  tags                        = local.common_tags
+  source                = "./modules/ecs"
+  aws_region            = var.aws_region
+  vpc_id                = module.vpc.vpc_id
+  private_subnet_ids    = [module.vpc.private_subnet_1_id, module.vpc.private_subnet_2_id]
+  ecs_security_group_id = module.security.ecs_security_group_id
+  tags                  = local.common_tags
 
-  ecr_frontend_url            = module.ecr.frontend_repository_url
-  ecr_auth_url                = module.ecr.auth_repository_url
-  ecr_operations_url          = module.ecr.operations_repository_url
-  ecr_inventory_url           = module.ecr.inventory_repository_url
-  ecr_user_url                = module.ecr.user_repository_url
+  ecr_frontend_url   = module.ecr.frontend_repository_url
+  ecr_auth_url       = module.ecr.auth_repository_url
+  ecr_operations_url = module.ecr.operations_repository_url
+  ecr_inventory_url  = module.ecr.inventory_repository_url
+  ecr_user_url       = module.ecr.user_repository_url
 
   frontend_target_group_arn   = module.cdn.frontend_target_group_arn
   auth_target_group_arn       = module.cdn.auth_target_group_arn
@@ -114,8 +114,8 @@ module "ecs" {
   inventory_target_group_arn  = module.cdn.inventory_target_group_arn
   user_target_group_arn       = module.cdn.user_target_group_arn
 
-  database_url                = "postgresql://${var.db_username}:${var.db_password}@${module.database.db_instance_address}:5432/${var.db_name}?sslmode=require&uselibpqcompat=true"
-  cloudfront_domain           = module.cdn.cloudfront_domain_name
+  database_url      = "postgresql://${var.db_username}:${var.db_password}@${module.database.db_instance_address}:5432/${var.db_name}?sslmode=require&uselibpqcompat=true"
+  cloudfront_domain = module.cdn.cloudfront_domain_name
 
   depends_on = [module.cdn]
 }

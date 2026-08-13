@@ -205,7 +205,24 @@ resource "aws_lb_listener_rule" "operations" {
         "/api/products/*",
         "/api/categories",
         "/api/categories/*",
-        "/api/banners",
+        "/api/banners"
+      ]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "operations_additional" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 21
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.operations.arn
+  }
+
+  condition {
+    path_pattern {
+      values = [
         "/api/banners/*",
         "/api/upload",
         "/api/upload/*",
@@ -253,7 +270,24 @@ resource "aws_lb_listener_rule" "user" {
         "/api/users/*",
         "/api/vendors",
         "/api/vendors/*",
-        "/api/admin",
+        "/api/admin"
+      ]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "user_additional" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 41
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.user.arn
+  }
+
+  condition {
+    path_pattern {
+      values = [
         "/api/admin/*"
       ]
     }
