@@ -77,7 +77,7 @@ export default function ProductsAdmin() {
   const createCategory = useCreateCategory();
   const deleteCategory = useDeleteCategory();
   
-  const { data: inventory = [] } = useListInventory({});
+  const { data: inventory = [] } = useListInventory({}, { retry: false, throwOnError: false });
   const { data: productDefs = [] } = useListProductDefinitions();
   const createProductDef = useCreateProductDefinition();
   const deleteProductDef = useDeleteProductDefinition();

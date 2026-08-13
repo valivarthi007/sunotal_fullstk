@@ -46,8 +46,8 @@ resource "aws_security_group" "sonarqube" {
 
 resource "aws_instance" "sonarqube" {
   ami                         = data.aws_ami.ubuntu.id
-  # c5.large: 2 vCPU, 4 GB RAM — fully supports SonarQube + Elasticsearch (~$0.085/hr)
-  instance_type               = "c5.large"
+  # t3.micro is the only Free Tier eligible instance (c5.large blocked by Free Tier restriction)
+  instance_type               = "t3.micro"
   subnet_id                   = var.public_subnet_id
   vpc_security_group_ids      = [aws_security_group.sonarqube.id]
   associate_public_ip_address = true
