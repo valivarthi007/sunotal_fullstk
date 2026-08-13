@@ -22,17 +22,9 @@ test('admin can log in, create a banner, and view it', async ({ page }) => {
   await page.click('button:has-text("Add Banner")');
 
   // 7. Fill out the banner form
-  await page.fill('input[placeholder="Festive discounts 2026..."]', 'Special Summer Promotion');
-  
-  // 8. Mock/Trigger file upload (since S3 upload fails or falls back locally, we can upload a small buffer)
-  const fileChooserPromise = page.waitForEvent('filechooser');
-  await page.click('text=Click to upload banner image');
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles({
-    name: 'summer-banner.jpg',
-    mimeType: 'image/jpeg',
-    buffer: Buffer.from('fake-image-data')
-  });
+  await page.fill('input[placeholder="e.g. Fresh Summer Sale"]', 'Special Summer Promotion');
+  await page.fill('input[placeholder="e.g. Up to 50% off on seasonal fruits"]', 'Up to 30% Off');
+  await page.fill('input[placeholder="Or paste image URL directly..."]', 'https://example.com/banner.jpg');
 
   // 9. Click on Create Banner
   await page.click('button:has-text("Create Banner")');
