@@ -14,7 +14,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Install pnpm
         run: |
@@ -23,6 +23,9 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: |
+          # ensure a modern pnpm and allow native build scripts in CI
+          npm install -g pnpm@latest
+          pnpm set config auto-approve-builds true
           pnpm install --frozen-lockfile
           pnpm build
 
