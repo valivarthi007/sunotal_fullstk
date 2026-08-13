@@ -252,6 +252,7 @@ export default function BannersAdmin() {
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
                     onClick={() => setDeletingBanner(banner)}
+                    aria-label="Delete banner"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>

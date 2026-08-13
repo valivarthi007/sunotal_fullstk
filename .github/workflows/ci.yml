@@ -76,32 +76,34 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-      - name: Fetch SonarQube IP & Wait for Service
-        id: fetch-sonar-ip
+      - name: Check SonarQube Availability
+        id: check-sonar
         run: |
           SONAR_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-sonarqube" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].PublicIpAddress" --output text | head -n 1)
-          if [ -n "$SONAR_IP" ] && [ "$SONAR_IP" != "None" ] && [ "$SONAR_IP" != "" ]; then
-            echo "SONAR_HOST_URL=http://$SONAR_IP:9000" >> $GITHUB_ENV
-            echo "Successfully retrieved SonarQube IP: $SONAR_IP"
-            
-            echo "Waiting for SonarQube server to start and become healthy..."
-            # Wait up to 5 minutes (30 attempts * 10 seconds)
-            for i in {1..30}; do
-              STATUS=$(curl -s --connect-timeout 5 "http://$SONAR_IP:9000/api/system/status" || true)
-              if echo "$STATUS" | grep -q '"status":"UP"'; then
-                echo "SonarQube is fully UP and running!"
-                break
-              fi
-              echo "SonarQube system status: $STATUS"
-              echo "Waiting for SonarQube... ($i/30)"
-              sleep 10
-            done
+          if [ -z "$SONAR_IP" ] || [ "$SONAR_IP" = "None" ]; then
+            SONAR_IP="${{ secrets.SONAR_HOST_URL }}"
+            SONAR_IP="${SONAR_IP#http://}"
+            SONAR_IP="${SONAR_IP%:9000}"
+          fi
+          
+          if [ -n "$SONAR_IP" ] && [ "$SONAR_IP" != "None" ]; then
+            echo "Checking SonarQube status at http://$SONAR_IP:9000..."
+            STATUS=$(curl -s --connect-timeout 5 "http://$SONAR_IP:9000/api/system/status" || true)
+            if echo "$STATUS" | grep -q '"status":"UP"'; then
+              echo "sonar_available=true" >> $GITHUB_OUTPUT
+              echo "SONAR_HOST_URL=http://$SONAR_IP:9000" >> $GITHUB_ENV
+              echo "✅ SonarQube is UP and ready."
+            else
+              echo "sonar_available=false" >> $GITHUB_OUTPUT
+              echo "⚠️ SonarQube server is offline or initializing. Skipping scan to avoid build delay."
+            fi
           else
-            echo "Could not find SonarQube IP dynamically, falling back to secret."
-            echo "SONAR_HOST_URL=${{ secrets.SONAR_HOST_URL }}" >> $GITHUB_ENV
+            echo "sonar_available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No SonarQube IP found. Skipping scan."
           fi
 
       - name: SonarQube Code Analysis
+        if: steps.check-sonar.outputs.sonar_available == 'true'
         uses: SonarSource/sonarqube-scan-action@v8
         continue-on-error: true
         env:
