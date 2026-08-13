@@ -63,3 +63,12 @@ jobs:
       - name: Log post-apply info
         run: |
           echo "Terraform apply completed. OIDC role ARN: '${{ steps.get_role.outputs.role_arn }}'"
+
+      - name: Trigger Deploy Operations workflow
+        if: secrets.ADMIN_GITHUB_TOKEN != '' && steps.get_role.outputs.role_arn != ''
+        uses: peter-evans/workflow-dispatch@v1
+        with:
+          token: ${{ secrets.ADMIN_GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          workflow: deploy-operations.yml
+          ref: main
