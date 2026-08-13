@@ -1,0 +1,81 @@
+name: Deploy Operations Service
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_OPERATIONS_REPOSITORY: ${{ secrets.ECR_OPERATIONS_REPOSITORY }}
+  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+  ECS_SERVICE_OPERATIONS: ${{ secrets.ECS_SERVICE_OPERATIONS }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@latest
+
+      - name: Build operations service
+        working-directory: backend/services/operations-service
+        run: |
+          pnpm set config auto-approve-builds true || true
+          rm -rf node_modules package-lock.json
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and push Docker image to ECR
+        id: build-image
+        uses: docker/build-push-action@v4
+        with:
+          context: backend/services/operations-service
+          file: backend/services/operations-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_OPERATIONS_REPOSITORY }}:sha-${{ github.sha }}
+            ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_OPERATIONS_REPOSITORY }}:latest
+
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service --cluster "${{ env.ECS_CLUSTER }}" --service "${{ env.ECS_SERVICE_OPERATIONS }}" --force-new-deployment --region "${{ env.AWS_REGION }}"
+          aws ecs wait services-stable --cluster "${{ env.ECS_CLUSTER }}" --services "${{ env.ECS_SERVICE_OPERATIONS }}" --region "${{ env.AWS_REGION }}"
+
+      - name: Smoke test /api/banners
+        run: |
+          set -e
+          ALB_DNS=$(aws route53 list-resource-record-sets --hosted-zone-id $(aws route53 list-hosted-zones-by-name --dns-name automateuniverse.space --query 'HostedZones[0].Id' --output text | sed 's|/hostedzone/||') --query "ResourceRecordSets[?Name=='sunotal.automateuniverse.space.'].AliasTarget.DNSName" --output text || true)
+          if [ -z "$ALB_DNS" ]; then
+            echo "Can't determine ALB DNS via Route53; skipping host smoke test."; exit 0;
+          fi
+          URL="https://${ALB_DNS%?}/api/banners"
+          echo "Testing: $URL"
+          for i in 1 2 3; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL" || echo 000)
+            echo "Attempt $i -> $HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "OK"; exit 0;
+            fi
+            sleep 5
+          done
+          echo "Smoke test failed"; exit 1
