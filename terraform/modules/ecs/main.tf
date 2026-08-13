@@ -300,7 +300,7 @@ resource "aws_ecs_service" "frontend" {
   task_definition = aws_ecs_task_definition.frontend.arn
   desired_count   = 1
   capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
+    capacity_provider = "FARGATE"
     weight            = 100
   }
 
@@ -326,7 +326,7 @@ resource "aws_ecs_service" "auth" {
   task_definition = aws_ecs_task_definition.auth.arn
   desired_count   = 1
   capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
+    capacity_provider = "FARGATE"
     weight            = 100
   }
 
@@ -352,7 +352,7 @@ resource "aws_ecs_service" "operations" {
   task_definition = aws_ecs_task_definition.operations.arn
   desired_count   = 1
   capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
+    capacity_provider = "FARGATE"
     weight            = 100
   }
 
@@ -378,7 +378,7 @@ resource "aws_ecs_service" "inventory" {
   task_definition = aws_ecs_task_definition.inventory.arn
   desired_count   = 1
   capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
+    capacity_provider = "FARGATE"
     weight            = 100
   }
 
@@ -404,7 +404,7 @@ resource "aws_ecs_service" "user" {
   task_definition = aws_ecs_task_definition.user.arn
   desired_count   = 1
   capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
+    capacity_provider = "FARGATE"
     weight            = 100
   }
 
