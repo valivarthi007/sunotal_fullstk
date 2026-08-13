@@ -98,7 +98,7 @@ module "ecs" {
   source                = "./modules/ecs"
   aws_region            = var.aws_region
   vpc_id                = module.vpc.vpc_id
-  private_subnet_ids    = [module.vpc.private_subnet_1_id, module.vpc.private_subnet_2_id]
+  public_subnet_ids     = [module.vpc.public_subnet_1_id, module.vpc.public_subnet_2_id]
   ecs_security_group_id = module.security.ecs_security_group_id
   tags                  = local.common_tags
 

@@ -8,9 +8,9 @@ variable "vpc_id" {
   description = "VPC ID"
 }
 
-variable "private_subnet_ids" {
+variable "public_subnet_ids" {
   type        = list(string)
-  description = "List of private subnet IDs for ECS Fargate tasks"
+  description = "List of public subnet IDs for ECS Fargate tasks"
 }
 
 variable "ecs_security_group_id" {
