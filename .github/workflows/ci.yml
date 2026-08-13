@@ -76,12 +76,24 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
+      - name: Fetch SonarQube IP
+        id: fetch-sonar-ip
+        run: |
+          SONAR_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-sonarqube" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].PublicIpAddress" --output text | head -n 1)
+          if [ -n "$SONAR_IP" ] && [ "$SONAR_IP" != "None" ] && [ "$SONAR_IP" != "" ]; then
+            echo "SONAR_HOST_URL=http://$SONAR_IP:9000" >> $GITHUB_ENV
+            echo "Successfully retrieved SonarQube IP: $SONAR_IP"
+          else
+            echo "Could not find SonarQube IP dynamically, falling back to secret."
+            echo "SONAR_HOST_URL=${{ secrets.SONAR_HOST_URL }}" >> $GITHUB_ENV
+          fi
+
       - name: SonarQube Code Analysis
         uses: SonarSource/sonarqube-scan-action@v8
         continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
 
       - name: Install dependencies
         run: |
