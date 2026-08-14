@@ -4,6 +4,7 @@ import cors from 'cors';
 import usersRouter from './routes/users.js';
 import vendorsRouter from './routes/vendors.js';
 import adminRouter from './routes/admin.js';
+import { initDatabase } from './lib/db.js';
 
 export const app = express();
 const PORT = Number(process.env.PORT ?? 5004);
@@ -22,9 +23,11 @@ app.use('/api', vendorsRouter);
 app.use('/api', adminRouter);
 
 app.get('/api/healthz', (req, res) => {
-  res.status(200).json({ status: "ok" });
+  res.status(200).json({ status: "ok", service: "user" });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`User Service listening on port ${PORT}`);
+initDatabase().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`User Service listening on port ${PORT}`);
+  });
 });

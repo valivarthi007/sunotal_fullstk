@@ -6,6 +6,7 @@ import categoriesRouter from './routes/categories.js';
 import { uploadRouter } from './routes/upload.js';
 import { bannersRouter } from './routes/banners.js';
 import productDefinitionsRouter from './routes/productDefinitions.js';
+import { initDatabase } from './lib/db.js';
 
 export const app = express();
 const PORT = Number(process.env.PORT ?? 5002);
@@ -22,13 +23,16 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api', productsRouter);
 app.use('/api', categoriesRouter);
 app.use('/api', uploadRouter);
+app.use('/api/banners', bannersRouter);
 app.use('/api', bannersRouter);
 app.use('/api', productDefinitionsRouter);
 
 app.get('/api/healthz', (req, res) => {
-  res.status(200).json({ status: "ok" });
+  res.status(200).json({ status: "ok", service: "operations" });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Operations Service listening on port ${PORT}`);
+initDatabase().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Operations Service listening on port ${PORT}`);
+  });
 });

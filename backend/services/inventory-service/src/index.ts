@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import inventoryRouter from './routes/inventory.js';
 import ordersRouter from './routes/orders.js';
+import { initDatabase } from './lib/db.js';
 
 export const app = express();
 const PORT = Number(process.env.PORT ?? 5003);
@@ -27,6 +28,8 @@ app.get('/api/inventory/healthz', (req, res) => {
   res.status(200).json({ status: "ok", service: "inventory" });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Inventory Service listening on port ${PORT}`);
+initDatabase().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Inventory Service listening on port ${PORT}`);
+  });
 });

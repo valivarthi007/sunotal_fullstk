@@ -42,7 +42,7 @@ uploadRouter.post('/upload', async (req, res) => {
 
       const cdnDomain = process.env.CLOUDFRONT_DOMAIN;
       if (cdnDomain) {
-        imageUrl = `${cdnDomain}/${objectKey}`;
+        imageUrl = cdnDomain.startsWith('http') ? `${cdnDomain}/${objectKey}` : `https://${cdnDomain}/${objectKey}`;
       } else {
         imageUrl = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${objectKey}`;
       }

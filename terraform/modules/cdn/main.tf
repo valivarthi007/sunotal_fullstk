@@ -226,8 +226,8 @@ resource "aws_lb_listener_rule" "operations_additional" {
         "/api/banners/*",
         "/api/upload",
         "/api/upload/*",
-        "/api/productDefinitions",
-        "/api/productDefinitions/*"
+        "/api/product-definitions*",
+        "/api/productDefinitions*"
       ]
     }
   }
