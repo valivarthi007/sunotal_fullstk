@@ -2,6 +2,7 @@ import { Product } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ShoppingCart, Leaf, Check, MapPin } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
 import { useState } from "react";

@@ -18,40 +18,42 @@ export const CATEGORY_FALLBACK_IMAGES: Record<string, string> = {
  * Handles protocol-less CloudFront domains, direct S3 URLs, data URIs, and local uploads.
  */
 export function normalizeImageUrl(url?: string | null, category?: string): string {
-  if (!url || typeof url !== "string" || url.trim() === "" || url === "/placeholder.jpg") {
-    return CATEGORY_FALLBACK_IMAGES[category || "Default"] || CATEGORY_FALLBACK_IMAGES.Default;
+  const fallback = CATEGORY_FALLBACK_IMAGES[category || "Default"] || CATEGORY_FALLBACK_IMAGES.Default;
+
+  if (!url || typeof url !== "string" || url.trim() === "" || url === "/placeholder.jpg" || url === "/placeholder.svg") {
+    return fallback;
   }
 
   const trimmed = url.trim();
 
-  // If already full HTTP/HTTPS URL
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
-    // If it's the old unauthenticated direct S3 bucket URL that returns 403 Forbidden, map it to fallback or CloudFront
-    if (trimmed.includes("jcs-raju-sunotal-final.s3.us-east-1.amazonaws.com")) {
-      const filename = trimmed.split("/").pop() || "";
-      // Check if it's one of the seed names like tomatoes.jpg
-      if (filename.includes("tomato") || filename.includes("vegetable") || filename.includes("spinach")) {
-        return CATEGORY_FALLBACK_IMAGES.Vegetables;
-      }
-      if (filename.includes("mango") || filename.includes("apple") || filename.includes("fruit")) {
-        return CATEGORY_FALLBACK_IMAGES.Fruits;
-      }
-      if (filename.includes("milk") || filename.includes("dairy")) {
-        return CATEGORY_FALLBACK_IMAGES.Dairy;
-      }
-      if (filename.includes("rice") || filename.includes("grain")) {
-        return CATEGORY_FALLBACK_IMAGES.Grains;
-      }
-      if (filename.includes("cashew") || filename.includes("dry")) {
-        return CATEGORY_FALLBACK_IMAGES["Dry Fruits"];
-      }
-      return `https://d2ncpl9skd2fp0.cloudfront.net/images/${filename}`;
+  // If it's the direct S3 bucket URL that returns 403 Forbidden (due to OAC), map it immediately
+  if (trimmed.includes("s3.us-east-1.amazonaws.com") || trimmed.includes("s3.amazonaws.com") || trimmed.includes("jcs-raju-sunotal-final")) {
+    const lower = trimmed.toLowerCase();
+    if (lower.includes("tomato") || lower.includes("vegetable") || lower.includes("spinach") || lower.includes("onion")) {
+      return CATEGORY_FALLBACK_IMAGES.Vegetables;
     }
+    if (lower.includes("mango") || lower.includes("apple") || lower.includes("fruit")) {
+      return CATEGORY_FALLBACK_IMAGES.Fruits;
+    }
+    if (lower.includes("milk") || lower.includes("dairy") || lower.includes("butter")) {
+      return CATEGORY_FALLBACK_IMAGES.Dairy;
+    }
+    if (lower.includes("rice") || lower.includes("grain") || lower.includes("wheat")) {
+      return CATEGORY_FALLBACK_IMAGES.Grains;
+    }
+    if (lower.includes("cashew") || lower.includes("dry") || lower.includes("nut")) {
+      return CATEGORY_FALLBACK_IMAGES["Dry Fruits"];
+    }
+    return fallback;
+  }
+
+  // If already full HTTP/HTTPS URL or Data URL
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
     return trimmed;
   }
 
   // If domain string without protocol (e.g. d2ncpl9skd2fp0.cloudfront.net/images/...)
-  if (trimmed.includes("cloudfront.net") || trimmed.includes("s3.") || trimmed.includes("amazonaws.com")) {
+  if (trimmed.includes("cloudfront.net")) {
     return `https://${trimmed}`;
   }
 

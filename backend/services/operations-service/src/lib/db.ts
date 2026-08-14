@@ -225,8 +225,15 @@ export async function initDatabase() {
         INSERT INTO banners (title, subtitle, image_url, link_url, active) VALUES
         ('Direct from Indian Farmers', '100% Organic & Naturally Grown Produce', 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80', '/products', true),
         ('Fresh Harvest of the Season', 'Delivered within 24 hours of plucking', 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&w=1200&q=80', '/products', true)
-      `);
-    }
+    // Clean up any legacy direct S3 URLs that return 403 Forbidden
+    await pool.query(`
+      UPDATE products SET image = 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%tomatoes.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Vegetables');
+      UPDATE products SET image = 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%mangoes.jpg%' OR image LIKE '%apples.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Fruits');
+      UPDATE products SET image = 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%milk.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Dairy');
+      UPDATE products SET image = 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%rice.jpg%' OR image LIKE '%grains.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Grains');
+      UPDATE products SET image = 'https://images.unsplash.com/photo-1596591606975-97ee5cef3a1e?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%cashews.jpg%' OR image LIKE '%dry-fruits.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Dry Fruits');
+      UPDATE products SET image = 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%vegetables.jpg%';
+    `);
 
     console.log('✅ Database initialized successfully with all tables and seed records.');
   } catch (err) {
