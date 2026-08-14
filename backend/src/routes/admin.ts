@@ -14,6 +14,7 @@ router.post("/admin/login", async (req, res) => {
     res.status(400).json({ error: "Invalid input" });
     return;
   }
+  const { email, password } = parsed.data;
   const cleanEmail = email.trim().toLowerCase();
   const [user] = await db
     .select()
