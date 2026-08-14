@@ -224,7 +224,10 @@ export async function initDatabase() {
       await pool.query(`
         INSERT INTO banners (title, subtitle, image_url, link_url, active) VALUES
         ('Direct from Indian Farmers', '100% Organic & Naturally Grown Produce', 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80', '/products', true),
-        ('Fresh Harvest of the Season', 'Delivered within 24 hours of plucking', 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&w=1200&q=80', '/products', true)
+        ('Fresh Harvest of the Season', 'Delivered within 24 hours of plucking', 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&w=1200&q=80', '/products', true);
+      `);
+    }
+
     // Clean up any legacy direct S3 URLs that return 403 Forbidden
     await pool.query(`
       UPDATE products SET image = 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%tomatoes.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Vegetables');
