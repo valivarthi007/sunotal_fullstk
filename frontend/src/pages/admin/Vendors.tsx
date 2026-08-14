@@ -76,8 +76,8 @@ export default function VendorsAdmin() {
   const { data: vendors, isLoading } = useListVendors({
     status: activeTab !== "All" ? activeTab.toLowerCase() : undefined,
     search: search.length > 2 ? search : undefined,
-  }, { retry: false, throwOnError: false });
-  const { data: products } = useListProducts(undefined, { retry: false, throwOnError: false });
+  });
+  const { data: products } = useListProducts();
   
   const updateVendor = useUpdateVendor();
   const deleteVendor = useDeleteVendor();
