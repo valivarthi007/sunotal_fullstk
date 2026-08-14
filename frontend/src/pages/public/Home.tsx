@@ -9,13 +9,21 @@ import { useCallback, useEffect, useState, useMemo } from "react";
 import { CheckCircle2, ShieldCheck, Clock, Tractor, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocationState } from "@/lib/location-context";
+import { normalizeImageUrl, handleImageError, CATEGORY_FALLBACK_IMAGES } from "@/lib/image-utils";
 
 const FALLBACK_SLIDES = [
   {
     bg: "#0B2914",
-    image: "",
+    image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1600&q=80",
     headline: "Fresh from Farm, Direct to Door",
-    subheadline: "Harvested this morning, delivered by evening.",
+    subheadline: "100% Organic produce harvested this morning, delivered fresh.",
+    shopHref: "/products",
+  },
+  {
+    bg: "#1A5C24",
+    image: "https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&w=1600&q=80",
+    headline: "Direct from Indian Organic Farmers",
+    subheadline: "Support local agriculture and enjoy chemical-free healthy food.",
     shopHref: "/products",
   },
 ];
@@ -92,9 +100,10 @@ export default function Home() {
                   style={{ backgroundColor: slide.bg }}
                 />
                 <img
-                  src={slide.image}
+                  src={normalizeImageUrl(slide.image, "Banners")}
                   alt={slide.headline}
-                  className="absolute inset-0 w-full h-full object-contain z-0"
+                  onError={(e) => handleImageError(e, "Banners")}
+                  className="absolute inset-0 w-full h-full object-cover z-0"
                 />
                 <div className="absolute inset-0 bg-gradient-to-r from-secondary/90 via-secondary/70 to-transparent z-10" />
 

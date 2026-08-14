@@ -2,8 +2,8 @@ import { Product } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShoppingCart, Leaf, Check, MapPin } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
+import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
 import { useState } from "react";
 
 export function ProductCard({ product }: { product: Product }) {
@@ -46,8 +46,9 @@ export function ProductCard({ product }: { product: Product }) {
 
       <div className="aspect-square overflow-hidden bg-muted/30">
         <img
-          src={product.image || "/placeholder.jpg"}
+          src={normalizeImageUrl(product.image, product.category)}
           alt={product.name}
+          onError={(e) => handleImageError(e, product.category)}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
       </div>

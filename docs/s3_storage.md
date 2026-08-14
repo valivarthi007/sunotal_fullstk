@@ -16,26 +16,26 @@ To ensure high performance, security, and developer convenience, the S3 architec
 
 ```mermaid
 graph TD
-    subgraph Client Space
-        Client[Frontend Browser]
+    subgraph ClientSpace["Client Space"]
+        Client["Frontend Browser"]
     end
 
-    subgraph AWS Cloud
-        CF[CloudFront CDN]
-        S3[(S3 Asset Bucket)]
-        Lambda[S3 Delete Lambda]
+    subgraph AWSCloud["AWS Cloud"]
+        CF["CloudFront CDN"]
+        S3["S3 Asset Bucket"]
+        Lambda["S3 Delete Lambda"]
         
-        subgraph VPC
-            EC2[EC2/ECS Microservices]
-            VPCE[VPC Gateway Endpoint for S3]
+        subgraph VPC["VPC Network"]
+            EC2["ECS Fargate Services"]
+            VPCE["VPC Gateway Endpoint for S3"]
         end
     end
 
-    Client -->|1. Get Asset Request| CF
-    CF -->|2. Cache Miss / Fetch with OAC| S3
-    EC2 -->|3. Upload/Download via VPCE| S3
-    EC2 -->|4. Invoke Cleanup| Lambda
-    Lambda -->|5. Delete Object| S3
+    Client -->|"1. Asset Request"| CF
+    CF -->|"2. Fetch with OAC"| S3
+    EC2 -->|"3. Access via VPCE"| S3
+    EC2 -->|"4. Invoke Cleanup"| Lambda
+    Lambda -->|"5. Delete Object"| S3
 ```
 
 ---

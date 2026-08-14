@@ -88,22 +88,22 @@ sequenceDiagram
     autonumber
     actor User as Client Browser
     participant ALB as Application Load Balancer
-    participant Micro as Target Microservice (ECS)
+    participant Micro as Operations Microservice
     participant RDS as Amazon RDS PostgreSQL
-    participant S3 as Amazon S3 / CloudFront
+    participant S3 as Amazon S3
 
-    User->>ALB: POST /api/upload (Base64 Image Payload)
-    Note over ALB: Evaluates Priority 21 (/api/upload*)
-    ALB->>Micro: Forward to sunotal-operations (:5002)
-    Micro->>S3: PutObjectCommand (Bucket: jcs-raju-sunotal-final)
-    S3-->>Micro: 200 OK (Key: images/177096-abc.jpg)
-    Micro-->>User: {"success": true, "url": "https://d2ncpl9skd2fp0.cloudfront.net/images/177096-abc.jpg"}
+    User->>ALB: POST /api/upload with base64 image
+    Note over ALB: Evaluates Priority 21 rule
+    ALB->>Micro: Forward to operations service
+    Micro->>S3: Upload object to S3 bucket
+    S3-->>Micro: S3 returns object key
+    Micro-->>User: Returns 200 OK with CDN URL
 
-    User->>ALB: POST /api/products (Authorization: Bearer <AdminJWT>)
-    Note over ALB: Evaluates Priority 20 (/api/products)
-    ALB->>Micro: Forward to sunotal-operations (:5002)
-    Note over Micro: requireAdmin middleware verifies JWT signature
-    Micro->>RDS: INSERT INTO products (...) VALUES (...)
+    User->>ALB: POST /api/products with Authorization Bearer
+    Note over ALB: Evaluates Priority 20 rule
+    ALB->>Micro: Forward to operations service
+    Note over Micro: requireAdmin middleware verifies JWT
+    Micro->>RDS: Insert product record
     RDS-->>Micro: Product record returned
-    Micro-->>User: 201 Created (Product JSON)
+    Micro-->>User: Returns 201 Created with product data
 ```

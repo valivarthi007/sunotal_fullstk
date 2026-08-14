@@ -10,43 +10,43 @@ Sunotal Farms follows a **Stateless Microservices Architecture** deployed on **A
 
 ```mermaid
 flowchart TD
-    User["Client (Browser / Mobile)"]
+    User["Client Browser"]
     
-    subgraph Edge["Edge Layer (AWS)"]
-        CF["CloudFront CDN (Static & S3 Assets)"]
-        ALB["Application Load Balancer (HTTPS:443)"]
+    subgraph Edge["Edge Layer AWS"]
+        CF["CloudFront CDN"]
+        ALB["Application Load Balancer"]
     end
     
-    subgraph Microservices["ECS Fargate Services (Private Subnets)"]
-        FE["Frontend Nginx (:80)<br/>React 19 + Vite + Wouter"]
-        Auth["Auth Service (:5001)<br/>JWT Issuance & Verification"]
-        Ops["Operations Service (:5002)<br/>Products, Categories, Banners, S3"]
-        Inv["Inventory Service (:5003)<br/>Stock Levels & FIFO Deduction"]
-        UserSvc["User Service (:5004)<br/>Users, Vendors, Quotations, Invoices"]
+    subgraph Microservices["ECS Fargate Services"]
+        FE["Frontend Nginx Port 80"]
+        Auth["Auth Service Port 5001"]
+        Ops["Operations Service Port 5002"]
+        Inv["Inventory Service Port 5003"]
+        UserSvc["User Service Port 5004"]
     end
     
-    subgraph DataStore["Data & File Layer"]
-        RDS[("Amazon RDS PostgreSQL<br/>(9 Relational Tables)")]
-        S3[("Amazon S3 Bucket<br/>(Images & Invoices)")]
+    subgraph DataStore["Data and File Layer"]
+        RDS[("Amazon RDS PostgreSQL")]
+        S3[("Amazon S3 Bucket")]
     end
     
-    User -->|HTTPS| ALB
-    User -->|Cached Images| CF
+    User -->|"HTTPS"| ALB
+    User -->|"Cached Images"| CF
     CF --> S3
     
-    ALB -->|/ (Default)| FE
-    ALB -->|/api/auth/*| Auth
-    ALB -->|/api/products*, /api/categories*, /api/banners*, /api/upload*| Ops
-    ALB -->|/api/inventory*, /api/orders*| Inv
-    ALB -->|/api/users*, /api/vendors*, /api/admin*| UserSvc
+    ALB -->|"Default Route"| FE
+    ALB -->|"/api/auth/*"| Auth
+    ALB -->|"/api/products*, /api/categories*"| Ops
+    ALB -->|"/api/inventory*, /api/orders*"| Inv
+    ALB -->|"/api/users*, /api/vendors*"| UserSvc
     
-    Auth -->|Direct SQL / Pool| RDS
-    Ops -->|Direct SQL / Pool| RDS
-    Inv -->|Direct SQL / Pool| RDS
-    UserSvc -->|Direct SQL / Pool| RDS
+    Auth -->|"SQL Pool"| RDS
+    Ops -->|"SQL Pool"| RDS
+    Inv -->|"SQL Pool"| RDS
+    UserSvc -->|"SQL Pool"| RDS
     
-    Ops -->|PutObject / Presigned| S3
-    UserSvc -->|PutObject (Invoices)| S3
+    Ops -->|"Upload Object"| S3
+    UserSvc -->|"Invoice Object"| S3
 ```
 
 ---

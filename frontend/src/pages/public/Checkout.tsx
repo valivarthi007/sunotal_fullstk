@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from "@workspace/api-client-react";
 import { useCart } from "@/lib/cart-context";
 import { useLocationState } from "@/lib/location-context";
+import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -442,7 +443,12 @@ export default function Checkout() {
                     {items.map(({ product, quantity }) => (
                       <li key={product.id} className="py-3 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <img src={product.image} alt={product.name} className="w-12 h-12 rounded-xl object-cover border" />
+                          <img
+                            src={normalizeImageUrl(product.image, product.category)}
+                            alt={product.name}
+                            onError={(e) => handleImageError(e, product.category)}
+                            className="w-12 h-12 rounded-xl object-cover border"
+                          />
                           <div>
                             <p className="font-semibold text-secondary text-sm leading-tight">{product.name}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">Qty: {quantity} × {product.unit}</p>

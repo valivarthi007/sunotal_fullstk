@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="farmGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1b4d2e" />
+      <stop offset="100%" stop-color="#0f2b1a" />
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#farmGrad)" />
+  <g transform="translate(150, 140)" fill="none" stroke="#22c55e" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M50 80 V20 M50 20 L20 40 M50 20 L80 40" />
+    <path d="M20 50 C20 30 50 20 50 20 C50 20 80 30 80 50 C80 70 50 80 50 80 C50 80 20 70 20 50 Z" fill="#22c55e" fill-opacity="0.2" />
+    <circle cx="50" cy="50" r="10" fill="#22c55e" />
+  </g>
+  <text x="200" y="270" font-family="system-ui, sans-serif" font-size="18" font-weight="600" fill="#a7f3d0" text-anchor="middle">
+    Sunotal Fresh Produce
+  </text>
+</svg>

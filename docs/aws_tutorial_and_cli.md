@@ -8,49 +8,49 @@ This guide provides a comprehensive overview of every AWS service utilized in th
 
 ```mermaid
 graph TD
-    Client["Web Browser / Client"] -->|HTTPS (443)| CloudFront["AWS CloudFront CDN (S3 Assets)"]
-    Client -->|HTTPS (443)| ACM["AWS Certificate Manager (SSL/TLS)"]
-    Client -->|HTTPS (443)| ALB["Application Load Balancer (sunotal-alb)"]
+    Client["Client Browser"] -->|"HTTPS 443"| CloudFront["AWS CloudFront CDN"]
+    Client -->|"HTTPS 443"| ACM["AWS Certificate Manager"]
+    Client -->|"HTTPS 443"| ALB["Application Load Balancer"]
     
-    subgraph VPC["AWS VPC (10.10.0.0/16)"]
-        subgraph PublicSubnets["Public Subnets (10.10.1.0/24, 10.10.2.0/24)"]
+    subgraph VPC["AWS VPC 10.10.0.0/16"]
+        subgraph PublicSubnets["Public Subnets"]
             ALB
             NAT["Internet Gateway"]
         end
         
-        subgraph PrivateSubnets["Private Subnets (10.10.10.0/24, 10.10.20.0/24)"]
-            subgraph ECSCluster["ECS Fargate Cluster (sunotal-cluster)"]
-                SvcFrontend["sunotal-frontend (:80)"]
-                SvcAuth["sunotal-auth (:5001)"]
-                SvcOps["sunotal-operations (:5002)"]
-                SvcInv["sunotal-inventory (:5003)"]
-                SvcUser["sunotal-user (:5004)"]
+        subgraph PrivateSubnets["Private Subnets"]
+            subgraph ECSCluster["ECS Fargate Cluster"]
+                SvcFrontend["sunotal-frontend Port 80"]
+                SvcAuth["sunotal-auth Port 5001"]
+                SvcOps["sunotal-operations Port 5002"]
+                SvcInv["sunotal-inventory Port 5003"]
+                SvcUser["sunotal-user Port 5004"]
             end
             
-            RDS["Amazon RDS PostgreSQL (:5432)"]
+            RDS[("Amazon RDS PostgreSQL Port 5432")]
         end
     end
     
-    subgraph StorageSecurity["Storage & Observability"]
-        S3["Amazon S3 (jcs-raju-sunotal-final)"]
-        ECR["Amazon ECR (Docker Repositories)"]
-        CW["Amazon CloudWatch Logs (/ecs/*)"]
-        IAM["AWS IAM (Task Execution Roles & Policies)"]
+    subgraph StorageSecurity["Storage and Observability"]
+        S3["Amazon S3 Bucket"]
+        ECR["Amazon ECR Repositories"]
+        CW["Amazon CloudWatch Logs"]
+        IAM["AWS IAM Roles and Policies"]
     end
     
-    ALB -->|/ (Default)| SvcFrontend
-    ALB -->|/api/auth/*| SvcAuth
-    ALB -->|/api/products*, /api/categories*, /api/banners*, /api/upload*, /api/product-definitions*| SvcOps
-    ALB -->|/api/inventory*, /api/orders*| SvcInv
-    ALB -->|/api/users*, /api/vendors*, /api/admin*| SvcUser
+    ALB -->|"Default Route"| SvcFrontend
+    ALB -->|"/api/auth/*"| SvcAuth
+    ALB -->|"/api/products*, /api/categories*"| SvcOps
+    ALB -->|"/api/inventory*, /api/orders*"| SvcInv
+    ALB -->|"/api/users*, /api/vendors*, /api/admin*"| SvcUser
     
     SvcAuth --> RDS
     SvcOps --> RDS
     SvcInv --> RDS
     SvcUser --> RDS
     
-    SvcOps -->|Upload Images| S3
-    CloudFront -->|Origin Access Control| S3
+    SvcOps -->|"Upload Images"| S3
+    CloudFront -->|"Origin Access Control"| S3
 ```
 
 ---

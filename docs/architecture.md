@@ -8,23 +8,23 @@ This document describes the microservices topology, individual service responsib
 
 ```mermaid
 graph TD
-    Client["🌐 Client Browser"] -->|"HTTPS (Port 443) / HTTP (Port 80)"| ALB["🌐 Application Load Balancer"]
+    Client["Client Browser"] -->|"HTTPS 443"| ALB["Application Load Balancer"]
     
-    subgraph "AWS ECS Fargate Cluster"
-        ALB -->|/| FE["💻 Frontend Container (Port 80)"]
-        ALB -->|/api/auth/*| AUTH["🔐 Auth Microservice (Port 5001)"]
-        ALB -->|/api/products/*, /api/banners/*, /api/upload/*| OPS["⚙️ Operations Microservice (Port 5002)"]
-        ALB -->|/api/inventory/*, /api/orders/*| INV["📦 Inventory Microservice (Port 5003)"]
-        ALB -->|/api/users/*, /api/vendors/*| USR["👤 User Microservice (Port 5004)"]
+    subgraph FargateCluster["AWS ECS Fargate Cluster"]
+        ALB -->|"Default"| FE["Frontend Container Port 80"]
+        ALB -->|"/api/auth/*"| AUTH["Auth Microservice Port 5001"]
+        ALB -->|"/api/products*, /api/banners*, /api/upload*"| OPS["Operations Microservice Port 5002"]
+        ALB -->|"/api/inventory*, /api/orders*"| INV["Inventory Microservice Port 5003"]
+        ALB -->|"/api/users*, /api/vendors*"| USR["User Microservice Port 5004"]
     end
 
-    subgraph "Data Storage & Assets"
-        AUTH -->|Drizzle ORM| DB[("🗄️ Amazon RDS PostgreSQL")]
-        OPS -->|Drizzle ORM| DB
-        INV -->|Drizzle ORM| DB
-        USR -->|Drizzle ORM| DB
-        OPS -->|Uploads| S3["📦 Amazon S3 Bucket (Images)"]
-        S3 -->|ObjectCreated Trigger| Lambda["⚡ AWS Lambda (S3 Photo Deletion)"]
+    subgraph DataStorage["Data Storage and Assets"]
+        AUTH -->|"SQL Connection"| DB[("Amazon RDS PostgreSQL")]
+        OPS -->|"SQL Connection"| DB
+        INV -->|"SQL Connection"| DB
+        USR -->|"SQL Connection"| DB
+        OPS -->|"Uploads"| S3["Amazon S3 Bucket Images"]
+        S3 -->|"S3 Event Trigger"| Lambda["AWS Lambda S3 Photo Cleanup"]
     end
 ```
 

@@ -16,7 +16,8 @@ import {
   ShoppingBag,
   LogOut,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
 import { useGetCurrentUser, getGetCurrentUserQueryKey, useListCategories } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart-context";
@@ -362,8 +363,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     <li key={product.id} className="flex gap-4 py-4">
                       <div className="w-18 h-18 flex-shrink-0">
                         <img
-                          src={product.image}
+                          src={normalizeImageUrl(product.image, product.category)}
                           alt={product.name}
+                          onError={(e) => handleImageError(e, product.category)}
                           className="w-16 h-16 rounded-xl object-cover border border-border"
                         />
                       </div>

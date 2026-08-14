@@ -8,32 +8,28 @@ This document explains the workflows, triggers, actions, and task execution logi
 
 ```mermaid
 graph TD
-    %% CI Flow
-    subgraph "CI Pipeline (ci.yml)"
-        ci_trigger["💻 Code Commit / PR"] --> ci_setup["Setup Node.js & pnpm"]
+    subgraph CIPipeline["CI Pipeline ci.yml"]
+        ci_trigger["Code Commit or PR"] --> ci_setup["Setup Node.js and pnpm"]
         ci_setup --> ci_install["Install Project Dependencies"]
         ci_install --> ci_db["Spin up PostgreSQL Service Container"]
-        ci_db --> ci_test["Execute Unit & Playwright E2E Tests"]
-        ci_test --> ci_build["Build Docker Images & Scan with Trivy"]
+        ci_db --> ci_test["Execute Unit and Typecheck Tests"]
+        ci_test --> ci_build["Build Docker Images and Scan with Trivy"]
         ci_build --> ci_push["Push Images to Amazon ECR"]
     end
 
-    %% CD Flow
-    subgraph "CD Pipeline (cd.yml)"
-        cd_trigger["⚙️ CI Succeeds on main"] --> cd_update["Force New ECS Fargate Deployment"]
-        cd_update --> cd_db_run["Run One-off ECS Tasks (DB Push & Seed)"]
+    subgraph CDPipeline["CD Pipeline cd.yml"]
+        cd_trigger["CI Succeeds on main"] --> cd_update["Force New ECS Fargate Deployment"]
+        cd_update --> cd_db_run["Auto-execute Startup DB Migrations"]
         cd_db_run --> cd_wait["Wait for ECS Services to be Stable"]
-        cd_wait --> cd_health["Strict HTTP health checks against ALB"]
+        cd_wait --> cd_health["HTTP health checks against ALB"]
     end
 
-    %% Infrastructure Flow
-    subgraph "Infrastructure Pipeline (infra.yml)"
-        infra_trigger["🛠️ Infra Change or Manual Run"] --> infra_tf["Apply Terraform Changes (Fargate Spot, ALB, RDS)"]
+    subgraph InfraPipeline["Infrastructure Pipeline infra.yml"]
+        infra_trigger["Infra Change or Manual Run"] --> infra_tf["Apply Terraform Changes"]
     end
 
-    %% Destroy Flow
-    subgraph "Destroy Pipeline (infra-destroy.yml)"
-        destroy_trigger["⚠️ Manual Decommission Run"] --> destroy_tf["Terraform Destroy (Purge Resources)"]
+    subgraph DestroyPipeline["Destroy Pipeline infra-destroy.yml"]
+        destroy_trigger["Manual Decommission Run"] --> destroy_tf["Terraform Destroy Purge Resources"]
     end
 ```
 

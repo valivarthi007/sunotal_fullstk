@@ -8,15 +8,15 @@ This document outlines the AWS cloud architecture, managed services, resource as
 
 ```mermaid
 graph TD
-    User["🌍 Public Client"] -->|Route 53 DNS| CF["🌍 CloudFront CDN"]
-    CF -->|Forward Dynamic Requests| ALB["🌐 Application Load Balancer"]
-    CF -->|Serve Static Assets| S3["📦 Amazon S3 Bucket (Images & Web Files)"]
+    User["Public Client"] -->|"Route 53 DNS"| CF["CloudFront CDN"]
+    CF -->|"Forward Dynamic Requests"| ALB["Application Load Balancer"]
+    CF -->|"Serve Static Assets"| S3["Amazon S3 Bucket"]
     
-    subgraph "Private VPC Network"
-        ALB -->|Host Path Routing| Fargate["🖥️ ECS Fargate Cluster"]
-        Fargate -->|Read/Write Operations| RDS[("🗄️ PostgreSQL RDS")]
-        Fargate -->|IAM Instance Role| S3
-        S3 -->|Trigger Object Removal| Lambda["⚡ AWS Lambda (S3 Photo Deletion)"]
+    subgraph VPCNetwork["Private VPC Network"]
+        ALB -->|"Host Path Routing"| Fargate["ECS Fargate Cluster"]
+        Fargate -->|"Read/Write Operations"| RDS[("PostgreSQL RDS")]
+        Fargate -->|"IAM Task Role"| S3
+        S3 -->|"Trigger Object Removal"| Lambda["AWS Lambda S3 Photo Deletion"]
     end
 ```
 

@@ -10,12 +10,12 @@ This manual provides an operational diagnostic checklist and step-by-step remedi
 graph TD
     Issue["Incident Detected"] --> Q1{"What is the symptom?"}
     
-    Q1 -->|Blank White Screen on UI| A1["Check DevTools Console for JSON parse error or uncaught 401/500.<br/>Inspect ALB Rule path patterns."]
-    Q1 -->|HTTP 500 on Login / APIs| A2["Tail CloudWatch logs for relation does not exist or database timeout.<br/>Run initDatabase / verify RDS."]
-    Q1 -->|HTTP 401 on Admin Pages| A3["Stale localStorage token.<br/>Log out and log in again at /admin/login."]
-    Q1 -->|HTTP 404 on API Endpoint| A4["Check Express router prefix & ALB listener rule priorities."]
-    Q1 -->|Image Upload Fails / Broken URL| A5["Check S3 IAM permissions & https:// prefix in CloudFront domain."]
-    Q1 -->|ECS Tasks Crashing / Failing Healthz| A6["Check target group health and container exit code in ECS console."]
+    Q1 -->|"Blank Screen on UI"| A1["Check DevTools Console and inspect ALB rules"]
+    Q1 -->|"HTTP 500 on Login"| A2["Tail CloudWatch logs and check table initialization"]
+    Q1 -->|"HTTP 401 on Admin Pages"| A3["Stale localStorage token. Re-login at admin login"]
+    Q1 -->|"HTTP 404 on API Endpoint"| A4["Check Express router mounting and ALB priorities"]
+    Q1 -->|"Image Upload Fails"| A5["Check S3 IAM permissions and HTTPS prefix in CDN domain"]
+    Q1 -->|"ECS Tasks Crashing"| A6["Check target group health and container logs"]
 ```
 
 ---
