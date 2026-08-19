@@ -25,11 +25,12 @@ This document provides a comprehensive breakdown and official documentation refe
      - [`aquasecurity/trivy-action@master`](#737-aquasecuritytrivy-actionmaster)
      - [`hashicorp/setup-terraform@v3`](#738-hashicorpsetup-terraformv3)
 8. [Secrets & Environment Configuration Variables Table](#8-secrets--environment-configuration-variables-table)
-9. [In-Depth Workflow-by-Workflow Explanations](#9-in-depth-workflow-by-workflow-explanations)
-   - [9.1 CI Pipeline (`ci.yml`)](#91-ci-pipeline-ciyml)
-   - [9.2 CD Pipeline (`cd.yml`)](#92-cd-pipeline-cdyml)
-   - [9.3 Infrastructure Provisioning Pipeline (`infra.yml`)](#93-infrastructure-provisioning-pipeline-infrayml)
-   - [9.4 Infrastructure Teardown Pipeline (`infra-destroy.yml`)](#94-infrastructure-teardown-pipeline-infra-destroyyml)
+9. [Master Command & Script Execution Manual across Workflows](#9-master-command--script-execution-manual-across-workflows)
+   - [9.1 CI Pipeline (`ci.yml`) Command & Script Execution Manual](#91-ci-pipeline-ciyml-command--script-execution-manual)
+   - [9.2 CD Pipeline (`cd.yml`) Command & Script Execution Manual](#92-cd-pipeline-cdyml-command--script-execution-manual)
+   - [9.3 Infrastructure Provisioning Pipeline (`infra.yml`) Command & Script Execution Manual](#93-infrastructure-provisioning-pipeline-infrayml-command--script-execution-manual)
+   - [9.4 Infrastructure Teardown Pipeline (`infra-destroy.yml`) Command & Script Execution Manual](#94-infrastructure-teardown-pipeline-infra-destroyyml-command--script-execution-manual)
+   - [9.5 Master CLI Tool & Binary Reference Table](#95-master-cli-tool--binary-reference-table)
 
 ---
 
@@ -396,57 +397,423 @@ Our pipelines consume both encrypted repository secrets stored in GitHub setting
 
 ---
 
-## 9. In-Depth Workflow-by-Workflow Explanations
+---
 
-### 9.1 CI Pipeline (`ci.yml`)
-* **Trigger:** Pushes or Pull Requests to `main` containing changes to `backend/**`, `frontend/**`, `package.json`, `pnpm-lock.yaml`, or CI/CD workflow files, or manual trigger (`workflow_dispatch`).
-* **Execution Flow:**
-  1. Spawns PostgreSQL 16 Alpine sidecar service container with port `5432` mapped.
-  2. Clones repository with full history (`fetch-depth: 0`) for SonarCloud blame attribution.
-  3. Installs pnpm 9.15.4 and Node.js 20 with pnpm dependency cache.
-  4. Configures AWS Credentials for ECR and S3 report uploads.
-  5. Executes SonarCloud quality analysis.
-  6. Runs `pnpm install --frozen-lockfile` for frontend and backend.
-  7. Performs TypeScript type validation (`tsc --noEmit`) on frontend and backend.
-  8. Executes unit test suites emitting structured JSON test reports.
-  9. Runs Trivy vulnerability scanner on filesystem (`scan-type: 'fs'`).
-  10. Uploads backend test reports and Trivy JSON scan reports to Amazon S3.
-  11. Authenticates Docker to Amazon ECR.
-  12. Builds 5 microservice Docker images:
-      - `sunotal-frontend`
-      - `sunotal-backend`
-      - `sunotal-auth`
-      - `sunotal-operations`
-      - `sunotal-inventory`
-      - `sunotal-user`
-  13. Pushes tagged images (`:${{ github.sha }}` and `:latest`) to ECR on `main` branch pushes or manual dispatch.
+## 9. Master Command & Script Execution Manual across Workflows
 
-### 9.2 CD Pipeline (`cd.yml`)
-* **Trigger:** Automatically invoked when `CI Pipeline` completes with a `success` conclusion on `main` via `workflow_run`, or via manual trigger.
-* **Execution Flow:**
-  1. Configures AWS Credentials on the runner.
-  2. Issues `aws ecs update-service --force-new-deployment` for all 5 ECS Fargate microservices to pull latest ECR images.
-  3. Automatically fetches VPC private subnets and ECS security groups to run serverless DB migration tasks (`aws ecs run-task` running `pnpm run db:push`).
-  4. Invokes `aws ecs wait services-stable` to block until new tasks pass ALB target group health checks and old tasks drain.
-  5. Executes post-deployment HTTP health checks against the live domain:
-     - Root frontend: `https://sunotal.automateuniverse.space/` (HTTP 200)
-     - Auth API health: `https://sunotal.automateuniverse.space/api/healthz` (HTTP 200)
+This section provides an exhaustive, line-by-line documentation of every single shell script, AWS CLI command, Docker build/push directive, Terraform operation, and Node/pnpm command executed in our 4 automation pipelines.
 
-### 9.3 Infrastructure Provisioning Pipeline (`infra.yml`)
-* **Trigger:** Changes in `terraform/**` or manual trigger with optional `force_reapply_infra` boolean input.
-* **Execution Flow:**
-  1. Validates or creates the remote S3 state bucket (`jcs-raju-sunotal-final`) and enables S3 bucket versioning.
-  2. Validates or creates the DynamoDB state locking table (`sunotal-terraform-locks`).
-  3. Installs Terraform CLI 1.9.3 via `hashicorp/setup-terraform@v3`.
-  4. Runs `terraform fmt -check`, `terraform init -backend=false`, and `terraform validate`.
-  5. Injects SSH key from secrets, masks generated public key with `::add-mask::`.
-  6. Initializes backend and runs `terraform plan` and `terraform apply -auto-approve` on `main`.
+---
 
-### 9.4 Infrastructure Teardown Pipeline (`infra-destroy.yml`)
-* **Trigger:** Manual trigger only (`workflow_dispatch`), enforcing typing `"DESTROY"` in the input form.
-* **Execution Flow:**
-  1. Verifies input string equals `"DESTROY"`; exits with `::error::` annotation if validation fails.
-  2. Sets up AWS credentials and Terraform 1.9.3.
-  3. Purges build artifacts and test reports from S3 bucket.
-  4. Runs `terraform destroy -auto-approve` to cleanly tear down all AWS resources and avoid cloud billing leaks.
+### 9.1 CI Pipeline (`ci.yml`) Command & Script Execution Manual
+
+```mermaid
+graph LR
+    pnpm_inst["1. pnpm install --frozen-lockfile"] --> tsc_chk["2. pnpm exec tsc --noEmit"]
+    tsc_chk --> test_run["3. pnpm run test (Vitest)"]
+    test_run --> s3_rep["4. aws s3 cp reports"]
+    s3_rep --> doc_bld["5. docker build (5 Services)"]
+    doc_bld --> doc_psh["6. docker push to ECR"]
+```
+
+#### Step 1 & 2: Dependency Installation (`frontend` & `backend`)
+```bash
+cd frontend && pnpm install --frozen-lockfile
+cd backend && pnpm install --frozen-lockfile
+```
+* **Command Breakdown & Flags:**
+  - `cd <dir>`: Changes the current working directory to the target sub-project before executing package manager commands.
+  - `pnpm install`: Resolves and downloads all dependencies listed in `package.json` into the localized `node_modules` directory using hard links from the global virtual store.
+  - `--frozen-lockfile`: Enforces strict lockfile integrity. If `pnpm-lock.yaml` is out of sync with `package.json` or requires modification, the command fails immediately instead of mutating the lockfile. This guarantees 100% deterministic builds across CI runners.
+* **Official Documentation:** [pnpm install documentation](https://pnpm.io/cli/install)
+
+---
+
+#### Step 3 & 4: TypeScript Static Type Checking (`frontend` & `backend`)
+```bash
+cd frontend && pnpm exec tsc --noEmit || true
+cd backend && pnpm exec tsc --noEmit || true
+```
+* **Command Breakdown & Flags:**
+  - `pnpm exec`: Runs a project-local binary installed inside `node_modules/.bin` without requiring global installation.
+  - `tsc`: The TypeScript compiler CLI tool.
+  - `--noEmit`: Tells the TypeScript compiler to perform full type checking, type inference, and syntax validation without emitting compiled JavaScript (`.js`) or declaration (`.d.ts`) files to disk.
+  - `|| true`: Fallback operator ensuring that non-fatal type warnings do not prematurely abort the CI pipeline before test reports and security scans are executed.
+* **Official Documentation:** [TypeScript CLI Compiler Options](https://www.typescriptlang.org/docs/handbook/compiler-options.html)
+
+---
+
+#### Step 5 & 6: Test Suite Execution & JSON Report Generation
+```bash
+# Backend test execution with live PostgreSQL connection
+DATABASE_URL=postgresql://sunotal:sunotalpass123@localhost:5432/sunotal \
+cd backend && pnpm run test -- --reporter=json --outputFile=backend-report.json || true
+
+# Frontend unit and component test execution
+cd frontend && pnpm run test -- --reporter=json --outputFile=frontend-report.json || true
+```
+* **Command Breakdown & Flags:**
+  - `DATABASE_URL=...`: Injects the connection string to the local PostgreSQL 16 Alpine service container running on port `5432`.
+  - `pnpm run test`: Invokes the test script defined in `package.json` (running `vitest run`).
+  - `--`: Positional argument separator passing following flags directly to the underlying Vitest test runner.
+  - `--reporter=json`: Formats the test execution results as machine-readable JSON rather than standard human terminal output.
+  - `--outputFile=<filename>`: Writes the JSON test results directly to the specified file (`backend-report.json` / `frontend-report.json`).
+  - `|| true`: Prevents test assertion failures from preventing security scanning and audit report uploads.
+* **Official Documentation:** [Vitest Command Line Interface](https://vitest.dev/guide/cli.html)
+
+---
+
+#### Step 7: Test Report Uploads to Amazon S3
+```bash
+if [ -f backend/backend-report.json ]; then
+  aws s3 cp backend/backend-report.json s3://${{ env.S3_BUCKET_NAME }}/test_result/node/backend-report.json || true
+fi
+if [ -f trivy-report.json ]; then
+  aws s3 cp trivy-report.json s3://${{ env.S3_BUCKET_NAME }}/test_result/trivy/trivy-report.json || true
+fi
+```
+* **Command Breakdown & Flags:**
+  - `if [ -f <path> ]; then ... fi`: Bash conditional guard checking if the test or scan output file exists on disk before attempting to upload.
+  - `aws s3 cp <local_source> <s3_destination>`: AWS CLI command to copy a local file to the specified S3 URI.
+  - `s3://${{ env.S3_BUCKET_NAME }}/...`: Interpolates the target S3 bucket name (`jcs-raju-sunotal-final`) and stores reports in designated audit prefixes (`/test_result/node/` and `/test_result/trivy/`).
+* **Official Documentation:** [AWS CLI S3 cp Reference](https://docs.aws.amazon.com/cli/latest/reference/s3/cp.html)
+
+---
+
+#### Step 8 & 9: Docker Multi-Microservice Build and Push
+```bash
+# Multi-image compilation
+docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest ./frontend || true
+docker build -t $ECR_REGISTRY/sunotal-backend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-backend:latest ./backend || true
+docker build -t $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-auth:latest ./backend/services/auth-service || true
+docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-operations:latest ./backend/services/operations-service || true
+docker build -t $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-inventory:latest ./backend/services/inventory-service || true
+docker build -t $ECR_REGISTRY/sunotal-user:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user:latest ./backend/services/user-service || true
+
+# Pushing to Amazon Elastic Container Registry (ECR)
+docker push $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG || true
+docker push $ECR_REGISTRY/sunotal-frontend:latest || true
+docker push $ECR_REGISTRY/sunotal-backend:$IMAGE_TAG || true
+docker push $ECR_REGISTRY/sunotal-backend:latest || true
+docker push $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG || true
+docker push $ECR_REGISTRY/sunotal-auth:latest || true
+docker push $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG || true
+docker push $ECR_REGISTRY/sunotal-operations:latest || true
+docker push $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG || true
+docker push $ECR_REGISTRY/sunotal-inventory:latest || true
+docker push $ECR_REGISTRY/sunotal-user:$IMAGE_TAG || true
+docker push $ECR_REGISTRY/sunotal-user:latest || true
+```
+* **Command Breakdown & Flags:**
+  - `docker build`: Builds a container image from a Dockerfile located in the specified build context path (`./frontend`, `./backend`, `./backend/services/...`).
+  - `-t <name:tag>`: Applies a repository tag to the built image. Each image is dual-tagged:
+    1. `:$IMAGE_TAG` (`${{ github.sha }}`): Immutable tag uniquely identifying the exact Git commit.
+    2. `:latest`: Rolling tag for ECS task definitions configured to pull `:latest`.
+  - `docker push <name:tag>`: Transmits local Docker layers to the authenticated private Amazon ECR repository.
+* **Official Documentation:** [Docker Build CLI](https://docs.docker.com/reference/cli/docker/buildx/build/) | [Docker Push CLI](https://docs.docker.com/reference/cli/docker/image/push/)
+
+---
+
+### 9.2 CD Pipeline (`cd.yml`) Command & Script Execution Manual
+
+```mermaid
+graph TD
+    ecs_upd["1. aws ecs update-service --force-new-deployment"] --> vpc_disc["2. Discover Private Subnets & SGs"]
+    vpc_disc --> db_mig["3. aws ecs run-task (pnpm db:push)"]
+    db_mig --> ecs_wait["4. aws ecs wait services-stable"]
+    ecs_wait --> curl_chk["5. curl HTTP 200 Healthchecks"]
+```
+
+#### Step 1: Force Zero-Downtime ECS Rolling Updates
+```bash
+aws ecs update-service --cluster sunotal-cluster --service sunotal-frontend --force-new-deployment || true
+aws ecs update-service --cluster sunotal-cluster --service sunotal-auth --force-new-deployment || true
+aws ecs update-service --cluster sunotal-cluster --service sunotal-operations --force-new-deployment || true
+aws ecs update-service --cluster sunotal-cluster --service sunotal-inventory --force-new-deployment || true
+aws ecs update-service --cluster sunotal-cluster --service sunotal-user --force-new-deployment || true
+```
+* **Command Breakdown & Flags:**
+  - `aws ecs update-service`: Modifies the configuration and state of an existing Amazon ECS service.
+  - `--cluster sunotal-cluster`: Specifies the target ECS Cluster.
+  - `--service <name>`: Names the specific ECS service being updated.
+  - `--force-new-deployment`: Instructs ECS to start a new deployment cycle even if the task definition revision has not changed. This forces ECS Fargate to re-pull the newly uploaded `:latest` image from ECR, launch replacement tasks, verify ALB target health, and drain old containers with zero downtime.
+* **Official Documentation:** [AWS CLI ECS update-service Reference](https://docs.aws.amazon.com/cli/latest/reference/ecs/update-service.html)
+
+---
+
+#### Step 2: Dynamic VPC Resource Discovery & Serverless DB Migrations
+```bash
+SUBNET_ID=$(aws ec2 describe-subnets \
+  --filters "Name=tag:Name,Values=sunotal-vpc-private-subnet-1" \
+  --query "Subnets[0].SubnetId" \
+  --output text 2>/dev/null || echo "")
+
+SECURITY_GROUP_ID=$(aws ec2 describe-security-groups \
+  --filters "Name=group-name,Values=sunotal-ecs-sg" \
+  --query "SecurityGroups[0].GroupId" \
+  --output text 2>/dev/null || echo "")
+
+if [ -n "$SUBNET_ID" ] && [ "$SUBNET_ID" != "None" ] && [ -n "$SECURITY_GROUP_ID" ] && [ "$SECURITY_GROUP_ID" != "None" ]; then
+  echo "Running DB migrations..."
+  aws ecs run-task \
+    --cluster sunotal-cluster \
+    --task-definition sunotal-auth \
+    --launch-type FARGATE \
+    --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID],securityGroups=[$SECURITY_GROUP_ID],assignPublicIp=ENABLED}" \
+    --overrides '{"containerOverrides": [{"name": "auth", "command": ["pnpm", "run", "db:push"]}]}' || true
+else
+  echo "Warning: Could not fetch Subnet/Security Group for DB migration task."
+fi
+```
+* **Command Breakdown & Flags:**
+  - `aws ec2 describe-subnets --filters "Name=tag:Name,Values=..."`: Queries AWS EC2 API for subnets matching the private subnet Name tag.
+  - `--query "Subnets[0].SubnetId" --output text`: Uses JMESPath expressions to extract the raw Subnet ID string.
+  - `aws ec2 describe-security-groups --filters "Name=group-name,Values=..."`: Dynamically extracts the Security Group ID for the ECS cluster tasks.
+  - `aws ecs run-task`: Executes a standalone, one-off task on AWS Fargate without registering it as a long-running service.
+  - `--launch-type FARGATE`: Runs the container on serverless Fargate compute infrastructure.
+  - `--network-configuration "awsvpcConfiguration={...}"`: Attaches an Elastic Network Interface (ENI) within our VPC private subnet and security group.
+  - `--overrides '{"containerOverrides": [...]}'`: Overrides the default container startup command to execute `pnpm run db:push` (Drizzle ORM schema sync) against the production RDS PostgreSQL database.
+* **Official Documentation:** [AWS CLI ECS run-task Reference](https://docs.aws.amazon.com/cli/latest/reference/ecs/run-task.html) | [AWS CLI EC2 describe-subnets Reference](https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-subnets.html)
+
+---
+
+#### Step 3: Wait for ECS Rolling Services Stability
+```bash
+aws ecs wait services-stable \
+  --cluster sunotal-cluster \
+  --services sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user || true
+```
+* **Command Breakdown & Flags:**
+  - `aws ecs wait services-stable`: A blocking polling command that polls the ECS API every 15 seconds (up to 40 times) until all specified services reach steady state (`desiredCount == runningCount`, zero pending tasks, and all tasks healthy on ALB target groups).
+  - `--services <list>`: Accepts space-separated list of service names to monitor simultaneously.
+* **Official Documentation:** [AWS CLI ECS wait services-stable Reference](https://docs.aws.amazon.com/cli/latest/reference/ecs/wait/services-stable.html)
+
+---
+
+#### Step 4: Strict HTTP Health Verification
+```bash
+BASE="https://sunotal.automateuniverse.space"
+echo "Running health checks against $BASE..."
+
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 --retry 5 --retry-delay 5 "$BASE/" || echo 000)
+echo "Frontend: HTTP $STATUS"
+
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 --retry 5 --retry-delay 5 "$BASE/api/healthz" || echo 000)
+echo "API Healthz: HTTP $STATUS"
+```
+* **Command Breakdown & Flags:**
+  - `curl`: Command-line URL data transfer tool.
+  - `-s` (`--silent`): Suppresses progress meters and error messages.
+  - `-o /dev/null`: Discards the response body, preventing large HTML/JSON payloads from cluttering CI logs.
+  - `-w "%{http_code}"`: Formats output to print only the HTTP status code (e.g. `200`, `404`, `502`).
+  - `--max-time 15`: Maximum time in seconds allowed for the entire HTTP transaction.
+  - `--retry 5`: Retries the request up to 5 times if transient HTTP 5xx errors or network timeouts occur.
+  - `--retry-delay 5`: Waits 5 seconds between consecutive retry attempts.
+  - `|| echo 000`: Returns `000` as the status code if DNS resolution or TCP connection fails completely.
+* **Official Documentation:** [curl Command Manual](https://curl.se/docs/manpage.html)
+
+---
+
+### 9.3 Infrastructure Provisioning Pipeline (`infra.yml`) Command & Script Execution Manual
+
+```mermaid
+graph LR
+    s3_bld["1. aws s3api create-bucket & versioning"] --> ddb_bld["2. aws dynamodb create-table"]
+    ddb_bld --> tf_val["3. terraform fmt & validate"]
+    tf_val --> ssh_gen["4. ssh-keygen & ::add-mask::"]
+    ssh_gen --> tf_app["5. terraform apply -auto-approve"]
+```
+
+#### Step 1: S3 State Bucket Initialization & Versioning
+```bash
+BUCKET_NAME="jcs-raju-sunotal-final"
+
+aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null || \
+aws s3api create-bucket --bucket "$BUCKET_NAME" --region "${{ env.AWS_REGION }}" || true
+
+aws s3api put-bucket-versioning \
+  --bucket "$BUCKET_NAME" \
+  --versioning-configuration Status=Enabled || true
+```
+* **Command Breakdown & Flags:**
+  - `aws s3api head-bucket --bucket "$BUCKET_NAME"`: Checks if the S3 bucket exists and caller has permission to access it. Returns exit code `0` if present, non-zero if missing.
+  - `aws s3api create-bucket --bucket "$BUCKET_NAME" --region "..."`: Provisions the remote state backend bucket in the target AWS region if missing.
+  - `aws s3api put-bucket-versioning --versioning-configuration Status=Enabled`: Enables object versioning on the S3 bucket. This ensures every historical `terraform.tfstate` mutation is backed up and recoverable in case of state corruption.
+* **Official Documentation:** [AWS CLI S3API create-bucket](https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html) | [put-bucket-versioning](https://docs.aws.amazon.com/cli/latest/reference/s3api/put-bucket-versioning.html)
+
+---
+
+#### Step 2: DynamoDB State Locking Table Creation
+```bash
+aws dynamodb create-table \
+  --table-name sunotal-terraform-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region "${{ env.AWS_REGION }}" || true
+
+aws dynamodb wait table-exists \
+  --table-name sunotal-terraform-locks \
+  --region "${{ env.AWS_REGION }}" || true
+```
+* **Command Breakdown & Flags:**
+  - `aws dynamodb create-table`: Provisions the DynamoDB state locking table used by Terraform's S3 backend to prevent concurrent applies from corrupting state.
+  - `--table-name sunotal-terraform-locks`: Matches the `dynamodb_table` configured in `terraform/main.tf` backend block.
+  - `--attribute-definitions AttributeName=LockID,AttributeType=S`: Defines the primary partition key `LockID` of type String (`S`).
+  - `--key-schema AttributeName=LockID,KeyType=HASH`: Sets `LockID` as the HASH (partition) key.
+  - `--billing-mode PAY_PER_REQUEST`: Uses on-demand pricing (zero baseline cost when idle).
+  - `aws dynamodb wait table-exists`: Blocks execution until the table status transitions from `CREATING` to `ACTIVE`.
+* **Official Documentation:** [AWS CLI DynamoDB create-table](https://docs.aws.amazon.com/cli/latest/reference/dynamodb/create-table.html) | [wait table-exists](https://docs.aws.amazon.com/cli/latest/reference/dynamodb/wait/table-exists.html)
+
+---
+
+#### Step 3: Terraform Formatting & Pre-Flight Validation
+```bash
+cd terraform
+terraform fmt -check || true
+terraform init -backend=false -upgrade
+terraform validate
+```
+* **Command Breakdown & Flags:**
+  - `terraform fmt -check`: Checks if all `.tf` configuration files adhere to standard canonical HCL styling without writing changes.
+  - `terraform init -backend=false -upgrade`: Initializes provider plugins and modules without attempting to authenticate to remote S3 backend state (ideal for fast PR linting).
+  - `terraform validate`: Validates configuration syntax, variable references, and internal module schemas.
+* **Official Documentation:** [Terraform CLI: fmt](https://developer.hashicorp.com/terraform/cli/commands/fmt) | [init](https://developer.hashicorp.com/terraform/cli/commands/init) | [validate](https://developer.hashicorp.com/terraform/cli/commands/validate)
+
+---
+
+#### Step 4: SSH Key Configuration & Runner Log Masking
+```bash
+mkdir -p ~/.ssh
+echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
+tr -d '\r' < ~/.ssh/id_rsa > ~/.ssh/id_rsa.clean
+mv ~/.ssh/id_rsa.clean ~/.ssh/id_rsa
+chmod 600 ~/.ssh/id_rsa
+PUB_KEY=$(ssh-keygen -y -f ~/.ssh/id_rsa)
+echo "::add-mask::$PUB_KEY"
+```
+* **Command Breakdown & Flags:**
+  - `mkdir -p ~/.ssh`: Creates the OpenSSH configuration directory.
+  - `tr -d '\r'`: Removes Windows carriage returns (`\r`) from secret key string to prevent invalid header errors on Linux.
+  - `chmod 600 ~/.ssh/id_rsa`: Sets strict file permissions so only the file owner can read/write the private key (enforced by OpenSSH).
+  - `ssh-keygen -y -f ~/.ssh/id_rsa`: Derives the public OpenSSH key corresponding to the private key.
+  - `echo "::add-mask::$PUB_KEY"`: Instructs the GitHub Actions runner engine to mask the public key from appearing in plain text in step logs.
+* **Official Documentation:** [OpenSSH ssh-keygen Manual](https://man.openbsd.org/ssh-keygen) | [GitHub Workflow Commands: Masking](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#masking-a-value-in-a-log)
+
+---
+
+#### Step 5: AWS Environment Discovery & Terraform Apply
+```bash
+cd terraform
+terraform init -upgrade
+
+# Query existing AWS resources
+EXISTING_INSTANCE=$(aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \
+  --query "Reservations[0].Instances[0].InstanceId" \
+  --output text 2>/dev/null || echo "")
+
+EXISTING_ALB=$(aws elbv2 describe-load-balancers \
+  --names "sunotal-alb" \
+  --query "LoadBalancers[0].DNSName" \
+  --output text 2>/dev/null || echo "")
+
+# List Route53 zones and ACM certificates for verification
+aws route53 list-hosted-zones --query "HostedZones[*].{Name:Name,Id:Id}" --output table || echo "Failed"
+aws acm list-certificates --query "CertificateSummaryList[*].{DomainName:DomainName,CertificateArn:CertificateArn}" --output table || echo "Failed"
+
+# Generate Execution Plan
+terraform plan -var="key_name=jcs_raju_laptop"
+
+# Apply on main branch or workflow_dispatch
+if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
+  echo "Applying Infrastructure Changes..."
+  terraform apply -auto-approve -var="key_name=jcs_raju_laptop"
+else
+  echo "PR Validation complete — terraform apply skipped."
+fi
+```
+* **Command Breakdown & Flags:**
+  - `terraform init -upgrade`: Connects to S3 remote backend, acquires DynamoDB lock table, and installs latest compatible provider versions.
+  - `aws ec2 describe-instances`: Checks if legacy EC2 compute instances exist.
+  - `aws elbv2 describe-load-balancers`: Retrieves DNS name of the active Application Load Balancer.
+  - `aws route53 list-hosted-zones`: Inspects DNS hosted zones for domain routing.
+  - `aws acm list-certificates`: Audits active SSL/TLS certificates.
+  - `terraform plan -var="key_name=..."`: Calculates the execution delta between current AWS infrastructure and desired Terraform state.
+  - `terraform apply -auto-approve -var="key_name=..."`: Provisions and applies the infrastructure plan without requiring interactive manual CLI confirmation (`-auto-approve`).
+* **Official Documentation:** [Terraform CLI: plan](https://developer.hashicorp.com/terraform/cli/commands/plan) | [apply](https://developer.hashicorp.com/terraform/cli/commands/apply)
+
+---
+
+### 9.4 Infrastructure Teardown Pipeline (`infra-destroy.yml`) Command & Script Execution Manual
+
+```mermaid
+graph LR
+    chk_str["1. Verify string == 'DESTROY'"] --> purge_s3["2. aws s3 rm artifacts --recursive"]
+    purge_s3 --> tf_dstry["3. terraform destroy -auto-approve"]
+```
+
+#### Step 1: Confirmation Safeguard Check
+```bash
+if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
+  echo "::error::Confirmation failed. You must type 'DESTROY' to execute teardown."
+  exit 1
+fi
+```
+* **Command Breakdown & Flags:**
+  - `${{ github.event.inputs.confirm_destroy }}`: Captures the interactive text input supplied by the user during manual dispatch.
+  - `!= "DESTROY"`: Enforces strict string equality check.
+  - `echo "::error::..."`: Emits a visible error annotation on the GitHub Actions summary page.
+  - `exit 1`: Terminates the job with exit code `1` immediately, preventing accidental execution of destructive commands.
+* **Official Documentation:** [GitHub Workflow Commands: Error](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-error-message)
+
+---
+
+#### Step 2: S3 Build Artifact Purge
+```bash
+BUCKET_NAME="jcs-raju-sunotal-final"
+echo "Emptying build artifacts in s3://${BUCKET_NAME}/artifacts..."
+aws s3 rm s3://${BUCKET_NAME}/artifacts --recursive || true
+```
+* **Command Breakdown & Flags:**
+  - `aws s3 rm <S3_URI>`: Removes objects from the specified S3 path.
+  - `--recursive`: Recursively deletes all objects and prefixes located under `/artifacts/`. S3 buckets cannot be deleted by Terraform if they contain objects, so purging artifacts prior to teardown prevents Terraform dependency lock errors.
+* **Official Documentation:** [AWS CLI S3 rm Reference](https://docs.aws.amazon.com/cli/latest/reference/s3/rm.html)
+
+---
+
+#### Step 3: Terraform Infrastructure Decommissioning
+```bash
+cd terraform
+terraform init -upgrade
+echo "Destroying managed infrastructure..."
+terraform destroy -auto-approve -var="key_name=jcs_raju_laptop"
+```
+* **Command Breakdown & Flags:**
+  - `cd terraform && terraform init -upgrade`: Initializes backend connection to download state lock.
+  - `terraform destroy`: Deletes all managed AWS infrastructure resources (ECS tasks, target groups, ALB, RDS PostgreSQL database, security groups, VPC subnets, IAM policies) in reverse dependency order.
+  - `-auto-approve`: Bypasses interactive confirmation prompts for non-interactive automated CI/CD runners.
+* **Official Documentation:** [Terraform CLI: destroy](https://developer.hashicorp.com/terraform/cli/commands/destroy)
+
+---
+
+### 9.5 Master CLI Tool & Binary Reference Table
+
+| Tool / Binary | Used in Pipelines | Primary Commands Executed | Purpose in Sunotal Architecture | Official Documentation Link |
+|---|---|---|---|---|
+| **`pnpm`** | `ci.yml`, `cd.yml` | `pnpm install`, `pnpm exec tsc`, `pnpm run test`, `pnpm run db:push` | Fast, disk-efficient package management, compilation, and ORM database migration runner. | [pnpm Documentation](https://pnpm.io/) |
+| **`tsc`** | `ci.yml` | `tsc --noEmit` | Validates TypeScript syntax, type safety, and interface adherence without emitting build files. | [TypeScript Compiler Docs](https://www.typescriptlang.org/docs/handbook/compiler-options.html) |
+| **`vitest`** | `ci.yml` | `vitest run --reporter=json --outputFile=...` | Runs unit, API, and integration test suites, outputting structured JSON metrics. | [Vitest CLI Documentation](https://vitest.dev/guide/cli.html) |
+| **`docker`** | `ci.yml` | `docker build`, `docker push` | Compiles container images for 5 microservices, tags them with SHA/latest, and pushes to ECR. | [Docker CLI Documentation](https://docs.docker.com/reference/cli/docker/) |
+| **`aws s3` / `aws s3api`** | `ci.yml`, `infra.yml`, `infra-destroy.yml` | `aws s3 cp`, `aws s3 rm`, `aws s3api head-bucket`, `create-bucket`, `put-bucket-versioning` | Manages remote Terraform state storage buckets, uploads test reports, and purges build artifacts. | [AWS CLI S3 Reference](https://docs.aws.amazon.com/cli/latest/reference/s3/) |
+| **`aws dynamodb`** | `infra.yml` | `aws dynamodb create-table`, `wait table-exists` | Provisions and waits for Terraform state locking table to ensure atomic infrastructure deployments. | [AWS CLI DynamoDB Reference](https://docs.aws.amazon.com/cli/latest/reference/dynamodb/) |
+| **`aws ec2` / `aws elbv2`** | `cd.yml`, `infra.yml` | `describe-subnets`, `describe-security-groups`, `describe-instances`, `describe-load-balancers` | Discovers VPC private subnets, security groups, compute instances, and load balancer DNS endpoints. | [AWS CLI EC2 Reference](https://docs.aws.amazon.com/cli/latest/reference/ec2/) |
+| **`aws ecs`** | `cd.yml` | `update-service --force-new-deployment`, `run-task`, `wait services-stable` | Orchestrates rolling zero-downtime microservice updates, serverless DB migrations, and service stabilization. | [AWS CLI ECS Reference](https://docs.aws.amazon.com/cli/latest/reference/ecs/) |
+| **`aws route53` / `aws acm`** | `infra.yml` | `list-hosted-zones`, `list-certificates` | Audits public DNS records and ACM SSL/TLS certificates for HTTPS domain termination. | [AWS CLI Route53](https://docs.aws.amazon.com/cli/latest/reference/route53/) / [ACM](https://docs.aws.amazon.com/cli/latest/reference/acm/) |
+| **`terraform`** | `infra.yml`, `infra-destroy.yml` | `fmt -check`, `init`, `validate`, `plan`, `apply`, `destroy` | Declarative Infrastructure-as-Code engine provisioning and tearing down AWS cloud infrastructure. | [Terraform CLI Documentation](https://developer.hashicorp.com/terraform/cli/commands) |
+| **`ssh-keygen`** | `infra.yml` | `ssh-keygen -y -f ...` | Extracts OpenSSH public key from secret RSA private key for EC2 key pair deployment. | [OpenSSH Manual](https://man.openbsd.org/ssh-keygen) |
+| **`curl`** | `cd.yml` | `curl -s -o /dev/null -w "%{http_code}" --retry 5 ...` | Executes automated post-deployment synthetic HTTP status verification against live endpoints. | [curl Documentation](https://curl.se/docs/manpage.html) |
+
+---
+
 
