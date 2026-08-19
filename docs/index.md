@@ -27,6 +27,6 @@ Welcome to the comprehensive, production-grade documentation hub for the **Sunot
 * **[Bash Shell Scripting Tutorial (`setup.sh` & `start-dev.sh`)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/shell_scripting_tutorial.md)**: Shell automation best practices, strict mode (`set -euo pipefail`), PID management, and signal trapping.
 
 ### 5. CI/CD & Code Quality
-* **[GitHub Actions CI/CD Workflows Deep Dive](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/github_actions_deep_dive.md)**: Line-by-line explanation of `ci.yml` and `cd.yml`, service containers, ECR push matrix, and ECS zero-downtime deployments.
+* **[GitHub Actions CI/CD Workflows Deep Dive & Keyword Reference](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/github_actions_deep_dive.md)**: Master keyword & syntax reference tables with official documentation links for every trigger, job, service container, step, context expression, workflow command, and action plugin across `ci.yml`, `cd.yml`, `infra.yml`, and `infra-destroy.yml`.
 * **[SonarCloud & SonarQube Setup & Quality Guide](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/sonarqube_and_sonarcloud_guide.md)**: Setup tutorial, token configuration, quality gates, and code metrics analysis.
 * **[Trivy Vulnerability Scanner Guide](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/trivy.md)**: Filesystem and container vulnerability scanning rules.

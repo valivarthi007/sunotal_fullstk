@@ -65,3 +65,12 @@ graph TD
 * **Core Job Steps**:
   1. **Artifact Clean**: Deletes build artifacts from S3.
   2. **Terraform Destroy**: Deconstructs all AWS-managed infrastructure. Error-silencing is disabled to prevent orphan resource leaks.
+
+---
+
+## 3. GitHub Actions Syntax & Keyword Documentation Reference
+
+For a complete tabular breakdown of every YAML keyword, event trigger, service container directive, context expression, workflow command, and action plugin used across our pipelines with official documentation links, see:
+
+👉 **[GitHub Actions CI/CD Workflows: Deep Dive & Keyword Documentation Reference](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/github_actions_deep_dive.md)**
+
