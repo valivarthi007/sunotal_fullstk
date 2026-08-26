@@ -6,6 +6,6 @@ describe("GET /api/healthz", () => {
   it("should return 200 OK and status 'ok'", async () => {
     const res = await request(app).get("/api/healthz");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "ok" });
+    expect(res.body).toEqual({ status: "ok", service: "auth" });
   });
 });

@@ -28,8 +28,10 @@ app.get('/api/inventory/healthz', (req, res) => {
   res.status(200).json({ status: "ok", service: "inventory" });
 });
 
-initDatabase().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Inventory Service listening on port ${PORT}`);
-  });
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Inventory Service listening on port ${PORT}`);
+});
+
+initDatabase().catch((err) => {
+  console.error('❌ Database initialization error:', err);
 });

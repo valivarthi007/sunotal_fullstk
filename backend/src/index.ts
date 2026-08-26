@@ -72,8 +72,10 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-initDatabase().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅  Sunotal API running → http://localhost:${PORT}`);
-  });
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅  Sunotal API running → http://localhost:${PORT}`);
+});
+
+initDatabase().catch((err) => {
+  console.error('❌ Database initialization error:', err);
 });

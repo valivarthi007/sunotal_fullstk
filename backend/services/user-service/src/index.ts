@@ -26,8 +26,10 @@ app.get('/api/healthz', (req, res) => {
   res.status(200).json({ status: "ok", service: "user" });
 });
 
-initDatabase().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`User Service listening on port ${PORT}`);
-  });
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`User Service listening on port ${PORT}`);
+});
+
+initDatabase().catch((err) => {
+  console.error('❌ Database initialization error:', err);
 });
