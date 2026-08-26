@@ -1,6 +1,7 @@
 resource "aws_ecr_repository" "frontend" {
   name                 = "sunotal-frontend"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -12,6 +13,7 @@ resource "aws_ecr_repository" "frontend" {
 resource "aws_ecr_repository" "auth" {
   name                 = "sunotal-auth"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -23,6 +25,7 @@ resource "aws_ecr_repository" "auth" {
 resource "aws_ecr_repository" "operations" {
   name                 = "sunotal-operations"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -34,6 +37,7 @@ resource "aws_ecr_repository" "operations" {
 resource "aws_ecr_repository" "inventory" {
   name                 = "sunotal-inventory"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -45,6 +49,7 @@ resource "aws_ecr_repository" "inventory" {
 resource "aws_ecr_repository" "user" {
   name                 = "sunotal-user"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
