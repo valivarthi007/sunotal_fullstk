@@ -123,16 +123,19 @@ jobs:
           fi
         continue-on-error: true
 
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-        continue-on-error: true
+      - name: Ensure ECR Repositories Exist
+        if: steps.login-ecr.outcome == 'success'
+        run: |
+          for repo in sunotal-frontend sunotal-backend sunotal-auth sunotal-operations sunotal-inventory sunotal-user; do
+            aws ecr create-repository --repository-name "$repo" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+          done
 
       - name: Build Docker images
         if: steps.login-ecr.outcome == 'success'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
+
         run: |
           docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest ./frontend || true
           docker build -t $ECR_REGISTRY/sunotal-backend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-backend:latest ./backend || true
