@@ -99,6 +99,48 @@ jobs:
           kubectl rollout status deployment/sunotal-operations -n sunotal --timeout=180s || true
           kubectl rollout status deployment/sunotal-inventory -n sunotal --timeout=180s || true
           kubectl rollout status deployment/sunotal-user -n sunotal --timeout=180s || true
+
+          echo "Configuring Security Groups and Target Groups on AWS..."
+          ALB_SG=$(aws elbv2 describe-load-balancers --names "sunotal-alb" --query "LoadBalancers[0].SecurityGroups[0]" --output text 2>/dev/null || echo "")
+          EKS_SG=$(aws eks describe-cluster --name sunotal-cluster --query "cluster.resourcesVpcConfig.clusterSecurityGroupId" --output text 2>/dev/null || echo "")
+          
+          if [ -n "$ALB_SG" ] && [ -n "$EKS_SG" ]; then
+            aws ec2 authorize-security-group-ingress --group-id "$EKS_SG" --protocol -1 --source-group "$ALB_SG" 2>/dev/null || true
+          fi
+
+          echo "Updating Target Group HealthCheckPaths to /api/healthz..."
+          aws elbv2 modify-target-group --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-inventory-tg/3a68ddf60a320673" --health-check-path "/api/healthz" 2>/dev/null || true
+          aws elbv2 modify-target-group --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-operations-tg/7757919f4c2fefb2" --health-check-path "/api/healthz" 2>/dev/null || true
+          aws elbv2 modify-target-group --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-user-tg/4d75ff35b1b50f0b" --health-check-path "/api/healthz" 2>/dev/null || true
+
+          echo "Registering active EKS Pod IPs into ALB Target Groups..."
+          AUTH_IP=$(kubectl get pods -n sunotal -l app=sunotal-auth --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
+          USER_IP=$(kubectl get pods -n sunotal -l app=sunotal-user --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
+          FRONTEND_IP=$(kubectl get pods -n sunotal -l app=sunotal-frontend --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
+          OPERATIONS_IP=$(kubectl get pods -n sunotal -l app=sunotal-operations --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
+          INVENTORY_IP=$(kubectl get pods -n sunotal -l app=sunotal-inventory --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
+
+          if [ -n "$AUTH_IP" ]; then aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-auth-tg/24a0b8296cb65cd9" --targets Id=$AUTH_IP,Port=5001 2>/dev/null || true; fi
+          if [ -n "$USER_IP" ]; then aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-user-tg/4d75ff35b1b50f0b" --targets Id=$USER_IP,Port=5004 2>/dev/null || true; fi
+          if [ -n "$FRONTEND_IP" ]; then aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-frontend-tg/5553ef2fe32f6001" --targets Id=$FRONTEND_IP,Port=80 2>/dev/null || true; fi
+          if [ -n "$OPERATIONS_IP" ]; then aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-operations-tg/7757919f4c2fefb2" --targets Id=$OPERATIONS_IP,Port=5002 2>/dev/null || true; fi
+          if [ -n "$INVENTORY_IP" ]; then aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-inventory-tg/3a68ddf60a320673" --targets Id=$INVENTORY_IP,Port=5003 2>/dev/null || true; fi
+
+          # Clean up stale target IP registrations
+          AUTH_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-auth-tg/24a0b8296cb65cd9" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+          for ip in $AUTH_REG; do if [ "$ip" != "$AUTH_IP" ]; then aws elbv2 deregister-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-auth-tg/24a0b8296cb65cd9" --targets Id=$ip,Port=5001 2>/dev/null || true; fi; done
+
+          USER_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-user-tg/4d75ff35b1b50f0b" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+          for ip in $USER_REG; do if [ "$ip" != "$USER_IP" ]; then aws elbv2 deregister-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-user-tg/4d75ff35b1b50f0b" --targets Id=$ip,Port=5004 2>/dev/null || true; fi; done
+
+          FRONTEND_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-frontend-tg/5553ef2fe32f6001" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+          for ip in $FRONTEND_REG; do if [ "$ip" != "$FRONTEND_IP" ]; then aws elbv2 deregister-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-frontend-tg/5553ef2fe32f6001" --targets Id=$ip,Port=80 2>/dev/null || true; fi; done
+
+          OPERATIONS_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-operations-tg/7757919f4c2fefb2" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+          for ip in $OPERATIONS_REG; do if [ "$ip" != "$OPERATIONS_IP" ]; then aws elbv2 deregister-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-operations-tg/7757919f4c2fefb2" --targets Id=$ip,Port=5002 2>/dev/null || true; fi; done
+
+          INVENTORY_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-inventory-tg/3a68ddf60a320673" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+          for ip in $INVENTORY_REG; do if [ "$ip" != "$INVENTORY_IP" ]; then aws elbv2 deregister-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-inventory-tg/3a68ddf60a320673" --targets Id=$ip,Port=5003 2>/dev/null || true; fi; done
         continue-on-error: true
 
       - name: Deploy to ECS Fargate
@@ -127,16 +169,41 @@ jobs:
           aws ecs wait services-stable --cluster sunotal-cluster --services sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user || true
         continue-on-error: true
 
-      - name: Post-Deployment Health Check
+      - name: Post-Deployment Automated Test Suite
         run: |
           BASE="https://sunotal.automateuniverse.space"
-          echo "Running health checks against $BASE..."
+          echo "🧪 Running Post-Deployment Test Suite against $BASE..."
           
+          # Test 1: Frontend Webpage
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 --retry 5 --retry-delay 5 "$BASE/" || echo 000)
-          echo "Frontend: HTTP $STATUS"
-          
+          echo "Test 1 [Frontend Webpage]: HTTP $STATUS"
+          if [ "$STATUS" != "200" ]; then echo "❌ Frontend test failed"; exit 1; fi
+
+          # Test 2: Auth Service Healthz
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 --retry 5 --retry-delay 5 "$BASE/api/healthz" || echo 000)
-          echo "API Healthz: HTTP $STATUS"
-          
-          echo "✅ Deployment complete!"
-        continue-on-error: true
+          echo "Test 2 [Auth Service Healthz]: HTTP $STATUS"
+          if [ "$STATUS" != "200" ]; then echo "❌ Healthz test failed"; exit 1; fi
+
+          # Test 3: Admin Login & JWT Token
+          LOGIN_RES=$(curl -s -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" -d '{"email":"admin@sunotal.com","password":"admin123"}' || echo "")
+          TOKEN=$(echo "$LOGIN_RES" | grep -o '"token":"[^"]*' | cut -d'"' -f4 || echo "")
+          if [ -n "$TOKEN" ]; then
+            echo "Test 3 [Admin Login API]: HTTP 200 (Token obtained successfully)"
+          else
+            echo "❌ Admin Login test failed. Response: $LOGIN_RES"
+            exit 1
+          fi
+
+          # Test 4: Admin Dashboard Stats API
+          STATS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE/api/admin/stats" || echo 000)
+          echo "Test 4 [Admin Stats API]: HTTP $STATS_STATUS"
+          if [ "$STATS_STATUS" != "200" ]; then echo "❌ Admin stats test failed"; exit 1; fi
+
+          # Test 5: Admin Quotations API
+          QUOTES_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE/api/admin/quotations" || echo 000)
+          echo "Test 5 [Admin Quotations API]: HTTP $QUOTES_STATUS"
+          if [ "$QUOTES_STATUS" != "200" ]; then echo "❌ Admin quotations test failed"; exit 1; fi
+
+          echo "🎉 All 5 Post-Deployment Tests Passed Successfully! Deployment is live and error-free."
+        continue-on-error: false
+
