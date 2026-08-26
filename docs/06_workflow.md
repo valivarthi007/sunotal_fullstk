@@ -66,7 +66,9 @@ Starts PostgreSQL 16 Alpine container (`postgres:16-alpine`) on port 5432 with h
 6. **Backend Unit Tests**: Executes `vitest run` against PostgreSQL database.
 7. **Trivy Vulnerability Scanner**: Scans filesystem for High/Critical vulnerabilities.
 8. **Upload Reports**: Uploads test results to AWS S3 (`jcs-raju-sunotal-final`).
-9. **Build & Push Docker Images**: Builds images for 5 microservices and pushes tags to AWS ECR (`:${github.sha}` and `:latest`).
+9. **Ensure ECR Repositories Exist**: Automatically checks and creates ECR repositories (`sunotal-frontend`, `sunotal-auth`, `sunotal-operations`, `sunotal-inventory`, `sunotal-user`) if missing after a full infrastructure reset.
+10. **Build & Push Docker Images**: Builds multi-stage Docker images for all microservices and pushes tags to AWS ECR (`:${github.sha}` and `:latest`).
+
 
 ---
 
@@ -79,15 +81,25 @@ Starts PostgreSQL 16 Alpine container (`postgres:16-alpine`) on port 5432 with h
         if: env.DEPLOY_TARGET == 'eks'
         run: |
           aws eks update-kubeconfig --name sunotal-cluster --region us-east-1
+
+          # Dynamic RDS Host Discovery & Secret Injection
+          RDS_HOST=$(aws rds describe-db-instances --db-instance-identifier sunotal-postgres --query "DBInstances[0].Endpoint.Address" --output text 2>/dev/null || echo "")
+          if [ -n "$RDS_HOST" ] && [ "$RDS_HOST" != "None" ]; then
+            sed -i "s|sunotal-postgres.cs1gq0a2wtpu.us-east-1.rds.amazonaws.com|${RDS_HOST}|g" k8s/01-configmap-secret.yaml
+          fi
+
           kubectl apply -f k8s/00-namespace.yaml
           kubectl apply -f k8s/01-configmap-secret.yaml
           kubectl apply -f k8s/03-services.yaml
           kubectl apply -f k8s/04-ingress.yaml
           kubectl apply -f k8s/02-deployments.yaml
 
-          # Self-healing ALB Target Registration
+          # Dynamic Target Group ARN Resolution by Target Group Name
+          AUTH_TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-auth-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
           AUTH_IP=$(kubectl get pods -n sunotal -l app=sunotal-auth --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}')
-          aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:us-east-1:143797622495:targetgroup/sunotal-auth-tg/24a0b8296cb65cd9" --targets Id=$AUTH_IP,Port=5001
+          if [ -n "$AUTH_IP" ] && [ -n "$AUTH_TG_ARN" ]; then
+            aws elbv2 register-targets --target-group-arn "$AUTH_TG_ARN" --targets Id=$AUTH_IP,Port=5001
+          fi
 
       - name: Post-Deployment Automated Test Suite
         run: |
