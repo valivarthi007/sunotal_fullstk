@@ -17,6 +17,10 @@ Welcome to the central documentation index for **Sunotal**, an enterprise-grade 
 | **[07. Version Control (Git)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/07_git.md)** | Git Operations & Branching Strategy | Daily Git commands, industry-standard GitFlow branching strategies, CRUD operations, commit history inspection, revert/rollback procedures, and emergency patch workflows. |
 | **[08. Architecture Diagrams](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/08_architecture_diagrams.md)** | System Architectural Visualizations | Production-grade Mermaid diagrams covering Application Architecture, DevOps Pipeline, AWS Cloud Infrastructure, Docker Container Topology, ER Database Model, and Kubernetes Cluster Topology. |
 | **[09. Shell Scripting Automation](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/09_shell_scripting.md)** | Automation Scripts & Pipeline Shell Patterns | Complete line-by-line breakdown of `setup.sh` and `start-dev.sh`, process concurrency, signal traps (`trap cleanup INT TERM`), JSONPath pod IP extraction, self-healing target registration, and shell best practices (`set -euo pipefail`). |
+| **[10. Line-by-Line Source Code Book](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/10_source_code_book.md)** | Complete Application Code Annotation Textbook | Comprehensive, textbook-style line-by-line breakdown of application entrypoints, authentication routes, admin stats, vendor quotation controllers, and React router components. |
+| **[11. Line-by-Line DevOps & Cloud Book](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/11_devops_cloud_book.md)** | Complete DevOps & Cloud Infrastructure Textbook | Comprehensive, textbook-style line-by-line breakdown of GitHub Actions CI/CD workflows, Kubernetes YAML manifests, Dockerfiles, Terraform HCL modules, Shell Scripts, Linux administration commands, Git, and AWS CLI commands. |
+
+
 
 
 ---
