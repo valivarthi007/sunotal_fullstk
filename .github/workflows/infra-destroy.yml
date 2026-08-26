@@ -13,7 +13,7 @@ env:
 
 jobs:
   destroy_infrastructure:
-    name: Destroy Infrastructure with Terraform
+    name: Destroy Infrastructure (AWS CLI & Terraform)
     runs-on: ubuntu-latest
     steps:
       - name: Verify Confirmation
@@ -51,11 +51,44 @@ jobs:
       - name: Purge Non-State S3 Folders (Preserve State File)
         run: |
           BUCKET_NAME="jcs-raju-sunotal-final"
-          echo "Purging non-state folders (artifacts/, uploads/, logs/) in s3://${BUCKET_NAME}..."
-          echo "SAFEGUARD: Preserving state/* (terraform.tfstate) so Terraform retains full resource state for teardown..."
+          echo "Purging non-state application objects (artifacts/, uploads/, logs/) in s3://${BUCKET_NAME}..."
+          echo "SAFEGUARD: Preserving state/* (terraform.tfstate) for Terraform teardown..."
           aws s3 rm "s3://${BUCKET_NAME}" --recursive --exclude "state/*" || true
 
-      - name: Teardown EKS Cluster and ENIs (if active)
+      - name: Deregister Load Balancer Targets
+        run: |
+          echo "Deregistering any active target IPs from ALB target groups..."
+          for tg in sunotal-frontend-tg sunotal-auth-tg sunotal-operations-tg sunotal-inventory-tg sunotal-user-tg; do
+            TG_ARN=$(aws elbv2 describe-target-groups --names "$tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+            if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
+              TARGETS=$(aws elbv2 describe-target-health --target-group-arn "$TG_ARN" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+              for target in $TARGETS; do
+                if [ -n "$target" ] && [ "$target" != "None" ]; then
+                  echo "Deregistering target $target from $tg..."
+                  aws elbv2 deregister-targets --target-group-arn "$TG_ARN" --targets Id=$target 2>/dev/null || true
+                fi
+              done
+            fi
+          done
+
+      - name: Scale Down & Stop ECS Tasks (if active)
+        run: |
+          if aws ecs describe-clusters --clusters sunotal-cluster --region "${{ env.AWS_REGION }}" --query "clusters[0].status" --output text 2>/dev/null | grep -q "ACTIVE"; then
+            echo "Scaling down ECS services in sunotal-cluster..."
+            for svc in sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user; do
+              aws ecs update-service --cluster sunotal-cluster --service "$svc" --desired-count 0 --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+            done
+            
+            TASKS=$(aws ecs list-tasks --cluster sunotal-cluster --region "${{ env.AWS_REGION }}" --query "taskArns[]" --output text 2>/dev/null || echo "")
+            for task in $TASKS; do
+              if [ -n "$task" ] && [ "$task" != "None" ]; then
+                echo "Stopping ECS Task: $task"
+                aws ecs stop-task --cluster sunotal-cluster --task "$task" --reason "Pipeline teardown" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+              fi
+            done
+          fi
+
+      - name: Teardown EKS Cluster, Node Groups & Fargate Profiles (if active)
         run: |
           CLUSTER_NAME="sunotal-cluster"
           if aws eks describe-cluster --name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
@@ -65,7 +98,7 @@ jobs:
             NODEGROUPS=$(aws eks list-nodegroups --cluster-name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" --query "nodegroups[]" --output text 2>/dev/null || echo "")
             for ng in $NODEGROUPS; do
               if [ -n "$ng" ] && [ "$ng" != "None" ]; then
-                echo "Deleting Node Group: $ng"
+                echo "Initiating deletion of Node Group: $ng"
                 aws eks delete-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name "$ng" --region "${{ env.AWS_REGION }}" || true
               fi
             done
@@ -74,12 +107,12 @@ jobs:
             PROFILES=$(aws eks list-fargate-profiles --cluster-name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" --query "fargateProfileNames[]" --output text 2>/dev/null || echo "")
             for fp in $PROFILES; do
               if [ -n "$fp" ] && [ "$fp" != "None" ]; then
-                echo "Deleting Fargate Profile: $fp"
+                echo "Initiating deletion of Fargate Profile: $fp"
                 aws eks delete-fargate-profile --cluster-name "$CLUSTER_NAME" --fargate-profile-name "$fp" --region "${{ env.AWS_REGION }}" || true
               fi
             done
 
-            # Wait for all Node Groups to be completely deleted
+            # Wait for Node Groups to be fully deleted
             for ng in $NODEGROUPS; do
               if [ -n "$ng" ] && [ "$ng" != "None" ]; then
                 echo "Waiting for Node Group $ng to be fully deleted..."
@@ -87,7 +120,7 @@ jobs:
               fi
             done
 
-            # Wait for all Fargate Profiles to be completely deleted
+            # Wait for Fargate Profiles to be fully deleted
             for fp in $PROFILES; do
               if [ -n "$fp" ] && [ "$fp" != "None" ]; then
                 echo "Waiting for Fargate Profile $fp to be fully deleted..."
@@ -98,6 +131,7 @@ jobs:
               fi
             done
 
+            # Delete EKS Cluster with retries
             echo "Deleting EKS Cluster $CLUSTER_NAME..."
             for attempt in {1..5}; do
               if aws eks delete-cluster --name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}"; then
@@ -116,6 +150,20 @@ jobs:
             echo "No active EKS cluster found."
           fi
 
+      - name: Clean Unattached Network Interfaces & SSM Parameters
+        run: |
+          echo "Cleaning up SSM Parameters..."
+          aws ssm delete-parameter --name "/sunotal/compute_target" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+
+          echo "Cleaning up unattached Network Interfaces (ENIs)..."
+          ENIS=$(aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION }}" --filters "Name=description,Values=*sunotal*,*elbv2*,*aws-K8S*" "Name=status,Values=available" --query "NetworkInterfaces[*].NetworkInterfaceId" --output text 2>/dev/null || echo "")
+          for eni in $ENIS; do
+            if [ -n "$eni" ] && [ "$eni" != "None" ]; then
+              echo "Deleting unattached ENI: $eni"
+              aws ec2 delete-network-interface --network-interface-id "$eni" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+            fi
+          done
+
       - name: Clear Stale DynamoDB State Locks
         run: |
           echo "Clearing any stale state lock items from DynamoDB table sunotal-terraform-locks..."
@@ -127,7 +175,7 @@ jobs:
             fi
           done
 
-      - name: Destroy Infrastructure with Terraform
+      - name: Destroy Infrastructure with Terraform (Multi-Pass)
         run: |
           cd terraform
           terraform init -upgrade
@@ -139,5 +187,17 @@ jobs:
           # Pass 2: Destroy ECS target & remaining shared infrastructure (VPC, RDS, ALB, Security Groups)
           terraform destroy -auto-approve -lock=false -var="key_name=jcs_raju_laptop" -var="compute_target=ecs" || true
 
-          # Final Pass: Fallback destroy to guarantee clean state
+          # Final Pass: Fallback destroy to guarantee 100% clean state
           terraform destroy -auto-approve -lock=false -var="key_name=jcs_raju_laptop"
+
+      - name: Post-Teardown Cleanup & CloudWatch Logs Removal
+        run: |
+          echo "Performing final sweep of CloudWatch log groups..."
+          LOG_GROUPS=$(aws logs describe-log-groups --region "${{ env.AWS_REGION }}" --query "logGroups[?contains(logGroupName, 'sunotal')].logGroupName" --output text 2>/dev/null || echo "")
+          for lg in $LOG_GROUPS; do
+            if [ -n "$lg" ] && [ "$lg" != "None" ]; then
+              echo "Deleting CloudWatch Log Group: $lg"
+              aws logs delete-log-group --log-group-name "$lg" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+            fi
+          done
+          echo "Post-teardown cleanup complete. All application resources destroyed."
