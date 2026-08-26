@@ -1,54 +1,97 @@
-# 04. Terraform (IaC) & AWS Infrastructure Guide
+# 04. Terraform (IaC) & AWS Infrastructure Provisioning Masterclass
 
-This document details the Infrastructure as Code (IaC) architecture built with Terraform, AWS resource modules, and AWS CLI management commands.
+Welcome to the **Sunotal Terraform Infrastructure as Code (IaC) Master Guide**. This document provides an exhaustive, educational, and operational manual for provisioning, managing, and troubleshooting AWS cloud infrastructure using Terraform and the AWS CLI.
 
 ---
 
-## 4.a Terraform Modules & AWS Resource Architecture
+## 📖 Table of Contents
+1. [Infrastructure as Code (IaC) 101 for Beginners](#1-infrastructure-as-code-iac-101-for-beginners)
+2. [Terraform Directory Structure & Module Breakdown](#2-terraform-directory-structure--module-breakdown)
+3. [Exhaustive Terraform Module Specifications](#3-exhaustive-terraform-module-specifications)
+4. [Step-by-Step Manual Infrastructure Deployment Guide](#4-step-by-step-manual-infrastructure-deployment-guide)
+5. [AWS CLI Masterclass: CRUD Commands by AWS Service](#5-aws-cli-masterclass-crud-commands-by-aws-service)
+6. [Terraform Prerequisites & Resource Dependency Graph](#6-terraform-prerequisites--resource-dependency-graph)
+
+---
+
+## 1. Infrastructure as Code (IaC) 101 for Beginners
+
+### What is Terraform?
+Terraform is an open-source Infrastructure as Code (IaC) tool created by HashiCorp. It enables developers and DevOps engineers to define cloud infrastructure (servers, networks, databases, security groups, DNS records) in human-readable HashiCorp Configuration Language (`.tf` files) and automate resource provisioning.
+
+### Core Terminology
+- **Provider**: A plugin that interacts with cloud providers (e.g. `hashicorp/aws`).
+- **Resource**: An infrastructure object defined in code (e.g. `aws_instance`, `aws_db_instance`, `aws_vpc`).
+- **Module**: A container for multiple resources configured together to encapsulate architecture patterns (e.g. `modules/vpc`, `modules/eks`).
+- **State File (`terraform.tfstate`)**: A JSON file where Terraform records real-world cloud resource IDs and states.
+- **Plan (`terraform plan`)**: An execution preview comparing local `.tf` code against the remote cloud state.
+
+---
+
+## 2. Terraform Directory Structure & Module Breakdown
 
 ```
 terraform/
-├── main.tf                  # Root module instantiating all infrastructure sub-modules
-├── variables.tf             # Global input variables (region, vpc_cidr, db_password)
-├── outputs.tf               # Infrastructure outputs (ALB DNS, EKS Cluster Name, S3 Bucket)
+├── main.tf                  # Root module orchestrating all sub-modules
+├── variables.tf             # Global input variables
+├── outputs.tf               # Environment output values (ALB DNS, DB Host, Bucket Name)
+├── terraform.tfvars         # Variable values file
 └── modules/
-    ├── vpc/                 # AWS VPC, 2 Public Subnets, 2 Private Subnets, IGW, NAT Gateway
-    ├── security/            # Security Groups for ALB, EKS Nodes, ECS Tasks, and RDS Postgres
-    ├── database/            # AWS RDS PostgreSQL Instance (DB Subnet Group, Parameter Group)
-    ├── eks/                 # AWS EKS Cluster & EKS Managed Node Group
-    ├── ecs/                 # AWS ECS Fargate Cluster, Task Definitions, ECS Services
-    ├── cdn/                 # AWS S3 Bucket, CloudFront Distribution, Route53 DNS Records
-    └── ecr/                 # AWS ECR Repositories for 5 Microservices
+    ├── vpc/                 # Module 1: AWS VPC, Subnets, IGW, Route Tables, NAT Gateway
+    ├── security/            # Module 2: Security Groups for ALB, EKS, ECS & RDS
+    ├── database/            # Module 3: AWS RDS PostgreSQL DB Instance
+    ├── eks/                 # Module 4: AWS EKS Cluster & Node Group
+    ├── ecs/                 # Module 5: AWS ECS Fargate Cluster, Tasks & Services
+    ├── cdn/                 # Module 6: AWS S3 Bucket, CloudFront Distribution & Route53 DNS
+    └── ecr/                 # Module 7: AWS ECR Docker Container Registries
 ```
 
 ---
 
-## 4.b Manual Infrastructure Deployment Guide with Terraform
+## 3. Exhaustive Terraform Module Specifications
+
+### 1. VPC Module (`terraform/modules/vpc/main.tf`)
+- Creates a dedicated Virtual Private Cloud (VPC) with CIDR block `10.10.0.0/16`.
+- Provisions **2 Public Subnets** across two Availability Zones (`us-east-1a`, `us-east-1b`) for ALB and NAT Gateways.
+- Provisions **2 Private Subnets** for EKS worker nodes and RDS PostgreSQL.
+
+### 2. Security Module (`terraform/modules/security/main.tf`)
+- **`sunotal-alb-sg`**: Allows public ingress traffic on ports 80 (HTTP) and 443 (HTTPS) from `0.0.0.0/0`.
+- **`eks-cluster-sg`**: Secures EKS cluster worker nodes and authorizes ingress from `sunotal-alb-sg` on ports 80, 5001-5004.
+- **`rds-postgres-sg`**: Allows database ingress on port 5432 strictly from EKS Node Security Group.
+
+---
+
+## 4. Step-by-Step Manual Infrastructure Deployment Guide
 
 ```bash
-# 1. Navigate to terraform directory
+# Step 1: Navigate to terraform directory
 cd terraform
 
-# 2. Initialize Terraform modules and AWS provider plugins
+# Step 2: Initialize Terraform workspace and download AWS Provider plugins
 terraform init
 
-# 3. Format and validate terraform source code
+# Step 3: Format code and validate configuration syntax
 terraform fmt
 terraform validate
 
-# 4. Generate and inspect execution plan
+# Step 4: Preview execution plan
 terraform plan -out=tfplan
 
-# 5. Apply infrastructure changes
+# Step 5: Apply execution plan to provision AWS cloud resources
 terraform apply tfplan
 
-# 6. Destroy infrastructure (if tearing down environment)
+# Step 6: Query outputs
+terraform output alb_dns_name
+terraform output rds_endpoint
+
+# Step 7: Destroy infrastructure (Teardown environment)
 terraform destroy -auto-approve
 ```
 
 ---
 
-## 4.c AWS CLI CRUD & Troubleshooting Commands by Service
+## 5. AWS CLI Masterclass: CRUD Commands by AWS Service
 
 ### 1. AWS VPC & Security Groups
 ```bash
@@ -64,7 +107,7 @@ aws ec2 authorize-security-group-ingress \
 
 ### 2. AWS RDS PostgreSQL
 ```bash
-# READ RDS Status & Hostname
+# READ RDS Hostname & Status
 aws rds describe-db-instances \
   --db-instance-identifier sunotal-postgres \
   --query "DBInstances[0].[DBInstanceIdentifier, Endpoint.Address, DBInstanceStatus]"
@@ -84,7 +127,7 @@ aws eks update-kubeconfig --name sunotal-cluster --region us-east-1
 
 ### 4. AWS Application Load Balancer & Target Groups
 ```bash
-# LIST ALBs
+# READ ALB Status
 aws elbv2 describe-load-balancers --names "sunotal-alb"
 
 # READ Target Group Health
@@ -98,7 +141,7 @@ aws elbv2 register-targets \
 
 ---
 
-## 4.d Terraform Prerequisites & Module Dependencies
+## 6. Terraform Prerequisites & Resource Dependency Graph
 
 ```mermaid
 graph TD

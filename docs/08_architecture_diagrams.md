@@ -1,10 +1,20 @@
-# 08. System Architectural Visualizations & Diagrams
+# 08. System Architectural Visualizations & Diagrams Masterclass
 
-This document contains production-grade Mermaid diagrams detailing the application, DevOps, AWS cloud, Docker, database, and Kubernetes cluster architectures of Sunotal.
+Welcome to the **Sunotal Architecture Visualizations Guide**. This document contains production-grade Mermaid diagrams detailing the application, DevOps, AWS cloud, Docker, database, and Kubernetes cluster architectures of Sunotal.
 
 ---
 
-## 8.1 Application Architecture Diagram
+## 📖 Table of Contents
+1. [Application Architecture Diagram](#1-application-architecture-diagram)
+2. [DevOps Pipeline Architecture Diagram](#2-devops-pipeline-architecture-diagram)
+3. [AWS Cloud Infrastructure Diagram](#3-aws-cloud-infrastructure-diagram)
+4. [Docker Container Topology Diagram](#4-docker-container-topology-diagram)
+5. [Database Entity-Relationship (ER) Diagram](#5-database-entity-relationship-er-diagram)
+6. [Kubernetes Cluster Topology Diagram](#6-kubernetes-cluster-topology-diagram)
+
+---
+
+## 1. Application Architecture Diagram
 
 ```mermaid
 graph TD
@@ -30,7 +40,7 @@ graph TD
 
 ---
 
-## 8.2 DevOps Architecture Diagram
+## 2. DevOps Pipeline Architecture Diagram
 
 ```mermaid
 flowchart LR
@@ -57,7 +67,7 @@ flowchart LR
 
 ---
 
-## 8.3 AWS Cloud Infrastructure Architecture
+## 3. AWS Cloud Infrastructure Diagram
 
 ```mermaid
 graph TB
@@ -94,7 +104,7 @@ graph TB
 
 ---
 
-## 8.4 Docker Container Topology
+## 4. Docker Container Topology Diagram
 
 ```mermaid
 graph LR
@@ -119,7 +129,7 @@ graph LR
 
 ---
 
-## 8.5 Database Entity-Relationship (ER) Architecture
+## 5. Database Entity-Relationship (ER) Diagram
 
 ```mermaid
 erDiagram
@@ -165,7 +175,7 @@ erDiagram
 
 ---
 
-## 8.6 Kubernetes Cluster Topology
+## 6. Kubernetes Cluster Topology Diagram
 
 ```mermaid
 graph TB

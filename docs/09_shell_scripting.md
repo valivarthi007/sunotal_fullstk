@@ -1,20 +1,38 @@
-# 09. Shell Scripting & Automation Guide
+# 09. Shell Scripting & Automation Masterclass
 
-This document details all Bash/Shell scripts (`setup.sh`, `start-dev.sh`) and inline pipeline scripts used for environment setup, process concurrency, automated deployment, target group sync, and post-deployment validation.
-
----
-
-## 9.1 Overview of Shell Scripts in Sunotal
-
-| Script / Location | Execution Context | Key Responsibilities |
-| :--- | :--- | :--- |
-| `setup.sh` | Local Workstation / Dev EC2 | System package installation (`curl`, `git`), Node.js 20 & pnpm setup, Docker PostgreSQL spin-up, DB schema migration (`db:push`), database seeding. |
-| `start-dev.sh` | Local Workstation | Concurrent background execution of backend (`:5000`) and frontend (`:3000`), DB readiness checks, process signal handling (`trap cleanup INT TERM`). |
-| In-Pipeline Scripts (`.github/workflows/cd.yml`) | GitHub Actions CI/CD Runner | EKS/ECS deployment target auto-detection, ECR image tag substitution, Kubernetes JSONPath pod IP extraction, self-healing ALB Target Group registration, and post-deployment verification. |
+Welcome to the **Sunotal Shell Scripting & Automation Master Guide**. This document provides an exhaustive, educational, and operational manual for shell scripting, bash automation, process concurrency, subshells, signal traps, and GitHub Actions inline scripting.
 
 ---
 
-## 9.2 Line-by-Line Breakdown of `setup.sh`
+## 📖 Table of Contents
+1. [Shell Scripting 101 for Beginners](#1-shell-scripting-101-for-beginners)
+2. [Line-by-Line Walkthrough of `setup.sh`](#2-line-by-line-walkthrough-of-setupsh)
+3. [Line-by-Line Walkthrough of `start-dev.sh`](#3-line-by-line-walkthrough-of-start-devsh)
+4. [In-Pipeline Shell Scripting Patterns (`cd.yml`)](#4-in-pipeline-shell-scripting-patterns-cdyml)
+5. [Shell Scripting Best Practices Used in Sunotal](#5-shell-scripting-best-practices-used-in-sunotal)
+6. [Essential Shell Commands & One-Liners Cheatsheet](#6-essential-shell-commands--one-liners-cheatsheet)
+
+---
+
+## 1. Shell Scripting 101 for Beginners
+
+### What is a Shell Script?
+A shell script is a plain text file containing a sequence of commands executed by the Bash (Bourne Again SHell) interpreter. Shell scripts automate repetitive system tasks like software installation, container management, process execution, and deployment verification.
+
+### Core Syntax Concepts
+- **Shebang (`#!/usr/bin/env bash`)**: First line of the script telling the operating system to execute the file using `bash`.
+- **Strict Mode (`set -euo pipefail`)**:
+  - `-e`: Exit immediately if any command returns a non-zero exit code (error).
+  - `-u`: Treat unset variables as errors and exit.
+  - `-o pipefail`: Ensure pipelines (`cmd1 | cmd2`) fail if any intermediate command fails.
+- **Variables**: Stored values accessed with `$` (e.g. `PORT=5000`, `echo $PORT`).
+- **Subshell `(...)`**: Executes commands inside an isolated child process, preventing directory pollution.
+- **Process ID (`$!`)**: Captures the process ID of the most recently executed background command.
+- **Signal Trap (`trap cleanup INT TERM`)**: Registers a cleanup function to execute when the script receives cancellation signals (e.g. `Ctrl+C`).
+
+---
+
+## 2. Line-by-Line Walkthrough of `setup.sh`
 
 ```bash
 #!/usr/bin/env bash
@@ -71,7 +89,7 @@ pnpm install
 
 ---
 
-## 9.3 Line-by-Line Breakdown of `start-dev.sh` (Process Concurrency & Traps)
+## 3. Line-by-Line Walkthrough of `start-dev.sh` (Process Concurrency & Traps)
 
 ```bash
 #!/usr/bin/env bash
@@ -103,31 +121,14 @@ wait
 
 ---
 
-## 9.4 In-Pipeline Shell Scripting Patterns (`cd.yml`)
+## 4. In-Pipeline Shell Scripting Patterns (`cd.yml`)
 
-### 1. Auto-Detection of Deployment Target (EKS vs ECS)
-```bash
-TARGET="${{ inputs.deploy_target }}"
-
-if [ -z "$TARGET" ] || [ "$TARGET" = "auto" ]; then
-  # Query SSM parameter or fallback to checking active EKS cluster
-  TARGET=$(aws ssm get-parameter --name "/sunotal/compute_target" --query "Parameter.Value" --output text 2>/dev/null || echo "")
-fi
-
-if [ -z "$TARGET" ] || [ "$TARGET" = "auto" ]; then
-  EKS_STATUS=$(aws eks describe-cluster --name sunotal-cluster --query "cluster.status" --output text 2>/dev/null || echo "")
-  if [ "$EKS_STATUS" = "ACTIVE" ]; then TARGET="eks"; else TARGET="ecs"; fi
-fi
-
-echo "DEPLOY_TARGET=$TARGET" >> $GITHUB_ENV
-```
-
-### 2. Extracting Kubernetes Pod IPs via JSONPath
+### 1. Extracting Kubernetes Pod IPs via JSONPath
 ```bash
 AUTH_IP=$(kubectl get pods -n sunotal -l app=sunotal-auth --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
 ```
 
-### 3. Self-Healing Target Registration Loop
+### 2. Self-Healing Target Registration Loop
 ```bash
 if [ -n "$AUTH_IP" ]; then
   aws elbv2 register-targets \
@@ -136,7 +137,7 @@ if [ -n "$AUTH_IP" ]; then
 fi
 ```
 
-### 4. Extracting Stale Registrations and Deregistering
+### 3. Extracting Stale Registrations and Deregistering
 ```bash
 AUTH_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${AWS_REGION}:${ACCOUNT_ID}:targetgroup/sunotal-auth-tg/24a0b8296cb65cd9" --query "TargetHealthDescriptions[*].Target.Id" --output text)
 
@@ -149,12 +150,18 @@ done
 
 ---
 
-## 9.5 Shell Scripting Best Practices Used in Sunotal
+## 5. Essential Shell Commands & One-Liners Cheatsheet
 
-1. **`set -euo pipefail`**:
-   - `-e`: Exit immediately if any command returns a non-zero exit code.
-   - `-u`: Treat unset variables as an error.
-   - `-o pipefail`: Ensure pipelines (`cmd1 | cmd2`) fail if any component command fails.
-2. **Subshell Scoping `(cd dir && command)`**: Prevents altering the current working directory of the main shell process.
-3. **Signal Trapping (`trap cleanup INT TERM`)**: Ensures background processes (`$BACK_PID`, `$FRONT_PID`) are cleanly terminated upon script exit, preventing orphaned node server processes.
-4. **JSONPath Filter Extraction**: Enables non-interactive parsing of complex Kubernetes metadata (`podIP`, `phase`).
+```bash
+# 1. Search for a string across all TypeScript files
+grep -rn "initDatabase" --include="*.ts" backend/
+
+# 2. Find process holding port 5001 and kill it
+lsof -i :5001 | awk 'NR>1 {print $2}' | xargs kill -9
+
+# 3. Stream colorized application logs
+journalctl -u sunotal.service -f --output=cat
+
+# 4. Measure HTTP API response time
+curl -o /dev/null -s -w 'Total Time: %{time_total}s\n' https://sunotal.automateuniverse.space/api/healthz
+```

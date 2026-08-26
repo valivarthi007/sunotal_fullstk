@@ -1,83 +1,129 @@
-# 06. CI/CD Workflows & GitHub Actions Automation
+# 06. CI/CD Workflows, GitHub Actions & Automated Testing Masterclass
 
-This document details the automated GitHub Actions continuous integration and continuous deployment pipelines (`ci.yml`, `cd.yml`, `infra.yml`, `infra-destroy.yml`).
+Welcome to the **Sunotal CI/CD Workflows & GitHub Actions Master Guide**. This document provides an exhaustive, educational, and operational manual for Sunotal's continuous integration and continuous deployment pipelines (`ci.yml`, `cd.yml`, `infra.yml`, `infra-destroy.yml`).
 
 ---
 
-## 6.1 Overview of Workflows
+## 📖 Table of Contents
+1. [CI/CD 101: Core Concepts for Beginners](#1-cicd-101-core-concepts-for-beginners)
+2. [Pipeline Architecture & Workflow Dependency Graph](#2-pipeline-architecture--workflow-dependency-graph)
+3. [Exhaustive Breakdown of `ci.yml` (Continuous Integration)](#3-exhaustive-breakdown-of-ciyml-continuous-integration)
+4. [Exhaustive Breakdown of `cd.yml` (Continuous Deployment & Self-Healing Sync)](#4-exhaustive-breakdown-of-cdyml-continuous-deployment--self-healing-sync)
+5. [GitHub CLI Operational Commands](#5-github-cli-operational-commands)
+6. [How to Add a Custom Test Step to GitHub Actions](#6-how-to-add-a-custom-test-step-to-github-actions)
+
+---
+
+## 1. CI/CD 101: Core Concepts for Beginners
+
+### What is CI/CD?
+- **Continuous Integration (CI)**: The automated practice of building code, running type checks, unit tests, static code analysis, vulnerability scans, and creating Docker container images whenever code is pushed to a repository.
+- **Continuous Deployment (CD)**: The automated practice of deploying compiled container images to cloud infrastructure (AWS EKS/ECS), executing database migrations, updating target load balancers, and running post-deployment integration tests.
+
+---
+
+## 2. Pipeline Architecture & Workflow Dependency Graph
 
 ```
-  [ Git Push to main ]
-          │
-          ▼
-   ┌──────────────┐
-   │  ci.yml      │  (Install, Type-Check, Test, SonarCloud, Trivy Scan, Docker Build & Push to ECR)
-   └──────┬───────┘
-          │ (On Success)
-          ▼
-   ┌──────────────┐
-   │  cd.yml      │  (Auto-Detect EKS/ECS -> Apply K8s Manifests -> DB Migration Job -> Auto ALB Target Sync -> Post-Deploy Test Suite)
-   └──────────────┘
+  [ Developer Push to main ]
+              │
+              ▼
+   ┌──────────────────────┐
+   │  CI Pipeline (ci.yml) │
+   └──────────┬───────────┘
+              │ (On Workflow Success)
+              ▼
+   ┌──────────────────────┐
+   │  CD Pipeline (cd.yml) │
+   └──────────┬───────────┘
+              │
+              ├─► 1. Auto-Detect EKS/ECS Deployment Target
+              ├─► 2. Apply K8s Manifests & Substitute ECR Registry
+              ├─► 3. Execute DB Migration Job (`pnpm db:push`)
+              ├─► 4. Perform Rolling Update Deployment
+              ├─► 5. Self-Healing Target Group Sync (Pod IPs -> ALB)
+              └─► 6. Post-Deployment 5-Step Test Suite (curl)
 ```
 
 ---
 
-## 6.2 Workflow Breakdown by File
+## 3. Exhaustive Breakdown of `ci.yml` (Continuous Integration)
 
-### 1. `ci.yml` (Continuous Integration)
-- **Triggers**: `push` to `main`, `pull_request` to `main`, or `workflow_dispatch`.
-- **Service Containers**: Starts ephemeral `postgres:16-alpine` database service container on port 5432.
-- **Jobs & Steps**:
-  1. `Checkout code`: Clones repository.
-  2. `Setup pnpm`: Configures pnpm package manager.
-  3. `Setup Node.js`: Configures Node.js v20 with pnpm dependency caching.
-  4. `Configure AWS Credentials`: Authenticates with AWS secrets.
-  5. `SonarCloud Code Analysis`: Runs static security and code quality analysis.
-  6. `Type check frontend & backend`: Executes `tsc --noEmit`.
-  7. `Run Backend Tests`: Executes `vitest run` against PostgreSQL.
-  8. `Run Trivy vulnerability scanner`: Scans repository filesystem for High/Critical CVEs.
-  9. `Upload Test Reports`: Uploads JSON reports to AWS S3 (`jcs-raju-sunotal-final`).
-  10. `Build & Push Docker Images`: Builds Docker images for all 5 microservices (`frontend`, `backend`, `auth`, `operations`, `inventory`, `user`) and pushes tags (`:${github.sha}` and `:latest`) to AWS ECR.
+### Trigger Events
+- `push` to `main` branch.
+- `pull_request` to `main` branch.
+- `workflow_dispatch` (Manual trigger from GitHub UI).
 
-### 2. `cd.yml` (Continuous Deployment & Automated Testing)
-- **Triggers**: Successful completion of `CI Pipeline` (`workflow_run`), or `workflow_dispatch`.
-- **Jobs & Steps**:
-  1. `Auto-Detect Active Deployment Target`: Checks SSM parameter `/sunotal/compute_target` or queries `aws eks describe-cluster` to dynamically route deployment to `eks` or `ecs`.
-  2. `Deploy to AWS EKS`:
-     - Updates `kubeconfig` for cluster `sunotal-cluster`.
-     - Dynamically substitutes AWS Account ID and ECR registry in Kubernetes manifests (`k8s/02-deployments.yaml` and `k8s/05-db-migration-job.yaml`).
-     - Applies Kubernetes resources (`Namespace`, `ConfigMap`, `Secret`, `Services`, `Ingress`).
-     - Executes database migration job `sunotal-db-migration` (`pnpm run db:push`).
-     - Performs rolling update deployment for all 5 services and waits for rollout status completion.
-     - **Self-Healing Infrastructure Sync**:
-       - Authorizes EKS Node Security Group in AWS.
-       - Configures Target Group `HealthCheckPaths` to `/api/healthz`.
-       - Extracts active running pod IPs and registers them into AWS ALB Target Groups (`sunotal-auth-tg`, `sunotal-user-tg`, `sunotal-operations-tg`, `sunotal-inventory-tg`, `sunotal-frontend-tg`).
-       - Cleans up (deregisters) stale/terminated pod IPs.
-  3. `Post-Deployment Automated Test Suite`:
-     - **Test 1**: Frontend HTTP 200 check (`curl -s -o /dev/null -w "%{http_code}" https://sunotal.automateuniverse.space/`).
-     - **Test 2**: API Healthz HTTP 200 check (`curl -s https://sunotal.automateuniverse.space/api/healthz`).
-     - **Test 3**: Admin Login API & JWT token generation (`POST https://sunotal.automateuniverse.space/api/auth/login`).
-     - **Test 4**: Admin Dashboard Stats API (`GET https://sunotal.automateuniverse.space/api/admin/stats` with Bearer token).
-     - **Test 5**: Admin Quotations API (`GET https://sunotal.automateuniverse.space/api/admin/quotations` with Bearer token).
+### Ephemeral Database Service Container
+Starts PostgreSQL 16 Alpine container (`postgres:16-alpine`) on port 5432 with health check polling.
 
-### 3. `infra.yml` (Infrastructure Provisioning)
-- **Triggers**: `workflow_dispatch`.
-- **Function**: Runs `terraform apply -auto-approve` to provision VPC, EKS, ECS, RDS Postgres, S3, CloudFront, ALB, and ECR.
-
-### 4. `infra-destroy.yml` (Infrastructure Teardown)
-- **Triggers**: `workflow_dispatch`.
-- **Function**: Runs `terraform destroy -auto-approve` to clean up cloud resources when not in use.
+### Job Steps
+1. **Checkout Code**: Uses `actions/checkout@v4`.
+2. **Setup pnpm & Node.js**: Installs pnpm 9.15.4 and Node.js v20 with dependency caching.
+3. **Configure AWS Credentials**: Authenticates with AWS using secrets.
+4. **SonarCloud Code Analysis**: Runs code quality and security scan.
+5. **TypeScript Type Check**: Runs `pnpm exec tsc --noEmit`.
+6. **Backend Unit Tests**: Executes `vitest run` against PostgreSQL database.
+7. **Trivy Vulnerability Scanner**: Scans filesystem for High/Critical vulnerabilities.
+8. **Upload Reports**: Uploads test results to AWS S3 (`jcs-raju-sunotal-final`).
+9. **Build & Push Docker Images**: Builds images for 5 microservices and pushes tags to AWS ECR (`:${github.sha}` and `:latest`).
 
 ---
 
-## 6.3 Workflow Querying & GitHub CLI Commands
+## 4. Exhaustive Breakdown of `cd.yml` (Continuous Deployment & Self-Healing Sync)
+
+### Self-Healing EKS Sync & Post-Deployment Test Suite
+
+```yaml
+      - name: Deploy to AWS EKS
+        if: env.DEPLOY_TARGET == 'eks'
+        run: |
+          aws eks update-kubeconfig --name sunotal-cluster --region us-east-1
+          kubectl apply -f k8s/00-namespace.yaml
+          kubectl apply -f k8s/01-configmap-secret.yaml
+          kubectl apply -f k8s/03-services.yaml
+          kubectl apply -f k8s/04-ingress.yaml
+          kubectl apply -f k8s/02-deployments.yaml
+
+          # Self-healing ALB Target Registration
+          AUTH_IP=$(kubectl get pods -n sunotal -l app=sunotal-auth --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}')
+          aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:us-east-1:143797622495:targetgroup/sunotal-auth-tg/24a0b8296cb65cd9" --targets Id=$AUTH_IP,Port=5001
+
+      - name: Post-Deployment Automated Test Suite
+        run: |
+          BASE="https://sunotal.automateuniverse.space"
+          
+          # Test 1: Frontend Webpage
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/")
+          if [ "$STATUS" != "200" ]; then exit 1; fi
+
+          # Test 2: Auth Service Healthz
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/api/healthz")
+          if [ "$STATUS" != "200" ]; then exit 1; fi
+
+          # Test 3: Admin Login API
+          LOGIN_RES=$(curl -s -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" -d '{"email":"admin@sunotal.com","password":"admin123"}')
+          TOKEN=$(echo "$LOGIN_RES" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+          if [ -z "$TOKEN" ]; then exit 1; fi
+
+          # Test 4: Admin Stats API
+          STATS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE/api/admin/stats")
+          if [ "$STATS_STATUS" != "200" ]; then exit 1; fi
+
+          # Test 5: Admin Quotations API
+          QUOTES_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE/api/admin/quotations")
+          if [ "$QUOTES_STATUS" != "200" ]; then exit 1; fi
+```
+
+---
+
+## 5. GitHub CLI Operational Commands
 
 ```bash
-# 1. List Recent Workflow Runs
+# 1. List Recent Workflow Pipeline Runs
 gh run list --limit 10
 
-# 2. View Logs for a Specific Run
+# 2. View Logs for a Specific Run ID
 gh run view <run_id> --log
 
 # 3. Trigger CI Pipeline Manually
