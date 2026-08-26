@@ -38,11 +38,61 @@ jobs:
         with:
           terraform_version: "1.9.3"
 
-      - name: Purge Build Artifacts
+      - name: Purge ECR Repositories & Images
+        run: |
+          echo "Force purging all ECR repositories to prevent RepositoryNotEmptyException..."
+          for repo in sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user; do
+            if aws ecr describe-repositories --repository-names "$repo" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
+              echo "Force deleting repository: $repo"
+              aws ecr delete-repository --repository-name "$repo" --force --region "${{ env.AWS_REGION }}" || true
+            fi
+          done
+
+      - name: Purge S3 Objects
         run: |
           BUCKET_NAME="jcs-raju-sunotal-final"
-          echo "Emptying build artifacts in s3://${BUCKET_NAME}/artifacts..."
-          aws s3 rm s3://${BUCKET_NAME}/artifacts --recursive || true
+          echo "Purging all objects in s3://${BUCKET_NAME}..."
+          aws s3 rm "s3://${BUCKET_NAME}" --recursive || true
+
+      - name: Teardown EKS Cluster and ENIs (if active)
+        run: |
+          CLUSTER_NAME="sunotal-cluster"
+          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
+            echo "EKS Cluster $CLUSTER_NAME detected. Starting clean teardown..."
+            
+            # Delete Node Groups
+            NODEGROUPS=$(aws eks list-nodegroups --cluster-name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" --query "nodegroups[]" --output text 2>/dev/null || echo "")
+            for ng in $NODEGROUPS; do
+              if [ -n "$ng" ] && [ "$ng" != "None" ]; then
+                echo "Deleting Node Group: $ng"
+                aws eks delete-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name "$ng" --region "${{ env.AWS_REGION }}" || true
+              fi
+            done
+            
+            # Delete Fargate Profiles
+            PROFILES=$(aws eks list-fargate-profiles --cluster-name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" --query "fargateProfileNames[]" --output text 2>/dev/null || echo "")
+            for fp in $PROFILES; do
+              if [ -n "$fp" ] && [ "$fp" != "None" ]; then
+                echo "Deleting Fargate Profile: $fp"
+                aws eks delete-fargate-profile --cluster-name "$CLUSTER_NAME" --fargate-profile-name "$fp" --region "${{ env.AWS_REGION }}" || true
+              fi
+            done
+
+            # Wait briefly if Node Groups or Fargate profiles were being deleted
+            if [ -n "$NODEGROUPS" ] || [ -n "$PROFILES" ]; then
+              echo "Waiting 60 seconds for Node Groups / Fargate Profiles cleanup..."
+              sleep 60
+            fi
+
+            echo "Deleting EKS Cluster $CLUSTER_NAME..."
+            aws eks delete-cluster --name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" || true
+
+            echo "Waiting for EKS cluster deletion to finish..."
+            aws eks wait cluster-deleted --name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+            echo "EKS cluster teardown complete."
+          else
+            echo "No active EKS cluster found."
+          fi
 
       - name: Clear Stale DynamoDB State Locks
         run: |
@@ -59,6 +109,13 @@ jobs:
         run: |
           cd terraform
           terraform init -upgrade
-          echo "Destroying managed infrastructure..."
-          terraform destroy -auto-approve -lock=false -var="key_name=jcs_raju_laptop" -var="compute_target=ecs" || \
-          terraform destroy -auto-approve -lock=false -var="key_name=jcs_raju_laptop" -var="compute_target=eks"
+          echo "Executing Terraform destroy..."
+          
+          # Pass 1: Destroy EKS target if state contains EKS module
+          terraform destroy -auto-approve -lock=false -var="key_name=jcs_raju_laptop" -var="compute_target=eks" || true
+          
+          # Pass 2: Destroy ECS target & remaining shared infrastructure (VPC, RDS, ALB, Security Groups)
+          terraform destroy -auto-approve -lock=false -var="key_name=jcs_raju_laptop" -var="compute_target=ecs" || true
+
+          # Final Pass: Fallback destroy to guarantee clean state
+          terraform destroy -auto-approve -lock=false -var="key_name=jcs_raju_laptop"
