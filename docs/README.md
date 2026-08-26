@@ -16,6 +16,8 @@ Welcome to the central documentation index for **Sunotal**, an enterprise-grade 
 | **[06. CI/CD Workflows](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/06_workflow.md)** | GitHub Actions Pipelines | In-depth breakdown of `ci.yml`, `cd.yml`, `infra.yml`, `infra-destroy.yml`, job dependency graphs, automated self-healing EKS Target Group sync, and post-deployment automated test suites. |
 | **[07. Version Control (Git)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/07_git.md)** | Git Operations & Branching Strategy | Daily Git commands, industry-standard GitFlow branching strategies, CRUD operations, commit history inspection, revert/rollback procedures, and emergency patch workflows. |
 | **[08. Architecture Diagrams](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/08_architecture_diagrams.md)** | System Architectural Visualizations | Production-grade Mermaid diagrams covering Application Architecture, DevOps Pipeline, AWS Cloud Infrastructure, Docker Container Topology, ER Database Model, and Kubernetes Cluster Topology. |
+| **[09. Shell Scripting Automation](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/09_shell_scripting.md)** | Automation Scripts & Pipeline Shell Patterns | Complete line-by-line breakdown of `setup.sh` and `start-dev.sh`, process concurrency, signal traps (`trap cleanup INT TERM`), JSONPath pod IP extraction, self-healing target registration, and shell best practices (`set -euo pipefail`). |
+
 
 ---
 
