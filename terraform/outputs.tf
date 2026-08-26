@@ -1,32 +1,48 @@
+output "compute_target" {
+  description = "Active compute deployment target (eks or ecs)"
+  value       = var.compute_target
+}
+
 output "ecs_cluster_name" {
   description = "ECS Cluster Name"
-  value       = module.ecs.cluster_name
+  value       = length(module.ecs) > 0 ? module.ecs[0].cluster_name : null
 }
 
 output "ecs_frontend_service" {
   description = "Frontend ECS Service Name"
-  value       = module.ecs.frontend_service_name
+  value       = length(module.ecs) > 0 ? module.ecs[0].frontend_service_name : null
 }
 
 output "ecs_auth_service" {
   description = "Auth ECS Service Name"
-  value       = module.ecs.auth_service_name
+  value       = length(module.ecs) > 0 ? module.ecs[0].auth_service_name : null
 }
 
 output "ecs_operations_service" {
   description = "Operations ECS Service Name"
-  value       = module.ecs.operations_service_name
+  value       = length(module.ecs) > 0 ? module.ecs[0].operations_service_name : null
 }
 
 output "ecs_inventory_service" {
   description = "Inventory ECS Service Name"
-  value       = module.ecs.inventory_service_name
+  value       = length(module.ecs) > 0 ? module.ecs[0].inventory_service_name : null
 }
 
 output "ecs_user_service" {
   description = "User ECS Service Name"
-  value       = module.ecs.user_service_name
+  value       = length(module.ecs) > 0 ? module.ecs[0].user_service_name : null
 }
+
+output "eks_cluster_name" {
+  description = "EKS Cluster Name"
+  value       = length(module.eks) > 0 ? module.eks[0].cluster_name : null
+}
+
+output "eks_cluster_endpoint" {
+  description = "EKS Cluster Endpoint"
+  value       = length(module.eks) > 0 ? module.eks[0].cluster_endpoint : null
+}
+
 
 output "alb_dns_name" {
   description = "Public DNS Endpoint of the Application Load Balancer"

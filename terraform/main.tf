@@ -95,6 +95,7 @@ module "ecr" {
 }
 
 module "ecs" {
+  count                 = var.compute_target == "ecs" ? 1 : 0
   source                = "./modules/ecs"
   aws_region            = var.aws_region
   vpc_id                = module.vpc.vpc_id
@@ -117,11 +118,21 @@ module "ecs" {
   database_url      = "postgresql://${var.db_username}:${var.db_password}@${module.database.db_instance_address}:5432/${var.db_name}?sslmode=require&uselibpqcompat=true"
   cloudfront_domain = module.cdn.cloudfront_domain_name
 
-  s3_bucket_name    = var.s3_bucket_name
-  s3_policy_arn     = module.iam.policy_arn
-  frontend_url      = "https://sunotal.automateuniverse.space"
+  s3_bucket_name = var.s3_bucket_name
+  s3_policy_arn  = module.iam.policy_arn
+  frontend_url   = "https://sunotal.automateuniverse.space"
 
   depends_on = [module.cdn]
+}
+
+module "eks" {
+  count          = var.compute_target == "eks" ? 1 : 0
+  source         = "./modules/eks"
+  cluster_name   = "sunotal-cluster"
+  vpc_id         = module.vpc.vpc_id
+  subnet_ids     = [module.vpc.public_subnet_1_id, module.vpc.public_subnet_2_id]
+  instance_types = var.eks_node_instance_types
+  tags           = local.common_tags
 }
 
 module "sonarqube" {

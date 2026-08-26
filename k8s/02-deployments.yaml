@@ -1,0 +1,246 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunotal-frontend
+  namespace: sunotal
+  labels:
+    app: sunotal-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sunotal-frontend
+  template:
+    metadata:
+      labels:
+        app: sunotal-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: sunotal-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunotal-auth
+  namespace: sunotal
+  labels:
+    app: sunotal-auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sunotal-auth
+  template:
+    metadata:
+      labels:
+        app: sunotal-auth
+    spec:
+      containers:
+        - name: auth
+          image: sunotal-auth:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5001
+          env:
+            - name: PORT
+              value: "5001"
+          envFrom:
+            - configMapRef:
+                name: sunotal-config
+            - secretRef:
+                name: sunotal-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 5001
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 5001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunotal-operations
+  namespace: sunotal
+  labels:
+    app: sunotal-operations
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sunotal-operations
+  template:
+    metadata:
+      labels:
+        app: sunotal-operations
+    spec:
+      containers:
+        - name: operations
+          image: sunotal-operations:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5002
+          env:
+            - name: PORT
+              value: "5002"
+          envFrom:
+            - configMapRef:
+                name: sunotal-config
+            - secretRef:
+                name: sunotal-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 5002
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 5002
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunotal-inventory
+  namespace: sunotal
+  labels:
+    app: sunotal-inventory
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sunotal-inventory
+  template:
+    metadata:
+      labels:
+        app: sunotal-inventory
+    spec:
+      containers:
+        - name: inventory
+          image: sunotal-inventory:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5003
+          env:
+            - name: PORT
+              value: "5003"
+          envFrom:
+            - configMapRef:
+                name: sunotal-config
+            - secretRef:
+                name: sunotal-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 5003
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 5003
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunotal-user
+  namespace: sunotal
+  labels:
+    app: sunotal-user
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sunotal-user
+  template:
+    metadata:
+      labels:
+        app: sunotal-user
+    spec:
+      containers:
+        - name: user
+          image: sunotal-user:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5004
+          env:
+            - name: PORT
+              value: "5004"
+          envFrom:
+            - configMapRef:
+                name: sunotal-config
+            - secretRef:
+                name: sunotal-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 5004
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 5004
+            initialDelaySeconds: 5
+            periodSeconds: 5

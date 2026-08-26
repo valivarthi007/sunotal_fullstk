@@ -10,6 +10,12 @@ variable "instance_type" {
   default     = "t3.small"
 }
 
+variable "ami_id" {
+  description = "AMI ID for EC2 instances"
+  type        = string
+  default     = "ami-09afda054f620959a"
+}
+
 variable "key_name" {
   description = "Existing EC2 key pair name for SSH access"
   type        = string
@@ -100,4 +106,22 @@ variable "dynamodb_table_name" {
   type        = string
   default     = "sunotal-terraform-locks"
 }
+
+variable "compute_target" {
+  description = "Compute deployment target: 'eks' or 'ecs'"
+  type        = string
+  default     = "eks"
+
+  validation {
+    condition     = contains(["eks", "ecs"], var.compute_target)
+    error_message = "compute_target must be either 'eks' or 'ecs'."
+  }
+}
+
+variable "eks_node_instance_types" {
+  description = "Instance types for EKS managed node group"
+  type        = list(string)
+  default     = ["t3.small"]
+}
+
 

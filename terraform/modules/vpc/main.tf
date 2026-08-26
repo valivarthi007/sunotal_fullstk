@@ -17,7 +17,9 @@ resource "aws_subnet" "public_1" {
   availability_zone       = data.aws_availability_zones.available.names[0]
 
   tags = merge(var.tags, {
-    Name = "${var.vpc_name}-public-subnet-1"
+    Name                                    = "${var.vpc_name}-public-subnet-1"
+    "kubernetes.io/cluster/sunotal-cluster" = "shared"
+    "kubernetes.io/role/elb"                = "1"
   })
 }
 
@@ -28,7 +30,9 @@ resource "aws_subnet" "public_2" {
   availability_zone       = data.aws_availability_zones.available.names[1]
 
   tags = merge(var.tags, {
-    Name = "${var.vpc_name}-public-subnet-2"
+    Name                                    = "${var.vpc_name}-public-subnet-2"
+    "kubernetes.io/cluster/sunotal-cluster" = "shared"
+    "kubernetes.io/role/elb"                = "1"
   })
 }
 
@@ -39,7 +43,9 @@ resource "aws_subnet" "private_1" {
   availability_zone       = data.aws_availability_zones.available.names[0]
 
   tags = merge(var.tags, {
-    Name = "${var.vpc_name}-private-subnet-1"
+    Name                                    = "${var.vpc_name}-private-subnet-1"
+    "kubernetes.io/cluster/sunotal-cluster" = "shared"
+    "kubernetes.io/role/internal-elb"       = "1"
   })
 }
 
@@ -50,7 +56,9 @@ resource "aws_subnet" "private_2" {
   availability_zone       = data.aws_availability_zones.available.names[1]
 
   tags = merge(var.tags, {
-    Name = "${var.vpc_name}-private-subnet-2"
+    Name                                    = "${var.vpc_name}-private-subnet-2"
+    "kubernetes.io/cluster/sunotal-cluster" = "shared"
+    "kubernetes.io/role/internal-elb"       = "1"
   })
 }
 

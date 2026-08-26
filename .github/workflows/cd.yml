@@ -8,6 +8,16 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Target Compute Platform (auto, eks, or ecs)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - eks
+          - ecs
 
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -16,7 +26,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy to ECS Fargate
+    name: Deploy Application
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
@@ -31,7 +41,68 @@ jobs:
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
         continue-on-error: true
 
+      - name: Auto-Detect Active Deployment Target
+        id: set_target
+        run: |
+          TARGET="${{ inputs.deploy_target }}"
+          
+          if [ -z "$TARGET" ] || [ "$TARGET" = "auto" ]; then
+            echo "Attempting auto-detection of active compute target from SSM..."
+            TARGET=$(aws ssm get-parameter --name "/sunotal/compute_target" --query "Parameter.Value" --output text 2>/dev/null || echo "")
+          fi
+
+          if [ -z "$TARGET" ] || [ "$TARGET" = "auto" ]; then
+            echo "SSM parameter not found. Checking if EKS cluster 'sunotal-cluster' is ACTIVE..."
+            EKS_STATUS=$(aws eks describe-cluster --name sunotal-cluster --query "cluster.status" --output text 2>/dev/null || echo "")
+            if [ "$EKS_STATUS" = "ACTIVE" ]; then
+              TARGET="eks"
+            else
+              TARGET="ecs"
+            fi
+          fi
+
+          echo "DEPLOY_TARGET=$TARGET" >> $GITHUB_ENV
+          echo "✅ Active Deployment Target set to: $TARGET"
+
+      - name: Deploy to AWS EKS
+        if: env.DEPLOY_TARGET == 'eks'
+        run: |
+          echo "🚀 Deploying to AWS EKS Cluster (sunotal-cluster)..."
+          aws eks update-kubeconfig --name sunotal-cluster --region ${{ env.AWS_DEFAULT_REGION }} || true
+
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+          if [ -n "$ACCOUNT_ID" ]; then
+            ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+            echo "Substituting ECR registry: $ECR_REGISTRY"
+            sed -i "s|sunotal-frontend:latest|${ECR_REGISTRY}/sunotal-frontend:latest|g" k8s/02-deployments.yaml
+            sed -i "s|sunotal-auth:latest|${ECR_REGISTRY}/sunotal-auth:latest|g" k8s/02-deployments.yaml k8s/05-db-migration-job.yaml
+            sed -i "s|sunotal-operations:latest|${ECR_REGISTRY}/sunotal-operations:latest|g" k8s/02-deployments.yaml
+            sed -i "s|sunotal-inventory:latest|${ECR_REGISTRY}/sunotal-inventory:latest|g" k8s/02-deployments.yaml
+            sed -i "s|sunotal-user:latest|${ECR_REGISTRY}/sunotal-user:latest|g" k8s/02-deployments.yaml
+          fi
+
+          echo "Applying Kubernetes Namespace, ConfigMaps, and Services..."
+          kubectl apply -f k8s/00-namespace.yaml || true
+          kubectl apply -f k8s/01-configmap-secret.yaml || true
+          kubectl apply -f k8s/03-services.yaml || true
+          kubectl apply -f k8s/04-ingress.yaml || true
+
+          echo "Running DB migrations on EKS..."
+          kubectl delete job sunotal-db-migration -n sunotal --ignore-not-found || true
+          kubectl apply -f k8s/05-db-migration-job.yaml || true
+          kubectl wait --for=condition=complete job/sunotal-db-migration -n sunotal --timeout=120s || true
+
+          echo "Applying Application Deployments..."
+          kubectl apply -f k8s/02-deployments.yaml || true
+          kubectl rollout status deployment/sunotal-frontend -n sunotal --timeout=180s || true
+          kubectl rollout status deployment/sunotal-auth -n sunotal --timeout=180s || true
+          kubectl rollout status deployment/sunotal-operations -n sunotal --timeout=180s || true
+          kubectl rollout status deployment/sunotal-inventory -n sunotal --timeout=180s || true
+          kubectl rollout status deployment/sunotal-user -n sunotal --timeout=180s || true
+        continue-on-error: true
+
       - name: Deploy to ECS Fargate
+        if: env.DEPLOY_TARGET == 'ecs'
         run: |
           echo "Updating ECS Services..."
           aws ecs update-service --cluster sunotal-cluster --service sunotal-frontend --force-new-deployment || true
@@ -39,29 +110,20 @@ jobs:
           aws ecs update-service --cluster sunotal-cluster --service sunotal-operations --force-new-deployment || true
           aws ecs update-service --cluster sunotal-cluster --service sunotal-inventory --force-new-deployment || true
           aws ecs update-service --cluster sunotal-cluster --service sunotal-user --force-new-deployment || true
-        continue-on-error: true
 
-      - name: Run Database Migrations on ECS
-        run: |
           SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=sunotal-vpc-private-subnet-1" --query "Subnets[0].SubnetId" --output text 2>/dev/null || echo "")
           SECURITY_GROUP_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=sunotal-ecs-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "")
           
           if [ -n "$SUBNET_ID" ] && [ "$SUBNET_ID" != "None" ] && [ -n "$SECURITY_GROUP_ID" ] && [ "$SECURITY_GROUP_ID" != "None" ]; then
-            echo "Running DB migrations..."
+            echo "Running DB migrations on ECS..."
             aws ecs run-task \
               --cluster sunotal-cluster \
               --task-definition sunotal-auth \
               --launch-type FARGATE \
               --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID],securityGroups=[$SECURITY_GROUP_ID],assignPublicIp=ENABLED}" \
               --overrides '{"containerOverrides": [{"name": "auth", "command": ["pnpm", "run", "db:push"]}]}' || true
-          else
-            echo "Warning: Could not fetch Subnet/Security Group for DB migration task."
           fi
-        continue-on-error: true
 
-      - name: Wait for ECS Services Rollout
-        run: |
-          echo "Waiting for services to stabilize..."
           aws ecs wait services-stable --cluster sunotal-cluster --services sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user || true
         continue-on-error: true
 

@@ -3,6 +3,14 @@ name: Infrastructure Automation
 on:
   workflow_dispatch:
     inputs:
+      compute_target:
+        description: 'Target Compute Platform (eks or ecs)'
+        type: choice
+        options:
+          - eks
+          - ecs
+        default: 'eks'
+        required: true
       force_reapply_infra:
         description: 'Force re-apply Terraform even if active running infrastructure is detected'
         type: boolean
@@ -66,8 +74,6 @@ jobs:
         with:
           terraform_version: "1.9.3"
 
-
-            
       - name: Validate Terraform Files
         run: |
           cd terraform
@@ -78,6 +84,7 @@ jobs:
       - name: Deploy Infrastructure with Terraform
         env:
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
+          COMPUTE_TARGET: ${{ inputs.compute_target || 'eks' }}
         run: |
           mkdir -p ~/.ssh
           echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
@@ -90,28 +97,15 @@ jobs:
           cd terraform
           terraform init -upgrade
 
-          EXISTING_INSTANCE=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=sunotal-frontend" "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].InstanceId" \
-            --output text 2>/dev/null || echo "")
-
-          EXISTING_ALB=$(aws elbv2 describe-load-balancers \
-            --names "sunotal-alb" \
-            --query "LoadBalancers[0].DNSName" \
-            --output text 2>/dev/null || echo "")
-
-          echo "=== Route 53 Hosted Zones ==="
-          aws route53 list-hosted-zones --query "HostedZones[*].{Name:Name,Id:Id}" --output table || echo "Failed to list Route 53 zones"
-          
-          echo "=== ACM Certificates ==="
-          aws acm list-certificates --query "CertificateSummaryList[*].{DomainName:DomainName,CertificateArn:CertificateArn}" --output table || echo "Failed to list ACM certificates"
-
-          echo "Planning & Applying Infrastructure Changes..."
-          terraform plan -var="key_name=jcs_raju_laptop"
+          echo "Planning Infrastructure Changes for target: ${COMPUTE_TARGET}..."
+          terraform plan -var="key_name=jcs_raju_laptop" -var="compute_target=${COMPUTE_TARGET}"
           
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "Applying Infrastructure Changes..."
-            terraform apply -auto-approve -var="key_name=jcs_raju_laptop"
+            echo "Applying Infrastructure Changes for target: ${COMPUTE_TARGET}..."
+            terraform apply -auto-approve -var="key_name=jcs_raju_laptop" -var="compute_target=${COMPUTE_TARGET}"
+            
+            echo "Storing active compute_target in AWS SSM Parameter Store..."
+            aws ssm put-parameter --name "/sunotal/compute_target" --value "${COMPUTE_TARGET}" --type "String" --overwrite || true
           else
             echo "PR Validation complete — terraform apply skipped for non-dispatch/PR builds."
           fi

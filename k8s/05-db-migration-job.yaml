@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sunotal-db-migration
+  namespace: sunotal
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: sunotal-db-migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-migration
+          image: sunotal-auth:latest
+          imagePullPolicy: Always
+          command: ["pnpm", "run", "db:push"]
+          envFrom:
+            - configMapRef:
+                name: sunotal-config
+            - secretRef:
+                name: sunotal-secrets

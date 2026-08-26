@@ -1,0 +1,62 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sunotal-ingress
+  namespace: sunotal
+  annotations:
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/target-type: "ip"
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-auth
+                port:
+                  number: 5001
+          - path: /api/operations
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-operations
+                port:
+                  number: 5002
+          - path: /api/banners
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-operations
+                port:
+                  number: 5002
+          - path: /api/inventory
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-inventory
+                port:
+                  number: 5003
+          - path: /api/users
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-user
+                port:
+                  number: 5004
+          - path: /api/vendors
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-user
+                port:
+                  number: 5004
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-frontend
+                port:
+                  number: 80
