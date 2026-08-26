@@ -81,6 +81,13 @@ jobs:
             sed -i "s|sunotal-user:latest|${ECR_REGISTRY}/sunotal-user:latest|g" k8s/02-deployments.yaml
           fi
 
+          # Dynamic RDS Host Discovery & Secret Sync
+          RDS_HOST=$(aws rds describe-db-instances --db-instance-identifier sunotal-postgres --query "DBInstances[0].Endpoint.Address" --output text 2>/dev/null || echo "")
+          if [ -n "$RDS_HOST" ] && [ "$RDS_HOST" != "None" ]; then
+            echo "Dynamic RDS Host discovered: $RDS_HOST"
+            sed -i "s|sunotal-postgres.cs1gq0a2wtpu.us-east-1.rds.amazonaws.com|${RDS_HOST}|g" k8s/01-configmap-secret.yaml
+          fi
+
           echo "Applying Kubernetes Namespace, ConfigMaps, and Services..."
           kubectl apply -f k8s/00-namespace.yaml || true
           kubectl apply -f k8s/01-configmap-secret.yaml || true
@@ -108,10 +115,17 @@ jobs:
             aws ec2 authorize-security-group-ingress --group-id "$EKS_SG" --protocol -1 --source-group "$ALB_SG" 2>/dev/null || true
           fi
 
+          echo "Dynamically resolving Target Group ARNs..."
+          AUTH_TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-auth-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+          USER_TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-user-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+          FRONTEND_TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-frontend-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+          OPERATIONS_TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-operations-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+          INVENTORY_TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-inventory-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+
           echo "Updating Target Group HealthCheckPaths to /api/healthz..."
-          aws elbv2 modify-target-group --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-inventory-tg/3a68ddf60a320673" --health-check-path "/api/healthz" 2>/dev/null || true
-          aws elbv2 modify-target-group --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-operations-tg/7757919f4c2fefb2" --health-check-path "/api/healthz" 2>/dev/null || true
-          aws elbv2 modify-target-group --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-user-tg/4d75ff35b1b50f0b" --health-check-path "/api/healthz" 2>/dev/null || true
+          if [ -n "$INVENTORY_TG_ARN" ]; then aws elbv2 modify-target-group --target-group-arn "$INVENTORY_TG_ARN" --health-check-path "/api/healthz" 2>/dev/null || true; fi
+          if [ -n "$OPERATIONS_TG_ARN" ]; then aws elbv2 modify-target-group --target-group-arn "$OPERATIONS_TG_ARN" --health-check-path "/api/healthz" 2>/dev/null || true; fi
+          if [ -n "$USER_TG_ARN" ]; then aws elbv2 modify-target-group --target-group-arn "$USER_TG_ARN" --health-check-path "/api/healthz" 2>/dev/null || true; fi
 
           echo "Registering active EKS Pod IPs into ALB Target Groups..."
           AUTH_IP=$(kubectl get pods -n sunotal -l app=sunotal-auth --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
@@ -120,27 +134,37 @@ jobs:
           OPERATIONS_IP=$(kubectl get pods -n sunotal -l app=sunotal-operations --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
           INVENTORY_IP=$(kubectl get pods -n sunotal -l app=sunotal-inventory --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
 
-          if [ -n "$AUTH_IP" ]; then aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-auth-tg/24a0b8296cb65cd9" --targets Id=$AUTH_IP,Port=5001 2>/dev/null || true; fi
-          if [ -n "$USER_IP" ]; then aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-user-tg/4d75ff35b1b50f0b" --targets Id=$USER_IP,Port=5004 2>/dev/null || true; fi
-          if [ -n "$FRONTEND_IP" ]; then aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-frontend-tg/5553ef2fe32f6001" --targets Id=$FRONTEND_IP,Port=80 2>/dev/null || true; fi
-          if [ -n "$OPERATIONS_IP" ]; then aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-operations-tg/7757919f4c2fefb2" --targets Id=$OPERATIONS_IP,Port=5002 2>/dev/null || true; fi
-          if [ -n "$INVENTORY_IP" ]; then aws elbv2 register-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-inventory-tg/3a68ddf60a320673" --targets Id=$INVENTORY_IP,Port=5003 2>/dev/null || true; fi
+          if [ -n "$AUTH_IP" ] && [ -n "$AUTH_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$AUTH_TG_ARN" --targets Id=$AUTH_IP,Port=5001 2>/dev/null || true; fi
+          if [ -n "$USER_IP" ] && [ -n "$USER_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$USER_TG_ARN" --targets Id=$USER_IP,Port=5004 2>/dev/null || true; fi
+          if [ -n "$FRONTEND_IP" ] && [ -n "$FRONTEND_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$FRONTEND_TG_ARN" --targets Id=$FRONTEND_IP,Port=80 2>/dev/null || true; fi
+          if [ -n "$OPERATIONS_IP" ] && [ -n "$OPERATIONS_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$OPERATIONS_TG_ARN" --targets Id=$OPERATIONS_IP,Port=5002 2>/dev/null || true; fi
+          if [ -n "$INVENTORY_IP" ] && [ -n "$INVENTORY_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$INVENTORY_TG_ARN" --targets Id=$INVENTORY_IP,Port=5003 2>/dev/null || true; fi
 
           # Clean up stale target IP registrations
-          AUTH_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-auth-tg/24a0b8296cb65cd9" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
-          for ip in $AUTH_REG; do if [ "$ip" != "$AUTH_IP" ]; then aws elbv2 deregister-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-auth-tg/24a0b8296cb65cd9" --targets Id=$ip,Port=5001 2>/dev/null || true; fi; done
+          if [ -n "$AUTH_TG_ARN" ]; then
+            AUTH_REG=$(aws elbv2 describe-target-health --target-group-arn "$AUTH_TG_ARN" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+            for ip in $AUTH_REG; do if [ "$ip" != "$AUTH_IP" ]; then aws elbv2 deregister-targets --target-group-arn "$AUTH_TG_ARN" --targets Id=$ip,Port=5001 2>/dev/null || true; fi; done
+          fi
 
-          USER_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-user-tg/4d75ff35b1b50f0b" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
-          for ip in $USER_REG; do if [ "$ip" != "$USER_IP" ]; then aws elbv2 deregister-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-user-tg/4d75ff35b1b50f0b" --targets Id=$ip,Port=5004 2>/dev/null || true; fi; done
+          if [ -n "$USER_TG_ARN" ]; then
+            USER_REG=$(aws elbv2 describe-target-health --target-group-arn "$USER_TG_ARN" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+            for ip in $USER_REG; do if [ "$ip" != "$USER_IP" ]; then aws elbv2 deregister-targets --target-group-arn "$USER_TG_ARN" --targets Id=$ip,Port=5004 2>/dev/null || true; fi; done
+          fi
 
-          FRONTEND_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-frontend-tg/5553ef2fe32f6001" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
-          for ip in $FRONTEND_REG; do if [ "$ip" != "$FRONTEND_IP" ]; then aws elbv2 deregister-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-frontend-tg/5553ef2fe32f6001" --targets Id=$ip,Port=80 2>/dev/null || true; fi; done
+          if [ -n "$FRONTEND_TG_ARN" ]; then
+            FRONTEND_REG=$(aws elbv2 describe-target-health --target-group-arn "$FRONTEND_TG_ARN" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+            for ip in $FRONTEND_REG; do if [ "$ip" != "$FRONTEND_IP" ]; then aws elbv2 deregister-targets --target-group-arn "$FRONTEND_TG_ARN" --targets Id=$ip,Port=80 2>/dev/null || true; fi; done
+          fi
 
-          OPERATIONS_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-operations-tg/7757919f4c2fefb2" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
-          for ip in $OPERATIONS_REG; do if [ "$ip" != "$OPERATIONS_IP" ]; then aws elbv2 deregister-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-operations-tg/7757919f4c2fefb2" --targets Id=$ip,Port=5002 2>/dev/null || true; fi; done
+          if [ -n "$OPERATIONS_TG_ARN" ]; then
+            OPERATIONS_REG=$(aws elbv2 describe-target-health --target-group-arn "$OPERATIONS_TG_ARN" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+            for ip in $OPERATIONS_REG; do if [ "$ip" != "$OPERATIONS_IP" ]; then aws elbv2 deregister-targets --target-group-arn "$OPERATIONS_TG_ARN" --targets Id=$ip,Port=5002 2>/dev/null || true; fi; done
+          fi
 
-          INVENTORY_REG=$(aws elbv2 describe-target-health --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-inventory-tg/3a68ddf60a320673" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
-          for ip in $INVENTORY_REG; do if [ "$ip" != "$INVENTORY_IP" ]; then aws elbv2 deregister-targets --target-group-arn "arn:aws:elasticloadbalancing:${{ env.AWS_DEFAULT_REGION }}:${ACCOUNT_ID}:targetgroup/sunotal-inventory-tg/3a68ddf60a320673" --targets Id=$ip,Port=5003 2>/dev/null || true; fi; done
+          if [ -n "$INVENTORY_TG_ARN" ]; then
+            INVENTORY_REG=$(aws elbv2 describe-target-health --target-group-arn "$INVENTORY_TG_ARN" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+            for ip in $INVENTORY_REG; do if [ "$ip" != "$INVENTORY_IP" ]; then aws elbv2 deregister-targets --target-group-arn "$INVENTORY_TG_ARN" --targets Id=$ip,Port=5003 2>/dev/null || true; fi; done
+          fi
         continue-on-error: true
 
       - name: Deploy to ECS Fargate
