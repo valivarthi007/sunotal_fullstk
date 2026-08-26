@@ -7,25 +7,15 @@ on:
         description: 'Target Compute Platform (eks or ecs)'
         type: choice
         options:
-          - eks
           - ecs
-        default: 'eks'
+          - eks
+        default: 'ecs'
         required: true
       force_reapply_infra:
         description: 'Force re-apply Terraform even if active running infrastructure is detected'
         type: boolean
         required: false
         default: false
-  push:
-    branches:
-      - main
-    paths:
-      - 'terraform/**'
-      - '.github/workflows/infra.yml'
-  pull_request:
-    paths:
-      - 'terraform/**'
-      - '.github/workflows/infra.yml'
 
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
@@ -84,7 +74,7 @@ jobs:
       - name: Deploy Infrastructure with Terraform
         env:
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
-          COMPUTE_TARGET: ${{ inputs.compute_target || 'eks' }}
+          COMPUTE_TARGET: ${{ inputs.compute_target || 'ecs' }}
         run: |
           mkdir -p ~/.ssh
           echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
@@ -100,12 +90,8 @@ jobs:
           echo "Planning Infrastructure Changes for target: ${COMPUTE_TARGET}..."
           terraform plan -var="key_name=jcs_raju_laptop" -var="compute_target=${COMPUTE_TARGET}"
           
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "Applying Infrastructure Changes for target: ${COMPUTE_TARGET}..."
-            terraform apply -auto-approve -var="key_name=jcs_raju_laptop" -var="compute_target=${COMPUTE_TARGET}"
-            
-            echo "Storing active compute_target in AWS SSM Parameter Store..."
-            aws ssm put-parameter --name "/sunotal/compute_target" --value "${COMPUTE_TARGET}" --type "String" --overwrite || true
-          else
-            echo "PR Validation complete — terraform apply skipped for non-dispatch/PR builds."
-          fi
+          echo "Applying Infrastructure Changes for target: ${COMPUTE_TARGET}..."
+          terraform apply -auto-approve -var="key_name=jcs_raju_laptop" -var="compute_target=${COMPUTE_TARGET}"
+          
+          echo "Storing active compute_target in AWS SSM Parameter Store..."
+          aws ssm put-parameter --name "/sunotal/compute_target" --value "${COMPUTE_TARGET}" --type "String" --overwrite || true

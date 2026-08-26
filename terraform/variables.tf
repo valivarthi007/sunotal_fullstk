@@ -110,7 +110,7 @@ variable "dynamodb_table_name" {
 variable "compute_target" {
   description = "Compute deployment target: 'eks' or 'ecs'"
   type        = string
-  default     = "eks"
+  default     = "ecs"
 
   validation {
     condition     = contains(["eks", "ecs"], var.compute_target)

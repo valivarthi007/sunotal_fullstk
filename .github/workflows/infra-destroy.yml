@@ -44,9 +44,21 @@ jobs:
           echo "Emptying build artifacts in s3://${BUCKET_NAME}/artifacts..."
           aws s3 rm s3://${BUCKET_NAME}/artifacts --recursive || true
 
+      - name: Clear Stale DynamoDB State Locks
+        run: |
+          echo "Clearing any stale state lock items from DynamoDB table sunotal-terraform-locks..."
+          LOCK_ITEMS=$(aws dynamodb scan --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" --query "Items[*].LockID.S" --output text 2>/dev/null || echo "")
+          for lock_id in $LOCK_ITEMS; do
+            if [ -n "$lock_id" ] && [ "$lock_id" != "None" ]; then
+              echo "Removing stale lock item: $lock_id"
+              aws dynamodb delete-item --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" --key "{\"LockID\": {\"S\": \"$lock_id\"}}" || true
+            fi
+          done
+
       - name: Destroy Infrastructure with Terraform
         run: |
           cd terraform
           terraform init -upgrade
           echo "Destroying managed infrastructure..."
-          terraform destroy -auto-approve -var="key_name=jcs_raju_laptop"
+          terraform destroy -auto-approve -lock=false -var="key_name=jcs_raju_laptop" -var="compute_target=ecs" || \
+          terraform destroy -auto-approve -lock=false -var="key_name=jcs_raju_laptop" -var="compute_target=eks"
