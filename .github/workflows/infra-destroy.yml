@@ -48,10 +48,11 @@ jobs:
             fi
           done
 
-      - name: Purge Non-State S3 Objects
+      - name: Purge Non-State S3 Folders (Preserve State File)
         run: |
           BUCKET_NAME="jcs-raju-sunotal-final"
-          echo "Purging application objects in s3://${BUCKET_NAME} (preserving terraform state)..."
+          echo "Purging non-state folders (artifacts/, uploads/, logs/) in s3://${BUCKET_NAME}..."
+          echo "SAFEGUARD: Preserving state/* (terraform.tfstate) so Terraform retains full resource state for teardown..."
           aws s3 rm "s3://${BUCKET_NAME}" --recursive --exclude "state/*" || true
 
       - name: Teardown EKS Cluster and ENIs (if active)
