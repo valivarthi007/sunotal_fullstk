@@ -48,11 +48,11 @@ jobs:
             fi
           done
 
-      - name: Purge S3 Objects
+      - name: Purge Non-State S3 Objects
         run: |
           BUCKET_NAME="jcs-raju-sunotal-final"
-          echo "Purging all objects in s3://${BUCKET_NAME}..."
-          aws s3 rm "s3://${BUCKET_NAME}" --recursive || true
+          echo "Purging application objects in s3://${BUCKET_NAME} (preserving terraform state)..."
+          aws s3 rm "s3://${BUCKET_NAME}" --recursive --exclude "state/*" || true
 
       - name: Teardown EKS Cluster and ENIs (if active)
         run: |
