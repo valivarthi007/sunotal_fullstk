@@ -78,14 +78,35 @@ jobs:
               fi
             done
 
-            # Wait briefly if Node Groups or Fargate profiles were being deleted
-            if [ -n "$NODEGROUPS" ] || [ -n "$PROFILES" ]; then
-              echo "Waiting 60 seconds for Node Groups / Fargate Profiles cleanup..."
-              sleep 60
-            fi
+            # Wait for all Node Groups to be completely deleted
+            for ng in $NODEGROUPS; do
+              if [ -n "$ng" ] && [ "$ng" != "None" ]; then
+                echo "Waiting for Node Group $ng to be fully deleted..."
+                aws eks wait nodegroup-deleted --cluster-name "$CLUSTER_NAME" --nodegroup-name "$ng" --region "${{ env.AWS_REGION }}" || true
+              fi
+            done
+
+            # Wait for all Fargate Profiles to be completely deleted
+            for fp in $PROFILES; do
+              if [ -n "$fp" ] && [ "$fp" != "None" ]; then
+                echo "Waiting for Fargate Profile $fp to be fully deleted..."
+                while aws eks describe-fargate-profile --cluster-name "$CLUSTER_NAME" --fargate-profile-name "$fp" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; do
+                  echo "Fargate profile $fp is still deleting..."
+                  sleep 15
+                done
+              fi
+            done
 
             echo "Deleting EKS Cluster $CLUSTER_NAME..."
-            aws eks delete-cluster --name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" || true
+            for attempt in {1..5}; do
+              if aws eks delete-cluster --name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}"; then
+                echo "Cluster deletion initiated successfully."
+                break
+              else
+                echo "Delete cluster attempt $attempt failed. Waiting 30 seconds before retry..."
+                sleep 30
+              fi
+            done
 
             echo "Waiting for EKS cluster deletion to finish..."
             aws eks wait cluster-deleted --name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
