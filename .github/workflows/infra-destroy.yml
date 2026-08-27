@@ -68,20 +68,28 @@ jobs:
           echo "SAFEGUARD: Preserving state/* (terraform.tfstate) for Terraform teardown..."
           aws s3 rm "s3://${BUCKET_NAME}" --recursive --exclude "state/*" || true
 
-      - name: Deregister Load Balancer Targets
+      - name: Deregister & Delete Load Balancers & Target Groups
         if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
-          echo "Deregistering any active target IPs from ALB target groups..."
-          for tg in sunotal-frontend-tg sunotal-auth-tg sunotal-operations-tg sunotal-inventory-tg sunotal-user-tg; do
-            TG_ARN=$(aws elbv2 describe-target-groups --names "$tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+          echo "Deregistering and deleting Load Balancers and Target Groups..."
+          ALB_ARN=$(aws elbv2 describe-load-balancers --names "sunotal-alb" --region "${{ env.AWS_REGION }}" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "")
+          if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
+            echo "Deleting ALB: sunotal-alb"
+            aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" --region "${{ env.AWS_REGION }}" || true
+            sleep 15
+          fi
+
+          for tg in sunotal-app-tg sunotal-frontend-tg sunotal-auth-tg sunotal-operations-tg sunotal-inventory-tg sunotal-user-tg; do
+            TG_ARN=$(aws elbv2 describe-target-groups --names "$tg" --region "${{ env.AWS_REGION }}" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
             if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
-              TARGETS=$(aws elbv2 describe-target-health --target-group-arn "$TG_ARN" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+              TARGETS=$(aws elbv2 describe-target-health --target-group-arn "$TG_ARN" --region "${{ env.AWS_REGION }}" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
               for target in $TARGETS; do
                 if [ -n "$target" ] && [ "$target" != "None" ]; then
-                  echo "Deregistering target $target from $tg..."
-                  aws elbv2 deregister-targets --target-group-arn "$TG_ARN" --targets Id=$target 2>/dev/null || true
+                  aws elbv2 deregister-targets --target-group-arn "$TG_ARN" --targets Id=$target --region "${{ env.AWS_REGION }}" 2>/dev/null || true
                 fi
               done
+              echo "Deleting Target Group: $tg"
+              aws elbv2 delete-target-group --target-group-arn "$TG_ARN" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
             fi
           done
 
@@ -166,7 +174,7 @@ jobs:
             echo "No active EKS cluster found."
           fi
 
-      - name: Purge RDS Database Instances & Unattached Network Interfaces
+      - name: Purge RDS Instances, DB Subnet Groups, CloudFront OAC & ENIs
         if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
           echo "Purging RDS Database Instances (sunotal-postgres & raju-sunotal-db)..."
@@ -176,6 +184,16 @@ jobs:
               aws rds delete-db-instance --db-instance-identifier "$db" --skip-final-snapshot --delete-automated-backups --region "${{ env.AWS_REGION }}" 2>/dev/null || true
             fi
           done
+
+          echo "Purging DB Subnet Group..."
+          aws rds delete-db-subnet-group --db-subnet-group-name "sunotal-db-subnet-group" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+
+          echo "Purging CloudFront OAC..."
+          OAC_ID=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='sunotal-s3-oac'].Id" --output text --region "${{ env.AWS_REGION }}" 2>/dev/null || echo "")
+          if [ -n "$OAC_ID" ] && [ "$OAC_ID" != "None" ]; then
+            OAC_ETAG=$(aws cloudfront get-origin-access-control --id "$OAC_ID" --query "ETag" --output text --region "${{ env.AWS_REGION }}" 2>/dev/null || echo "")
+            aws cloudfront delete-origin-access-control --id "$OAC_ID" --if-match "$OAC_ETAG" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+          fi
 
           echo "Cleaning up SSM Parameters..."
           aws ssm delete-parameter --name "/sunotal/compute_target" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
@@ -188,6 +206,47 @@ jobs:
               aws ec2 delete-network-interface --network-interface-id "$eni" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
             fi
           done
+
+      - name: Purge IAM Roles, Instance Profiles & Custom Policies
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
+        run: |
+          echo "Purging IAM Roles, Instance Profiles, and Custom Policies..."
+          for role in sunotal-cluster-cluster-role sunotal-cluster-node-group-role sunotal-ec2-s3-access-role sunotal-lambda-s3-delete-role sunotal-fargate-pod-execution-role; do
+            if aws iam get-role --role-name "$role" >/dev/null 2>&1; then
+              POLICIES=$(aws iam list-attached-role-policies --role-name "$role" --query "AttachedPolicies[*].PolicyArn" --output text 2>/dev/null || echo "")
+              for pol in $POLICIES; do
+                aws iam detach-role-policy --role-name "$role" --policy-arn "$pol" 2>/dev/null || true
+              done
+              INLINES=$(aws iam list-role-policies --role-name "$role" --query "PolicyNames[]" --output text 2>/dev/null || echo "")
+              for inline in $INLINES; do
+                aws iam delete-role-policy --role-name "$role" --policy-name "$inline" 2>/dev/null || true
+              done
+              echo "Deleting IAM Role: $role"
+              aws iam delete-role --role-name "$role" 2>/dev/null || true
+            fi
+          done
+
+          for ip in sunotal-ec2-s3-access-role-profile sunotal-test-server-profile sunotal-sonarqube-profile; do
+            if aws iam get-instance-profile --instance-profile-name "$ip" >/dev/null 2>&1; then
+              ROLES=$(aws iam get-instance-profile --instance-profile-name "$ip" --query "InstanceProfile.Roles[*].RoleName" --output text 2>/dev/null || echo "")
+              for r in $ROLES; do
+                aws iam remove-role-from-instance-profile --instance-profile-name "$ip" --role-name "$r" 2>/dev/null || true
+              done
+              echo "Deleting Instance Profile: $ip"
+              aws iam delete-instance-profile --instance-profile-name "$ip" 2>/dev/null || true
+            fi
+          done
+
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+          if [ -n "$ACCOUNT_ID" ]; then
+            for pol_name in sunotal-github-actions-ecr-ecs sunotal-lambda-s3-delete-policy; do
+              POL_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${pol_name}"
+              if aws iam get-policy --policy-arn "$POL_ARN" >/dev/null 2>&1; then
+                echo "Deleting IAM Policy: $pol_name"
+                aws iam delete-policy --policy-arn "$POL_ARN" 2>/dev/null || true
+              fi
+            done
+          fi
 
       - name: Clear Stale DynamoDB State Locks
         if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' || github.event.inputs.destroy_method == 'terraform' }}
