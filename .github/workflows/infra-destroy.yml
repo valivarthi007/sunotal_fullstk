@@ -7,13 +7,22 @@ on:
         description: 'Type "DESTROY" to confirm teardown of infrastructure'
         required: true
         default: ''
+      destroy_method:
+        type: choice
+        description: 'Select Teardown Method: "all" (CLI + Terraform), "aws_cli" (CLI purges only), or "terraform" (Terraform destroy only)'
+        required: true
+        default: 'all'
+        options:
+          - 'all'
+          - 'aws_cli'
+          - 'terraform'
 
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
 jobs:
   destroy_infrastructure:
-    name: Destroy Infrastructure (AWS CLI & Terraform)
+    name: Destroy Infrastructure
     runs-on: ubuntu-latest
     steps:
       - name: Verify Confirmation
@@ -22,6 +31,7 @@ jobs:
             echo "::error::Confirmation failed. You must type 'DESTROY' to execute teardown."
             exit 1
           fi
+          echo "Executing Teardown Method: ${{ github.event.inputs.destroy_method }}"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,11 +44,13 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'terraform' }}
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.3"
 
       - name: Purge ECR Repositories & Images
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
           echo "Force purging all ECR repositories to prevent RepositoryNotEmptyException..."
           for repo in sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user; do
@@ -49,6 +61,7 @@ jobs:
           done
 
       - name: Purge Non-State S3 Folders (Preserve State File)
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
           BUCKET_NAME="jcs-raju-sunotal-final"
           echo "Purging non-state application objects (artifacts/, uploads/, logs/) in s3://${BUCKET_NAME}..."
@@ -56,6 +69,7 @@ jobs:
           aws s3 rm "s3://${BUCKET_NAME}" --recursive --exclude "state/*" || true
 
       - name: Deregister Load Balancer Targets
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
           echo "Deregistering any active target IPs from ALB target groups..."
           for tg in sunotal-frontend-tg sunotal-auth-tg sunotal-operations-tg sunotal-inventory-tg sunotal-user-tg; do
@@ -72,6 +86,7 @@ jobs:
           done
 
       - name: Scale Down & Stop ECS Tasks (if active)
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
           if aws ecs describe-clusters --clusters sunotal-cluster --region "${{ env.AWS_REGION }}" --query "clusters[0].status" --output text 2>/dev/null | grep -q "ACTIVE"; then
             echo "Scaling down ECS services in sunotal-cluster..."
@@ -89,6 +104,7 @@ jobs:
           fi
 
       - name: Teardown EKS Cluster, Node Groups & Fargate Profiles (if active)
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
           CLUSTER_NAME="sunotal-cluster"
           if aws eks describe-cluster --name "$CLUSTER_NAME" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
@@ -151,6 +167,7 @@ jobs:
           fi
 
       - name: Purge RDS Database Instances & Unattached Network Interfaces
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
           echo "Purging RDS Database Instances (sunotal-postgres & raju-sunotal-db)..."
           for db in sunotal-postgres raju-sunotal-db; do
@@ -173,6 +190,7 @@ jobs:
           done
 
       - name: Clear Stale DynamoDB State Locks
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' || github.event.inputs.destroy_method == 'terraform' }}
         run: |
           echo "Clearing any stale state lock items from DynamoDB table sunotal-terraform-locks..."
           LOCK_ITEMS=$(aws dynamodb scan --table-name sunotal-terraform-locks --region "${{ env.AWS_REGION }}" --query "Items[*].LockID.S" --output text 2>/dev/null || echo "")
@@ -184,6 +202,7 @@ jobs:
           done
 
       - name: Destroy Infrastructure with Terraform (Multi-Pass)
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'terraform' }}
         run: |
           cd terraform
           terraform init -upgrade
@@ -199,6 +218,7 @@ jobs:
           terraform destroy -auto-approve -lock=false -var="key_name=jcs_raju_laptop"
 
       - name: Post-Teardown Cleanup & CloudWatch Logs Removal
+        if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
           echo "Performing final sweep of CloudWatch log groups..."
           LOG_GROUPS=$(aws logs describe-log-groups --region "${{ env.AWS_REGION }}" --query "logGroups[?contains(logGroupName, 'sunotal')].logGroupName" --output text 2>/dev/null || echo "")
@@ -208,4 +228,4 @@ jobs:
               aws logs delete-log-group --log-group-name "$lg" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
             fi
           done
-          echo "Post-teardown cleanup complete. All application resources destroyed."
+          echo "Teardown complete."
