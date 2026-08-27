@@ -207,46 +207,53 @@ jobs:
             fi
           done
 
-      - name: Purge IAM Roles, Instance Profiles & Custom Policies
+      - name: Dynamic Purge of IAM Roles, Instance Profiles & Custom Policies
         if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
-          echo "Purging IAM Roles, Instance Profiles, and Custom Policies..."
-          for role in sunotal-cluster-cluster-role sunotal-cluster-node-group-role sunotal-ec2-s3-access-role sunotal-lambda-s3-delete-role sunotal-fargate-pod-execution-role; do
-            if aws iam get-role --role-name "$role" >/dev/null 2>&1; then
+          echo "Dynamically Purging ALL Sunotal IAM Roles, Instance Profiles & Custom Policies..."
+          
+          # 1. Instance Profiles
+          PROFILES=$(aws iam list-instance-profiles --query "InstanceProfiles[?contains(InstanceProfileName, 'sunotal')].InstanceProfileName" --output text 2>/dev/null || echo "")
+          for ip in $PROFILES; do
+            if [ -n "$ip" ] && [ "$ip" != "None" ]; then
+              echo "Cleaning Instance Profile: $ip"
+              ROLES=$(aws iam get-instance-profile --instance-profile-name "$ip" --query "InstanceProfile.Roles[*].RoleName" --output text 2>/dev/null || echo "")
+              for r in $ROLES; do
+                aws iam remove-role-from-instance-profile --instance-profile-name "$ip" --role-name "$r" 2>/dev/null || true
+              done
+              aws iam delete-instance-profile --instance-profile-name "$ip" 2>/dev/null || true
+            fi
+          done
+
+          # 2. Roles
+          ROLES=$(aws iam list-roles --query "Roles[?contains(RoleName, 'sunotal')].RoleName" --output text 2>/dev/null || echo "")
+          for role in $ROLES; do
+            if [ -n "$role" ] && [ "$role" != "None" ]; then
+              echo "Cleaning IAM Role: $role"
               POLICIES=$(aws iam list-attached-role-policies --role-name "$role" --query "AttachedPolicies[*].PolicyArn" --output text 2>/dev/null || echo "")
-              for pol in $POLICIES; do
-                aws iam detach-role-policy --role-name "$role" --policy-arn "$pol" 2>/dev/null || true
+              for p in $POLICIES; do
+                aws iam detach-role-policy --role-name "$role" --policy-arn "$p" 2>/dev/null || true
               done
               INLINES=$(aws iam list-role-policies --role-name "$role" --query "PolicyNames[]" --output text 2>/dev/null || echo "")
               for inline in $INLINES; do
                 aws iam delete-role-policy --role-name "$role" --policy-name "$inline" 2>/dev/null || true
               done
-              echo "Deleting IAM Role: $role"
               aws iam delete-role --role-name "$role" 2>/dev/null || true
             fi
           done
 
-          for ip in sunotal-ec2-s3-access-role-profile sunotal-test-server-profile sunotal-sonarqube-profile; do
-            if aws iam get-instance-profile --instance-profile-name "$ip" >/dev/null 2>&1; then
-              ROLES=$(aws iam get-instance-profile --instance-profile-name "$ip" --query "InstanceProfile.Roles[*].RoleName" --output text 2>/dev/null || echo "")
-              for r in $ROLES; do
-                aws iam remove-role-from-instance-profile --instance-profile-name "$ip" --role-name "$r" 2>/dev/null || true
+          # 3. Customer Policies
+          POLICIES=$(aws iam list-policies --scope Local --query "Policies[?contains(PolicyName, 'sunotal')].PolicyArn" --output text 2>/dev/null || echo "")
+          for pol_arn in $POLICIES; do
+            if [ -n "$pol_arn" ] && [ "$pol_arn" != "None" ]; then
+              echo "Deleting IAM Policy: $pol_arn"
+              ATTACHED_ROLES=$(aws iam list-entities-for-policy --policy-arn "$pol_arn" --query "PolicyRoles[*].RoleName" --output text 2>/dev/null || echo "")
+              for r in $ATTACHED_ROLES; do
+                aws iam detach-role-policy --role-name "$r" --policy-arn "$pol_arn" 2>/dev/null || true
               done
-              echo "Deleting Instance Profile: $ip"
-              aws iam delete-instance-profile --instance-profile-name "$ip" 2>/dev/null || true
+              aws iam delete-policy --policy-arn "$pol_arn" 2>/dev/null || true
             fi
           done
-
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
-          if [ -n "$ACCOUNT_ID" ]; then
-            for pol_name in sunotal-github-actions-ecr-ecs sunotal-lambda-s3-delete-policy; do
-              POL_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${pol_name}"
-              if aws iam get-policy --policy-arn "$POL_ARN" >/dev/null 2>&1; then
-                echo "Deleting IAM Policy: $pol_name"
-                aws iam delete-policy --policy-arn "$POL_ARN" 2>/dev/null || true
-              fi
-            done
-          fi
 
       - name: Clear Stale DynamoDB State Locks
         if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' || github.event.inputs.destroy_method == 'terraform' }}

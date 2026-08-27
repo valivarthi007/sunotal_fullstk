@@ -134,44 +134,48 @@ for eni in $ENIS; do
   fi
 done
 
-# Step 7: Purge IAM Roles, Instance Profiles & Policies
-echo "[7/9] Purging IAM Roles, Instance Profiles & Custom Policies..."
-for role in sunotal-cluster-cluster-role sunotal-cluster-node-group-role sunotal-ec2-s3-access-role sunotal-lambda-s3-delete-role sunotal-fargate-pod-execution-role; do
-  if aws iam get-role --role-name "$role" >/dev/null 2>&1; then
-    POLICIES=$(aws iam list-attached-role-policies --role-name "$role" --query "AttachedPolicies[*].PolicyArn" --output text 2>/dev/null || echo "")
-    for pol in $POLICIES; do
-      aws iam detach-role-policy --role-name "$role" --policy-arn "$pol" 2>/dev/null || true
-    done
-    INLINES=$(aws iam list-role-policies --role-name "$role" --query "PolicyNames[]" --output text 2>/dev/null || echo "")
-    for inline in $INLINES; do
-      aws iam delete-role-policy --role-name "$role" --policy-name "$inline" 2>/dev/null || true
-    done
-    echo "  -> Deleting IAM Role: $role"
-    aws iam delete-role --role-name "$role" 2>/dev/null || true
-  fi
-done
+# Step 7: Dynamic Purge of IAM Roles, Instance Profiles & Custom Policies
+echo "[7/9] Dynamically Purging ALL Sunotal IAM Roles, Instance Profiles & Custom Policies..."
+python3 -c "
+import subprocess, json
+try:
+    # 1. Instance Profiles
+    out = subprocess.check_output(['aws', 'iam', 'list-instance-profiles']).decode()
+    for ip in json.loads(out).get('InstanceProfiles', []):
+        name = ip['InstanceProfileName']
+        if 'sunotal' in name.lower():
+            print(f'  -> Deleting Instance Profile: {name}')
+            for r in ip.get('Roles', []):
+                subprocess.call(['aws', 'iam', 'remove-role-from-instance-profile', '--instance-profile-name', name, '--role-name', r['RoleName']])
+            subprocess.call(['aws', 'iam', 'delete-instance-profile', '--instance-profile-name', name])
 
-for ip in sunotal-ec2-s3-access-role-profile sunotal-test-server-profile sunotal-sonarqube-profile; do
-  if aws iam get-instance-profile --instance-profile-name "$ip" >/dev/null 2>&1; then
-    ROLES=$(aws iam get-instance-profile --instance-profile-name "$ip" --query "InstanceProfile.Roles[*].RoleName" --output text 2>/dev/null || echo "")
-    for r in $ROLES; do
-      aws iam remove-role-from-instance-profile --instance-profile-name "$ip" --role-name "$r" 2>/dev/null || true
-    done
-    echo "  -> Deleting Instance Profile: $ip"
-    aws iam delete-instance-profile --instance-profile-name "$ip" 2>/dev/null || true
-  fi
-done
+    # 2. Roles
+    out = subprocess.check_output(['aws', 'iam', 'list-roles']).decode()
+    for role in json.loads(out).get('Roles', []):
+        rname = role['RoleName']
+        if 'sunotal' in rname.lower():
+            print(f'  -> Deleting IAM Role: {rname}')
+            att = subprocess.check_output(['aws', 'iam', 'list-attached-role-policies', '--role-name', rname]).decode()
+            for p in json.loads(att).get('AttachedPolicies', []):
+                subprocess.call(['aws', 'iam', 'detach-role-policy', '--role-name', rname, '--policy-arn', p['PolicyArn']])
+            inl = subprocess.check_output(['aws', 'iam', 'list-role-policies', '--role-name', rname]).decode()
+            for pname in json.loads(inl).get('PolicyNames', []):
+                subprocess.call(['aws', 'iam', 'delete-role-policy', '--role-name', rname, '--policy-name', pname])
+            subprocess.call(['aws', 'iam', 'delete-role', '--role-name', rname])
 
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
-if [ -n "$ACCOUNT_ID" ]; then
-  for pol_name in sunotal-github-actions-ecr-ecs sunotal-lambda-s3-delete-policy; do
-    POL_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${pol_name}"
-    if aws iam get-policy --policy-arn "$POL_ARN" >/dev/null 2>&1; then
-      echo "  -> Deleting IAM Policy: $pol_name"
-      aws iam delete-policy --policy-arn "$POL_ARN" 2>/dev/null || true
-    fi
-  done
-fi
+    # 3. Customer Policies
+    out = subprocess.check_output(['aws', 'iam', 'list-policies', '--scope', 'Local']).decode()
+    for pol in json.loads(out).get('Policies', []):
+        pname = pol['PolicyName']
+        parn = pol['PolicyArn']
+        if 'sunotal' in pname.lower():
+            print(f'  -> Deleting IAM Policy: {pname}')
+            ent = subprocess.check_output(['aws', 'iam', 'list-entities-for-policy', '--policy-arn', parn]).decode()
+            for r in json.loads(ent).get('PolicyRoles', []):
+                subprocess.call(['aws', 'iam', 'detach-role-policy', '--role-name', r['RoleName'], '--policy-arn', parn])
+            subprocess.call(['aws', 'iam', 'delete-policy', '--policy-arn', parn])
+except Exception as e: pass
+" || true
 
 # Step 8: Terraform Teardown
 echo "[8/9] Running Terraform Teardown..."
