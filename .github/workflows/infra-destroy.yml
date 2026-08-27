@@ -150,8 +150,16 @@ jobs:
             echo "No active EKS cluster found."
           fi
 
-      - name: Clean Unattached Network Interfaces & SSM Parameters
+      - name: Purge RDS Database Instances & Unattached Network Interfaces
         run: |
+          echo "Purging RDS Database Instances (sunotal-postgres & raju-sunotal-db)..."
+          for db in sunotal-postgres raju-sunotal-db; do
+            if aws rds describe-db-instances --db-instance-identifier "$db" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
+              echo "Initiating deletion of RDS Instance: $db"
+              aws rds delete-db-instance --db-instance-identifier "$db" --skip-final-snapshot --delete-automated-backups --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+            fi
+          done
+
           echo "Cleaning up SSM Parameters..."
           aws ssm delete-parameter --name "/sunotal/compute_target" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
 
