@@ -15,7 +15,7 @@ spec:
         - name: db-migration
           image: sunotal-auth:latest
           imagePullPolicy: Always
-          command: ["pnpm", "run", "db:push"]
+          command: ["./node_modules/.bin/drizzle-kit", "push", "--config", "drizzle.config.ts", "--force"]
           envFrom:
             - configMapRef:
                 name: sunotal-config
