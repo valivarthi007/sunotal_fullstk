@@ -97,7 +97,7 @@ jobs:
           echo "Running DB migrations on EKS..."
           kubectl delete job sunotal-db-migration -n sunotal --ignore-not-found || true
           kubectl apply -f k8s/05-db-migration-job.yaml || true
-          kubectl wait --for=condition=complete job/sunotal-db-migration -n sunotal --timeout=120s || true
+          kubectl wait --for=condition=complete job/sunotal-db-migration -n sunotal --timeout=120s || (kubectl logs job/sunotal-db-migration -n sunotal --tail=100 2>/dev/null || true)
 
           echo "Applying Application Deployments..."
           kubectl apply -f k8s/02-deployments.yaml || true
