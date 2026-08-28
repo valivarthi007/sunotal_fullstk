@@ -4,7 +4,7 @@ RUN apk update && apk upgrade --no-cache
 RUN npm install -g pnpm
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm config set only-built-dependencies esbuild && pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm build
 RUN pnpm prune --prod

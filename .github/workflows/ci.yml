@@ -83,10 +83,10 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Install frontend dependencies
-        run: cd frontend && pnpm config set only-built-dependencies esbuild && pnpm install --frozen-lockfile
+        run: cd frontend && pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Install backend dependencies
-        run: cd backend && pnpm config set only-built-dependencies esbuild && pnpm install --frozen-lockfile
+        run: cd backend && pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Type check frontend
         run: cd frontend && pnpm exec tsc --noEmit || true
