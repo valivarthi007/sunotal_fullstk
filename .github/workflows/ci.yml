@@ -131,7 +131,7 @@ jobs:
       - name: Ensure ECR Repositories Exist
         if: steps.login-ecr.outcome == 'success'
         run: |
-          for repo in sunotal-frontend sunotal-backend sunotal-auth sunotal-operations sunotal-inventory sunotal-user; do
+          for repo in sunotal-frontend sunotal-backend sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery; do
             aws ecr create-repository --repository-name "$repo" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
           done
 
@@ -148,6 +148,7 @@ jobs:
           docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-operations:latest ./backend/services/operations-service || true
           docker build -t $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-inventory:latest ./backend/services/inventory-service || true
           docker build -t $ECR_REGISTRY/sunotal-user:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user:latest ./backend/services/user-service || true
+          docker build -t $ECR_REGISTRY/sunotal-delivery:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-delivery:latest ./backend/services/delivery-service || true
 
       - name: Push Docker images to Amazon ECR
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
@@ -167,4 +168,6 @@ jobs:
           docker push $ECR_REGISTRY/sunotal-inventory:latest || true
           docker push $ECR_REGISTRY/sunotal-user:$IMAGE_TAG || true
           docker push $ECR_REGISTRY/sunotal-user:latest || true
+          docker push $ECR_REGISTRY/sunotal-delivery:$IMAGE_TAG || true
+          docker push $ECR_REGISTRY/sunotal-delivery:latest || true
         continue-on-error: true

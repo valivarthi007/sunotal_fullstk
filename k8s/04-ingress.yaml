@@ -53,6 +53,20 @@ spec:
                 name: sunotal-user
                 port:
                   number: 5004
+          - path: /api/user/addresses
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-delivery
+                port:
+                  number: 5006
+          - path: /api/delivery
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-delivery
+                port:
+                  number: 5006
           - path: /
             pathType: Prefix
             backend:

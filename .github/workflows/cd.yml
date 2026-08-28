@@ -79,6 +79,7 @@ jobs:
             sed -i "s|sunotal-operations:latest|${ECR_REGISTRY}/sunotal-operations:latest|g" k8s/02-deployments.yaml
             sed -i "s|sunotal-inventory:latest|${ECR_REGISTRY}/sunotal-inventory:latest|g" k8s/02-deployments.yaml
             sed -i "s|sunotal-user:latest|${ECR_REGISTRY}/sunotal-user:latest|g" k8s/02-deployments.yaml
+            sed -i "s|sunotal-delivery:latest|${ECR_REGISTRY}/sunotal-delivery:latest|g" k8s/02-deployments.yaml
           fi
 
           # Dynamic RDS Host Discovery & Secret Sync
@@ -106,6 +107,7 @@ jobs:
           kubectl rollout status deployment/sunotal-operations -n sunotal --timeout=180s || true
           kubectl rollout status deployment/sunotal-inventory -n sunotal --timeout=180s || true
           kubectl rollout status deployment/sunotal-user -n sunotal --timeout=180s || true
+          kubectl rollout status deployment/sunotal-delivery -n sunotal --timeout=180s || true
 
           echo "Configuring Security Groups and Target Groups on AWS..."
           ALB_SG=$(aws elbv2 describe-load-balancers --names "sunotal-alb" --query "LoadBalancers[0].SecurityGroups[0]" --output text 2>/dev/null || echo "")
@@ -121,11 +123,13 @@ jobs:
           FRONTEND_TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-frontend-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
           OPERATIONS_TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-operations-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
           INVENTORY_TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-inventory-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+          DELIVERY_TG_ARN=$(aws elbv2 describe-target-groups --names "sunotal-delivery-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
 
           echo "Updating Target Group HealthCheckPaths to /api/healthz..."
           if [ -n "$INVENTORY_TG_ARN" ]; then aws elbv2 modify-target-group --target-group-arn "$INVENTORY_TG_ARN" --health-check-path "/api/healthz" 2>/dev/null || true; fi
           if [ -n "$OPERATIONS_TG_ARN" ]; then aws elbv2 modify-target-group --target-group-arn "$OPERATIONS_TG_ARN" --health-check-path "/api/healthz" 2>/dev/null || true; fi
           if [ -n "$USER_TG_ARN" ]; then aws elbv2 modify-target-group --target-group-arn "$USER_TG_ARN" --health-check-path "/api/healthz" 2>/dev/null || true; fi
+          if [ -n "$DELIVERY_TG_ARN" ]; then aws elbv2 modify-target-group --target-group-arn "$DELIVERY_TG_ARN" --health-check-path "/api/healthz" 2>/dev/null || true; fi
 
           echo "Registering active EKS Pod IPs into ALB Target Groups..."
           AUTH_IP=$(kubectl get pods -n sunotal -l app=sunotal-auth --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
@@ -133,12 +137,14 @@ jobs:
           FRONTEND_IP=$(kubectl get pods -n sunotal -l app=sunotal-frontend --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
           OPERATIONS_IP=$(kubectl get pods -n sunotal -l app=sunotal-operations --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
           INVENTORY_IP=$(kubectl get pods -n sunotal -l app=sunotal-inventory --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
+          DELIVERY_IP=$(kubectl get pods -n sunotal -l app=sunotal-delivery --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || echo "")
 
           if [ -n "$AUTH_IP" ] && [ -n "$AUTH_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$AUTH_TG_ARN" --targets Id=$AUTH_IP,Port=5001 2>/dev/null || true; fi
           if [ -n "$USER_IP" ] && [ -n "$USER_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$USER_TG_ARN" --targets Id=$USER_IP,Port=5004 2>/dev/null || true; fi
           if [ -n "$FRONTEND_IP" ] && [ -n "$FRONTEND_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$FRONTEND_TG_ARN" --targets Id=$FRONTEND_IP,Port=80 2>/dev/null || true; fi
           if [ -n "$OPERATIONS_IP" ] && [ -n "$OPERATIONS_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$OPERATIONS_TG_ARN" --targets Id=$OPERATIONS_IP,Port=5002 2>/dev/null || true; fi
           if [ -n "$INVENTORY_IP" ] && [ -n "$INVENTORY_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$INVENTORY_TG_ARN" --targets Id=$INVENTORY_IP,Port=5003 2>/dev/null || true; fi
+          if [ -n "$DELIVERY_IP" ] && [ -n "$DELIVERY_TG_ARN" ]; then aws elbv2 register-targets --target-group-arn "$DELIVERY_TG_ARN" --targets Id=$DELIVERY_IP,Port=5006 2>/dev/null || true; fi
 
           # Clean up stale target IP registrations
           if [ -n "$AUTH_TG_ARN" ]; then
@@ -165,6 +171,11 @@ jobs:
             INVENTORY_REG=$(aws elbv2 describe-target-health --target-group-arn "$INVENTORY_TG_ARN" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
             for ip in $INVENTORY_REG; do if [ "$ip" != "$INVENTORY_IP" ]; then aws elbv2 deregister-targets --target-group-arn "$INVENTORY_TG_ARN" --targets Id=$ip,Port=5003 2>/dev/null || true; fi; done
           fi
+
+          if [ -n "$DELIVERY_TG_ARN" ]; then
+            DELIVERY_REG=$(aws elbv2 describe-target-health --target-group-arn "$DELIVERY_TG_ARN" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
+            for ip in $DELIVERY_REG; do if [ "$ip" != "$DELIVERY_IP" ]; then aws elbv2 deregister-targets --target-group-arn "$DELIVERY_TG_ARN" --targets Id=$ip,Port=5006 2>/dev/null || true; fi; done
+          fi
         continue-on-error: true
 
       - name: Deploy to ECS Fargate
@@ -176,6 +187,7 @@ jobs:
           aws ecs update-service --cluster sunotal-cluster --service sunotal-operations --force-new-deployment || true
           aws ecs update-service --cluster sunotal-cluster --service sunotal-inventory --force-new-deployment || true
           aws ecs update-service --cluster sunotal-cluster --service sunotal-user --force-new-deployment || true
+          aws ecs update-service --cluster sunotal-cluster --service sunotal-delivery --force-new-deployment || true
 
           SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=sunotal-vpc-private-subnet-1" --query "Subnets[0].SubnetId" --output text 2>/dev/null || echo "")
           SECURITY_GROUP_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=sunotal-ecs-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "")
@@ -190,7 +202,7 @@ jobs:
               --overrides '{"containerOverrides": [{"name": "auth", "command": ["pnpm", "run", "db:push"]}]}' || true
           fi
 
-          aws ecs wait services-stable --cluster sunotal-cluster --services sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user || true
+          aws ecs wait services-stable --cluster sunotal-cluster --services sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery || true
         continue-on-error: true
 
       - name: Post-Deployment Automated Test Suite
@@ -230,4 +242,3 @@ jobs:
 
           echo "🎉 All 5 Post-Deployment Tests Passed Successfully! Deployment is live and error-free."
         continue-on-error: false
-

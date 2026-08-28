@@ -82,3 +82,20 @@ spec:
       name: http
   selector:
     app: sunotal-user
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sunotal-delivery
+  namespace: sunotal
+  labels:
+    app: sunotal-delivery
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5006
+      targetPort: 5006
+      protocol: TCP
+      name: http
+  selector:
+    app: sunotal-delivery
