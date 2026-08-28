@@ -7,7 +7,7 @@ import { uploadRouter } from './routes/upload.js';
 import { bannersRouter } from './routes/banners.js';
 import productDefinitionsRouter from './routes/productDefinitions.js';
 import warehouseRouter from './routes/warehouse.js';
-import { metricsMiddleware, metricsHandler } from '../../src/lib/metrics.js';
+import { metricsMiddleware, metricsHandler } from './lib/metrics.js';
 import { initDatabase } from './lib/db.js';
 
 export const app = express();

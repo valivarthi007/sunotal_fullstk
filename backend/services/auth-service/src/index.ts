@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import authRouter from './routes/auth.js';
-import { metricsMiddleware, metricsHandler } from '../../src/lib/metrics.js';
+import { metricsMiddleware, metricsHandler } from './lib/metrics.js';
 import { initDatabase } from './lib/db.js';
 
 export const app = express();

@@ -4,7 +4,7 @@ import cors from 'cors';
 import usersRouter from './routes/users.js';
 import vendorsRouter from './routes/vendors.js';
 import adminRouter from './routes/admin.js';
-import { metricsMiddleware, metricsHandler } from '../../src/lib/metrics.js';
+import { metricsMiddleware, metricsHandler } from './lib/metrics.js';
 import { initDatabase } from './lib/db.js';
 
 export const app = express();

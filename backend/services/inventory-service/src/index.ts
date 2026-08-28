@@ -4,7 +4,7 @@ import cors from 'cors';
 import inventoryRouter from './routes/inventory.js';
 import ordersRouter from './routes/orders.js';
 import paymentsRouter from './routes/payments.js';
-import { metricsMiddleware, metricsHandler } from '../../src/lib/metrics.js';
+import { metricsMiddleware, metricsHandler } from './lib/metrics.js';
 import { initDatabase } from './lib/db.js';
 
 export const app = express();

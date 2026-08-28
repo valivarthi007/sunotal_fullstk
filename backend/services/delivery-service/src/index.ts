@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import addressesRouter from './routes/addresses.js';
 import trackingRouter from './routes/tracking.js';
-import { metricsMiddleware, metricsHandler } from '../../src/lib/metrics.js';
+import { metricsMiddleware, metricsHandler } from './lib/metrics.js';
 
 export const app = express();
 const PORT = Number(process.env.PORT ?? 5006);
