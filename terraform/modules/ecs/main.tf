@@ -56,7 +56,7 @@ resource "aws_iam_role_policy_attachment" "ecs_s3_attach" {
 
 # Cloudwatch Log Groups
 resource "aws_cloudwatch_log_group" "ecs_logs" {
-  for_each          = toset(["frontend", "auth", "operations", "inventory", "user"])
+  for_each          = toset(["frontend", "auth", "operations", "inventory", "user", "delivery"])
   name              = "/ecs/sunotal-${each.key}"
   retention_in_days = 7
   tags              = var.tags
@@ -293,6 +293,52 @@ resource "aws_ecs_task_definition" "user" {
   }
 }
 
+# Delivery Service Task Definition
+resource "aws_ecs_task_definition" "delivery" {
+  family                   = "sunotal-delivery"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "delivery"
+      image     = "${var.ecr_delivery_url}:latest"
+      essential = true
+      portMappings = [
+        {
+          containerPort = 5006
+          hostPort      = 5006
+        }
+      ]
+      environment = [
+        { name = "PORT", value = "5006" },
+        { name = "NODE_ENV", value = "production" },
+        { name = "DATABASE_URL", value = var.database_url },
+        { name = "SESSION_SECRET", value = var.session_secret },
+        { name = "FRONTEND_URL", value = var.frontend_url }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs_logs["delivery"].name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "delivery"
+        }
+      }
+    }
+  ])
+
+  tags = var.tags
+
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
+}
+
 # Frontend Service
 resource "aws_ecs_service" "frontend" {
   name            = "sunotal-frontend"
@@ -418,6 +464,32 @@ resource "aws_ecs_service" "user" {
     target_group_arn = var.user_target_group_arn
     container_name   = "user"
     container_port   = 5004
+  }
+
+  tags = var.tags
+}
+
+# Delivery Service
+resource "aws_ecs_service" "delivery" {
+  name            = "sunotal-delivery"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.delivery.arn
+  desired_count   = 1
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    weight            = 100
+  }
+
+  network_configuration {
+    subnets          = var.public_subnet_ids
+    security_groups  = [var.ecs_security_group_id]
+    assign_public_ip = true
+  }
+
+  load_balancer {
+    target_group_arn = var.delivery_target_group_arn
+    container_name   = "delivery"
+    container_port   = 5006
   }
 
   tags = var.tags

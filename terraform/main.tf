@@ -46,6 +46,11 @@ module "iam" {
   tags                  = local.common_tags
 }
 
+module "sqs_sns" {
+  source = "./modules/sqs_sns"
+  tags   = local.common_tags
+}
+
 module "vpc" {
   source                = "./modules/vpc"
   aws_region            = var.aws_region
@@ -108,12 +113,14 @@ module "ecs" {
   ecr_operations_url = module.ecr.operations_repository_url
   ecr_inventory_url  = module.ecr.inventory_repository_url
   ecr_user_url       = module.ecr.user_repository_url
+  ecr_delivery_url   = module.ecr.delivery_repository_url
 
   frontend_target_group_arn   = module.cdn.frontend_target_group_arn
   auth_target_group_arn       = module.cdn.auth_target_group_arn
   operations_target_group_arn = module.cdn.operations_target_group_arn
   inventory_target_group_arn  = module.cdn.inventory_target_group_arn
   user_target_group_arn       = module.cdn.user_target_group_arn
+  delivery_target_group_arn   = module.cdn.delivery_target_group_arn
 
   database_url      = "postgresql://${var.db_username}:${var.db_password}@${module.database.db_instance_address}:5432/${var.db_name}?sslmode=require&uselibpqcompat=true"
   cloudfront_domain = module.cdn.cloudfront_domain_name

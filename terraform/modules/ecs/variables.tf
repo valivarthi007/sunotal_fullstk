@@ -49,6 +49,11 @@ variable "ecr_user_url" {
   description = "ECR Repository URL for user service"
 }
 
+variable "ecr_delivery_url" {
+  type        = string
+  description = "ECR Repository URL for delivery service"
+}
+
 variable "frontend_target_group_arn" {
   type        = string
   description = "ALB Target Group ARN for frontend"
@@ -72,6 +77,11 @@ variable "inventory_target_group_arn" {
 variable "user_target_group_arn" {
   type        = string
   description = "ALB Target Group ARN for user service"
+}
+
+variable "delivery_target_group_arn" {
+  type        = string
+  description = "ALB Target Group ARN for delivery service"
 }
 
 variable "database_url" {
@@ -106,4 +116,3 @@ variable "frontend_url" {
   description = "Public URL of the frontend application for CORS configuration"
   default     = "https://sunotal.automateuniverse.space"
 }
-

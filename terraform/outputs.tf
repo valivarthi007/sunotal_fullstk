@@ -43,7 +43,6 @@ output "eks_cluster_endpoint" {
   value       = length(module.eks) > 0 ? module.eks[0].cluster_endpoint : null
 }
 
-
 output "alb_dns_name" {
   description = "Public DNS Endpoint of the Application Load Balancer"
   value       = module.cdn.alb_dns_name
@@ -92,6 +91,21 @@ output "ecr_inventory_url" {
 output "ecr_user_url" {
   description = "ECR Repository URL for user service"
   value       = module.ecr.user_repository_url
+}
+
+output "ecr_delivery_url" {
+  description = "ECR Repository URL for delivery service"
+  value       = module.ecr.delivery_repository_url
+}
+
+output "sqs_queue_arn" {
+  description = "ARN of AWS SQS order events queue"
+  value       = module.sqs_sns.sqs_queue_arn
+}
+
+output "sns_topic_arn" {
+  description = "ARN of AWS SNS delivery notifications topic"
+  value       = module.sqs_sns.sns_topic_arn
 }
 
 output "github_oidc_role_arn" {

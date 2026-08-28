@@ -35,6 +35,8 @@ graph TD
             CloudFront["AWS CloudFront CDN"]
             S3["AWS S3 Bucket\njcs-raju-sunotal-final"]
             ECR["AWS ECR Registries\n(6 Repositories)"]
+            SQS["AWS SQS Queue\n(sunotal-order-events-queue)"]
+            SNS["AWS SNS Topic\n(sunotal-delivery-notifications-topic)"]
             IAM["IAM Roles & OIDC Provider"]
         end
     end
@@ -56,10 +58,11 @@ The Terraform codebase (`terraform/`) is organized into reusable modules:
 | **vpc** | `terraform/modules/vpc` | VPC, 2 Public Subnets, 2 Private Subnets, Internet Gateway, Route Tables. |
 | **security** | `terraform/modules/security` | Security Groups for ALB, EKS Nodes, ECS Tasks, RDS PostgreSQL, and SSH Access. |
 | **database** | `terraform/modules/database` | AWS RDS PostgreSQL DB Instance (`sunotal-postgres`), DB Subnet Group, Storage Autoscaling. |
-| **cdn** | `terraform/modules/cdn` | Application Load Balancer (`sunotal-alb`), 5 Target Groups, Route53 Alias Record, S3 Bucket Policy, CloudFront CDN Distribution. |
-| **ecr** | `terraform/modules/ecr` | 6 ECR Repositories (`sunotal-frontend`, `sunotal-backend`, `sunotal-auth`, `sunotal-operations`, `sunotal-inventory`, `sunotal-user`). |
+| **cdn** | `terraform/modules/cdn` | Application Load Balancer (`sunotal-alb`), 6 Target Groups (`frontend`, `auth`, `operations`, `inventory`, `user`, `delivery`), Route53 Alias Record, S3 Bucket Policy, CloudFront CDN Distribution. |
+| **ecr** | `terraform/modules/ecr` | 6 ECR Repositories (`sunotal-frontend`, `sunotal-auth`, `sunotal-operations`, `sunotal-inventory`, `sunotal-user`, `sunotal-delivery`). |
+| **sqs_sns** | `terraform/modules/sqs_sns` | AWS SQS Queue (`sunotal-order-events-queue`) and AWS SNS Topic (`sunotal-delivery-notifications-topic`). |
 | **eks** | `terraform/modules/eks` | EKS Control Plane Cluster (`sunotal-cluster`), Managed Node Group, OIDC Identity Provider for IRSA. |
-| **ecs** | `terraform/modules/ecs` | ECS Cluster, Task Definitions, Fargate Services (used when compute target is set to `ecs`). |
+| **ecs** | `terraform/modules/ecs` | ECS Cluster, Task Definitions, Fargate Services for 5 microservices + frontend. |
 | **iam** | `terraform/modules/iam` | IAM Roles, S3 Access Policies, EC2 Instance Profiles, GitHub Actions OIDC Role. |
 | **lambda** | `terraform/modules/lambda` | AWS Lambda function for PDF invoice generation. |
 | **sonarqube** | `terraform/modules/sonarqube` | Dedicated EC2 instance running SonarQube for static code analysis. |
@@ -99,4 +102,3 @@ terraform apply -var-file="terraform.tfvars" -auto-approve
 ```bash
 ./scripts/manual_destroy.sh
 ```
-Or via GitHub Actions workflow: Trigger **Destroy Infrastructure** workflow on GitHub (`infra-destroy.yml`).

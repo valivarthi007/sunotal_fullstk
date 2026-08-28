@@ -143,6 +143,31 @@ resource "aws_lb_target_group" "user" {
   })
 }
 
+# Delivery Target Group
+resource "aws_lb_target_group" "delivery" {
+  name        = "sunotal-delivery-tg"
+  port        = 5006
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    path                = "/api/healthz"
+    protocol            = "HTTP"
+    port                = "5006"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    matcher             = "200-499"
+  }
+
+  tags = merge(var.tags, {
+    Name = "sunotal-delivery-tg"
+  })
+}
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -289,6 +314,27 @@ resource "aws_lb_listener_rule" "user_additional" {
     path_pattern {
       values = [
         "/api/admin/*"
+      ]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "delivery" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 50
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.delivery.arn
+  }
+
+  condition {
+    path_pattern {
+      values = [
+        "/api/user/addresses",
+        "/api/user/addresses/*",
+        "/api/delivery",
+        "/api/delivery/*"
       ]
     }
   }
