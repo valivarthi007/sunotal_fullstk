@@ -1,43 +1,25 @@
-# Sunotal Full-Stack Enterprise Documentation
+# Sunotal Documentation & Learning Hub
 
-Welcome to the central documentation index for **Sunotal**, an enterprise-grade multi-tenant B2B/B2C agricultural e-commerce platform and marketplace connecting Indian farmers, agricultural vendors, and consumers.
+Welcome to the **Sunotal End-to-End Master Documentation**. This documentation is designed as a complete teaching manual—taking anyone from zero technical background to a confident DevOps engineer capable of operating, deploying, and maintaining the Sunotal platform.
 
 ---
 
-## 📚 Table of Contents
+## 📚 Table of Contents & Learning Path
 
-| Section | Topic | Summary |
+| Chapter | Document Title | Description & Target Knowledge |
 | :--- | :--- | :--- |
-| **[01. Application Code](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/01_application_code.md)** | Codebase Architecture & User Operating Manuals | End-to-end architecture, Admin/Vendor/User operating manuals, API workflows, DB schemas, ER diagrams, SQL CRUD queries, manual installation, health querying via curl/wget, troubleshooting, and enhancement blueprints (Payment Gateways). |
-| **[02. Docker Infrastructure](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/02_docker.md)** | Containerization & AWS ECS/ECR | Line-by-line Dockerfile breakdown for all services, `docker-compose` architecture, CLI lifecycle commands, `docker exec` querying, resource monitoring, log auditing, network packet inspection, AWS ECR & ECS CLI templates, and service-down triage. |
-| **[03. Kubernetes (EKS)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/03_kubernetes.md)** | K8s Manifests & EKS Operations | Explanation of Kubernetes manifests by `kind` (`Deployment`, `Service`, `Ingress`, `ConfigMap`, `Secret`, `Job`), manifest skeletons/templates, `kubectl` CRUD commands, troubleshooting, log auditing, resource monitoring, and service-down runbooks. |
-| **[04. Terraform (IaC)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/04_terraform.md)** | Infrastructure as Code & AWS Resources | Modular Terraform architecture, manual infrastructure provisioning commands, AWS CLI CRUD commands for VPC, EKS, ECS, RDS, S3, CloudFront, ALB, Route53, and IAM prerequisites. |
-| **[05. Nginx Reverse Proxy](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/05_nginx.md)** | Web Server & Gateway Routing | Nginx deployment locations, process management commands, configuration syntax, request routing mechanics, SPA client-side fallback, and step-by-step route creation guide. |
-| **[06. CI/CD Workflows](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/06_workflow.md)** | GitHub Actions Pipelines | In-depth breakdown of `ci.yml`, `cd.yml`, `infra.yml`, `infra-destroy.yml`, job dependency graphs, automated self-healing EKS Target Group sync, and post-deployment automated test suites. |
-| **[07. Version Control (Git)](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/07_git.md)** | Git Operations & Branching Strategy | Daily Git commands, industry-standard GitFlow branching strategies, CRUD operations, commit history inspection, revert/rollback procedures, and emergency patch workflows. |
-| **[08. Architecture Diagrams](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/08_architecture_diagrams.md)** | System Architectural Visualizations | Production-grade Mermaid diagrams covering Application Architecture, DevOps Pipeline, AWS Cloud Infrastructure, Docker Container Topology, ER Database Model, and Kubernetes Cluster Topology. |
-| **[09. Shell Scripting Automation](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/09_shell_scripting.md)** | Automation Scripts & Pipeline Shell Patterns | Complete line-by-line breakdown of `setup.sh` and `start-dev.sh`, process concurrency, signal traps (`trap cleanup INT TERM`), JSONPath pod IP extraction, self-healing target registration, and shell best practices (`set -euo pipefail`). |
-| **[10. Line-by-Line Source Code Book](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/10_source_code_book.md)** | Complete Application Code Annotation Textbook | Comprehensive, textbook-style line-by-line breakdown of application entrypoints, authentication routes, admin stats, vendor quotation controllers, and React router components. |
-| **[11. Line-by-Line DevOps & Cloud Book](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/docs/11_devops_cloud_book.md)** | Complete DevOps & Cloud Infrastructure Textbook | Comprehensive, textbook-style line-by-line breakdown of GitHub Actions CI/CD workflows, Kubernetes YAML manifests, Dockerfiles, Terraform HCL modules, Shell Scripts, Linux administration commands, Git, and AWS CLI commands. |
-
-
-
+| **01** | [System Overview & Core Concepts](01-OVERVIEW.md) | What Sunotal is, the business problem it solves, the full technology stack explained in plain English, and foundational concepts for beginners. |
+| **02** | [System Architecture & Database Schemas](02-ARCHITECTURE.md) | Visual architecture diagrams, microservices topology, complete database tables (PostgreSQL/Drizzle ORM), API routes, and S3 asset delivery. |
+| **03** | [Local Development & Testing Guide](03-LOCAL-DEVELOPMENT.md) | How to set up the app on your computer, manage environment variables, run local database migrations, start dev servers, and execute unit/E2E test suites. |
+| **04** | [Infrastructure as Code (AWS & Terraform)](04-INFRASTRUCTURE.md) | Understanding cloud infrastructure, VPC networking, RDS PostgreSQL, EKS clusters, ALB load balancers, CloudFront CDN, and Terraform deployment automation. |
+| **05** | [Containers & Kubernetes Guide](05-CONTAINERS-KUBERNETES.md) | What Docker containers are, multi-stage Dockerfiles explained line-by-line, Kubernetes manifests (Pods, Deployments, Services, Ingress, Jobs), and EKS management. |
+| **06** | [CI/CD Pipelines (GitHub Actions)](06-CICD-PIPELINES.md) | Continuous Integration (CI) and Continuous Deployment (CD) pipelines explained step-by-step: automated testing, security scanning, image building, and production deployment. |
+| **07** | [Operations Runbook & Troubleshooting](07-OPERATIONS-RUNBOOK.md) | The Layman's Operating Manual: how to trigger deployments, monitor pod health, execute DB migrations, scale resources, rotate secrets, and fix common errors step-by-step. |
 
 ---
 
-## ⚡ Quick System Status Check
+## 🎯 How to Use This Documentation
 
-To quickly check the health of the entire deployed production environment:
-
-```bash
-# Public Web App
-curl -i https://sunotal.automateuniverse.space/
-
-# Microservice Health Endpoint
-curl -i https://sunotal.automateuniverse.space/api/healthz
-
-# Admin Login Test
-curl -i -X POST https://sunotal.automateuniverse.space/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@sunotal.com","password":"admin123"}'
-```
+1. **If you are new to IT/DevOps**: Read sequentially starting from [01-OVERVIEW.md](01-OVERVIEW.md). Each chapter builds upon the previous concepts using plain English and real-world analogies.
+2. **If you need to deploy or manage Sunotal**: Jump straight to [07-OPERATIONS-RUNBOOK.md](07-OPERATIONS-RUNBOOK.md) for step-by-step operational instructions and troubleshooting guides.
+3. **If you are contributing code**: Consult [03-LOCAL-DEVELOPMENT.md](03-LOCAL-DEVELOPMENT.md) to set up your local environment in minutes.
