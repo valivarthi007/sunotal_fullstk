@@ -5,4 +5,9 @@ export * from './inventory.js';
 export * from './categories.js';
 export * from './banners.js';
 export * from './productDefinitions.js';
-
+export * from './warehouses.js';
+export * from './payments.js';
+export * from './orders.js';
+export * from './cart.js';
+export * from './reviews.js';
+export * from './addresses.js';

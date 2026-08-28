@@ -10,7 +10,9 @@ import {
   X,
   ClipboardList,
   GalleryHorizontalEnd,
-  FileText
+  FileText,
+  Navigation,
+  Activity
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -30,6 +32,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { name: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
     { name: "Products", path: "/admin/products", icon: Package },
+    { name: "Warehouse", path: "/admin/warehouses", icon: Navigation },
+    { name: "Observability", path: "/admin/observability", icon: Activity },
     { name: "Banners", path: "/admin/banners", icon: GalleryHorizontalEnd },
     { name: "Inventory", path: "/admin/inventory", icon: ClipboardList },
     { name: "Vendors", path: "/admin/vendors", icon: Store },

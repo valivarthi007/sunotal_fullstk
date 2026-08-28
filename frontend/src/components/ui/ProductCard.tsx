@@ -2,14 +2,17 @@ import { Product } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShoppingCart, Leaf, Check, MapPin } from "lucide-react";
+import { ShoppingCart, Leaf, Check, MapPin, Plus, Minus } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
 import { useState } from "react";
 
 export function ProductCard({ product }: { product: Product }) {
-  const { addItem } = useCart();
-  const [added, setAdded] = useState(false);
+  const { items, addItem, removeItem, updateQuantity } = useCart();
+  
+  // Find current cart quantity for this product
+  const cartItem = items.find((i) => i.product.id === product.id);
+  const currentQuantity = cartItem ? cartItem.quantity : 0;
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-IN", {
@@ -20,8 +23,18 @@ export function ProductCard({ product }: { product: Product }) {
 
   const handleAddToCart = () => {
     addItem(product);
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1500);
+  };
+
+  const handleIncrement = () => {
+    updateQuantity(product.id, currentQuantity + 1);
+  };
+
+  const handleDecrement = () => {
+    if (currentQuantity === 1) {
+      removeItem(product.id);
+    } else {
+      updateQuantity(product.id, currentQuantity - 1);
+    }
   };
 
   return (
@@ -39,8 +52,8 @@ export function ProductCard({ product }: { product: Product }) {
 
       {product.discountPercentage > 0 && (
         <div className="absolute top-3 right-3 z-10">
-          <Badge variant="secondary" className="bg-red-100 text-red-700 border-transparent hover:bg-red-100 font-bold px-2 py-0.5 shadow-sm">
-            {product.discountPercentage}% OFF
+          <Badge variant="secondary" className="bg-red-100 text-red-700 border-transparent hover:bg-red-100 font-bold px-2 py-0.5 shadow-sm font-mono">
+            SAVE ₹{Math.round(product.originalPrice - product.price)} ({product.discountPercentage}% OFF)
           </Badge>
         </div>
       )}
@@ -84,23 +97,34 @@ export function ProductCard({ product }: { product: Product }) {
         </div>
       </div>
 
-      {/* Add to Cart — always visible on mobile, hover on desktop */}
-      <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-0 sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300 ease-out">
-        <Button
-          className={`w-full shadow-lg gap-2 font-semibold transition-all ${added ? "bg-green-600 hover:bg-green-700" : ""}`}
-          onClick={handleAddToCart}
-          disabled={product.stock === 0}
-        >
-          {product.stock === 0 ? (
-            "Out of stock"
-          ) : added ? (
-            <><Check className="w-4 h-4" /> Added!</>
-          ) : (
-            <><ShoppingCart className="w-4 h-4" /> Add to Cart</>
-          )}
-        </Button>
+      {/* BigBasket-Style Instant Quantity Stepper & Add Button */}
+      <div className="absolute bottom-0 left-0 right-0 p-3 bg-card border-t border-border">
+        {currentQuantity === 0 ? (
+          <Button
+            className="w-full h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-sm"
+            onClick={handleAddToCart}
+            disabled={product.stock === 0}
+          >
+            {product.stock === 0 ? "Out of stock" : <><ShoppingCart className="w-3.5 h-3.5" /> ADD</>}
+          </Button>
+        ) : (
+          <div className="flex items-center justify-between bg-emerald-700 text-white rounded-xl h-9 px-2 font-mono font-bold text-xs shadow-md">
+            <button
+              onClick={handleDecrement}
+              className="p-1 hover:bg-emerald-800 rounded transition-colors text-white"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-xs">{currentQuantity} in cart</span>
+            <button
+              onClick={handleIncrement}
+              className="p-1 hover:bg-emerald-800 rounded transition-colors text-white"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
-      <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card to-transparent opacity-0 sm:group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
     </div>
   );
 }

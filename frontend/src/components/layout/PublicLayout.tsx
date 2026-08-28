@@ -23,6 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart-context";
 import { useLocationState } from "@/lib/location-context";
 import { LocationModal } from "@/components/ui/location-modal";
+import { InteractiveMapPickerModal } from "@/components/ui/InteractiveMapPickerModal";
 import { cn } from "@/lib/utils";
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
@@ -77,10 +78,17 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 
+  const [mapModalOpen, setMapModalOpen] = useState(false);
+
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary/20 selection:text-primary">
       {/* Location Modal */}
       <LocationModal open={locationModalOpen} onOpenChange={setLocationModalOpen} />
+      <InteractiveMapPickerModal
+        isOpen={mapModalOpen}
+        onClose={() => setMapModalOpen(false)}
+        onSelectAddress={(addr) => setLocationModalOpen(false)}
+      />
 
       {/* Header */}
       <header
@@ -122,9 +130,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-2 sm:gap-4">
             <button
-              onClick={() => setLocationModalOpen(true)}
+              onClick={() => setMapModalOpen(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-accent/60 hover:bg-accent text-sm font-medium border border-border/50 hover:border-primary/40 transition-all group"
-              title="Click to change delivery location"
+              title="Click to pin precise delivery location on map"
             >
               <MapPin className="w-4 h-4 text-primary shrink-0 group-hover:scale-110 transition-transform" />
               <div className="text-left">

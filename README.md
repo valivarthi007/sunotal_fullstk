@@ -142,3 +142,21 @@ cd frontend && pnpm exec tsc --noEmit && pnpm build
 # Type check backend
 cd ../backend && pnpm exec tsc --noEmit && pnpm build
 ```
+
+---
+
+## 8. Complete Exhaustive Documentation Index
+
+For complete technical specifications, architecture diagrams, API contracts, infrastructure details, and operational runbooks, inspect the [`docs/`](docs/README.md) directory:
+
+- [Chapter 1: System Overview & Core Concepts](docs/01-OVERVIEW.md)
+- [Chapter 2: System Architecture & Database Schemas](docs/02-ARCHITECTURE.md)
+- [Chapter 3: Local Development & Testing Guide](docs/03-LOCAL-DEVELOPMENT.md)
+- [Chapter 4: Infrastructure as Code (AWS & Terraform)](docs/04-INFRASTRUCTURE.md)
+- [Chapter 5: Containers & Kubernetes Guide](docs/05-CONTAINERS-KUBERNETES.md)
+- [Chapter 6: CI/CD Pipelines (GitHub Actions)](docs/06-CICD-PIPELINES.md)
+- [Chapter 7: Operations Runbook & Troubleshooting](docs/07-OPERATIONS-RUNBOOK.md)
+- [Chapter 8: Exhaustive API Reference & Contracts](docs/08-EXHAUSTIVE-API-REFERENCE-AND-CONTRACTS.md)
+- [Chapter 9: Location Auto-Detection Engine & Frontend Architecture](docs/09-LOCATION-AND-FRONTEND-ENGINE.md)
+- [Chapter 10: How-To Guides & Operational Cookbook](docs/10-HOW-TO-GUIDES-AND-COOKBOOK.md)
+

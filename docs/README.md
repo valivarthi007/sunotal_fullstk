@@ -15,11 +15,15 @@ Welcome to the **Sunotal End-to-End Master Documentation**. This documentation i
 | **05** | [Containers & Kubernetes Guide](05-CONTAINERS-KUBERNETES.md) | What Docker containers are, multi-stage Dockerfiles explained line-by-line, Kubernetes manifests (Pods, Deployments, Services, Ingress, Jobs), and EKS management. |
 | **06** | [CI/CD Pipelines (GitHub Actions)](06-CICD-PIPELINES.md) | Continuous Integration (CI) and Continuous Deployment (CD) pipelines explained step-by-step: automated testing, security scanning, image building, and production deployment. |
 | **07** | [Operations Runbook & Troubleshooting](07-OPERATIONS-RUNBOOK.md) | The Layman's Operating Manual: how to trigger deployments, monitor pod health, execute DB migrations, scale resources, rotate secrets, and fix common errors step-by-step. |
+| **08** | [Exhaustive API Reference & Contracts](08-EXHAUSTIVE-API-REFERENCE-AND-CONTRACTS.md) | Detailed REST contracts for all 4 microservices, headers, payload schemas, query params, status codes, and error models. |
+| **09** | [Location Engine & Frontend Architecture](09-LOCATION-AND-FRONTEND-ENGINE.md) | Technical specs for Automatic Location Auto-Detection (HTML5 + Nominatim + IP fallback), Corporate GSTIN Checkout, and E2E Playwright framework. |
+| **10** | [How-To Guides & Operational Cookbook](10-HOW-TO-GUIDES-AND-COOKBOOK.md) | Step-by-step tutorials for warehouse management, payment gateway testing, Prometheus/Grafana monitoring, microservice additions, and secret rotation. |
 
 ---
 
 ## 🎯 How to Use This Documentation
 
 1. **If you are new to IT/DevOps**: Read sequentially starting from [01-OVERVIEW.md](01-OVERVIEW.md). Each chapter builds upon the previous concepts using plain English and real-world analogies.
-2. **If you need to deploy or manage Sunotal**: Jump straight to [07-OPERATIONS-RUNBOOK.md](07-OPERATIONS-RUNBOOK.md) for step-by-step operational instructions and troubleshooting guides.
+2. **If you need to deploy or manage Sunotal**: Jump straight to [07-OPERATIONS-RUNBOOK.md](07-OPERATIONS-RUNBOOK.md) and [10-HOW-TO-GUIDES-AND-COOKBOOK.md](10-HOW-TO-GUIDES-AND-COOKBOOK.md).
 3. **If you are contributing code**: Consult [03-LOCAL-DEVELOPMENT.md](03-LOCAL-DEVELOPMENT.md) to set up your local environment in minutes.
+4. **If you are integrating APIs or developing features**: Refer to [08-EXHAUSTIVE-API-REFERENCE-AND-CONTRACTS.md](08-EXHAUSTIVE-API-REFERENCE-AND-CONTRACTS.md), [09-LOCATION-AND-FRONTEND-ENGINE.md](09-LOCATION-AND-FRONTEND-ENGINE.md), and [10-HOW-TO-GUIDES-AND-COOKBOOK.md](10-HOW-TO-GUIDES-AND-COOKBOOK.md).

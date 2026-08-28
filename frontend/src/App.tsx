@@ -21,6 +21,8 @@ import UsersAdmin from "@/pages/admin/Users";
 import InventoryAdmin from "@/pages/admin/Inventory";
 import BannersAdmin from "@/pages/admin/Banners";
 import QuotationsAdmin from "@/pages/admin/Quotations";
+import { WarehouseManager } from "@/pages/admin/WarehouseManager";
+import { ObservabilityDashboard } from "@/pages/admin/ObservabilityDashboard";
 
 import VendorDashboard from "@/pages/vendor/VendorDashboard";
 import NotFound from "@/pages/not-found";
@@ -73,6 +75,8 @@ function Router() {
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={Dashboard} />
       <Route path="/admin/products" component={ProductsAdmin} />
+      <Route path="/admin/warehouses" component={WarehouseManager} />
+      <Route path="/admin/observability" component={ObservabilityDashboard} />
       <Route path="/admin/banners" component={BannersAdmin} />
       <Route path="/admin/inventory" component={InventoryAdmin} />
       <Route path="/admin/vendors" component={VendorsAdmin} />

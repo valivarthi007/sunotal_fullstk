@@ -6,6 +6,8 @@ import categoriesRouter from './routes/categories.js';
 import { uploadRouter } from './routes/upload.js';
 import { bannersRouter } from './routes/banners.js';
 import productDefinitionsRouter from './routes/productDefinitions.js';
+import warehouseRouter from './routes/warehouse.js';
+import { metricsMiddleware, metricsHandler } from '../../src/lib/metrics.js';
 import { initDatabase } from './lib/db.js';
 
 export const app = express();
@@ -19,6 +21,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(metricsMiddleware('operations-service'));
 
 app.use('/api', productsRouter);
 app.use('/api', categoriesRouter);
@@ -26,6 +29,9 @@ app.use('/api', uploadRouter);
 app.use('/api/banners', bannersRouter);
 app.use('/api', bannersRouter);
 app.use('/api', productDefinitionsRouter);
+app.use('/api', warehouseRouter);
+
+app.get('/metrics', metricsHandler);
 
 app.get('/api/healthz', (req, res) => {
   res.status(200).json({ status: "ok", service: "operations" });

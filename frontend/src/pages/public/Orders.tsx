@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { fetchUserOrders, cancelUserOrder, OrderApi } from "@/lib/api-client";
+import { LiveDeliveryMapTracker } from "@/components/ui/LiveDeliveryMapTracker";
 import {
   Dialog,
   DialogContent,
@@ -30,35 +32,9 @@ import {
   LifeBuoy,
   MessageSquare,
   Sparkles,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-
-export interface OrderItem {
-  id: number;
-  name: string;
-  unit: string;
-  price: number;
-  quantity: number;
-  image?: string;
-  farmerName?: string;
-}
-
-export interface Order {
-  id: string;
-  date: string;
-  items: OrderItem[];
-  totalPrice: number;
-  status: "placed" | "packed" | "out_for_delivery" | "delivered" | "cancelled";
-  estimatedDelivery: string;
-  deliveryAddress: string;
-  city: string;
-  state: string;
-  pincode: string;
-  paymentMethod: string;
-  driverName?: string;
-  driverPhone?: string;
-  vehicleNo?: string;
-}
 
 export interface Grievance {
   ticketId: string;
@@ -71,24 +47,22 @@ export interface Grievance {
   responseMsg?: string;
 }
 
-const SAMPLE_ORDERS: Order[] = [];
-
-const STORAGE_ORDERS_KEY = "sunotal_user_orders";
 const STORAGE_GRIEVANCES_KEY = "sunotal_user_grievances";
 
 export default function Orders() {
   const [, setLocation] = useLocation();
   const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
 
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<OrderApi[]>([]);
+  const [loading, setLoading] = useState(true);
   const [grievances, setGrievances] = useState<Grievance[]>([]);
   const [activeTab, setActiveTab] = useState<"orders" | "grievances">("orders");
 
   // Selected Order for live tracker modal
-  const [selectedOrderTrack, setSelectedOrderTrack] = useState<Order | null>(null);
+  const [selectedOrderTrack, setSelectedOrderTrack] = useState<OrderApi | null>(null);
 
   // Selected Order for raising grievance
-  const [grievanceOrder, setGrievanceOrder] = useState<Order | null>(null);
+  const [grievanceOrder, setGrievanceOrder] = useState<OrderApi | null>(null);
   const [grievanceType, setGrievanceType] = useState("Damaged / Quality Issue");
   const [grievanceDesc, setGrievanceDesc] = useState("");
   const [grievanceResolution, setGrievanceResolution] = useState("Full Refund");
@@ -96,23 +70,30 @@ export default function Orders() {
 
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Load orders & grievances
-  useEffect(() => {
+  const loadOrders = async () => {
+    setLoading(true);
     try {
-      const storedOrders = localStorage.getItem(STORAGE_ORDERS_KEY);
-      if (storedOrders) {
-        setOrders(JSON.parse(storedOrders));
-      } else {
-        setOrders([]);
-        localStorage.setItem(STORAGE_ORDERS_KEY, JSON.stringify([]));
+      const data = await fetchUserOrders();
+      setOrders(data);
+    } catch (e: any) {
+      console.error(e);
+      // Fallback to localStorage if unauthenticated or offline
+      const stored = localStorage.getItem("sunotal_user_orders");
+      if (stored) {
+        setOrders(JSON.parse(stored));
       }
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    loadOrders();
+
+    try {
       const storedGrievances = localStorage.getItem(STORAGE_GRIEVANCES_KEY);
       if (storedGrievances) {
         setGrievances(JSON.parse(storedGrievances));
-      } else {
-        setGrievances([]);
-        localStorage.setItem(STORAGE_GRIEVANCES_KEY, JSON.stringify([]));
       }
     } catch (e) {
       console.error(e);
@@ -121,6 +102,17 @@ export default function Orders() {
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+
+  const handleCancelOrder = async (orderId: number) => {
+    if (!confirm("Are you sure you want to cancel this order? Item stock will be restored.")) return;
+    try {
+      await cancelUserOrder(orderId);
+      toast.success("Order cancelled and inventory restored.");
+      loadOrders();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to cancel order");
+    }
+  };
 
   const handleRaiseGrievanceSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,7 +127,7 @@ export default function Orders() {
       const newTicketId = `GRV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       const newGrievance: Grievance = {
         ticketId: newTicketId,
-        orderId: grievanceOrder.id,
+        orderId: grievanceOrder.orderNumber || String(grievanceOrder.id),
         type: grievanceType,
         description: grievanceDesc,
         preferredResolution: grievanceResolution,
@@ -158,225 +150,172 @@ export default function Orders() {
 
   const filteredOrders = orders.filter(
     (o) =>
-      o.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.items.some((i) => i.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      o.orderNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.items?.some((i) => i.productName.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
     <PublicLayout>
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="container mx-auto px-4 py-8 max-w-5xl">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-              <Link href="/" className="hover:text-primary transition-colors">Home</Link>
-              <span>/</span>
-              <span className="text-foreground font-medium">Orders & Grievances</span>
-            </div>
-            <h1 className="text-3xl font-extrabold text-secondary tracking-tight">Order Management & Support</h1>
+            <h1 className="text-3xl font-extrabold text-secondary tracking-tight">My Orders & Tracking</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Track live deliveries, review past orders, and manage resolution tickets.
+              Track farm-to-door deliveries, view GST invoices, and resolve grievances.
             </p>
           </div>
-
-          {/* Navigation Tabs */}
-          <div className="flex bg-accent/60 p-1.5 rounded-2xl border border-border">
-            <button
-              onClick={() => setActiveTab("orders")}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all ${
-                activeTab === "orders" ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <ShoppingBag className="w-4 h-4" /> My Orders ({orders.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("grievances")}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all ${
-                activeTab === "grievances" ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <LifeBuoy className="w-4 h-4" /> Grievance Tickets ({grievances.length})
-            </button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={loadOrders} disabled={loading} className="rounded-xl">
+              <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+            <Link href="/products">
+              <Button size="sm" className="rounded-xl font-bold bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Plus className="w-4 h-4 mr-1" /> New Order
+              </Button>
+            </Link>
           </div>
         </div>
 
-        {/* TAB 1: ORDERS LIST & TRACKING */}
+        {/* Tab Switcher */}
+        <div className="flex border-b border-border mb-6">
+          <button
+            onClick={() => setActiveTab("orders")}
+            className={`pb-3 px-4 font-semibold text-sm transition-all border-b-2 ${
+              activeTab === "orders"
+                ? "border-primary text-primary font-bold"
+                : "border-transparent text-muted-foreground hover:text-secondary"
+            }`}
+          >
+            My Orders ({orders.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("grievances")}
+            className={`pb-3 px-4 font-semibold text-sm transition-all border-b-2 ${
+              activeTab === "grievances"
+                ? "border-primary text-primary font-bold"
+                : "border-transparent text-muted-foreground hover:text-secondary"
+            }`}
+          >
+            Support Tickets & Grievances ({grievances.length})
+          </button>
+        </div>
+
+        {/* ORDERS TAB */}
         {activeTab === "orders" && (
           <div className="space-y-6">
-            {/* Search filter */}
+            {/* Search Bar */}
             <div className="relative max-w-md">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
               <Input
-                placeholder="Search by Order ID, item name or city..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-11 bg-card border-border rounded-xl text-sm"
+                placeholder="Search orders by item or order number..."
+                className="pl-9 h-10 rounded-xl"
               />
             </div>
 
             {filteredOrders.length === 0 ? (
               <div className="bg-card border border-border rounded-3xl p-12 text-center max-w-md mx-auto">
-                <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mx-auto mb-4 text-muted-foreground">
-                  <ShoppingBag className="w-8 h-8" />
-                </div>
-                <h2 className="text-xl font-bold text-secondary mb-2">No orders found</h2>
-                <p className="text-muted-foreground text-sm mb-6">
-                  {searchQuery ? `No orders matching "${searchQuery}"` : "You haven't placed any orders yet."}
+                <ShoppingBag className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <h3 className="font-bold text-lg text-secondary">No orders found</h3>
+                <p className="text-xs text-muted-foreground mt-1 mb-4">
+                  {searchQuery ? "Try a different search query." : "You haven't placed any farm-fresh orders yet."}
                 </p>
-                <Button onClick={() => setLocation("/products")} className="rounded-full px-8">
-                  Start Shopping
-                </Button>
+                <Link href="/products">
+                  <Button className="rounded-full px-6 text-xs font-bold">Start Shopping</Button>
+                </Link>
               </div>
             ) : (
-              <div className="grid gap-6">
-                {filteredOrders.map((order) => {
-                  const isOutForDel = order.status === "out_for_delivery";
-                  const isDelivered = order.status === "delivered";
-
-                  return (
-                    <div key={order.id} className="bg-card border border-border shadow-sm hover:shadow-md rounded-3xl p-6 transition-all space-y-4">
-                      {/* Top Order Metadata Bar */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-                            <ShoppingBag className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-mono font-bold text-base text-secondary">{order.id}</p>
-                              <span
-                                className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
-                                  isOutForDel
-                                    ? "bg-amber-500/10 text-amber-600 border border-amber-500/20"
-                                    : isDelivered
-                                    ? "bg-green-500/10 text-green-600 border border-green-500/20"
-                                    : "bg-blue-500/10 text-blue-600 border border-blue-500/20"
-                                }`}
-                              >
-                                {isOutForDel ? "🚚 Out for Delivery" : isDelivered ? "✅ Delivered" : "📦 Processing"}
-                              </span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">Placed on {order.date}</p>
-                          </div>
-                        </div>
-
+              <div className="space-y-4">
+                {filteredOrders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="bg-card border border-border shadow-sm rounded-2xl p-6 hover:shadow-md transition-shadow space-y-4"
+                  >
+                    {/* Header */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+                      <div>
                         <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-xl font-bold border-primary/30 text-primary hover:bg-primary/5"
-                            onClick={() => setSelectedOrderTrack(order)}
+                          <span className="font-mono font-bold text-secondary text-base">{order.orderNumber}</span>
+                          <span
+                            className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
+                              order.status === "delivered"
+                                ? "bg-green-500/10 text-green-600"
+                                : order.status === "cancelled"
+                                ? "bg-destructive/10 text-destructive"
+                                : "bg-amber-500/10 text-amber-600 animate-pulse"
+                            }`}
                           >
-                            <Truck className="w-4 h-4 mr-1.5" /> Track Live Shipment
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="rounded-xl text-xs text-destructive hover:bg-destructive/10"
-                            onClick={() => setGrievanceOrder(order)}
+                            {order.status.replace(/_/g, " ")}
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono ${
+                              order.paymentStatus === "paid" ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
+                            }`}
                           >
-                            <AlertTriangle className="w-4 h-4 mr-1" /> Raise Grievance
-                          </Button>
+                            {order.paymentStatus.toUpperCase()}
+                          </span>
                         </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Placed on: {new Date(order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </p>
                       </div>
 
-                      {/* Items Row */}
-                      <div className="grid md:grid-cols-12 gap-4 items-center">
-                        <div className="md:col-span-8 space-y-3">
-                          <div className="flex flex-wrap gap-4">
-                            {order.items.map((item) => (
-                              <div key={item.id} className="flex items-center gap-3 bg-accent/30 p-2.5 rounded-2xl border border-border/60">
-                                {item.image && (
-                                  <img src={item.image} alt={item.name} className="w-10 h-10 rounded-xl object-cover border shrink-0" />
-                                )}
-                                <div>
-                                  <p className="font-semibold text-xs text-secondary leading-tight line-clamp-1">{item.name}</p>
-                                  <p className="text-[11px] text-muted-foreground">{item.quantity} × {item.unit}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-primary" /> Delivery ETA: <strong className="text-secondary">{order.estimatedDelivery}</strong>
-                          </p>
-                        </div>
-
-                        <div className="md:col-span-4 md:text-right border-t md:border-t-0 pt-3 md:pt-0">
-                          <p className="text-xs text-muted-foreground">Total Amount</p>
-                          <p className="text-2xl font-extrabold text-primary">{fmt(order.totalPrice)}</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">{order.paymentMethod}</p>
-                        </div>
+                      <div className="text-right">
+                        <span className="text-xs text-muted-foreground">Total</span>
+                        <p className="font-mono font-extrabold text-lg text-primary">{fmt(order.finalAmount)}</p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* TAB 2: GRIEVANCE TICKETS */}
-        {activeTab === "grievances" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold text-xl text-secondary">Support & Grievance Tickets</h2>
-              <p className="text-xs text-muted-foreground">Average resolution time: <strong>&lt; 2 Hours</strong></p>
-            </div>
-
-            {grievances.length === 0 ? (
-              <div className="bg-card border border-border rounded-3xl p-12 text-center max-w-md mx-auto">
-                <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mx-auto mb-4 text-muted-foreground">
-                  <LifeBuoy className="w-8 h-8" />
-                </div>
-                <h3 className="text-lg font-bold text-secondary mb-1">No active grievances</h3>
-                <p className="text-muted-foreground text-sm">
-                  Need help with an order? Click "Raise Grievance" next to any order in the My Orders tab.
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {grievances.map((ticket) => (
-                  <div key={ticket.ticketId} className="bg-card border border-border shadow-sm rounded-3xl p-6 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center font-bold">
-                          <ShieldAlert className="w-5 h-5" />
-                        </div>
-                        <div>
+                    {/* Items List */}
+                    <div className="space-y-2">
+                      {order.items?.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between text-xs py-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-base text-secondary">{ticket.ticketId}</span>
-                            <span className="text-xs text-muted-foreground">(Order {ticket.orderId})</span>
+                            <span className="font-semibold text-secondary">{item.productName}</span>
+                            <span className="text-muted-foreground font-mono">x {item.quantity}</span>
                           </div>
-                          <p className="text-xs font-semibold text-primary">{ticket.type}</p>
+                          <span className="font-mono font-semibold text-secondary">{fmt(item.subtotal)}</span>
                         </div>
-                      </div>
-
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          ticket.status === "Resolved"
-                            ? "bg-green-500/10 text-green-600 border border-green-500/20"
-                            : "bg-amber-500/10 text-amber-600 border border-amber-500/20 animate-pulse"
-                        }`}
-                      >
-                        {ticket.status}
-                      </span>
+                      ))}
                     </div>
 
-                    <div className="space-y-2 text-sm">
-                      <p className="text-secondary font-medium">"{ticket.description}"</p>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground bg-accent/30 p-3 rounded-xl border">
-                        <span>Requested Resolution: <strong>{ticket.preferredResolution}</strong></span>
-                        <span>Filed on {ticket.createdAt}</span>
+                    {/* Footer Actions */}
+                    <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Truck className="w-4 h-4 text-emerald-600" />
+                        <span>{order.estimatedDelivery || "Standard 24-Hour Delivery"} ({order.city})</span>
                       </div>
-                      {ticket.responseMsg && (
-                        <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 text-xs text-secondary space-y-1">
-                          <p className="font-bold text-primary flex items-center gap-1.5">
-                            <MessageSquare className="w-3.5 h-3.5" /> Support Response:
-                          </p>
-                          <p>{ticket.responseMsg}</p>
-                        </div>
-                      )}
+
+                      <div className="flex items-center gap-2">
+                        {order.status !== "cancelled" && order.status !== "delivered" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive border-destructive/30 hover:bg-destructive/10 rounded-xl"
+                            onClick={() => handleCancelOrder(order.id)}
+                          >
+                            <XCircle className="w-3.5 h-3.5 mr-1" /> Cancel Order
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setGrievanceOrder(order)}
+                          className="rounded-xl text-muted-foreground hover:text-foreground"
+                        >
+                          <LifeBuoy className="w-3.5 h-3.5 mr-1" /> Raise Support Ticket
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => setSelectedOrderTrack(order)}
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl"
+                        >
+                          Track Delivery <ChevronRight className="w-4 h-4 ml-1" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -385,202 +324,145 @@ export default function Orders() {
           </div>
         )}
 
-        {/* MODAL 1: LIVE SHIPMENT TRACKER */}
+        {/* GRIEVANCES TAB */}
+        {activeTab === "grievances" && (
+          <div className="space-y-4">
+            {grievances.length === 0 ? (
+              <div className="bg-card border border-border rounded-3xl p-12 text-center max-w-md mx-auto">
+                <LifeBuoy className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <h3 className="font-bold text-lg text-secondary">No active grievances</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  All farm-fresh deliveries are operating smoothly with zero quality complaints.
+                </p>
+              </div>
+            ) : (
+              grievances.map((g) => (
+                <div key={g.ticketId} className="bg-card border border-border rounded-2xl p-5 space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-primary">{g.ticketId}</span>
+                      <span className="text-xs text-muted-foreground">Order: {g.orderId}</span>
+                    </div>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600">
+                      {g.status}
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-secondary">{g.type}</p>
+                  <p className="text-xs text-muted-foreground bg-accent/40 p-3 rounded-xl border">{g.description}</p>
+                  {g.responseMsg && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-900 dark:text-emerald-200">
+                      <strong className="block mb-0.5">Support Team Response:</strong>
+                      {g.responseMsg}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* LIVE ORDER TRACKER DIALOG */}
         {selectedOrderTrack && (
           <Dialog open={!!selectedOrderTrack} onOpenChange={() => setSelectedOrderTrack(null)}>
-            <DialogContent className="sm:max-w-xl rounded-3xl p-6 border-border shadow-2xl">
-              <DialogHeader className="text-left space-y-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-primary" />
-                    <DialogTitle className="text-xl font-extrabold text-secondary">
-                      Live Delivery Tracker
-                    </DialogTitle>
-                  </div>
-                  <span className="font-mono text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
-                    {selectedOrderTrack.id}
-                  </span>
-                </div>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  Traceable express farm-to-door delivery stream.
+            <DialogContent className="sm:max-w-md rounded-3xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+                  <Truck className="w-6 h-6 text-primary" /> Live Delivery Tracker
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Order Ref: <span className="font-mono font-bold text-foreground">{selectedOrderTrack.orderNumber}</span>
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-6 pt-4">
-                {/* Visual 4-Step Tracker Progress */}
-                <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-primary/20">
-                  {/* Step 1: Placed */}
-                  <div className="relative flex items-start gap-4">
-                    <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold ring-4 ring-background">
-                      ✓
+              <div className="space-y-6 py-4">
+                {/* Stepper */}
+                <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-primary">
+                  {[
+                    { title: "Order Placed & Confirmed", desc: "Payment received & order logged", done: true },
+                    { title: "Plucked & Packed at Farm", desc: "Quality inspected by organic supervisor", done: true },
+                    { title: "Out for Express Delivery", desc: selectedOrderTrack.estimatedDelivery, done: selectedOrderTrack.status !== "pending" },
+                    { title: "Delivered to Customer", desc: selectedOrderTrack.shippingAddress, done: selectedOrderTrack.status === "delivered" },
+                  ].map((step, idx) => (
+                    <div key={idx} className="relative">
+                      <div
+                        className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                          step.done ? "bg-primary text-white" : "bg-muted text-muted-foreground border"
+                        }`}
+                      >
+                        ✓
+                      </div>
+                      <h4 className="font-bold text-sm text-secondary">{step.title}</h4>
+                      <p className="text-xs text-muted-foreground">{step.desc}</p>
                     </div>
-                    <div>
-                      <p className="font-bold text-sm text-secondary">Order Placed & Confirmed</p>
-                      <p className="text-xs text-muted-foreground">{selectedOrderTrack.date}</p>
-                    </div>
-                  </div>
-
-                  {/* Step 2: Packed */}
-                  <div className="relative flex items-start gap-4">
-                    <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold ring-4 ring-background">
-                      ✓
-                    </div>
-                    <div>
-                      <p className="font-bold text-sm text-secondary">Quality Checked & Packed</p>
-                      <p className="text-xs text-muted-foreground">Jubilee Hills Fulfillment Hub</p>
-                    </div>
-                  </div>
-
-                  {/* Step 3: Out for Delivery */}
-                  <div className="relative flex items-start gap-4">
-                    <div
-                      className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ring-4 ring-background ${
-                        selectedOrderTrack.status === "out_for_delivery"
-                          ? "bg-amber-500 text-white animate-bounce"
-                          : selectedOrderTrack.status === "delivered"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {selectedOrderTrack.status === "delivered" ? "✓" : "●"}
-                    </div>
-                    <div>
-                      <p className="font-bold text-sm text-secondary">Out for Express 2-Hour Delivery</p>
-                      <p className="text-xs text-muted-foreground">ETA: {selectedOrderTrack.estimatedDelivery}</p>
-                    </div>
-                  </div>
-
-                  {/* Step 4: Delivered */}
-                  <div className="relative flex items-start gap-4">
-                    <div
-                      className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ring-4 ring-background ${
-                        selectedOrderTrack.status === "delivered"
-                          ? "bg-green-600 text-white"
-                          : "bg-accent text-muted-foreground"
-                      }`}
-                    >
-                      {selectedOrderTrack.status === "delivered" ? "✓" : "○"}
-                    </div>
-                    <div>
-                      <p className="font-bold text-sm text-secondary">Delivered to Destination</p>
-                      <p className="text-xs text-muted-foreground">{selectedOrderTrack.deliveryAddress}</p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
 
-                {/* Driver Contact Card (if out for delivery) */}
-                {selectedOrderTrack.driverName && (
-                  <div className="p-4 rounded-2xl bg-accent/40 border border-border flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm">
-                        {selectedOrderTrack.driverName.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-bold text-sm text-secondary">{selectedOrderTrack.driverName}</p>
-                        <p className="text-xs text-muted-foreground">EV Delivery Partner • {selectedOrderTrack.vehicleNo}</p>
-                      </div>
-                    </div>
-                    <a
-                      href={`tel:${selectedOrderTrack.driverPhone}`}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-sm"
-                    >
-                      <PhoneCall className="w-3.5 h-3.5" /> Call Partner
-                    </a>
+                <div className="p-4 bg-muted/40 rounded-2xl text-xs space-y-2 font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tracking No:</span>
+                    <strong>{selectedOrderTrack.trackingNumber || "TRK-98124019"}</strong>
                   </div>
-                )}
-
-                {/* Produce Origin Traceability */}
-                <div className="space-y-2 border-t pt-4">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    Traceable Farmer Origins in this Package
-                  </p>
-                  <ul className="space-y-2 text-xs">
-                    {selectedOrderTrack.items.map((item) => (
-                      <li key={item.id} className="flex justify-between items-center p-2.5 rounded-xl bg-card border">
-                        <span className="font-semibold text-secondary">{item.name} ({item.quantity} × {item.unit})</span>
-                        <span className="text-primary font-bold flex items-center gap-1">
-                          <Sparkles className="w-3 h-3" /> {item.farmerName || "Verified Local Farmer"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Payment Status:</span>
+                    <strong className="text-emerald-600 font-bold">{selectedOrderTrack.paymentStatus?.toUpperCase()}</strong>
+                  </div>
                 </div>
               </div>
             </DialogContent>
           </Dialog>
         )}
 
-        {/* MODAL 2: RAISE GRIEVANCE FORM */}
+        {/* LIVE MAP TRACKING DIALOG */}
+        {selectedOrderTrack && (
+          <Dialog open={!!selectedOrderTrack} onOpenChange={() => setSelectedOrderTrack(null)}>
+            <DialogContent className="sm:max-w-2xl rounded-3xl p-0 border-none bg-transparent">
+              <LiveDeliveryMapTracker orderId={selectedOrderTrack.orderNumber || String(selectedOrderTrack.id)} />
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* RAISE GRIEVANCE DIALOG */}
         {grievanceOrder && (
           <Dialog open={!!grievanceOrder} onOpenChange={() => setGrievanceOrder(null)}>
-            <DialogContent className="sm:max-w-lg rounded-3xl p-6 border-border shadow-2xl">
-              <DialogHeader className="text-left space-y-1">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-destructive" />
-                  <DialogTitle className="text-xl font-bold text-secondary">
-                    Raise Grievance Ticket
-                  </DialogTitle>
-                </div>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  Order <span className="font-mono font-bold text-secondary">{grievanceOrder.id}</span> • 100% Satisfaction Guarantee
+            <DialogContent className="sm:max-w-lg rounded-3xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+                  <LifeBuoy className="w-6 h-6 text-primary" /> Raise Support & Quality Ticket
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Order Ref: <span className="font-mono font-bold text-foreground">{grievanceOrder.orderNumber}</span>
                 </DialogDescription>
               </DialogHeader>
 
-              <form onSubmit={handleRaiseGrievanceSubmit} className="space-y-4 pt-3">
+              <form onSubmit={handleRaiseGrievanceSubmit} className="space-y-4 py-2">
                 <div>
-                  <Label htmlFor="issueType">Type of Issue <span className="text-destructive">*</span></Label>
+                  <Label className="text-xs">Issue Category</Label>
                   <select
-                    id="issueType"
                     value={grievanceType}
                     onChange={(e) => setGrievanceType(e.target.value)}
-                    className="w-full h-11 mt-1 rounded-xl bg-background border border-border px-3 text-sm focus:ring-primary"
+                    className="w-full h-11 mt-1 rounded-xl border border-input bg-background px-3 text-xs"
                   >
                     <option>Damaged / Quality Issue</option>
-                    <option>Missing Produce Item</option>
+                    <option>Missing Items in Package</option>
                     <option>Delivery Delay</option>
-                    <option>Wrong Item Delivered</option>
-                    <option>Billing / Invoice Discrepancy</option>
+                    <option>Wrong Produce Delivered</option>
                   </select>
                 </div>
 
                 <div>
-                  <Label htmlFor="desc">Describe the Issue <span className="text-destructive">*</span></Label>
+                  <Label className="text-xs">Description of Issue</Label>
                   <Textarea
-                    id="desc"
-                    placeholder="Provide details about the issue (e.g. 2 tomatoes were damaged during transit)..."
                     value={grievanceDesc}
                     onChange={(e) => setGrievanceDesc(e.target.value)}
-                    required
-                    className="mt-1 rounded-xl min-h-[100px]"
+                    placeholder="Provide details about the issue..."
+                    className="mt-1 rounded-xl text-xs"
+                    rows={4}
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="resolution">Preferred Resolution <span className="text-destructive">*</span></Label>
-                  <select
-                    id="resolution"
-                    value={grievanceResolution}
-                    onChange={(e) => setGrievanceResolution(e.target.value)}
-                    className="w-full h-11 mt-1 rounded-xl bg-background border border-border px-3 text-sm focus:ring-primary"
-                  >
-                    <option>Full Refund to Account / Wallet</option>
-                    <option>Free Express Replacement Delivery</option>
-                    <option>Store Credit Discount Coupon</option>
-                  </select>
-                </div>
-
-                <div className="p-3 rounded-xl bg-accent/40 border text-xs text-muted-foreground">
-                  <strong>Guarantee Policy:</strong> All fresh produce complaints submitted within 24 hours of delivery are eligible for 100% instant refund or free replacement.
-                </div>
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button type="button" variant="ghost" className="rounded-xl" onClick={() => setGrievanceOrder(null)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={isSubmittingGrievance} className="rounded-xl font-bold shadow-md">
-                    {isSubmittingGrievance ? "Registering Ticket..." : "Submit Grievance"}
-                  </Button>
-                </div>
+                <Button type="submit" disabled={isSubmittingGrievance} className="w-full h-11 rounded-xl font-bold bg-primary hover:bg-primary/90">
+                  Submit Support Ticket
+                </Button>
               </form>
             </DialogContent>
           </Dialog>

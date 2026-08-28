@@ -3,6 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import inventoryRouter from './routes/inventory.js';
 import ordersRouter from './routes/orders.js';
+import paymentsRouter from './routes/payments.js';
+import { metricsMiddleware, metricsHandler } from '../../src/lib/metrics.js';
 import { initDatabase } from './lib/db.js';
 
 export const app = express();
@@ -16,9 +18,13 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(metricsMiddleware('inventory-service'));
 
 app.use('/api', inventoryRouter);
 app.use('/api', ordersRouter);
+app.use('/api', paymentsRouter);
+
+app.get('/metrics', metricsHandler);
 
 // Public healthz – no auth required (used by ALB target group and CD pipeline)
 app.get('/api/healthz', (req, res) => {

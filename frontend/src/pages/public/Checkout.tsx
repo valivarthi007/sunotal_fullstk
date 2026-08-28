@@ -11,6 +11,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { PublicLayout } from "@/components/layout/PublicLayout";
+import { PaymentGatewayModal } from "@/components/ui/PaymentGatewayModal";
+import { DeliverySlotPicker } from "@/components/ui/DeliverySlotPicker";
+import { InteractiveMapPickerModal } from "@/components/ui/InteractiveMapPickerModal";
+import { calculateDeliveryFee, createOrderCheckout, verifyPayment, DeliveryFeeCalculation } from "@/lib/api-client";
 import {
   MapPin,
   Truck,
@@ -23,6 +27,7 @@ import {
   Clock,
   ArrowRight,
   Sparkles,
+  FileCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -57,14 +62,26 @@ export default function Checkout() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderConfirmed, setOrderConfirmed] = useState<any>(null);
+  
+  // Payment Gateway Modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState<any>(null);
+
+  // Map Modal & Slot State
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [selectedSlotId, setSelectedSlotId] = useState("express_2hr");
+  const [selectedSlotName, setSelectedSlotName] = useState("Express 2-Hour Delivery");
+
+  // Dynamic Delivery Calculation State
+  const [deliveryCalc, setDeliveryCalc] = useState<DeliveryFeeCalculation | null>(null);
 
   const form = useForm<CheckoutValues>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
       streetAddress: "",
-      city: userLoc.city || "Hyderabad",
-      state: userLoc.state || "Telangana",
-      pincode: userLoc.pincode || "500033",
+      city: userLoc.city || "Bengaluru",
+      state: userLoc.state || "Karnataka",
+      pincode: userLoc.pincode || "560100",
       companyName: "",
       gstin: "",
       poNumber: "",
@@ -72,12 +89,21 @@ export default function Checkout() {
     },
   });
 
-  // Sync user location into checkout address form if defaults change
+  // Sync user location into checkout address form & calculate distance delivery fee
+  const currentCity = form.watch("city") || "Bengaluru";
+
   useEffect(() => {
     if (userLoc.city) form.setValue("city", userLoc.city);
     if (userLoc.state) form.setValue("state", userLoc.state);
     if (userLoc.pincode) form.setValue("pincode", userLoc.pincode);
   }, [userLoc, form]);
+
+  // Recalculate Delivery Fee when city changes
+  useEffect(() => {
+    calculateDeliveryFee({ city: currentCity })
+      .then((res) => setDeliveryCalc(res))
+      .catch((err) => console.error("Delivery fee calculation error:", err));
+  }, [currentCity]);
 
   // Redirect if unauthenticated
   useEffect(() => {
@@ -87,6 +113,10 @@ export default function Checkout() {
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 
+  const deliveryFeeAmount = deliveryCalc ? deliveryCalc.deliveryFee : 0;
+  const gstAmount = Math.round(totalPrice * 0.05);
+  const finalPayable = totalPrice + gstAmount + deliveryFeeAmount;
+
   const handlePlaceOrder = async (values: CheckoutValues) => {
     if (items.length === 0) {
       toast.error("Your cart is empty");
@@ -95,73 +125,68 @@ export default function Checkout() {
 
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem("sunotal_token");
-      const checkoutItems = items.map(i => ({
+      const checkoutItems = items.map((i) => ({
         productId: i.product.id,
-        quantity: i.quantity
+        quantity: i.quantity,
+        price: i.product.price,
       }));
 
-      const res = await fetch("/api/orders/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ items: checkoutItems })
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to process stock deduction for this order");
-      }
-
-      const orderRef = `SUN-${Math.floor(100000 + Math.random() * 900000)}`;
-      const confirmData: any = {
-        id: orderRef,
-        orderId: orderRef,
-        date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
-        items: items.map((i) => ({
-          id: i.product.id,
-          name: i.product.name,
-          unit: i.product.unit,
-          price: i.product.price,
-          quantity: i.quantity,
-          image: i.product.image,
-          farmerName: "Verified Local Farmer",
-        })),
-        totalPrice,
-        status: "out_for_delivery",
-        estimatedDelivery: `Express 2-Hour Delivery (${values.city})`,
-        deliveryAddress: values.streetAddress,
+      const res = await createOrderCheckout({
+        items: checkoutItems,
+        shippingAddress: values.streetAddress,
         city: values.city,
         state: values.state,
         pincode: values.pincode,
-        streetAddress: values.streetAddress,
-        gstin: values.gstin,
-        poNumber: values.poNumber,
-        paymentMethod: values.paymentMethod === "card" ? "Credit / Debit Card" : values.paymentMethod === "upi" ? "UPI" : values.paymentMethod === "netbanking" ? "Net Banking" : "Corporate PO Invoice",
-        driverName: "Ramesh Kumar",
-        driverPhone: "+91 98765 43210",
-        vehicleNo: "EV-DEL-4412",
-      };
+        deliveryFee: deliveryFeeAmount,
+        corporateGstin: values.gstin,
+        corporatePoRef: values.poNumber,
+        paymentMethod: values.paymentMethod === "corporate_po" ? "po" : values.paymentMethod,
+      });
 
-      // Persist to user orders in localStorage so it appears in My Orders & Tracking
-      try {
-        const existingRaw = localStorage.getItem("sunotal_user_orders");
-        const existing = existingRaw ? JSON.parse(existingRaw) : [];
-        localStorage.setItem("sunotal_user_orders", JSON.stringify([confirmData, ...existing]));
-      } catch (err) {
-        console.error("Failed to save order to storage", err);
-      }
+      setPendingOrder({
+        ...res.order,
+        values,
+      });
 
-      setOrderConfirmed(confirmData);
-      clearCart();
-      toast.success(`Order ${orderRef} placed successfully!`);
+      // Open Payment Gateway Modal
+      setShowPaymentModal(true);
     } catch (err: any) {
-      toast.error(err.message || "Failed to place order.");
+      toast.error(err.message || "Failed to create order.");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handlePaymentSuccess = async (paymentId: string) => {
+    setShowPaymentModal(false);
+    if (!pendingOrder) return;
+
+    const confirmData = {
+      id: pendingOrder.orderNumber,
+      orderId: pendingOrder.orderNumber,
+      date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+      items: items.map((i) => ({
+        id: i.product.id,
+        name: i.product.name,
+        unit: i.product.unit,
+        price: i.product.price,
+        quantity: i.quantity,
+        image: i.product.image,
+      })),
+      totalPrice: finalPayable,
+      status: "processing",
+      estimatedDelivery: deliveryCalc?.estimatedHours || "Express 2-Hour Delivery",
+      deliveryAddress: pendingOrder.shippingAddress,
+      city: pendingOrder.city,
+      state: pendingOrder.state,
+      pincode: pendingOrder.pincode,
+      paymentId,
+      paymentMethod: pendingOrder.paymentMethod,
+    };
+
+    setOrderConfirmed(confirmData);
+    clearCart();
+    toast.success(`Payment verified! Order ${pendingOrder.orderNumber} placed successfully.`);
   };
 
   if (orderConfirmed) {
@@ -174,7 +199,7 @@ export default function Checkout() {
             </div>
             <div>
               <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">
-                Order Confirmed
+                Order Confirmed & Payment Captured
               </span>
               <h1 className="text-3xl font-extrabold text-secondary mt-3">Thank you for your order!</h1>
               <p className="text-muted-foreground text-sm mt-1">
@@ -184,21 +209,19 @@ export default function Checkout() {
 
             <div className="bg-accent/40 rounded-2xl p-6 text-left space-y-3 text-sm border border-border">
               <div className="flex justify-between border-b pb-3">
-                <span className="text-muted-foreground">Delivery Location:</span>
-                <span className="font-bold text-secondary">{orderConfirmed.streetAddress}, {orderConfirmed.city}, {orderConfirmed.state} - {orderConfirmed.pincode}</span>
+                <span className="text-muted-foreground">Delivery Destination:</span>
+                <span className="font-bold text-secondary">{orderConfirmed.deliveryAddress}, {orderConfirmed.city}</span>
               </div>
               <div className="flex justify-between border-b pb-3">
-                <span className="text-muted-foreground">Est. Guaranteed Delivery:</span>
+                <span className="text-muted-foreground">Est. Delivery Promise:</span>
                 <span className="font-bold text-green-600 flex items-center gap-1">
-                  <Clock className="w-4 h-4" /> 2-Hour Express Delivery in {orderConfirmed.city}
+                  <Clock className="w-4 h-4" /> {orderConfirmed.estimatedDelivery}
                 </span>
               </div>
-              {orderConfirmed.gstin && (
-                <div className="flex justify-between border-b pb-3">
-                  <span className="text-muted-foreground">GSTIN Billing:</span>
-                  <span className="font-mono font-bold text-secondary">{orderConfirmed.gstin}</span>
-                </div>
-              )}
+              <div className="flex justify-between border-b pb-3">
+                <span className="text-muted-foreground">Payment Transaction ID:</span>
+                <span className="font-mono font-bold text-emerald-600">{orderConfirmed.paymentId}</span>
+              </div>
               <div className="flex justify-between pt-1 font-bold text-base">
                 <span>Total Amount Paid:</span>
                 <span className="text-primary">{fmt(orderConfirmed.totalPrice)}</span>
@@ -206,8 +229,8 @@ export default function Checkout() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-4">
-              <Button className="flex-1 rounded-xl h-12 font-bold shadow-md" onClick={() => setLocation("/products")}>
-                Continue Shopping <ArrowRight className="w-4 h-4 ml-2" />
+              <Button className="flex-1 rounded-xl h-12 font-bold shadow-md" onClick={() => setLocation("/orders")}>
+                View My Orders & Track Delivery <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
           </div>
@@ -216,8 +239,7 @@ export default function Checkout() {
     );
   }
 
-  const currentCity = form.watch("city") || "Hyderabad";
-  const currentState = form.watch("state") || "Telangana";
+  const currentState = form.watch("state") || "Karnataka";
   const currentPaymentMethod = form.watch("paymentMethod");
 
   return (
@@ -254,17 +276,29 @@ export default function Checkout() {
               <div className="lg:col-span-7 space-y-6">
                 {/* Section 1: Shipping Address */}
                 <div className="bg-card border border-border shadow-sm rounded-3xl p-6 space-y-4">
-                  <div className="flex items-center gap-3 border-b pb-4">
-                    <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-                      <MapPin className="w-5 h-5" />
+                  <div className="flex items-center justify-between border-b pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                        <MapPin className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h2 className="font-bold text-lg text-secondary">Delivery Destination</h2>
+                        <p className="text-xs text-muted-foreground">Pin precise location on map or choose saved address</p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="font-bold text-lg text-secondary">Delivery Destination</h2>
-                      <p className="text-xs text-muted-foreground">Auto-filled from your location settings</p>
-                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setShowMapModal(true)} className="rounded-xl text-xs font-bold border-primary/30 text-primary">
+                      <MapPin className="w-3.5 h-3.5 mr-1" /> Pin Map Location
+                    </Button>
                   </div>
 
                   <div className="space-y-4">
+                    <DeliverySlotPicker
+                      selectedSlotId={selectedSlotId}
+                      onSelectSlot={(id, name) => {
+                        setSelectedSlotId(id);
+                        setSelectedSlotName(name);
+                      }}
+                    />
                     <FormField
                       control={form.control}
                       name="streetAddress"
@@ -273,7 +307,7 @@ export default function Checkout() {
                           <FormLabel>Street / Building / Hub Address <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <Input
-                              placeholder="e.g. Building 4B, Mindspace IT Park, HITEC City"
+                              placeholder="e.g. Building 4B, Electronic City Phase 1"
                               className="h-11 rounded-xl"
                               {...field}
                             />
@@ -317,32 +351,25 @@ export default function Checkout() {
                           <FormItem>
                             <FormLabel>Pincode <span className="text-destructive">*</span></FormLabel>
                             <FormControl>
-                              <Input placeholder="500033" className="h-11 rounded-xl" {...field} />
+                              <Input className="h-11 rounded-xl font-mono" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
-
-                    <div className="p-3.5 rounded-2xl bg-accent/40 border border-border flex items-center gap-3 text-xs text-secondary font-medium">
-                      <Truck className="w-5 h-5 text-primary shrink-0" />
-                      <span>
-                        Guaranteed <strong>2-Hour Express Delivery</strong> available for <strong>{currentCity}</strong> region.
-                      </span>
-                    </div>
                   </div>
                 </div>
 
-                {/* Section 2: Corporate B2B Details (Optional) */}
+                {/* Section 2: Corporate Invoicing Details */}
                 <div className="bg-card border border-border shadow-sm rounded-3xl p-6 space-y-4">
                   <div className="flex items-center gap-3 border-b pb-4">
                     <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-                      <Building2 className="w-5 h-5" />
+                      <Receipt className="w-5 h-5" />
                     </div>
                     <div>
-                      <h2 className="font-bold text-lg text-secondary">Corporate Invoice Details</h2>
-                      <p className="text-xs text-muted-foreground">Optional fields for company billing & GST claiming</p>
+                      <h2 className="font-bold text-lg text-secondary">Corporate GSTIN & PO Billing (Optional)</h2>
+                      <p className="text-xs text-muted-foreground">Claim GST input tax credit for enterprise purchases</p>
                     </div>
                   </div>
 
@@ -352,9 +379,9 @@ export default function Checkout() {
                       name="companyName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Company Name</FormLabel>
+                          <FormLabel>Company / Enterprise Name</FormLabel>
                           <FormControl>
-                            <Input placeholder="Acme Technologies Pvt Ltd" className="h-11 rounded-xl" {...field} />
+                            <Input placeholder="e.g. Sunotal Enterprises Pvt Ltd" className="h-11 rounded-xl" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -373,27 +400,10 @@ export default function Checkout() {
                         </FormItem>
                       )}
                     />
-                    <div className="sm:col-span-2">
-                      <FormField
-                        control={form.control}
-                        name="poNumber"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              Corporate PO Reference Number {currentPaymentMethod === "corporate_po" && <span className="text-destructive">*</span>}
-                            </FormLabel>
-                            <FormControl>
-                              <Input placeholder="PO-2026-8891" className="h-11 rounded-xl font-mono" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
                   </div>
                 </div>
 
-                {/* Section 3: Payment Method */}
+                {/* Section 3: Payment Method Selection */}
                 <div className="bg-card border border-border shadow-sm rounded-3xl p-6 space-y-4">
                   <div className="flex items-center gap-3 border-b pb-4">
                     <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
@@ -401,7 +411,7 @@ export default function Checkout() {
                     </div>
                     <div>
                       <h2 className="font-bold text-lg text-secondary">Payment Method</h2>
-                      <p className="text-xs text-muted-foreground">Secure 256-bit encrypted checkout</p>
+                      <p className="text-xs text-muted-foreground">Encrypted test & sandbox payment simulator</p>
                     </div>
                   </div>
 
@@ -409,100 +419,151 @@ export default function Checkout() {
                     {[
                       { id: "card", label: "Credit / Debit Card", icon: CreditCard },
                       { id: "upi", label: "UPI / QR Code", icon: QrCode },
-                      { id: "netbanking", label: "Net Banking", icon: Receipt },
-                      { id: "corporate_po", label: "Corporate PO / Invoice", icon: Building2 },
-                    ].map((m) => {
-                      const Icon = m.icon;
-                      const isSel = currentPaymentMethod === m.id;
+                      { id: "netbanking", label: "Net Banking", icon: Building2 },
+                      { id: "corporate_po", label: "Corporate PO Account", icon: FileCheck },
+                    ].map((pm) => {
+                      const Icon = pm.icon;
+                      const isSelected = currentPaymentMethod === pm.id;
                       return (
-                        <button
-                          type="button"
-                          key={m.id}
-                          onClick={() => form.setValue("paymentMethod", m.id as any)}
-                          className={`flex items-center gap-3 p-4 rounded-2xl border text-left transition-all ${
-                            isSel
-                              ? "border-primary bg-primary/5 shadow-sm font-bold text-primary"
-                              : "border-border/70 hover:border-primary/40 bg-background text-secondary"
+                        <label
+                          key={pm.id}
+                          onClick={() => form.setValue("paymentMethod", pm.id as any)}
+                          className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${
+                            isSelected
+                              ? "border-primary bg-primary/5 text-primary shadow-sm font-semibold"
+                              : "border-border hover:border-primary/40 text-muted-foreground"
                           }`}
                         >
                           <Icon className="w-5 h-5 shrink-0" />
-                          <span className="text-xs font-semibold leading-tight">{m.label}</span>
-                        </button>
+                          <span className="text-xs">{pm.label}</span>
+                        </label>
                       );
                     })}
                   </div>
+
+                  {currentPaymentMethod === "corporate_po" && (
+                    <div className="pt-2 animate-in fade-in duration-200">
+                      <FormField
+                        control={form.control}
+                        name="poNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Purchase Order Reference Number <span className="text-destructive">*</span></FormLabel>
+                            <FormControl>
+                              <Input placeholder="PO-2026-SUN-0091" className="h-11 rounded-xl font-mono uppercase" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Right Column: Order Summary & Place Order */}
-              <div className="lg:col-span-5">
-                <div className="bg-card border border-border shadow-lg rounded-3xl p-6 sticky top-28 space-y-6">
-                  <h2 className="font-bold text-xl text-secondary border-b pb-4">Order Summary</h2>
+              {/* Right Column: Order Summary */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-card border border-border shadow-xl rounded-3xl p-6 space-y-6 sticky top-24">
+                  <div className="flex items-center justify-between border-b pb-4">
+                    <h2 className="font-bold text-lg text-secondary">Order Summary ({totalItems} items)</h2>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary">
+                      Express Hub
+                    </span>
+                  </div>
 
-                  <ul className="divide-y divide-border/60 max-h-72 overflow-y-auto pr-1">
-                    {items.map(({ product, quantity }) => (
-                      <li key={product.id} className="py-3 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={normalizeImageUrl(product.image, product.category)}
-                            alt={product.name}
-                            onError={(e) => handleImageError(e, product.category)}
-                            className="w-12 h-12 rounded-xl object-cover border"
-                          />
-                          <div>
-                            <p className="font-semibold text-secondary text-sm leading-tight">{product.name}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">Qty: {quantity} × {product.unit}</p>
-                          </div>
+                  {/* Items List */}
+                  <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                    {items.map((i) => (
+                      <div key={i.product.id} className="flex items-center gap-3 text-xs">
+                        <img
+                          src={normalizeImageUrl(i.product.image)}
+                          alt={i.product.name}
+                          onError={handleImageError}
+                          className="w-12 h-12 rounded-xl object-cover border"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-secondary truncate">{i.product.name}</p>
+                          <p className="text-muted-foreground text-[11px]">{i.quantity} x {fmt(i.product.price)}</p>
                         </div>
-                        <span className="font-bold text-secondary text-sm">{fmt(product.price * quantity)}</span>
-                      </li>
+                        <span className="font-bold text-secondary font-mono">{fmt(i.product.price * i.quantity)}</span>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
 
-                  <div className="space-y-3 pt-4 border-t text-sm">
+                  {/* Dynamic Distance & Delivery Fee Calculation */}
+                  <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-xs space-y-1.5 font-mono">
+                    <div className="flex justify-between text-emerald-900 dark:text-emerald-200">
+                      <span>Haversine Distance:</span>
+                      <strong>{deliveryCalc ? `${deliveryCalc.distanceKm} km` : "Calculating..."}</strong>
+                    </div>
+                    <div className="flex justify-between text-emerald-900 dark:text-emerald-200">
+                      <span>Free Delivery Radius:</span>
+                      <strong>25 km (₹0)</strong>
+                    </div>
+                    <div className="flex justify-between text-emerald-900 dark:text-emerald-200 font-bold border-t border-emerald-200 dark:border-emerald-800 pt-1.5">
+                      <span>Calculated Delivery Fee:</span>
+                      <span className={deliveryFeeAmount === 0 ? "text-emerald-600 font-extrabold" : "text-foreground"}>
+                        {deliveryFeeAmount === 0 ? "FREE (₹0)" : fmt(deliveryFeeAmount)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Pricing Breakdown */}
+                  <div className="space-y-2 text-xs border-t pt-4">
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Subtotal ({totalItems} items)</span>
-                      <span className="font-semibold text-secondary">{fmt(totalPrice)}</span>
+                      <span>Items Subtotal:</span>
+                      <span className="font-mono text-secondary">{fmt(totalPrice)}</span>
                     </div>
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Express Delivery ({currentCity})</span>
-                      <span className="text-green-600 font-bold">FREE</span>
+                      <span>Estimated GST (5% Organic):</span>
+                      <span className="font-mono text-secondary">{fmt(gstAmount)}</span>
                     </div>
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Estimated Taxes & GST</span>
-                      <span className="font-semibold text-secondary">Included</span>
+                      <span>Delivery Fee:</span>
+                      <span className="font-mono text-emerald-600">{deliveryFeeAmount === 0 ? "FREE" : fmt(deliveryFeeAmount)}</span>
                     </div>
-                    <div className="flex justify-between font-extrabold text-xl text-secondary border-t pt-3">
-                      <span>Total Amount</span>
-                      <span className="text-primary">{fmt(totalPrice)}</span>
+                    <div className="flex justify-between pt-3 border-t text-base font-extrabold text-secondary">
+                      <span>Total Payable:</span>
+                      <span className="text-primary font-mono">{fmt(finalPayable)}</span>
                     </div>
                   </div>
 
                   <Button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full h-14 rounded-2xl font-bold text-base shadow-xl shadow-primary/20"
+                    className="w-full h-13 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base shadow-lg shadow-emerald-600/20"
                   >
-                    {isSubmitting ? (
-                      "Authorizing Order..."
-                    ) : (
-                      <>
-                        Place Order • {fmt(totalPrice)} <Sparkles className="w-5 h-5 ml-2" />
-                      </>
-                    )}
+                    Proceed to Secure Payment ({fmt(finalPayable)})
                   </Button>
-
-                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
-                    <ShieldCheck className="w-4 h-4 text-green-600" />
-                    <span>Traceable Farm Guarantee & 100% Quality Assurance</span>
-                  </div>
                 </div>
               </div>
             </form>
           </Form>
         )}
+
+        {/* Payment Gateway Modal */}
+        {pendingOrder && (
+          <PaymentGatewayModal
+            isOpen={showPaymentModal}
+            onClose={() => setShowPaymentModal(false)}
+            orderId={pendingOrder.id}
+            amount={finalPayable}
+            onSuccess={handlePaymentSuccess}
+          />
+        )}
+
+        {/* Interactive Map Picker Modal */}
+        <InteractiveMapPickerModal
+          isOpen={showMapModal}
+          onClose={() => setShowMapModal(false)}
+          onSelectAddress={(addr) => {
+            form.setValue("streetAddress", `${addr.houseNo}, ${addr.street}`);
+            form.setValue("city", addr.city);
+            form.setValue("state", addr.state);
+            form.setValue("pincode", addr.pincode);
+          }}
+        />
       </div>
     </PublicLayout>
   );
 }
-

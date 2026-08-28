@@ -4,6 +4,7 @@ import cors from 'cors';
 import usersRouter from './routes/users.js';
 import vendorsRouter from './routes/vendors.js';
 import adminRouter from './routes/admin.js';
+import { metricsMiddleware, metricsHandler } from '../../src/lib/metrics.js';
 import { initDatabase } from './lib/db.js';
 
 export const app = express();
@@ -17,10 +18,13 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(metricsMiddleware('user-service'));
 
 app.use('/api', usersRouter);
 app.use('/api', vendorsRouter);
 app.use('/api', adminRouter);
+
+app.get('/metrics', metricsHandler);
 
 app.get('/api/healthz', (req, res) => {
   res.status(200).json({ status: "ok", service: "user" });
