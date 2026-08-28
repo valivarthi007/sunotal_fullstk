@@ -130,9 +130,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-2 sm:gap-4">
             <button
-              onClick={() => setMapModalOpen(true)}
+              onClick={() => setLocationModalOpen(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-accent/60 hover:bg-accent text-sm font-medium border border-border/50 hover:border-primary/40 transition-all group"
-              title="Click to pin precise delivery location on map"
+              title="Click to select delivery city or pincode"
             >
               <MapPin className="w-4 h-4 text-primary shrink-0 group-hover:scale-110 transition-transform" />
               <div className="text-left">
