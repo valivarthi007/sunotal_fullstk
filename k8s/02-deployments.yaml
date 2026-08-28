@@ -34,12 +34,16 @@ spec:
               port: 80
             initialDelaySeconds: 15
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
           readinessProbe:
             httpGet:
               path: /
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 5
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -87,14 +91,18 @@ spec:
             httpGet:
               path: /api/healthz
               port: 5001
-            initialDelaySeconds: 15
+            initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 5001
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 8
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -142,14 +150,18 @@ spec:
             httpGet:
               path: /api/healthz
               port: 5002
-            initialDelaySeconds: 15
+            initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 5002
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 8
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -197,14 +209,18 @@ spec:
             httpGet:
               path: /api/healthz
               port: 5003
-            initialDelaySeconds: 15
+            initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 5003
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 8
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -252,14 +268,18 @@ spec:
             httpGet:
               path: /api/healthz
               port: 5004
-            initialDelaySeconds: 15
+            initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 5004
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 8
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -307,11 +327,15 @@ spec:
             httpGet:
               path: /api/healthz
               port: 5006
-            initialDelaySeconds: 15
+            initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 5006
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 8

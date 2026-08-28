@@ -109,6 +109,9 @@ jobs:
           kubectl rollout status deployment/sunotal-user -n sunotal --timeout=180s || true
           kubectl rollout status deployment/sunotal-delivery -n sunotal --timeout=180s || true
 
+          echo "Inspecting EKS Pod Statuses & Diagnostics..."
+          kubectl get pods -n sunotal -o wide || true
+
           echo "Configuring Security Groups and Target Groups on AWS..."
           ALB_SG=$(aws elbv2 describe-load-balancers --names "sunotal-alb" --query "LoadBalancers[0].SecurityGroups[0]" --output text 2>/dev/null || echo "")
           EKS_SG=$(aws eks describe-cluster --name sunotal-cluster --query "cluster.resourcesVpcConfig.clusterSecurityGroupId" --output text 2>/dev/null || echo "")
