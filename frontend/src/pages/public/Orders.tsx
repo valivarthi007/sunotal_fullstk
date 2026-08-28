@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { fetchUserOrders, cancelUserOrder, OrderApi } from "@/lib/api-client";
-import { LiveDeliveryMapTracker } from "@/components/ui/LiveDeliveryMapTracker";
 import {
   Dialog,
   DialogContent,
@@ -408,15 +407,6 @@ export default function Orders() {
                   </div>
                 </div>
               </div>
-            </DialogContent>
-          </Dialog>
-        )}
-
-        {/* LIVE MAP TRACKING DIALOG */}
-        {selectedOrderTrack && (
-          <Dialog open={!!selectedOrderTrack} onOpenChange={() => setSelectedOrderTrack(null)}>
-            <DialogContent className="sm:max-w-2xl rounded-3xl p-0 border-none bg-transparent">
-              <LiveDeliveryMapTracker orderId={selectedOrderTrack.orderNumber || String(selectedOrderTrack.id)} />
             </DialogContent>
           </Dialog>
         )}

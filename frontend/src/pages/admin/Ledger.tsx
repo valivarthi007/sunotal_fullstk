@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 import { BookOpen, Download, Calendar, DollarSign, CreditCard, QrCode, FileText, ArrowUpRight, CheckCircle2, Clock, Filter, RefreshCw } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -45,7 +46,8 @@ export const AdminLedger: React.FC = () => {
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 
   return (
-    <div className="space-y-8 p-6 max-w-7xl mx-auto">
+    <AdminLayout>
+      <div className="space-y-8 p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-6">
         <div>
@@ -184,7 +186,8 @@ export const AdminLedger: React.FC = () => {
             </tbody>
           </table>
         </div>
+        </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 };

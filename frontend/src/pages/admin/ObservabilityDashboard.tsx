@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 import { Activity, Server, Cpu, Database, ExternalLink, RefreshCw, CheckCircle2, ShieldCheck, Zap, AlertTriangle, ArrowLeft } from "lucide-react";
 import { Button } from "../../components/ui/button";
 
@@ -31,7 +32,8 @@ export const ObservabilityDashboard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 p-6 max-w-7xl mx-auto">
+    <AdminLayout>
+      <div className="space-y-8 p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-6">
         <div className="space-y-1">
@@ -189,5 +191,6 @@ export const ObservabilityDashboard: React.FC = () => {
         </div>
       </div>
     </div>
-  );
+  </AdminLayout>
+);
 };
