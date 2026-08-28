@@ -1,0 +1,21 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sunotal-frontend-pdb
+  namespace: sunotal
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: sunotal-frontend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sunotal-delivery-pdb
+  namespace: sunotal
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: sunotal-delivery
