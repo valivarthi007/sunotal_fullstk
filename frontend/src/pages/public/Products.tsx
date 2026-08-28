@@ -125,56 +125,58 @@ export default function ProductsPage({ initialCategory = "All" }: ProductsPagePr
           </div>
         </div>
 
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-sm text-muted-foreground font-medium">
-            {isLoading ? "Loading products..." : `Showing ${displayedProducts.length || 0} products`}
-          </p>
-          <button className="flex items-center gap-2 text-sm font-medium text-secondary hover:text-primary transition-colors px-3 py-1.5 rounded-lg hover:bg-accent" onClick={() => setFiltersOpen(true)}>
+        {/* Left-Aligned Filter & Sort Bar */}
+        <div className="flex flex-wrap items-center justify-start gap-4 mb-6 pb-4 border-b">
+          <button className="flex items-center gap-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors px-4 py-2 rounded-xl shadow-sm" onClick={() => setFiltersOpen(true)}>
             <SlidersHorizontal className="w-4 h-4" /> Filter & Sort
           </button>
-          <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Filter & Sort</DialogTitle>
-              </DialogHeader>
+          <p className="text-sm text-muted-foreground font-medium border-l pl-4">
+            {isLoading ? "Loading products..." : `Showing ${displayedProducts.length || 0} products`}
+          </p>
+        </div>
 
-              <div className="space-y-4 py-4">
-                <div className="flex items-center gap-2">
-                  <Checkbox checked={onlyOrganic} onCheckedChange={(v: any) => setOnlyOrganic(Boolean(v))} />
-                  <div>
-                    <div className="font-semibold">Organic only</div>
-                    <div className="text-sm text-muted-foreground">Show only organic products</div>
-                  </div>
-                </div>
+        <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Filter & Sort</DialogTitle>
+            </DialogHeader>
 
+            <div className="space-y-4 py-4">
+              <div className="flex items-center gap-2">
+                <Checkbox checked={onlyOrganic} onCheckedChange={(v: any) => setOnlyOrganic(Boolean(v))} />
                 <div>
-                  <div className="font-semibold mb-2">Sort by</div>
-                  <div className="flex flex-col gap-2">
-                    <label className={cn('p-2 rounded-lg border', sortBy==='relevance' ? 'bg-secondary text-white' : 'bg-card')}> 
-                      <input type="radio" name="sort" value="relevance" checked={sortBy==='relevance'} onChange={() => setSortBy('relevance')} /> {' '} Relevance
-                    </label>
-                    <label className={cn('p-2 rounded-lg border', sortBy==='newest' ? 'bg-secondary text-white' : 'bg-card')}> 
-                      <input type="radio" name="sort" value="newest" checked={sortBy==='newest'} onChange={() => setSortBy('newest')} /> {' '} Newest
-                    </label>
-                    <label className={cn('p-2 rounded-lg border', sortBy==='price_asc' ? 'bg-secondary text-white' : 'bg-card')}> 
-                      <input type="radio" name="sort" value="price_asc" checked={sortBy==='price_asc'} onChange={() => setSortBy('price_asc')} /> {' '} Price: Low → High
-                    </label>
-                    <label className={cn('p-2 rounded-lg border', sortBy==='price_desc' ? 'bg-secondary text-white' : 'bg-card')}> 
-                      <input type="radio" name="sort" value="price_desc" checked={sortBy==='price_desc'} onChange={() => setSortBy('price_desc')} /> {' '} Price: High → Low
-                    </label>
-                  </div>
+                  <div className="font-semibold">Organic only</div>
+                  <div className="text-sm text-muted-foreground">Show only organic products</div>
                 </div>
               </div>
 
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Close</Button>
-                </DialogClose>
-                <Button onClick={() => setFiltersOpen(false)}>Apply</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+              <div>
+                <div className="font-semibold mb-2">Sort by</div>
+                <div className="flex flex-col gap-2">
+                  <label className={cn('p-2 rounded-lg border cursor-pointer', sortBy==='relevance' ? 'bg-secondary text-white' : 'bg-card')}> 
+                    <input type="radio" name="sort" value="relevance" checked={sortBy==='relevance'} onChange={() => setSortBy('relevance')} /> {' '} Relevance
+                  </label>
+                  <label className={cn('p-2 rounded-lg border cursor-pointer', sortBy==='newest' ? 'bg-secondary text-white' : 'bg-card')}> 
+                    <input type="radio" name="sort" value="newest" checked={sortBy==='newest'} onChange={() => setSortBy('newest')} /> {' '} Newest
+                  </label>
+                  <label className={cn('p-2 rounded-lg border cursor-pointer', sortBy==='price_asc' ? 'bg-secondary text-white' : 'bg-card')}> 
+                    <input type="radio" name="sort" value="price_asc" checked={sortBy==='price_asc'} onChange={() => setSortBy('price_asc')} /> {' '} Price: Low → High
+                  </label>
+                  <label className={cn('p-2 rounded-lg border cursor-pointer', sortBy==='price_desc' ? 'bg-secondary text-white' : 'bg-card')}> 
+                    <input type="radio" name="sort" value="price_desc" checked={sortBy==='price_desc'} onChange={() => setSortBy('price_desc')} /> {' '} Price: High → Low
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Close</Button>
+              </DialogClose>
+              <Button onClick={() => setFiltersOpen(false)}>Apply</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
           {isLoading ? (

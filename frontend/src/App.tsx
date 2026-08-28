@@ -23,6 +23,7 @@ import BannersAdmin from "@/pages/admin/Banners";
 import QuotationsAdmin from "@/pages/admin/Quotations";
 import { WarehouseManager } from "@/pages/admin/WarehouseManager";
 import { ObservabilityDashboard } from "@/pages/admin/ObservabilityDashboard";
+import { AdminLedger } from "@/pages/admin/Ledger";
 
 import VendorDashboard from "@/pages/vendor/VendorDashboard";
 import NotFound from "@/pages/not-found";
@@ -76,6 +77,7 @@ function Router() {
       <Route path="/admin/dashboard" component={Dashboard} />
       <Route path="/admin/products" component={ProductsAdmin} />
       <Route path="/admin/warehouses" component={WarehouseManager} />
+      <Route path="/admin/ledger" component={AdminLedger} />
       <Route path="/admin/observability" component={ObservabilityDashboard} />
       <Route path="/admin/banners" component={BannersAdmin} />
       <Route path="/admin/inventory" component={InventoryAdmin} />

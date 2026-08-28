@@ -116,10 +116,14 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
         isDefault: true,
       };
 
-      // Save address to database
-      await saveUserAddress(payload);
+      // Save address to server database (graceful fallback if unauthenticated)
+      try {
+        await saveUserAddress(payload);
+      } catch (saveErr) {
+        console.warn("Address save to database skipped (unauthenticated or offline):", saveErr);
+      }
 
-      // Invoke callback
+      // Always update selected address in UI state
       onSelectAddress({
         houseNo,
         street,
@@ -133,7 +137,19 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
 
       onClose();
     } catch (err: any) {
-      alert(err.message || "Failed to confirm address");
+      console.error("Address confirmation error:", err);
+      // Fallback invocation
+      onSelectAddress({
+        houseNo,
+        street,
+        landmark,
+        city,
+        state: stateName,
+        pincode,
+        lat,
+        lng,
+      });
+      onClose();
     } finally {
       setSaving(false);
     }

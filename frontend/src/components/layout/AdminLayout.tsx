@@ -12,6 +12,7 @@ import {
   GalleryHorizontalEnd,
   FileText,
   Navigation,
+  BookOpen,
   Activity
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -33,6 +34,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     { name: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
     { name: "Products", path: "/admin/products", icon: Package },
     { name: "Warehouse", path: "/admin/warehouses", icon: Navigation },
+    { name: "Ledger & Reports", path: "/admin/ledger", icon: BookOpen },
     { name: "Observability", path: "/admin/observability", icon: Activity },
     { name: "Banners", path: "/admin/banners", icon: GalleryHorizontalEnd },
     { name: "Inventory", path: "/admin/inventory", icon: ClipboardList },

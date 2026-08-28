@@ -34,9 +34,15 @@ export const WarehouseManager: React.FC = () => {
     setError(null);
     try {
       const data = await fetchWarehouses();
-      setWarehouses(data);
+      if (Array.isArray(data)) {
+        setWarehouses(data);
+      } else {
+        setWarehouses([]);
+      }
     } catch (err: any) {
+      console.error("Failed to load warehouses:", err);
       setError(err.message || "Failed to load warehouses");
+      setWarehouses([]);
     } finally {
       setLoading(false);
     }

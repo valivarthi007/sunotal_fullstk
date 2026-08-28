@@ -6,7 +6,12 @@ metadata:
   labels:
     app: sunotal-frontend
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: sunotal-frontend
@@ -53,7 +58,12 @@ metadata:
   labels:
     app: sunotal-auth
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: sunotal-auth
@@ -112,7 +122,12 @@ metadata:
   labels:
     app: sunotal-operations
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: sunotal-operations
@@ -171,7 +186,12 @@ metadata:
   labels:
     app: sunotal-inventory
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: sunotal-inventory
@@ -230,7 +250,12 @@ metadata:
   labels:
     app: sunotal-user
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: sunotal-user
@@ -289,7 +314,12 @@ metadata:
   labels:
     app: sunotal-delivery
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: sunotal-delivery

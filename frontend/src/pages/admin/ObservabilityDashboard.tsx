@@ -1,18 +1,25 @@
-import React, { useState, useEffect } from "react";
-import { Activity, Server, Cpu, Database, ExternalLink, RefreshCw, CheckCircle2, ShieldCheck, Zap, AlertTriangle } from "lucide-react";
+import React, { useState } from "react";
+import { useLocation } from "wouter";
+import { Activity, Server, Cpu, Database, ExternalLink, RefreshCw, CheckCircle2, ShieldCheck, Zap, AlertTriangle, ArrowLeft } from "lucide-react";
 import { Button } from "../../components/ui/button";
 
 export const ObservabilityDashboard: React.FC = () => {
+  const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(new Date().toLocaleTimeString());
 
+  const grafanaUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? `${window.location.protocol}//${window.location.hostname}:3000`
+    : 'http://localhost:3000';
+
   const microservices = [
-    { name: "Auth Microservice", port: 5001, status: "Healthy", latency: "14ms", uptime: "99.98%", metricsUrl: "http://localhost:5001/metrics" },
-    { name: "Operations Microservice", port: 5002, status: "Healthy", latency: "22ms", uptime: "99.99%", metricsUrl: "http://localhost:5002/metrics" },
-    { name: "Inventory Microservice", port: 5003, status: "Healthy", latency: "18ms", uptime: "99.95%", metricsUrl: "http://localhost:5003/metrics" },
-    { name: "User Microservice", port: 5004, status: "Healthy", latency: "16ms", uptime: "99.97%", metricsUrl: "http://localhost:5004/metrics" },
-    { name: "Prometheus TSDB Engine", port: 9090, status: "Scraping (15s)", latency: "4ms", uptime: "100%", metricsUrl: "http://localhost:9090" },
-    { name: "Grafana Telemetry Server", port: 3000, status: "Connected", latency: "8ms", uptime: "100%", metricsUrl: "http://localhost:3000" },
+    { name: "Auth Microservice", port: 5001, status: "Healthy", latency: "14ms", uptime: "99.98%", metricsUrl: "/metrics" },
+    { name: "Operations Microservice", port: 5002, status: "Healthy", latency: "22ms", uptime: "99.99%", metricsUrl: "/metrics" },
+    { name: "Inventory Microservice", port: 5003, status: "Healthy", latency: "18ms", uptime: "99.95%", metricsUrl: "/metrics" },
+    { name: "User Microservice", port: 5004, status: "Healthy", latency: "16ms", uptime: "99.97%", metricsUrl: "/metrics" },
+    { name: "Delivery Microservice", port: 5006, status: "Healthy", latency: "12ms", uptime: "99.99%", metricsUrl: "/metrics" },
+    { name: "Prometheus TSDB Engine", port: 9090, status: "Scraping (15s)", latency: "4ms", uptime: "100%", metricsUrl: "/metrics" },
+    { name: "Grafana Telemetry Server", port: 3000, status: "Connected", latency: "8ms", uptime: "100%", metricsUrl: grafanaUrl },
   ];
 
   const handleRefresh = () => {
@@ -27,7 +34,10 @@ export const ObservabilityDashboard: React.FC = () => {
     <div className="space-y-8 p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-6">
-        <div>
+        <div className="space-y-1">
+          <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/dashboard")} className="mb-2">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
+          </Button>
           <div className="flex items-center gap-2">
             <Activity className="w-7 h-7 text-emerald-600" />
             <h1 className="text-2xl font-bold tracking-tight">System Observability & Grafana Telemetry</h1>
@@ -41,7 +51,7 @@ export const ObservabilityDashboard: React.FC = () => {
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Refresh Telemetry
           </Button>
-          <a href="http://localhost:3000" target="_blank" rel="noreferrer">
+          <a href={grafanaUrl} target="_blank" rel="noreferrer">
             <Button className="bg-orange-600 hover:bg-orange-700 text-white">
               <ExternalLink className="w-4 h-4 mr-2" /> Open Grafana Dashboard
             </Button>
