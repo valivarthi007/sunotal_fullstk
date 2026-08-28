@@ -4,7 +4,7 @@ RUN apk update && apk upgrade --no-cache
 RUN npm install -g pnpm
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm config set only-built-dependencies esbuild && pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
 RUN pnpm prune --prod
@@ -17,6 +17,7 @@ COPY package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY drizzle.config.ts tsconfig.json ./
-COPY src/db ./src/db
+COPY src/lib ./src/lib
+COPY src/schema ./src/schema
 EXPOSE 5000
 CMD ["node", "dist/src/index.js"]
