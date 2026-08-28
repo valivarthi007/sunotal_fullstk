@@ -1,18 +1,9 @@
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 WORKDIR /app
-RUN npm install -g pnpm
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --ignore-scripts
+COPY package.json ./
+RUN npm install --no-audit --no-fund
 COPY . .
-RUN pnpm run build
-
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-RUN npm install -g pnpm
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --prod --ignore-scripts
-COPY --from=builder /app/dist ./dist
+RUN npm run build
 
 # Non-root user for security (OWASP / CIS Docker Benchmark)
 USER node
