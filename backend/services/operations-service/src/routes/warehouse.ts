@@ -50,10 +50,10 @@ router.get("/warehouses", async (req, res) => {
           city: "Bengaluru",
           latitude: 12.9716,
           longitude: 77.5946,
-          freeDeliveryRadiusKm: 25.0,
+          freeDeliveryRadiusKm: 30.0,
           baseDeliveryFee: 50.0,
           perKmRate: 8.0,
-          maxServiceRadiusKm: 150.0,
+          maxServiceRadiusKm: 70.0,
           isActive: true,
         })
         .returning();
@@ -71,7 +71,7 @@ router.get("/warehouses", async (req, res) => {
 // POST /api/admin/warehouses - Create new warehouse (Admin only)
 router.post("/admin/warehouses", requireAdmin, async (req, res) => {
   try {
-    const { name, address, city, latitude, longitude, freeDeliveryRadiusKm, baseDeliveryFee, perKmRate } = req.body;
+    const { name, address, city, latitude, longitude, freeDeliveryRadiusKm, baseDeliveryFee, perKmRate, maxServiceRadiusKm } = req.body;
 
     if (!name || !address || !city || latitude === undefined || longitude === undefined) {
       res.status(400).json({ error: "Name, address, city, latitude, and longitude are required" });
@@ -86,9 +86,10 @@ router.post("/admin/warehouses", requireAdmin, async (req, res) => {
         city,
         latitude: Number(latitude),
         longitude: Number(longitude),
-        freeDeliveryRadiusKm: freeDeliveryRadiusKm !== undefined ? Number(freeDeliveryRadiusKm) : 25.0,
+        freeDeliveryRadiusKm: freeDeliveryRadiusKm !== undefined ? Number(freeDeliveryRadiusKm) : 30.0,
         baseDeliveryFee: baseDeliveryFee !== undefined ? Number(baseDeliveryFee) : 50.0,
         perKmRate: perKmRate !== undefined ? Number(perKmRate) : 8.0,
+        maxServiceRadiusKm: maxServiceRadiusKm !== undefined ? Number(maxServiceRadiusKm) : 70.0,
         isActive: true,
       })
       .returning();
@@ -104,7 +105,7 @@ router.post("/admin/warehouses", requireAdmin, async (req, res) => {
 router.put("/admin/warehouses/:id", requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { name, address, city, latitude, longitude, freeDeliveryRadiusKm, baseDeliveryFee, perKmRate, isActive } = req.body;
+    const { name, address, city, latitude, longitude, freeDeliveryRadiusKm, baseDeliveryFee, perKmRate, maxServiceRadiusKm, isActive } = req.body;
 
     const [updated] = await db
       .update(warehousesTable)
@@ -117,6 +118,7 @@ router.put("/admin/warehouses/:id", requireAdmin, async (req, res) => {
         freeDeliveryRadiusKm: freeDeliveryRadiusKm !== undefined ? Number(freeDeliveryRadiusKm) : undefined,
         baseDeliveryFee: baseDeliveryFee !== undefined ? Number(baseDeliveryFee) : undefined,
         perKmRate: perKmRate !== undefined ? Number(perKmRate) : undefined,
+        maxServiceRadiusKm: maxServiceRadiusKm !== undefined ? Number(maxServiceRadiusKm) : undefined,
         isActive: isActive !== undefined ? Boolean(isActive) : undefined,
         updatedAt: new Date(),
       })
@@ -161,7 +163,9 @@ router.post("/delivery/calculate", async (req, res) => {
         distanceKm: 12.0,
         deliveryFee: 0,
         isFree: true,
-        freeRadiusKm: 25.0,
+        freeRadiusKm: 30.0,
+        maxServiceRadiusKm: 70.0,
+        isServiceable: true,
         warehouseName: "Default Regional Hub",
         estimatedHours: "2 Hours",
       });
@@ -180,14 +184,20 @@ router.post("/delivery/calculate", async (req, res) => {
       }
     }
 
-    const freeRadius = nearestWh.freeDeliveryRadiusKm || 25.0;
+    const freeRadius = nearestWh.freeDeliveryRadiusKm || 30.0;
+    const maxRadius = nearestWh.maxServiceRadiusKm || 70.0;
     const baseFee = nearestWh.baseDeliveryFee || 50.0;
     const perKm = nearestWh.perKmRate || 8.0;
 
     let deliveryFee = 0;
     let isFree = false;
+    let isServiceable = true;
 
-    if (minDistance <= freeRadius) {
+    if (minDistance > maxRadius) {
+      isServiceable = false;
+      deliveryFee = 0;
+      isFree = false;
+    } else if (minDistance < freeRadius) {
       deliveryFee = 0;
       isFree = true;
     } else {
@@ -196,16 +206,19 @@ router.post("/delivery/calculate", async (req, res) => {
       isFree = false;
     }
 
-    const estimatedHours = minDistance <= 25 ? "Express 2-Hour Delivery" : "Next-Day Delivery";
+    const estimatedHours = minDistance <= 30 ? "Express 2-Hour Delivery" : "Standard Next-Day Delivery";
 
     res.json({
       distanceKm: minDistance,
       deliveryFee,
       isFree,
+      isServiceable,
       freeRadiusKm: freeRadius,
+      maxServiceRadiusKm: maxRadius,
       warehouseName: nearestWh.name,
       warehouseCity: nearestWh.city,
       estimatedHours,
+      message: !isServiceable ? `Location exceeds maximum delivery limit of ${maxRadius} km.` : undefined,
     });
   } catch (error: any) {
     console.error("Delivery fee calculation error:", error);

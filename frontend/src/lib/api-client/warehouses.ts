@@ -20,10 +20,13 @@ export interface DeliveryFeeCalculation {
   distanceKm: number;
   deliveryFee: number;
   isFree: boolean;
+  isServiceable?: boolean;
   freeRadiusKm: number;
+  maxServiceRadiusKm?: number;
   warehouseName: string;
   warehouseCity: string;
   estimatedHours: string;
+  message?: string;
 }
 
 export async function fetchWarehouses(): Promise<Warehouse[]> {

@@ -14,8 +14,8 @@ const DEFAULT_FALLBACK_WAREHOUSES: Warehouse[] = [
     city: "Bengaluru",
     latitude: 12.9716,
     longitude: 77.5946,
-    freeDeliveryRadiusKm: 25.0,
-    maxServiceRadiusKm: 50.0,
+    freeDeliveryRadiusKm: 30.0,
+    maxServiceRadiusKm: 70.0,
     baseDeliveryFee: 50.0,
     perKmRate: 8.0,
     isActive: true,
@@ -29,8 +29,8 @@ const DEFAULT_FALLBACK_WAREHOUSES: Warehouse[] = [
     city: "Vijayawada",
     latitude: 16.5062,
     longitude: 80.6480,
-    freeDeliveryRadiusKm: 25.0,
-    maxServiceRadiusKm: 50.0,
+    freeDeliveryRadiusKm: 30.0,
+    maxServiceRadiusKm: 70.0,
     baseDeliveryFee: 50.0,
     perKmRate: 8.0,
     isActive: true,
@@ -44,8 +44,8 @@ const DEFAULT_FALLBACK_WAREHOUSES: Warehouse[] = [
     city: "Hyderabad",
     latitude: 17.3850,
     longitude: 78.4867,
-    freeDeliveryRadiusKm: 25.0,
-    maxServiceRadiusKm: 50.0,
+    freeDeliveryRadiusKm: 30.0,
+    maxServiceRadiusKm: 70.0,
     baseDeliveryFee: 50.0,
     perKmRate: 8.0,
     isActive: true,
@@ -68,7 +68,8 @@ export const WarehouseManager: React.FC = () => {
     city: "",
     latitude: 12.9716,
     longitude: 77.5946,
-    freeDeliveryRadiusKm: 25.0,
+    freeDeliveryRadiusKm: 30.0,
+    maxServiceRadiusKm: 70.0,
     baseDeliveryFee: 50.0,
     perKmRate: 8.0,
   });
@@ -108,7 +109,8 @@ export const WarehouseManager: React.FC = () => {
       city: "",
       latitude: 12.9716,
       longitude: 77.5946,
-      freeDeliveryRadiusKm: 25.0,
+      freeDeliveryRadiusKm: 30.0,
+      maxServiceRadiusKm: 70.0,
       baseDeliveryFee: 50.0,
       perKmRate: 8.0,
     });
@@ -123,9 +125,10 @@ export const WarehouseManager: React.FC = () => {
       city: wh.city,
       latitude: wh.latitude,
       longitude: wh.longitude,
-      freeDeliveryRadiusKm: wh.freeDeliveryRadiusKm,
-      baseDeliveryFee: wh.baseDeliveryFee,
-      perKmRate: wh.perKmRate,
+      freeDeliveryRadiusKm: wh.freeDeliveryRadiusKm || 30.0,
+      maxServiceRadiusKm: wh.maxServiceRadiusKm || 70.0,
+      baseDeliveryFee: wh.baseDeliveryFee || 50.0,
+      perKmRate: wh.perKmRate || 8.0,
     });
     setShowModal(true);
   };
@@ -208,13 +211,14 @@ export const WarehouseManager: React.FC = () => {
         <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-start gap-3">
           <ShieldCheck className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
           <div className="text-xs text-emerald-900 dark:text-emerald-200 space-y-1">
-            <p className="font-bold text-sm">Active Delivery Rules Summary</p>
+            <p className="font-bold text-sm">Active Delivery Rules & Coverage Limits</p>
             <p>
-              Distance is dynamically computed from customer city/pincode to nearest warehouse:
+              Distance is dynamically computed from customer location/city to nearest warehouse:
             </p>
             <ul className="list-disc list-inside space-y-0.5 font-mono text-[11px]">
-              <li>Distance &le; 25 km: <strong>FREE Delivery (₹0)</strong></li>
-              <li>Distance &gt; 25 km: <strong>Base Fee (₹50) + ₹8 per extra km</strong></li>
+              <li>Distance &lt; 30 km: <strong>FREE Delivery (₹0 Fee)</strong></li>
+              <li>Distance 30 km to 70 km: <strong>Base Fee (₹50) + ₹8 per extra km</strong></li>
+              <li>Distance &gt; 70 km: <strong>Outside Delivery Limit (Service Unavailable)</strong></li>
             </ul>
           </div>
         </div>
@@ -236,6 +240,7 @@ export const WarehouseManager: React.FC = () => {
               </div>
 
               <p className="text-xs text-muted-foreground">{wh.address}, {wh.city}</p>
+              <p className="text-[11px] font-mono text-muted-foreground">Coordinates: {wh.latitude}, {wh.longitude}</p>
 
               <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-3 rounded-xl font-mono">
                 <div>
@@ -244,11 +249,11 @@ export const WarehouseManager: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-muted-foreground text-[10px]">Free Threshold</span>
-                  <p className="font-medium text-emerald-600">{wh.freeDeliveryRadiusKm || 25} km (₹0)</p>
+                  <p className="font-medium text-emerald-600">&lt; {wh.freeDeliveryRadiusKm || 30} km (₹0)</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground text-[10px]">Base Charge</span>
-                  <p className="font-medium text-foreground">₹{wh.baseDeliveryFee || 50}</p>
+                  <span className="text-muted-foreground text-[10px]">Max Limit</span>
+                  <p className="font-medium text-foreground">{wh.maxServiceRadiusKm || 70} km</p>
                 </div>
                 <div>
                   <span className="text-muted-foreground text-[10px]">Excess Rate</span>
@@ -258,7 +263,7 @@ export const WarehouseManager: React.FC = () => {
 
               <div className="pt-2 border-t flex justify-end">
                 <Button size="sm" variant="ghost" onClick={() => handleOpenEdit(wh)}>
-                  <Edit3 className="w-3.5 h-3.5 mr-1" /> Edit Details
+                  <Edit3 className="w-3.5 h-3.5 mr-1" /> Edit Hub Location & Rates
                 </Button>
               </div>
             </div>
@@ -271,7 +276,7 @@ export const WarehouseManager: React.FC = () => {
             <Settings className="w-5 h-5 text-emerald-600" />
             <h2 className="font-bold text-lg">Test City Delivery Fee Calculator</h2>
           </div>
-          <p className="text-xs text-muted-foreground">Test how delivery charges are computed for customer cities.</p>
+          <p className="text-xs text-muted-foreground">Test how delivery charges and 30km/70km service limits are computed for customer cities.</p>
 
           <div className="flex gap-3 max-w-md">
             <Input
@@ -292,8 +297,8 @@ export const WarehouseManager: React.FC = () => {
                 <strong className="text-foreground">{calcResult.warehouseName}</strong>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Free Threshold:</span>
-                <strong className="text-emerald-600">25 km (₹0)</strong>
+                <span className="text-muted-foreground">Distance & Free Threshold:</span>
+                <strong className="text-emerald-600">{calcResult.distanceKm} km (&lt; 30 km ₹0)</strong>
               </div>
               <div className="flex justify-between pt-2 border-t text-sm font-bold">
                 <span>Calculated Delivery Fee:</span>
@@ -309,7 +314,7 @@ export const WarehouseManager: React.FC = () => {
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="bg-background border rounded-2xl p-6 w-full max-w-lg space-y-4 shadow-2xl">
-              <h3 className="font-bold text-lg">{editWarehouse ? "Edit Warehouse Hub" : "Add Fulfillment Warehouse"}</h3>
+              <h3 className="font-bold text-lg">{editWarehouse ? "Edit Warehouse Hub & Location" : "Add Fulfillment Warehouse"}</h3>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -343,13 +348,47 @@ export const WarehouseManager: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs">Latitude (GPS)</Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={formData.latitude}
+                      onChange={(e) => setFormData({ ...formData, latitude: parseFloat(e.target.value) })}
+                      placeholder="12.9716"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Longitude (GPS)</Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={formData.longitude}
+                      onChange={(e) => setFormData({ ...formData, longitude: parseFloat(e.target.value) })}
+                      placeholder="77.5946"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2">
                   <div>
                     <Label className="text-xs">Free Radius (km)</Label>
                     <Input
                       type="number"
                       value={formData.freeDeliveryRadiusKm}
                       onChange={(e) => setFormData({ ...formData, freeDeliveryRadiusKm: parseFloat(e.target.value) })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Max Limit (km)</Label>
+                    <Input
+                      type="number"
+                      value={formData.maxServiceRadiusKm}
+                      onChange={(e) => setFormData({ ...formData, maxServiceRadiusKm: parseFloat(e.target.value) })}
                       required
                     />
                   </div>
@@ -378,7 +417,7 @@ export const WarehouseManager: React.FC = () => {
                     Cancel
                   </Button>
                   <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
-                    Save Warehouse Hub
+                    Save Warehouse Hub Location
                   </Button>
                 </div>
               </form>

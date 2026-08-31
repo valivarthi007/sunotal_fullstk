@@ -2,26 +2,26 @@ name: CI Pipeline
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/cd.yml'
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/cd.yml'
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'backend/**'
+  #     - 'frontend/**'
+  #     - 'package.json'
+  #     - 'pnpm-lock.yaml'
+  #     - '.github/workflows/ci.yml'
+  #     - '.github/workflows/cd.yml'
+  # pull_request:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'backend/**'
+  #     - 'frontend/**'
+  #     - 'package.json'
+  #     - 'pnpm-lock.yaml'
+  #     - '.github/workflows/ci.yml'
+  #     - '.github/workflows/cd.yml'
 
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

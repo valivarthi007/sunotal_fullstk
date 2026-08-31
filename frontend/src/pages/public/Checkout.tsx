@@ -521,9 +521,14 @@ export default function Checkout() {
                       <strong>{deliveryCalc ? `${deliveryCalc.distanceKm} km` : "Calculating..."}</strong>
                     </div>
                     <div className="flex justify-between text-emerald-900 dark:text-emerald-200">
-                      <span>Free Delivery Radius:</span>
-                      <strong>25 km (₹0)</strong>
+                      <span>Free Delivery Threshold:</span>
+                      <strong>&lt; 30 km (₹0)</strong>
                     </div>
+                    {deliveryCalc?.isServiceable === false ? (
+                      <div className="p-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg text-[11px] font-sans">
+                        ⚠️ Location exceeds maximum delivery limit of 70 km.
+                      </div>
+                    ) : null}
                     <div className="flex justify-between text-emerald-900 dark:text-emerald-200 font-bold border-t border-emerald-200 dark:border-emerald-800 pt-1.5">
                       <span>Calculated Delivery Fee:</span>
                       <span className={deliveryFeeAmount === 0 ? "text-emerald-600 font-extrabold" : "text-foreground"}>

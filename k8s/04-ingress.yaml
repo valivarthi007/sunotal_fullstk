@@ -32,6 +32,27 @@ spec:
                 name: sunotal-operations
                 port:
                   number: 5002
+          - path: /api/warehouses
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-operations
+                port:
+                  number: 5002
+          - path: /api/admin/warehouses
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-operations
+                port:
+                  number: 5002
+          - path: /api/admin/ledger
+            pathType: Prefix
+            backend:
+              service:
+                name: sunotal-operations
+                port:
+                  number: 5002
           - path: /api/inventory
             pathType: Prefix
             backend:

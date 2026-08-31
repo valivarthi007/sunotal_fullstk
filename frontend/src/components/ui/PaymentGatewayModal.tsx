@@ -75,6 +75,41 @@ export const PaymentGatewayModal: React.FC<PaymentGatewayModalProps> = ({
   const handleProcessPayment = async (method: "upi" | "netbanking" | "po") => {
     setLoading(true);
     setError(null);
+
+    const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
+
+    // Check if Razorpay API Key is configured for live/test Checkout SDK
+    if (razorpayKey && (window as any).Razorpay) {
+      try {
+        const options = {
+          key: razorpayKey,
+          amount: Math.round(amount * 100), // in paise
+          currency: "INR",
+          name: "Sunotal Farms",
+          description: `Payment for Order #${orderId}`,
+          image: "/favicon.ico",
+          handler: function (response: any) {
+            onSuccess(response.razorpay_payment_id || `PAY-RZP-${Date.now()}`);
+          },
+          prefill: {
+            name: "Corporate Customer",
+            email: "purchasing@sunotalfarms.com",
+            contact: "9999999999",
+          },
+          theme: {
+            color: "#059669",
+          },
+        };
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+        setLoading(false);
+        return;
+      } catch (rzpErr) {
+        console.warn("Razorpay SDK initialization fallback to simulator:", rzpErr);
+      }
+    }
+
+    // Fallback simulation when VITE_RAZORPAY_KEY_ID is missing or in offline POC mode
     try {
       const res = await verifyPayment({
         orderId,
