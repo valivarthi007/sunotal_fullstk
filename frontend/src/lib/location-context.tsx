@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { reverseGeocodeMappls } from "./mappls-sdk";
 
 export interface UserLocation {
   city: string;
@@ -88,8 +89,29 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     return null;
   }, [saveLocation]);
 
-  // Reverse Geocoding via Nominatim
+  // Reverse Geocoding via Mappls API with OpenStreetMap fallback
   const reverseGeocode = async (lat: number, lon: number): Promise<UserLocation> => {
+    // 1. Primary: Mappls Reverse Geocoding API
+    try {
+      const mapplsData = await reverseGeocodeMappls(lat, lon);
+      if (mapplsData && (mapplsData.city || mapplsData.formattedAddress)) {
+        return {
+          city: mapplsData.city || "Detected Location",
+          state: mapplsData.state || "",
+          country: "India",
+          pincode: mapplsData.pincode || "",
+          formattedAddress: mapplsData.formattedAddress || `${mapplsData.city}, ${mapplsData.state}`,
+          isDetected: true,
+          latitude: lat,
+          longitude: lon,
+          source: "geolocation",
+        };
+      }
+    } catch (mapplsErr) {
+      console.warn("Mappls reverse geocode error, falling back to OSM:", mapplsErr);
+    }
+
+    // 2. Secondary Fallback: Nominatim OpenStreetMap
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,

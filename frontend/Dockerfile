@@ -5,6 +5,11 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
+ARG VITE_MAPPLS_API_KEY
+ARG VITE_RAZORPAY_KEY_ID
+ENV VITE_MAPPLS_API_KEY=${VITE_MAPPLS_API_KEY}
+ENV VITE_RAZORPAY_KEY_ID=${VITE_RAZORPAY_KEY_ID}
+
 RUN pnpm build
 
 # Stage 2: Production

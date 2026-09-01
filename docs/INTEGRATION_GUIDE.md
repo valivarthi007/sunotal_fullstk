@@ -1,37 +1,40 @@
-# Third-Party Integration Guide: Google Maps API & Razorpay UPI API
+# Third-Party Integration Guide: Mappls (MapmyIndia) API & Razorpay UPI API
 
-This guide explains how to enable production / live integrations for **Google Maps API** and **Razorpay UPI API** in the Sunotal Farms application.
+This guide explains how to enable production / live integrations for **Mappls (MapmyIndia) API** and **Razorpay UPI API** in the Sunotal Farms application.
 
 ---
 
-## 1. Google Maps API Integration
+## 1. Mappls (MapmyIndia) API Integration
 
 ### Prerequisites
-1. A Google Cloud Platform (GCP) Account with an active billing profile.
-2. An API Key generated from the [GCP Console](https://console.cloud.google.com/).
+1. A [Mappls Developer Account](https://about.mappls.com/api/).
+2. An API Key / Client Credentials generated from the Mappls Developer Dashboard.
 
 ### Enabled APIs Required
-In GCP Console -> **APIs & Services** -> **Library**, enable the following services:
-- **Maps JavaScript API** (for interactive map view and marker pinning)
-- **Geocoding API** (for converting lat/lng coordinates to street addresses)
-- **Places API** (for autocomplete location search bar)
+In your Mappls App Dashboard, ensure the following API services are enabled:
+- **Vector Map JS SDK Initialization API / Interactive JS SDK API** (for interactive map view and marker pinning)
+- **Geocode API & Reverse Geocode API** (for converting coordinates to street address and vice versa)
+- **Autosuggest API / eLoc Marker API** (for autocomplete location search bar)
 
-### Steps to Include in Codebase
+### Steps to Include in Codebase / Workflow
 
 1. **Configure Environment Variables**:
-   Add the following line to `frontend/.env`:
+   Add the following line to `frontend/.env` (or pass dynamically as a secret/build variable during workflow runs):
    ```env
-   VITE_GOOGLE_MAPS_API_KEY=AIzaSyYourActualGoogleMapsApiKeyHere
+   VITE_MAPPLS_API_KEY=lbeudwpwglkryeposczwqyjzsmnjukolkrjr
    ```
 
-2. **Script Injection**:
-   In `frontend/index.html`, add the Google Maps JS SDK script tag inside the `<head>` section:
+2. **Script Injection & Dynamic SDK Loading**:
+   In `frontend/index.html` or dynamically via `frontend/src/lib/mappls-sdk.ts`, the Mappls Web Map JS SDK v3.0 script is loaded:
    ```html
-   <script src="https://maps.googleapis.com/maps/api/js?key=%VITE_GOOGLE_MAPS_API_KEY%&libraries=places"></script>
+   <script src="https://apis.mappls.com/advancedmaps/v1/%VITE_MAPPLS_API_KEY%/map_load?v=3.0"></script>
    ```
 
-3. **Fallback & Robustness**:
-   The application components (`InteractiveMapPickerModal.tsx`, `WarehouseManager.tsx`) automatically detect if `VITE_GOOGLE_MAPS_API_KEY` is undefined. When unconfigured, the app falls back to interactive coordinate inputs and OpenStreetMap reverse geocoding to prevent any application workflow crash.
+3. **Workflow Environment Injection**:
+   During workflow execution (e.g., CI/CD pipeline, Docker build, GitHub Actions), `VITE_MAPPLS_API_KEY` is dynamically read by `frontend/src/lib/mappls-sdk.ts`.
+
+4. **Fallback & Robustness**:
+   The application components (`InteractiveMapPickerModal.tsx`, `location-context.tsx`) automatically detect if `VITE_MAPPLS_API_KEY` is present. If unconfigured or offline, the app falls back to interactive coordinate inputs and OpenStreetMap reverse geocoding to prevent application crashes.
 
 ---
 

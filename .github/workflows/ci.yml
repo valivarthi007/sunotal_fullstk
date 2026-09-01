@@ -142,7 +142,7 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
 
         run: |
-          docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest ./frontend || true
+          docker build --build-arg VITE_MAPPLS_API_KEY="${{ secrets.VITE_MAPPLS_API_KEY || secrets.MAPPLS_API_KEY }}" --build-arg VITE_RAZORPAY_KEY_ID="${{ secrets.VITE_RAZORPAY_KEY_ID || secrets.RAZORPAY_KEY_ID }}" -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest ./frontend || true
           docker build -t $ECR_REGISTRY/sunotal-backend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-backend:latest ./backend || true
           docker build -t $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-auth:latest ./backend/services/auth-service || true
           docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-operations:latest ./backend/services/operations-service || true

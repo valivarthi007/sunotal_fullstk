@@ -74,7 +74,7 @@ info "Setting up frontend application…"
 cd "$SCRIPT_DIR/frontend"
 
 if [[ ! -f .env ]]; then
-  echo "VITE_API_URL=http://localhost:5000" > .env
+  cp .env.example .env 2>/dev/null || echo "VITE_API_URL=http://localhost:5000" > .env
 fi
 
 info "Installing frontend dependencies…"
