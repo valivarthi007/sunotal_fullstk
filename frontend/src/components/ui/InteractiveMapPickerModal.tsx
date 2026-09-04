@@ -4,7 +4,7 @@ import { Button } from "./button";
 import { Input } from "./input";
 import { Label } from "./label";
 import { saveUserAddress, fetchUserAddresses, UserAddressApi } from "../../lib/api-client";
-import { loadMapplsSdk, reverseGeocodeMappls } from "../../lib/mappls-sdk";
+import { loadGeoapifySdk, reverseGeocodeGeoapify, getGeoapifyTileUrl } from "../../lib/geoapify-sdk";
 
 interface InteractiveMapPickerModalProps {
   isOpen: boolean;
@@ -42,9 +42,8 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
   const [geocoding, setGeocoding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<UserAddressApi[]>([]);
-  const [mapplsLoaded, setMapplsLoaded] = useState(false);
+  const [geoapifyLoaded, setGeoapifyLoaded] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapplsMapRef = useRef<any>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -52,47 +51,26 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
         .then((data) => setSavedAddresses(data))
         .catch((err) => console.error("Failed to load saved addresses", err));
 
-      loadMapplsSdk().then((success) => {
-        setMapplsLoaded(success);
+      loadGeoapifySdk().then((success) => {
+        setGeoapifyLoaded(success);
       });
     }
   }, [isOpen]);
 
-  // Initialize or re-center Mappls Map
-  useEffect(() => {
-    if (isOpen && activeTab === "map" && mapplsLoaded && mapContainerRef.current && (window as any).mappls) {
-      try {
-        if (!mapplsMapRef.current) {
-          mapplsMapRef.current = new (window as any).mappls.Map({
-            id: mapContainerRef.current,
-            properties: {
-              center: [lat, lng],
-              zoom: 15,
-              zoomControl: true,
-              hybrid: false,
-            },
-          });
-        }
-      } catch (e) {
-        console.warn("Mappls Map container init fallback:", e);
-      }
-    }
-  }, [isOpen, activeTab, mapplsLoaded]);
-
   if (!isOpen) return null;
 
-  // Reverse Geocoding Lookup via Mappls REST API & Nominatim Fallback
+  // Reverse Geocoding Lookup via Geoapify REST API & Nominatim Fallback
   const reverseGeocode = async (latitude: number, longitude: number) => {
     setGeocoding(true);
     try {
-      const mapplsRes = await reverseGeocodeMappls(latitude, longitude);
-      if (mapplsRes) {
-        if (mapplsRes.city) setCity(mapplsRes.city);
-        if (mapplsRes.state) setStateName(mapplsRes.state);
-        if (mapplsRes.pincode) setPincode(mapplsRes.pincode);
-        if (mapplsRes.street) setStreet(mapplsRes.street);
-        if (mapplsRes.houseNo) setHouseNo(mapplsRes.houseNo);
-        if (mapplsRes.landmark) setLandmark(mapplsRes.landmark);
+      const geoapifyRes = await reverseGeocodeGeoapify(latitude, longitude);
+      if (geoapifyRes) {
+        if (geoapifyRes.city) setCity(geoapifyRes.city);
+        if (geoapifyRes.state) setStateName(geoapifyRes.state);
+        if (geoapifyRes.pincode) setPincode(geoapifyRes.pincode);
+        if (geoapifyRes.street) setStreet(geoapifyRes.street);
+        if (geoapifyRes.houseNo) setHouseNo(geoapifyRes.houseNo);
+        if (geoapifyRes.landmark) setLandmark(geoapifyRes.landmark);
       } else {
         // Nominatim fallback
         const res = await fetch(
@@ -124,12 +102,6 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
           setLat(newLat);
           setLng(newLng);
           reverseGeocode(newLat, newLng);
-
-          if (mapplsMapRef.current) {
-            try {
-              mapplsMapRef.current.setCenter([newLat, newLng]);
-            } catch (e) {}
-          }
         },
         () => {
           alert("GPS access denied. Defaulting to current map location.");
@@ -145,12 +117,6 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
     setLat(nextLat);
     setLng(nextLng);
     reverseGeocode(nextLat, nextLng);
-
-    if (mapplsMapRef.current) {
-      try {
-        mapplsMapRef.current.setCenter([nextLat, nextLng]);
-      } catch (e) {}
-    }
   };
 
   const handleConfirmAddress = async () => {
@@ -233,7 +199,7 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
             </div>
             <div>
               <h2 className="font-bold text-base text-foreground">Pin Delivery Location on Map</h2>
-              <p className="text-xs text-muted-foreground">Hyperlocal delivery powered by Mappls (MapmyIndia)</p>
+              <p className="text-xs text-muted-foreground">Hyperlocal delivery powered by Geoapify Maps</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 text-muted-foreground hover:text-foreground rounded-full hover:bg-accent">
@@ -267,8 +233,8 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
             <>
               {/* Interactive Vector Map Tile Visualization */}
               <div className="relative w-full h-52 bg-slate-900 border-2 border-emerald-600/60 rounded-2xl overflow-hidden shadow-inner group">
-                {/* Mappls Map Container */}
-                <div ref={mapContainerRef} id="mappls-map-container" className="absolute inset-0 w-full h-full z-0" />
+                {/* Geoapify Map Container */}
+                <div ref={mapContainerRef} id="geoapify-map-container" className="absolute inset-0 w-full h-full z-0" />
 
                 {/* Grid Overlay Fallback */}
                 <div className="absolute inset-0 opacity-20 pointer-events-none bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]" />

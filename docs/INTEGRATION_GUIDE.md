@@ -1,40 +1,40 @@
-# Third-Party Integration Guide: Mappls (MapmyIndia) API & Razorpay UPI API
+# Third-Party Integration Guide: Geoapify API & Razorpay UPI API
 
-This guide explains how to enable production / live integrations for **Mappls (MapmyIndia) API** and **Razorpay UPI API** in the Sunotal Farms application.
+This guide explains how to enable production / live integrations for **Geoapify Maps & Reverse Geocoding API** and **Razorpay UPI API** in the Sunotal Farms application.
 
 ---
 
-## 1. Mappls (MapmyIndia) API Integration
+## 1. Geoapify API Integration
 
 ### Prerequisites
-1. A [Mappls Developer Account](https://about.mappls.com/api/).
-2. An API Key / Client Credentials generated from the Mappls Developer Dashboard.
+1. A [Geoapify Developer Account](https://myprojects.geoapify.com/).
+2. An API Key generated from the Geoapify MyProjects Dashboard.
 
 ### Enabled APIs Required
-In your Mappls App Dashboard, ensure the following API services are enabled:
-- **Vector Map JS SDK Initialization API / Interactive JS SDK API** (for interactive map view and marker pinning)
-- **Geocode API & Reverse Geocode API** (for converting coordinates to street address and vice versa)
-- **Autosuggest API / eLoc Marker API** (for autocomplete location search bar)
+In your Geoapify Project Dashboard, ensure the following API services are enabled:
+- **Map Tiles API** (for interactive map tiles and marker pinning)
+- **Reverse Geocoding REST API** (`https://api.geoapify.com/v1/geocode/reverse`)
+- **Address Autocomplete API** (optional for enhanced address search)
 
 ### Steps to Include in Codebase / Workflow
 
 1. **Configure Environment Variables**:
    Add the following line to `frontend/.env` (or pass dynamically as a secret/build variable during workflow runs):
    ```env
-   VITE_MAPPLS_API_KEY=lbeudwpwglkryeposczwqyjzsmnjukolkrjr
+   VITE_GEOAPIFY_API_KEY=your_geoapify_api_key_here
    ```
 
 2. **Script Injection & Dynamic SDK Loading**:
-   In `frontend/index.html` or dynamically via `frontend/src/lib/mappls-sdk.ts`, the Mappls Web Map JS SDK v3.0 script is loaded:
-   ```html
-   <script src="https://apis.mappls.com/advancedmaps/v1/%VITE_MAPPLS_API_KEY%/map_load?v=3.0"></script>
+   In `frontend/src/lib/geoapify-sdk.ts`, Geoapify map tile URLs and reverse geocoding queries are loaded:
+   ```ts
+   https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&apiKey=${apiKey}
    ```
 
 3. **Workflow Environment Injection**:
-   During workflow execution (e.g., CI/CD pipeline, Docker build, GitHub Actions), `VITE_MAPPLS_API_KEY` is dynamically read by `frontend/src/lib/mappls-sdk.ts`.
+   During workflow execution (e.g., CI/CD pipeline, Docker build, GitHub Actions), `VITE_GEOAPIFY_API_KEY` is dynamically read by `frontend/src/lib/geoapify-sdk.ts`.
 
 4. **Fallback & Robustness**:
-   The application components (`InteractiveMapPickerModal.tsx`, `location-context.tsx`) automatically detect if `VITE_MAPPLS_API_KEY` is present. If unconfigured or offline, the app falls back to interactive coordinate inputs and OpenStreetMap reverse geocoding to prevent application crashes.
+   The application components (`InteractiveMapPickerModal.tsx`, `location-context.tsx`) automatically detect if `VITE_GEOAPIFY_API_KEY` is present. If unconfigured or offline, the app falls back to interactive coordinate inputs and OpenStreetMap reverse geocoding to prevent application crashes.
 
 ---
 
