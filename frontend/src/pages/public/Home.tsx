@@ -71,7 +71,7 @@ export default function Home() {
 
   // Modals state
   const [showGrievanceModal, setShowGrievanceModal] = useState(false);
-  const [trackOrderInput, setTrackOrderInput] = useState("ORD-2026-8801");
+  const [trackOrderInput, setTrackOrderInput] = useState("");
   const [showTrackModal, setShowTrackModal] = useState(false);
 
   useEffect(() => {
@@ -231,12 +231,6 @@ export default function Home() {
                     Track
                   </Button>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono">
-                  <span>Default Demo Order:</span>
-                  <button type="button" onClick={() => { setTrackOrderInput("ORD-2026-8801"); setShowTrackModal(true); }} className="text-emerald-600 font-bold hover:underline">
-                    ORD-2026-8801
-                  </button>
-                </div>
               </form>
             </div>
 
@@ -275,7 +269,7 @@ export default function Home() {
       <GrievanceRedressalModal
         isOpen={showGrievanceModal}
         onClose={() => setShowGrievanceModal(false)}
-        defaultOrderId={trackOrderInput || "ORD-2026-8801"}
+        defaultOrderId={trackOrderInput}
       />
 
       {/* Track Order Stepper Dialog */}

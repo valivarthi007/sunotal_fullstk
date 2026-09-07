@@ -135,41 +135,13 @@ export async function initDatabase() {
       );
     `);
 
-    // Seed default admin user (password: admin123 or admin)
+    // Seed default admin user ONLY (password: admin123 or admin)
     const adminHash = await bcrypt.hash('admin123', 10);
     await pool.query(`
       INSERT INTO users (name, email, password_hash, role, active, phone, city)
       VALUES ('Admin User', 'admin@sunotal.com', $1, 'admin', true, '+91 98765 00001', 'Hyderabad')
       ON CONFLICT (email) DO UPDATE SET active = true, role = 'admin';
     `, [adminHash]);
-
-    // Seed default farmer/vendor user (password: farmer123)
-    const farmerHash = await bcrypt.hash('farmer123', 10);
-    const farmerRes = await pool.query(`
-      INSERT INTO users (name, email, password_hash, role, active, phone, city)
-      VALUES ('Ramesh Kumar', 'farmer@sunotal.com', $1, 'vendor', true, '+91 98765 43210', 'Telangana')
-      ON CONFLICT (email) DO UPDATE SET active = true, role = 'vendor'
-      RETURNING id;
-    `, [farmerHash]);
-
-    if (farmerRes.rows.length > 0) {
-      const farmerUserId = farmerRes.rows[0].id;
-      const vCheck = await pool.query('SELECT id FROM vendors WHERE user_id = $1 OR email = $2', [farmerUserId, 'farmer@sunotal.com']);
-      if (vCheck.rows.length === 0) {
-        await pool.query(`
-          INSERT INTO vendors (user_id, first_name, last_name, phone, location, produce, email, farm_size, aadhar, status, notes)
-          VALUES ($1, 'Ramesh', 'Kumar', '+91 98765 43210', 'Telangana', 'Vegetables', 'farmer@sunotal.com', '5 Acres', '123456789012', 'approved', 'Verified Organic Farmer');
-        `, [farmerUserId]);
-      }
-    }
-
-    // Seed default customer user (password: user123)
-    const userHash = await bcrypt.hash('user123', 10);
-    await pool.query(`
-      INSERT INTO users (name, email, password_hash, role, active, phone, city)
-      VALUES ('John Doe', 'user@sunotal.com', $1, 'user', true, '+91 98765 11111', 'Bangalore')
-      ON CONFLICT (email) DO UPDATE SET active = true;
-    `, [userHash]);
 
     // Seed categories if empty
     const catCheck = await pool.query('SELECT COUNT(*) FROM categories');
@@ -206,18 +178,6 @@ export async function initDatabase() {
       `);
     }
 
-    // Seed sample products if empty
-    const prodCheck = await pool.query('SELECT COUNT(*) FROM products');
-    if (parseInt(prodCheck.rows[0].count, 10) === 0) {
-      await pool.query(`
-        INSERT INTO products (name, category, unit, price, original_price, discount_percentage, image, organic, active, description) VALUES
-        ('Organic Desi Tomatoes', 'Vegetables', '1 kg', 40, 50, 20, 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=600&q=80', true, true, 'Farm fresh naturally grown tomatoes'),
-        ('Fresh Red Onions', 'Vegetables', '1 kg', 35, 45, 22, 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?auto=format&fit=crop&w=600&q=80', false, true, 'Crisp farm onions from Maharashtra'),
-        ('Royal Gala Apples', 'Fruits', '1 kg', 160, 200, 20, 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=600&q=80', true, true, 'Fresh mountain apples from Himachal Pradesh'),
-        ('Organic Farm Milk', 'Dairy', '1 L', 65, 75, 13, 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=600&q=80', true, true, 'Pure farm fresh raw milk')
-      `);
-    }
-
     // Seed banners if empty
     const bannerCheck = await pool.query('SELECT COUNT(*) FROM banners');
     if (parseInt(bannerCheck.rows[0].count, 10) === 0) {
@@ -227,16 +187,6 @@ export async function initDatabase() {
         ('Fresh Harvest of the Season', 'Delivered within 24 hours of plucking', 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&w=1200&q=80', '/products', true);
       `);
     }
-
-    // Clean up any legacy direct S3 URLs that return 403 Forbidden
-    await pool.query(`
-      UPDATE products SET image = 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%tomatoes.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Vegetables');
-      UPDATE products SET image = 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%mangoes.jpg%' OR image LIKE '%apples.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Fruits');
-      UPDATE products SET image = 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%milk.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Dairy');
-      UPDATE products SET image = 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%rice.jpg%' OR image LIKE '%grains.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Grains');
-      UPDATE products SET image = 'https://images.unsplash.com/photo-1596591606975-97ee5cef3a1e?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%cashews.jpg%' OR image LIKE '%dry-fruits.jpg%' OR (image LIKE '%s3.us-east-1.amazonaws.com%' AND category = 'Dry Fruits');
-      UPDATE products SET image = 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?auto=format&fit=crop&w=600&q=80' WHERE image LIKE '%vegetables.jpg%';
-    `);
 
     console.log('✅ Database initialized successfully with all tables and seed records.');
   } catch (err) {

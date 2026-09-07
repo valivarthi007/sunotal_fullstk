@@ -16,7 +16,7 @@ interface GrievanceRedressalModalProps {
 export const GrievanceRedressalModal: React.FC<GrievanceRedressalModalProps> = ({
   isOpen,
   onClose,
-  defaultOrderId = "ORD-2026-8801",
+  defaultOrderId = "",
 }) => {
   const [orderId, setOrderId] = useState(defaultOrderId);
   const [category, setCategory] = useState("Damaged / Quality Issue");

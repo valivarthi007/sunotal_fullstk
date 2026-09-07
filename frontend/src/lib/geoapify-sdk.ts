@@ -89,9 +89,7 @@ export async function reverseGeocodeGeoapify(
   // Fallback to OpenStreetMap Nominatim reverse geocoding
   try {
     const fallbackUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
-    const res = await fetch(fallbackUrl, {
-      headers: { "User-Agent": "Sunotal-Web-App" },
-    });
+    const res = await fetch(fallbackUrl);
     if (res.ok) {
       const data = await res.json();
       if (data && data.address) {
@@ -177,9 +175,7 @@ export async function searchPlaceGeoapify(query: string): Promise<GeoapifySearch
   // Fallback to OpenStreetMap Nominatim search
   try {
     const fallbackUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`;
-    const res = await fetch(fallbackUrl, {
-      headers: { "User-Agent": "Sunotal-Web-App" },
-    });
+    const res = await fetch(fallbackUrl);
     if (res.ok) {
       const data = await res.json();
       return data.map((item: any) => ({

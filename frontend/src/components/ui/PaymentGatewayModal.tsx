@@ -25,18 +25,18 @@ export const PaymentGatewayModal: React.FC<PaymentGatewayModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   // Form State
-  const [cardNumber, setCardNumber] = useState("4111 1111 1111 1111");
-  const [cardExpiry, setCardExpiry] = useState("12/28");
-  const [cardCvv, setCardCvv] = useState("123");
-  const [cardName, setCardName] = useState("Corporate Purchasing");
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [cardName, setCardName] = useState("");
   
   // 3D Secure OTP Modal state
   const [showOtpDialog, setShowOtpDialog] = useState(false);
-  const [otpCode, setOtpCode] = useState("123456");
+  const [otpCode, setOtpCode] = useState("");
 
-  const [upiId, setUpiId] = useState("corporate@upi");
-  const [selectedBank, setSelectedBank] = useState("HDFC Bank");
-  const [poReference, setPoReference] = useState("PO-2026-SUN-0091");
+  const [upiId, setUpiId] = useState("");
+  const [selectedBank, setSelectedBank] = useState("");
+  const [poReference, setPoReference] = useState("");
 
   if (!isOpen) return null;
 

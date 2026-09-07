@@ -36,8 +36,13 @@ router.get("/orders", requireAuth, async (req: any, res) => {
 // GET /api/orders/:id - Fetch single order detail
 router.get("/orders/:id", requireAuth, async (req: any, res) => {
   try {
-    const orderId = Number(req.params.id);
-    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+    const rawParam = req.params.id;
+    const numId = Number(rawParam);
+    const isValidNum = !isNaN(numId) && String(numId) === String(rawParam);
+
+    const [order] = isValidNum
+      ? await db.select().from(ordersTable).where(eq(ordersTable.id, numId)).limit(1)
+      : await db.select().from(ordersTable).where(eq(ordersTable.orderNumber, String(rawParam))).limit(1);
 
     if (!order) {
       res.status(404).json({ error: "Order not found" });
@@ -50,7 +55,7 @@ router.get("/orders/:id", requireAuth, async (req: any, res) => {
       return;
     }
 
-    const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+    const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
 
     res.json({
       ...order,
@@ -58,7 +63,7 @@ router.get("/orders/:id", requireAuth, async (req: any, res) => {
     });
   } catch (error: any) {
     console.error("Failed to fetch order detail:", error);
-    res.status(500).json({ error: "Failed to fetch order detail" });
+    res.status(500).json({ error: error.message || "Failed to fetch order detail" });
   }
 });
 

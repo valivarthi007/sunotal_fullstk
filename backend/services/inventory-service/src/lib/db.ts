@@ -135,43 +135,7 @@ export async function initDatabase() {
       );
     `);
 
-    // Seed default admin user (password: admin123 or admin)
-    const adminHash = await bcrypt.hash('admin123', 10);
-    await pool.query(`
-      INSERT INTO users (name, email, password_hash, role, active, phone, city)
-      VALUES ('Admin User', 'admin@sunotal.com', $1, 'admin', true, '+91 98765 00001', 'Hyderabad')
-      ON CONFLICT (email) DO UPDATE SET active = true, role = 'admin';
-    `, [adminHash]);
-
-    // Seed default farmer/vendor user (password: farmer123)
-    const farmerHash = await bcrypt.hash('farmer123', 10);
-    const farmerRes = await pool.query(`
-      INSERT INTO users (name, email, password_hash, role, active, phone, city)
-      VALUES ('Ramesh Kumar', 'farmer@sunotal.com', $1, 'vendor', true, '+91 98765 43210', 'Telangana')
-      ON CONFLICT (email) DO UPDATE SET active = true, role = 'vendor'
-      RETURNING id;
-    `, [farmerHash]);
-
-    if (farmerRes.rows.length > 0) {
-      const farmerUserId = farmerRes.rows[0].id;
-      const vCheck = await pool.query('SELECT id FROM vendors WHERE user_id = $1 OR email = $2', [farmerUserId, 'farmer@sunotal.com']);
-      if (vCheck.rows.length === 0) {
-        await pool.query(`
-          INSERT INTO vendors (user_id, first_name, last_name, phone, location, produce, email, farm_size, aadhar, status, notes)
-          VALUES ($1, 'Ramesh', 'Kumar', '+91 98765 43210', 'Telangana', 'Vegetables', 'farmer@sunotal.com', '5 Acres', '123456789012', 'approved', 'Verified Organic Farmer');
-        `, [farmerUserId]);
-      }
-    }
-
-    // Seed default customer user (password: user123)
-    const userHash = await bcrypt.hash('user123', 10);
-    await pool.query(`
-      INSERT INTO users (name, email, password_hash, role, active, phone, city)
-      VALUES ('John Doe', 'user@sunotal.com', $1, 'user', true, '+91 98765 11111', 'Bangalore')
-      ON CONFLICT (email) DO UPDATE SET active = true;
-    `, [userHash]);
-
-    // Seed categories if empty
+    // Essential categories & product definitions for dynamic entry
     const catCheck = await pool.query('SELECT COUNT(*) FROM categories');
     if (parseInt(catCheck.rows[0].count, 10) === 0) {
       await pool.query(`
@@ -180,41 +144,9 @@ export async function initDatabase() {
         ('Fruits', '🍎'),
         ('Grains', '🌾'),
         ('Dairy', '🥛'),
+        ('Dry Fruits', '🥜'),
         ('Herbs & Spices', '🌿')
         ON CONFLICT (name) DO NOTHING;
-      `);
-    }
-
-    // Seed product definitions if empty
-    const defCheck = await pool.query('SELECT COUNT(*) FROM product_definitions');
-    if (parseInt(defCheck.rows[0].count, 10) === 0) {
-      await pool.query(`
-        INSERT INTO product_definitions (name, category) VALUES
-        ('Desi Tomato', 'Vegetables'),
-        ('Hybrid Tomato', 'Vegetables'),
-        ('Red Onion', 'Vegetables'),
-        ('White Potato', 'Vegetables'),
-        ('Shimla Apple', 'Fruits'),
-        ('Robusta Banana', 'Fruits'),
-        ('Alphonso Mango', 'Fruits'),
-        ('Sharbati Wheat', 'Grains'),
-        ('Sona Masoori Rice', 'Grains'),
-        ('Organic A2 Milk', 'Dairy'),
-        ('Fresh Farm Paneer', 'Dairy'),
-        ('Organic Turmeric', 'Herbs & Spices')
-        ON CONFLICT (name) DO NOTHING;
-      `);
-    }
-
-    // Seed sample products if empty
-    const prodCheck = await pool.query('SELECT COUNT(*) FROM products');
-    if (parseInt(prodCheck.rows[0].count, 10) === 0) {
-      await pool.query(`
-        INSERT INTO products (name, category, unit, price, original_price, discount_percentage, image, organic, active, description) VALUES
-        ('Organic Desi Tomatoes', 'Vegetables', '1 kg', 40, 50, 20, 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=600&q=80', true, true, 'Farm fresh naturally grown tomatoes'),
-        ('Fresh Red Onions', 'Vegetables', '1 kg', 35, 45, 22, 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?auto=format&fit=crop&w=600&q=80', false, true, 'Crisp farm onions from Maharashtra'),
-        ('Royal Gala Apples', 'Fruits', '1 kg', 160, 200, 20, 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=600&q=80', true, true, 'Fresh mountain apples from Himachal Pradesh'),
-        ('Organic Farm Milk', 'Dairy', '1 L', 65, 75, 13, 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=600&q=80', true, true, 'Pure farm fresh raw milk')
       `);
     }
 

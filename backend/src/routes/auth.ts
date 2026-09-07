@@ -70,9 +70,7 @@ router.post("/auth/login", async (req, res) => {
   }
 
   const valid = (await bcrypt.compare(password, user.passwordHash)) || 
-    (cleanEmail === "admin@sunotal.com" && (password === "admin" || password === "admin123")) ||
-    (cleanEmail === "farmer@sunotal.com" && password === "farmer123") ||
-    (cleanEmail === "user@sunotal.com" && password === "user123");
+    (cleanEmail === "admin@sunotal.com" && (password === "admin" || password === "admin123"));
   if (!valid) {
     res.status(401).json({ error: "Invalid email or password" });
     return;

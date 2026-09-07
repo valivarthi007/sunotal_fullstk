@@ -31,12 +31,12 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
   // Map Coordinates & Address State
   const [lat, setLat] = useState(12.9716);
   const [lng, setLng] = useState(77.5946);
-  const [houseNo, setHouseNo] = useState("Flat 402, Green Acres");
-  const [street, setStreet] = useState("100 Feet Rd, Indiranagar");
-  const [landmark, setLandmark] = useState("Opp. Metro Station");
-  const [city, setCity] = useState("Bengaluru");
-  const [stateName, setStateName] = useState("Karnataka");
-  const [pincode, setPincode] = useState("560038");
+  const [houseNo, setHouseNo] = useState("");
+  const [street, setStreet] = useState("");
+  const [landmark, setLandmark] = useState("");
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
+  const [pincode, setPincode] = useState("");
   const [tag, setTag] = useState<"home" | "work" | "office" | "other">("home");
 
   // Place Search & Autocomplete State
@@ -149,7 +149,7 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
     if (result.pincode) setPincode(result.pincode);
     if (result.street) setStreet(result.street);
     setSearchResults([]);
-    setSearchQuery("");
+    setSearchQuery(result.formatted);
     reverseGeocode(result.lat, result.lng);
   };
 
