@@ -72,7 +72,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
     { name: "Home", path: "/" },
     { name: "All Products", path: "/products" },
     ...categoryNavLinks,
-    ...(user ? [] : [{ name: "For Farmers", path: "/farmer" }]),
   ];
 
   const fmt = (n: number) =>
@@ -454,8 +453,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       {/* Footer */}
       <footer className="bg-secondary text-secondary-foreground pt-16 pb-8 border-t-4 border-primary">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
+            <div className="lg:col-span-2">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-12 h-12 bg-primary text-primary-foreground rounded-xl flex items-center justify-center font-bold text-2xl shadow-lg shadow-primary/20">
                   SF
@@ -465,48 +464,60 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   <p className="text-xs uppercase tracking-widest text-primary font-bold">Farms</p>
                 </div>
               </div>
-              <p className="text-secondary-foreground/70 mb-6 max-w-sm">
+              <p className="text-secondary-foreground/70 mb-6 max-w-sm text-sm">
                 Premium, trust-first farm-to-door grocery platform. Every gram is traceable back to a verified farmer.
               </p>
               <div className="flex items-center gap-4">
-                <a href="#" className="w-10 h-10 rounded-full bg-secondary-foreground/10 flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors">
+                <a href="#" className="w-10 h-10 rounded-full bg-secondary-foreground/10 flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors" aria-label="Facebook">
                   <Facebook className="w-5 h-5" />
                 </a>
-                <a href="#" className="w-10 h-10 rounded-full bg-secondary-foreground/10 flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors">
+                <a href="#" className="w-10 h-10 rounded-full bg-secondary-foreground/10 flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors" aria-label="Twitter">
                   <Twitter className="w-5 h-5" />
                 </a>
-                <a href="#" className="w-10 h-10 rounded-full bg-secondary-foreground/10 flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors">
+                <a href="#" className="w-10 h-10 rounded-full bg-secondary-foreground/10 flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors" aria-label="Instagram">
                   <Instagram className="w-5 h-5" />
                 </a>
               </div>
             </div>
 
             <div>
-              <h4 className="font-bold text-lg mb-6">Company</h4>
-              <ul className="flex flex-col gap-3">
-                <li><Link href="/about" className="text-secondary-foreground/70 hover:text-white transition-colors">About Us</Link></li>
-                {!user && <li><Link href="/farmer" className="text-secondary-foreground/70 hover:text-white transition-colors">For Farmers</Link></li>}
-                <li><Link href="/careers" className="text-secondary-foreground/70 hover:text-white transition-colors">Careers</Link></li>
-                <li><Link href="/press" className="text-secondary-foreground/70 hover:text-white transition-colors">Press</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-bold text-lg mb-6">Categories</h4>
-              <ul className="flex flex-col gap-3">
+              <h4 className="font-bold text-base mb-4 text-white">Categories</h4>
+              <ul className="flex flex-col gap-2.5 text-sm">
                 <li><Link href="/vegetables" className="text-secondary-foreground/70 hover:text-white transition-colors">Fresh Vegetables</Link></li>
                 <li><Link href="/fruits" className="text-secondary-foreground/70 hover:text-white transition-colors">Fresh Fruits</Link></li>
                 <li><Link href="/dairy" className="text-secondary-foreground/70 hover:text-white transition-colors">Dairy Products</Link></li>
+                <li><Link href="/dry-fruits" className="text-secondary-foreground/70 hover:text-white transition-colors">Dry Fruits</Link></li>
                 <li><Link href="/grains" className="text-secondary-foreground/70 hover:text-white transition-colors">Organic Grains</Link></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-bold text-lg mb-6">Contact Support</h4>
-              <ul className="flex flex-col gap-4 text-secondary-foreground/70">
-                <li className="flex items-start gap-3">
-                  <MapPin className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                  <span>current office road, 76-16-53,<br />Bhavani Puram, RR Nagar,<br />Vijayawada, Andhra Pradesh 520012</span>
+              <h4 className="font-bold text-base mb-4 text-white">Partner & Admin</h4>
+              <ul className="flex flex-col gap-2.5 text-sm">
+                <li>
+                  <Link href="/farmer" className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors flex items-center gap-1.5">
+                    🌾 Farmer Partner Portal
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/vendor" className="text-secondary-foreground/70 hover:text-white transition-colors flex items-center gap-1.5">
+                    🏪 Vendor Dashboard
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/login" className="text-secondary-foreground/70 hover:text-white transition-colors flex items-center gap-1.5">
+                    🔑 Admin Portal Login
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-base mb-4 text-white">Contact & Support</h4>
+              <ul className="flex flex-col gap-3 text-sm text-secondary-foreground/70">
+                <li className="flex items-start gap-2">
+                  <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <span>76-16-53, Bhavani Puram,<br />Vijayawada, AP 520012</span>
                 </li>
                 <li>Email: <a href="mailto:support@sunotal.com" className="text-white hover:text-primary transition-colors">support@sunotal.com</a></li>
                 <li>Phone: <a href="tel:09090007108" className="text-white hover:text-primary transition-colors font-medium">090900 07108</a></li>
@@ -514,11 +525,13 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <div className="pt-8 border-t border-secondary-foreground/10 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-secondary-foreground/50">
+          <div className="pt-8 border-t border-secondary-foreground/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-secondary-foreground/50">
             <p>&copy; {new Date().getFullYear()} Sunotal Farms. All rights reserved.</p>
-            <div className="flex gap-6">
+            <div className="flex flex-wrap gap-4 sm:gap-6">
               <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
               <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+              <Link href="/farmer" className="hover:text-emerald-400 transition-colors">Farmer Registration</Link>
+              <Link href="/admin/login" className="hover:text-white transition-colors">Admin Login</Link>
             </div>
           </div>
         </div>
