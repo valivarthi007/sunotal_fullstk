@@ -48,42 +48,77 @@ export async function reverseGeocodeGeoapify(
   lng: number
 ): Promise<GeoapifyGeocodeResult | null> {
   const apiKey = getGeoapifyApiKey();
-  if (!apiKey) return null;
 
-  try {
-    const url = `https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&apiKey=${apiKey}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Geoapify API HTTP status ${res.status}`);
+  if (apiKey) {
+    try {
+      const url = `https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&apiKey=${apiKey}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Geoapify API HTTP status ${res.status}`);
 
-    const data = await res.json();
-    const feature = data.features && data.features[0] ? data.features[0] : null;
+      const data = await res.json();
+      const feature = data.features && data.features[0] ? data.features[0] : null;
 
-    if (feature && feature.properties) {
-      const props = feature.properties;
+      if (feature && feature.properties) {
+        const props = feature.properties;
 
-      const houseNo = props.housenumber || props.building || props.house_number || "";
-      const street = props.street || props.road || props.suburb || props.district || "";
-      const landmark = props.name || props.poi || props.suburb || "";
-      const city = props.city || props.town || props.county || props.state_district || "";
-      const state = props.state || "";
-      const pincode = props.postcode || props.pincode || "";
-      const formattedAddress =
-        props.formatted ||
-        [houseNo, street, city, state, pincode].filter(Boolean).join(", ");
+        const houseNo = props.housenumber || props.building || props.house_number || "";
+        const street = props.street || props.road || props.suburb || props.district || "";
+        const landmark = props.name || props.poi || props.suburb || "";
+        const city = props.city || props.town || props.county || props.state_district || "";
+        const state = props.state || "";
+        const pincode = props.postcode || props.pincode || "";
+        const formattedAddress =
+          props.formatted ||
+          [houseNo, street, city, state, pincode].filter(Boolean).join(", ");
 
-      return {
-        houseNo,
-        street,
-        landmark,
-        city,
-        state,
-        pincode,
-        formattedAddress,
-      };
+        return {
+          houseNo,
+          street,
+          landmark,
+          city,
+          state,
+          pincode,
+          formattedAddress,
+        };
+      }
+    } catch (err) {
+      console.warn("Geoapify reverse geocoding request failed, trying Nominatim fallback:", err);
     }
-  } catch (err) {
-    console.warn("Geoapify reverse geocoding request failed:", err);
   }
+
+  // Fallback to OpenStreetMap Nominatim reverse geocoding
+  try {
+    const fallbackUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+    const res = await fetch(fallbackUrl, {
+      headers: { "User-Agent": "Sunotal-Web-App" },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.address) {
+        const addr = data.address;
+        const houseNo = addr.house_number || addr.building || "";
+        const street = addr.road || addr.suburb || addr.neighbourhood || "";
+        const landmark = addr.amenity || addr.shop || addr.suburb || "";
+        const city = addr.city || addr.town || addr.village || addr.county || "";
+        const state = addr.state || "";
+        const pincode = addr.postcode || "";
+        const formattedAddress = data.display_name || [houseNo, street, city, state, pincode].filter(Boolean).join(", ");
+
+        return {
+          houseNo,
+          street,
+          landmark,
+          city,
+          state,
+          pincode,
+          formattedAddress,
+        };
+      }
+    }
+  } catch (fallbackErr) {
+    console.warn("Nominatim fallback reverse geocoding failed:", fallbackErr);
+  }
+
   return null;
 }
 

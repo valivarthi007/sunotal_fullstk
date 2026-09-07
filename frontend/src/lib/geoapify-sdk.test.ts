@@ -69,6 +69,37 @@ describe("Geoapify SDK Integration Module", () => {
     expect(result?.formattedAddress).toContain("MG Road");
   });
 
+  it("reverseGeocodeGeoapify falls back to OpenStreetMap Nominatim when API key is unconfigured", async () => {
+    const mockNominatimResponse = {
+      display_name: "200, Brigade Road, Bengaluru, Karnataka 560025, India",
+      address: {
+        house_number: "200",
+        road: "Brigade Road",
+        city: "Bengaluru",
+        state: "Karnataka",
+        postcode: "560025",
+      },
+    };
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockNominatimResponse,
+    } as Response);
+
+    vi.spyOn(import.meta, "env", "get").mockReturnValue({
+      VITE_GEOAPIFY_API_KEY: "",
+    });
+
+    const result = await reverseGeocodeGeoapify(12.9716, 77.5946);
+
+    expect(result).not.toBeNull();
+    expect(result?.city).toBe("Bengaluru");
+    expect(result?.state).toBe("Karnataka");
+    expect(result?.pincode).toBe("560025");
+    expect(result?.street).toBe("Brigade Road");
+    expect(result?.houseNo).toBe("200");
+  });
+
   it("reverseGeocodeGeoapify handles network errors gracefully without crashing", async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error("Network Error"));
 
