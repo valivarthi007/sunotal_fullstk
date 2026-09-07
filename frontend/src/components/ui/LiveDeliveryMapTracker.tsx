@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { MapPin, Truck, PhoneCall, Star, Clock, ShieldCheck, RefreshCw, Navigation, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "./button";
 import { fetchLiveTrackingTelemetry, LiveTrackingTelemetry } from "../../lib/api-client";
+import { loadGeoapifySdk, getGeoapifyTileUrl } from "../../lib/geoapify-sdk";
 
 interface LiveDeliveryMapTrackerProps {
   orderId: string;
@@ -11,6 +12,9 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
   const [telemetry, setTelemetry] = useState<LiveTrackingTelemetry | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<any>(null);
 
   const loadTelemetry = async () => {
     setLoading(true);
@@ -30,6 +34,84 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
     const interval = setInterval(loadTelemetry, 10000);
     return () => clearInterval(interval);
   }, [orderId]);
+
+  useEffect(() => {
+    if (!telemetry || !mapContainerRef.current) return;
+
+    loadGeoapifySdk().then(() => {
+      const L = (window as any).L;
+      if (!L || !mapContainerRef.current) return;
+
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+
+      const { warehouseOrigin, customerDestination, driverLocation, driverProfile } = telemetry;
+      const wLat = warehouseOrigin.latitude || 12.9352;
+      const wLng = warehouseOrigin.longitude || 77.6245;
+      const cLat = customerDestination.latitude || 12.9716;
+      const cLng = customerDestination.longitude || 77.5946;
+      const dLat = driverLocation.latitude || (wLat + cLat) / 2;
+      const dLng = driverLocation.longitude || (wLng + cLng) / 2;
+
+      const map = L.map(mapContainerRef.current, {
+        zoomControl: true,
+      });
+
+      L.tileLayer(getGeoapifyTileUrl(), {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(map);
+
+      // 1. Warehouse Marker
+      const hubIcon = L.divIcon({
+        className: "custom-hub-marker",
+        html: '<div style="background:#1d4ed8;color:white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid white;box-shadow:0 4px 6px rgba(0,0,0,0.4)">HUB</div>',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
+      L.marker([wLat, wLng], { icon: hubIcon }).addTo(map).bindPopup(`<b>${warehouseOrigin.name}</b>`);
+
+      // 2. Customer Destination Marker
+      const homeIcon = L.divIcon({
+        className: "custom-home-marker",
+        html: '<div style="background:#059669;color:white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;border:2px solid white;box-shadow:0 4px 6px rgba(0,0,0,0.4)">📍</div>',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
+      L.marker([cLat, cLng], { icon: homeIcon }).addTo(map).bindPopup("<b>Delivery Address</b>");
+
+      // 3. Driver Location Marker
+      const driverIcon = L.divIcon({
+        className: "custom-driver-marker",
+        html: '<div style="background:#f59e0b;color:black;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 10px rgba(0,0,0,0.5)">🛵</div>',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+      });
+      L.marker([dLat, dLng], { icon: driverIcon }).addTo(map).bindPopup(`<b>${driverProfile.name} (EV Driver)</b>`).openPopup();
+
+      // 4. Route Polyline
+      L.polyline([[wLat, wLng], [dLat, dLng], [cLat, cLng]], {
+        color: "#10b981",
+        weight: 5,
+        dashArray: "8, 8",
+      }).addTo(map);
+
+      // Fit bounds
+      const bounds = L.latLngBounds([[wLat, wLng], [cLat, cLng], [dLat, dLng]]);
+      map.fitBounds(bounds, { padding: [40, 40] });
+
+      mapInstanceRef.current = map;
+    });
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [telemetry]);
 
   if (loading && !telemetry) {
     return (
@@ -73,47 +155,11 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
       </div>
 
       {/* Interactive Map Tile Visualization */}
-      <div className="relative w-full h-64 bg-slate-950 overflow-hidden group">
-        {/* Simulated OSM Grid */}
-        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(#475569_1px,transparent_1px)] [background-size:20px_20px]" />
-
-        {/* Route Line Vector */}
-        <div className="absolute top-1/2 left-8 right-8 h-2 bg-emerald-500/40 rounded-full -rotate-6 transform scale-105">
-          <div className="h-full bg-emerald-400 rounded-full animate-pulse" style={{ width: "65%" }} />
-        </div>
-
-        {/* Warehouse Origin Pin */}
-        <div className="absolute top-1/3 left-10 flex flex-col items-center">
-          <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white text-xs font-bold">
-            HUB
-          </div>
-          <span className="text-[9px] font-bold text-slate-300 bg-slate-900/90 px-1.5 py-0.5 rounded mt-1 shadow">
-            {warehouseOrigin.name.split(" ")[0]}
-          </span>
-        </div>
-
-        {/* Customer Destination Pin */}
-        <div className="absolute bottom-1/3 right-10 flex flex-col items-center">
-          <div className="w-8 h-8 bg-emerald-600 text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white text-xs font-bold">
-            <MapPin className="w-4 h-4 fill-white text-emerald-600" />
-          </div>
-          <span className="text-[9px] font-bold text-slate-300 bg-slate-900/90 px-1.5 py-0.5 rounded mt-1 shadow">
-            You ({customerDestination.city})
-          </span>
-        </div>
-
-        {/* Animated Moving Driver Pin */}
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center animate-bounce">
-          <div className="p-2 bg-amber-500 text-slate-950 rounded-full shadow-2xl border-2 border-white flex items-center justify-center">
-            <Truck className="w-6 h-6 fill-slate-950" />
-          </div>
-          <span className="text-[10px] font-extrabold text-slate-950 bg-amber-400 px-2 py-0.5 rounded-full shadow mt-1">
-            {driverProfile.name.split(" ")[0]} (EV)
-          </span>
-        </div>
+      <div className="relative w-full h-72 bg-slate-950 overflow-hidden group">
+        <div ref={mapContainerRef} className="absolute inset-0 w-full h-full z-0" />
 
         {/* Live Status Badge */}
-        <div className="absolute bottom-3 left-3 bg-slate-900/90 border border-slate-800 text-white px-3 py-1 rounded-full text-[10px] font-mono flex items-center gap-1.5">
+        <div className="absolute bottom-3 left-3 bg-slate-900/90 border border-slate-800 text-white px-3 py-1 rounded-full text-[10px] font-mono flex items-center gap-1.5 z-10 pointer-events-none">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
           Live GPS Telemetry Active
         </div>

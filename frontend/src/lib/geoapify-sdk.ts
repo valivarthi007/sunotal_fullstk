@@ -20,12 +20,39 @@ let scriptLoadingPromise: Promise<boolean> | null = null;
  */
 export function loadGeoapifySdk(): Promise<boolean> {
   if (typeof window === "undefined") return Promise.resolve(false);
-  const apiKey = getGeoapifyApiKey();
-  if (apiKey) return Promise.resolve(true);
+  if ((window as any).L) return Promise.resolve(true);
 
   if (scriptLoadingPromise) return scriptLoadingPromise;
 
-  scriptLoadingPromise = Promise.resolve(true);
+  scriptLoadingPromise = new Promise((resolve) => {
+    // 1. Inject Leaflet CSS
+    if (!document.getElementById("leaflet-css")) {
+      const link = document.createElement("link");
+      link.id = "leaflet-css";
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+
+    // 2. Inject Leaflet JS
+    if (document.getElementById("leaflet-js")) {
+      resolve(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "leaflet-js";
+    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    script.onload = () => {
+      resolve(true);
+    };
+    script.onerror = () => {
+      console.warn("Failed to load Leaflet JS script");
+      resolve(false);
+    };
+    document.head.appendChild(script);
+  });
+
   return scriptLoadingPromise;
 }
 

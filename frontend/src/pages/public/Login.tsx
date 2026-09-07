@@ -81,17 +81,16 @@ export default function Login() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormItem>
-                <FormLabel>Login As</FormLabel>
+                <FormLabel>Login Account Type</FormLabel>
                 <Select value={selectedRole} onValueChange={(val: any) => setSelectedRole(val)}>
                   <FormControl>
                     <SelectTrigger className="h-12 rounded-xl">
-                      <SelectValue placeholder="Login As" />
+                      <SelectValue placeholder="Select Login Type" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="user">Customer / B2B Buyer</SelectItem>
-                    <SelectItem value="vendor">Farmer / Vendor</SelectItem>
-                    <SelectItem value="admin">Administrator</SelectItem>
+                    <SelectItem value="user">🛒 Customer Login</SelectItem>
+                    <SelectItem value="vendor">🌾 Farmer / Vendor Partner</SelectItem>
                   </SelectContent>
                 </Select>
               </FormItem>
@@ -139,6 +138,10 @@ export default function Login() {
             <p className="text-sm text-muted-foreground">
               Don't have an account?{" "}
               <Link href="/register" className="font-bold text-primary hover:underline">Sign up</Link>
+            </p>
+            <p className="text-xs text-muted-foreground/80 pt-1">
+              Sunotal Administrator?{" "}
+              <Link href="/admin/login" className="font-semibold text-secondary hover:underline">Admin Staff Portal</Link>
             </p>
           </div>
         </div>

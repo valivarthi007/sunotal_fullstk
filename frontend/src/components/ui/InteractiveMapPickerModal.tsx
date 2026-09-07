@@ -49,6 +49,8 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
   const [savedAddresses, setSavedAddresses] = useState<UserAddressApi[]>([]);
   const [geoapifyLoaded, setGeoapifyLoaded] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -61,6 +63,65 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
       });
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== "map" || !mapContainerRef.current) return;
+
+    loadGeoapifySdk().then(() => {
+      const L = (window as any).L;
+      if (!L || !mapContainerRef.current) return;
+
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+
+      const map = L.map(mapContainerRef.current, {
+        center: [lat, lng],
+        zoom: 15,
+        zoomControl: true,
+      });
+
+      L.tileLayer(getGeoapifyTileUrl(), {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(map);
+
+      const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+
+      marker.on("dragend", () => {
+        const pos = marker.getLatLng();
+        setLat(pos.lat);
+        setLng(pos.lng);
+        reverseGeocode(pos.lat, pos.lng);
+      });
+
+      map.on("click", (e: any) => {
+        const { lat: clickLat, lng: clickLng } = e.latlng;
+        marker.setLatLng([clickLat, clickLng]);
+        setLat(clickLat);
+        setLng(clickLng);
+        reverseGeocode(clickLat, clickLng);
+      });
+
+      mapInstanceRef.current = map;
+      markerRef.current = marker;
+    });
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    if (mapInstanceRef.current && markerRef.current) {
+      mapInstanceRef.current.setView([lat, lng], 15);
+      markerRef.current.setLatLng([lat, lng]);
+    }
+  }, [lat, lng]);
 
   if (!isOpen) return null;
 
