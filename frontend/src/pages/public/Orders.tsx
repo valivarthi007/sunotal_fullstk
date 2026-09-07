@@ -389,43 +389,6 @@ export default function Orders() {
           </Dialog>
         )}
 
-                {/* Stepper Timeline */}
-                <div className="relative pl-6 space-y-4 border-l-2 border-emerald-500/40 ml-2">
-                  {[
-                    { title: "Order Confirmed", desc: "Farm produce reserved & logged", done: true },
-                    { title: "Plucked & Packed at Farm", desc: "Quality inspected by organic supervisor", done: true },
-                    { title: "Out for Express Delivery", desc: selectedOrderTrack.estimatedDelivery || "Express EV Delivery (14 mins away)", done: selectedOrderTrack.status !== "pending" },
-                    { title: "Delivered to Customer", desc: selectedOrderTrack.shippingAddress || "Customer Home Address", done: selectedOrderTrack.status === "delivered" },
-                  ].map((step, idx) => (
-                    <div key={idx} className="relative">
-                      <div
-                        className={`absolute -left-[31px] top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                          step.done ? "bg-emerald-600 text-white shadow-sm" : "bg-muted text-muted-foreground border"
-                        }`}
-                      >
-                        ✓
-                      </div>
-                      <h4 className="font-bold text-xs text-secondary">{step.title}</h4>
-                      <p className="text-[11px] text-muted-foreground">{step.desc}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="p-3 bg-muted/40 rounded-xl text-xs space-y-1.5 font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tracking Number:</span>
-                    <strong>{selectedOrderTrack.trackingNumber || "TRK-98124019"}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Payment Status:</span>
-                    <strong className="text-emerald-600 font-bold">{(selectedOrderTrack.paymentStatus || "unpaid").toUpperCase()}</strong>
-                  </div>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
-
         {/* RAISE GRIEVANCE DIALOG */}
         {grievanceOrder && (
           <Dialog open={!!grievanceOrder} onOpenChange={() => setGrievanceOrder(null)}>
