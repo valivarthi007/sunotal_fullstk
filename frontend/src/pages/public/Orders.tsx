@@ -73,13 +73,21 @@ export default function Orders() {
     setLoading(true);
     try {
       const data = await fetchUserOrders();
-      setOrders(data);
+      setOrders(Array.isArray(data) ? data : []);
     } catch (e: any) {
-      console.error(e);
+      console.error("Failed to load orders:", e);
       // Fallback to localStorage if unauthenticated or offline
-      const stored = localStorage.getItem("sunotal_user_orders");
-      if (stored) {
-        setOrders(JSON.parse(stored));
+      try {
+        const stored = localStorage.getItem("sunotal_user_orders");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setOrders(Array.isArray(parsed) ? parsed : []);
+        } else {
+          setOrders([]);
+        }
+      } catch (err) {
+        console.error("Failed to parse stored orders:", err);
+        setOrders([]);
       }
     } finally {
       setLoading(false);
@@ -92,15 +100,17 @@ export default function Orders() {
     try {
       const storedGrievances = localStorage.getItem(STORAGE_GRIEVANCES_KEY);
       if (storedGrievances) {
-        setGrievances(JSON.parse(storedGrievances));
+        const parsed = JSON.parse(storedGrievances);
+        setGrievances(Array.isArray(parsed) ? parsed : []);
       }
     } catch (e) {
-      console.error(e);
+      console.error("Failed to parse stored grievances:", e);
+      setGrievances([]);
     }
   }, []);
 
   const fmt = (n: number) =>
-    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n || 0);
 
   const handleCancelOrder = async (orderId: number) => {
     if (!confirm("Are you sure you want to cancel this order? Item stock will be restored.")) return;
@@ -109,7 +119,7 @@ export default function Orders() {
       toast.success("Order cancelled and inventory restored.");
       loadOrders();
     } catch (err: any) {
-      toast.error(err.message || "Failed to cancel order");
+      toast.error(err?.message || "Failed to cancel order");
     }
   };
 
@@ -126,7 +136,7 @@ export default function Orders() {
       const newTicketId = `GRV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       const newGrievance: Grievance = {
         ticketId: newTicketId,
-        orderId: grievanceOrder.orderNumber || String(grievanceOrder.id),
+        orderId: grievanceOrder.orderNumber || String(grievanceOrder.id || "N/A"),
         type: grievanceType,
         description: grievanceDesc,
         preferredResolution: grievanceResolution,
@@ -135,7 +145,7 @@ export default function Orders() {
         responseMsg: "Grievance received. Our Quality Inspection Team is reviewing your ticket.",
       };
 
-      const updated = [newGrievance, ...grievances];
+      const updated = [newGrievance, ...(Array.isArray(grievances) ? grievances : [])];
       setGrievances(updated);
       localStorage.setItem(STORAGE_GRIEVANCES_KEY, JSON.stringify(updated));
 
@@ -147,11 +157,12 @@ export default function Orders() {
     }, 600);
   };
 
-  const filteredOrders = orders.filter(
+  const safeSearch = (searchQuery || "").toLowerCase();
+  const filteredOrders = (Array.isArray(orders) ? orders : []).filter(
     (o) =>
-      o.orderNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.items?.some((i) => i.productName.toLowerCase().includes(searchQuery.toLowerCase()))
+      o?.orderNumber?.toLowerCase().includes(safeSearch) ||
+      o?.city?.toLowerCase().includes(safeSearch) ||
+      o?.items?.some((i) => i?.productName?.toLowerCase().includes(safeSearch))
   );
 
   return (
@@ -228,65 +239,72 @@ export default function Orders() {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="bg-card border border-border shadow-sm rounded-2xl p-6 hover:shadow-md transition-shadow space-y-4"
-                  >
-                    {/* Header */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-secondary text-base">{order.orderNumber}</span>
-                          <span
-                            className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
-                              order.status === "delivered"
-                                ? "bg-green-500/10 text-green-600"
-                                : order.status === "cancelled"
-                                ? "bg-destructive/10 text-destructive"
-                                : "bg-amber-500/10 text-amber-600 animate-pulse"
-                            }`}
-                          >
-                            {order.status.replace(/_/g, " ")}
-                          </span>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono ${
-                              order.paymentStatus === "paid" ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {order.paymentStatus.toUpperCase()}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Placed on: {new Date(order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                        </p>
-                      </div>
+                {filteredOrders.map((order, idx) => {
+                  const statusStr = (order.status || "processing").replace(/_/g, " ");
+                  const payStatusStr = (order.paymentStatus || "unpaid").toUpperCase();
+                  const formattedDate = order.createdAt
+                    ? new Date(order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                    : "Recent";
 
-                      <div className="text-right">
-                        <span className="text-xs text-muted-foreground">Total</span>
-                        <p className="font-mono font-extrabold text-lg text-primary">{fmt(order.finalAmount)}</p>
-                      </div>
-                    </div>
-
-                    {/* Items List */}
-                    <div className="space-y-2">
-                      {order.items?.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between text-xs py-1">
+                  return (
+                    <div
+                      key={order.id || order.orderNumber || idx}
+                      className="bg-card border border-border shadow-sm rounded-2xl p-6 hover:shadow-md transition-shadow space-y-4"
+                    >
+                      {/* Header */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+                        <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-secondary">{item.productName}</span>
-                            <span className="text-muted-foreground font-mono">x {item.quantity}</span>
+                            <span className="font-mono font-bold text-secondary text-base">{order.orderNumber || "N/A"}</span>
+                            <span
+                              className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
+                                order.status === "delivered"
+                                  ? "bg-green-500/10 text-green-600"
+                                  : order.status === "cancelled"
+                                  ? "bg-destructive/10 text-destructive"
+                                  : "bg-amber-500/10 text-amber-600 animate-pulse"
+                              }`}
+                            >
+                              {statusStr}
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono ${
+                                order.paymentStatus === "paid" ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {payStatusStr}
+                            </span>
                           </div>
-                          <span className="font-mono font-semibold text-secondary">{fmt(item.subtotal)}</span>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Placed on: {formattedDate}
+                          </p>
                         </div>
-                      ))}
-                    </div>
 
-                    {/* Footer Actions */}
-                    <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <Truck className="w-4 h-4 text-emerald-600" />
-                        <span>{order.estimatedDelivery || "Standard 24-Hour Delivery"} ({order.city})</span>
+                        <div className="text-right">
+                          <span className="text-xs text-muted-foreground">Total</span>
+                          <p className="font-mono font-extrabold text-lg text-primary">{fmt(order.finalAmount || 0)}</p>
+                        </div>
                       </div>
+
+                      {/* Items List */}
+                      <div className="space-y-2">
+                        {order.items?.map((item, itemIdx) => (
+                          <div key={item.id || itemIdx} className="flex items-center justify-between text-xs py-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-secondary">{item.productName || "Produce Item"}</span>
+                              <span className="text-muted-foreground font-mono">x {item.quantity || 1}</span>
+                            </div>
+                            <span className="font-mono font-semibold text-secondary">{fmt(item.subtotal || 0)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Truck className="w-4 h-4 text-emerald-600" />
+                          <span>{order.estimatedDelivery || "Standard 24-Hour Delivery"} {order.city ? `(${order.city})` : ""}</span>
+                        </div>
 
                       <div className="flex items-center gap-2">
                         {order.status !== "cancelled" && order.status !== "delivered" && (
@@ -316,8 +334,9 @@ export default function Orders() {
                         </Button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

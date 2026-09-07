@@ -40,6 +40,51 @@ export const PaymentGatewayModal: React.FC<PaymentGatewayModalProps> = ({
 
   if (!isOpen) return null;
 
+  const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TWi3df17ynwfPX";
+
+  const triggerRazorpayCheckout = (paymentMethodLabel: string) => {
+    if (typeof window !== "undefined" && (window as any).Razorpay) {
+      try {
+        const options = {
+          key: razorpayKey,
+          amount: Math.round(amount * 100), // Amount in paise
+          currency: "INR",
+          name: "Sunotal Organic Farms",
+          description: `Order Checkout #${orderId} (${paymentMethodLabel.toUpperCase()})`,
+          image: "/favicon.svg",
+          handler: function (response: any) {
+            console.log("Razorpay payment successful:", response);
+            onSuccess(response.razorpay_payment_id || `PAY-RZP-${Date.now()}`);
+          },
+          prefill: {
+            name: cardName || "Corporate Customer",
+            email: "purchasing@sunotalfarms.com",
+            contact: "9876543210",
+          },
+          notes: {
+            address: "Sunotal Corporate Hub, Electronic City, Bengaluru",
+            order_id: String(orderId),
+            payment_method: paymentMethodLabel,
+          },
+          theme: {
+            color: "#059669",
+          },
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on("payment.failed", function (response: any) {
+          console.error("Razorpay Payment Failed:", response.error);
+          setError(response.error?.description || "Razorpay Payment Failed");
+        });
+        rzp.open();
+        return true;
+      } catch (err: any) {
+        console.warn("Razorpay Checkout initialization failed, using simulator fallback:", err);
+      }
+    }
+    return false;
+  };
+
   const handleCardSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -47,8 +92,13 @@ export const PaymentGatewayModal: React.FC<PaymentGatewayModalProps> = ({
       setError("Please complete all card details");
       return;
     }
-    // Open 3D Secure Verification Dialog
-    setShowOtpDialog(true);
+
+    // Attempt Razorpay Standard Web Checkout first
+    const launched = triggerRazorpayCheckout("card");
+    if (!launched) {
+      // Fallback to 3D Secure OTP Verification Simulator
+      setShowOtpDialog(true);
+    }
   };
 
   const handleVerifyOtp = async () => {
@@ -76,40 +126,13 @@ export const PaymentGatewayModal: React.FC<PaymentGatewayModalProps> = ({
     setLoading(true);
     setError(null);
 
-    const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
-
-    // Check if Razorpay API Key is configured for live/test Checkout SDK
-    if (razorpayKey && (window as any).Razorpay) {
-      try {
-        const options = {
-          key: razorpayKey,
-          amount: Math.round(amount * 100), // in paise
-          currency: "INR",
-          name: "Sunotal Farms",
-          description: `Payment for Order #${orderId}`,
-          image: "/favicon.ico",
-          handler: function (response: any) {
-            onSuccess(response.razorpay_payment_id || `PAY-RZP-${Date.now()}`);
-          },
-          prefill: {
-            name: "Corporate Customer",
-            email: "purchasing@sunotalfarms.com",
-            contact: "9999999999",
-          },
-          theme: {
-            color: "#059669",
-          },
-        };
-        const rzp = new (window as any).Razorpay(options);
-        rzp.open();
-        setLoading(false);
-        return;
-      } catch (rzpErr) {
-        console.warn("Razorpay SDK initialization fallback to simulator:", rzpErr);
-      }
+    const launched = triggerRazorpayCheckout(method);
+    if (launched) {
+      setLoading(false);
+      return;
     }
 
-    // Fallback simulation when VITE_RAZORPAY_KEY_ID is missing or in offline POC mode
+    // Fallback simulation when in offline POC mode
     try {
       const res = await verifyPayment({
         orderId,

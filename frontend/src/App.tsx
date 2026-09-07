@@ -67,6 +67,15 @@ function Router() {
       <Route path="/farmer" component={FarmerRegistration} />
       <Route path="/profile" component={Profile} />
       <Route path="/orders" component={Orders} />
+      <Route path="/orders/:rest+">
+        <Redirect to="/orders" />
+      </Route>
+      <Route path="/oders">
+        <Redirect to="/orders" />
+      </Route>
+      <Route path="/oders/:rest+">
+        <Redirect to="/orders" />
+      </Route>
       <Route path="/checkout" component={Checkout} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
