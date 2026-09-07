@@ -133,3 +133,64 @@ export function getGeoapifyTileUrl(style: string = "osm-carto"): string {
   // Standard OpenStreetMap fallback tiles if no Geoapify key is set
   return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 }
+
+export interface GeoapifySearchResult {
+  formatted: string;
+  lat: number;
+  lng: number;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  street?: string;
+}
+
+/**
+ * Forward Geocoding / Place Search Autocomplete using Geoapify REST API & Nominatim fallback
+ */
+export async function searchPlaceGeoapify(query: string): Promise<GeoapifySearchResult[]> {
+  if (!query || query.trim().length < 2) return [];
+  const apiKey = getGeoapifyApiKey();
+
+  if (apiKey) {
+    try {
+      const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(query)}&apiKey=${apiKey}&limit=5`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.features) {
+          return data.features.map((f: any) => ({
+            formatted: f.properties.formatted || f.properties.name || query,
+            lat: f.properties.lat,
+            lng: f.properties.lon,
+            city: f.properties.city || f.properties.town || "",
+            state: f.properties.state || "",
+            pincode: f.properties.postcode || "",
+            street: f.properties.street || f.properties.road || "",
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn("Geoapify place search failed, trying Nominatim fallback:", err);
+    }
+  }
+
+  // Fallback to OpenStreetMap Nominatim search
+  try {
+    const fallbackUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`;
+    const res = await fetch(fallbackUrl, {
+      headers: { "User-Agent": "Sunotal-Web-App" },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.map((item: any) => ({
+        formatted: item.display_name,
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lon),
+      }));
+    }
+  } catch (err) {
+    console.warn("Nominatim search failed:", err);
+  }
+
+  return [];
+}

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { MapPin, Navigation, Crosshair, Home, Briefcase, Building, Tag, Check, Loader2, X, ShieldCheck } from "lucide-react";
+import { MapPin, Navigation, Crosshair, Home, Briefcase, Building, Tag, Check, Loader2, X, ShieldCheck, Search } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
 import { Label } from "./label";
 import { saveUserAddress, fetchUserAddresses, UserAddressApi } from "../../lib/api-client";
-import { loadGeoapifySdk, reverseGeocodeGeoapify, getGeoapifyTileUrl } from "../../lib/geoapify-sdk";
+import { loadGeoapifySdk, reverseGeocodeGeoapify, getGeoapifyTileUrl, searchPlaceGeoapify, GeoapifySearchResult } from "../../lib/geoapify-sdk";
 
 interface InteractiveMapPickerModalProps {
   isOpen: boolean;
@@ -38,6 +38,11 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
   const [stateName, setStateName] = useState("Karnataka");
   const [pincode, setPincode] = useState("560038");
   const [tag, setTag] = useState<"home" | "work" | "office" | "other">("home");
+
+  // Place Search & Autocomplete State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<GeoapifySearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const [geocoding, setGeocoding] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -117,6 +122,35 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
     setLat(nextLat);
     setLng(nextLng);
     reverseGeocode(nextLat, nextLng);
+  };
+
+  const handleSearchLocation = async (q: string) => {
+    setSearchQuery(q);
+    if (!q.trim() || q.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const results = await searchPlaceGeoapify(q);
+      setSearchResults(results);
+    } catch (err) {
+      console.error("Place search error", err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSelectSearchResult = (result: GeoapifySearchResult) => {
+    setLat(result.lat);
+    setLng(result.lng);
+    if (result.city) setCity(result.city);
+    if (result.state) setStateName(result.state);
+    if (result.pincode) setPincode(result.pincode);
+    if (result.street) setStreet(result.street);
+    setSearchResults([]);
+    setSearchQuery("");
+    reverseGeocode(result.lat, result.lng);
   };
 
   const handleConfirmAddress = async () => {
@@ -231,6 +265,39 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
           {activeTab === "map" && (
             <>
+              {/* Dynamic Place Search Autocomplete */}
+              <div className="relative z-30">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => handleSearchLocation(e.target.value)}
+                    placeholder="Search area, street, landmark (e.g. Indiranagar, Electronic City)..."
+                    className="pl-9 pr-8 h-10 rounded-xl text-xs bg-accent/40 border-emerald-600/30 focus-visible:border-emerald-600"
+                  />
+                  {isSearching && <Loader2 className="w-4 h-4 absolute right-3 top-3 animate-spin text-emerald-600" />}
+                </div>
+
+                {/* Search Prediction Dropdown */}
+                {searchResults.length > 0 && (
+                  <div className="absolute left-0 right-0 top-11 z-40 bg-background border border-border shadow-2xl rounded-2xl p-2 space-y-1 max-h-48 overflow-y-auto">
+                    {searchResults.map((res, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleSelectSearchResult(res)}
+                        className="w-full text-left p-2.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-xs flex items-start gap-2 group transition-colors"
+                      >
+                        <MapPin className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span className="truncate font-medium text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                          {res.formatted}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Interactive Vector Map Tile Visualization */}
               <div className="relative w-full h-52 bg-slate-900 border-2 border-emerald-600/60 rounded-2xl overflow-hidden shadow-inner group">
                 {/* Geoapify Map Container */}

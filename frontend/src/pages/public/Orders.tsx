@@ -382,47 +382,121 @@ export default function Orders() {
         {/* LIVE ORDER TRACKER DIALOG */}
         {selectedOrderTrack && (
           <Dialog open={!!selectedOrderTrack} onOpenChange={() => setSelectedOrderTrack(null)}>
-            <DialogContent className="sm:max-w-md rounded-3xl">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-                  <Truck className="w-6 h-6 text-primary" /> Live Delivery Tracker
-                </DialogTitle>
-                <DialogDescription className="text-xs">
-                  Order Ref: <span className="font-mono font-bold text-foreground">{selectedOrderTrack.orderNumber}</span>
-                </DialogDescription>
-              </DialogHeader>
+            <DialogContent className="sm:max-w-lg rounded-3xl overflow-hidden p-0">
+              {/* Top Banner */}
+              <div className="bg-emerald-950 text-white p-5 relative">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-6 h-6 text-emerald-400 animate-bounce" />
+                    <div>
+                      <h3 className="font-bold text-lg leading-tight">Live Delivery Tracker</h3>
+                      <p className="text-xs text-emerald-200/80">Hyperlocal Farm-to-Door EV Express Delivery</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Live Tracking
+                  </span>
+                </div>
+                <div className="mt-4 pt-3 border-t border-emerald-800/60 flex items-center justify-between text-xs font-mono">
+                  <span className="text-emerald-300">Order Ref: {selectedOrderTrack.orderNumber || "N/A"}</span>
+                  <span className="text-emerald-400 font-bold">ETA: 14 Mins</span>
+                </div>
+              </div>
 
-              <div className="space-y-6 py-4">
-                {/* Stepper */}
-                <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-primary">
+              <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+                {/* Dynamic Map Telemetry Canvas */}
+                <div className="relative w-full h-56 bg-slate-900 border-2 border-emerald-600/50 rounded-2xl overflow-hidden shadow-inner group">
+                  {/* Grid Overlay Fallback */}
+                  <div className="absolute inset-0 opacity-25 pointer-events-none bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:20px_20px]" />
+                  
+                  {/* Route Polyline Simulation */}
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+                    <path
+                      d="M 40 160 Q 180 50 360 160"
+                      fill="none"
+                      stroke="#10b981"
+                      strokeWidth="3"
+                      strokeDasharray="6 4"
+                      className="animate-pulse"
+                    />
+                  </svg>
+
+                  {/* Warehouse Hub Marker (Start) */}
+                  <div className="absolute left-6 bottom-8 z-20 flex flex-col items-center">
+                    <div className="px-2 py-0.5 bg-slate-800 text-[9px] font-bold text-emerald-400 rounded-full border border-emerald-500/40 mb-1 shadow">
+                      Organic Hub
+                    </div>
+                    <div className="w-9 h-9 bg-emerald-700 text-white rounded-full flex items-center justify-center shadow-xl border-2 border-white">
+                      🚜
+                    </div>
+                  </div>
+
+                  {/* Live Moving Rider Marker (In Transit) */}
+                  <div className="absolute left-1/2 top-10 -translate-x-1/2 z-30 flex flex-col items-center animate-pulse">
+                    <div className="px-2.5 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded-full shadow-lg border border-white flex items-center gap-1">
+                      <span>Rider En Route</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                    </div>
+                    <div className="w-11 h-11 bg-white text-emerald-700 rounded-full flex items-center justify-center shadow-2xl border-2 border-emerald-600 font-bold text-lg mt-1">
+                      🛵
+                    </div>
+                  </div>
+
+                  {/* Customer Home Destination Marker (End) */}
+                  <div className="absolute right-6 bottom-8 z-20 flex flex-col items-center">
+                    <div className="px-2 py-0.5 bg-slate-800 text-[9px] font-bold text-emerald-400 rounded-full border border-emerald-500/40 mb-1 shadow">
+                      Delivery Address
+                    </div>
+                    <div className="w-9 h-9 bg-emerald-600 text-white rounded-full flex items-center justify-center shadow-xl border-2 border-white">
+                      🏠
+                    </div>
+                  </div>
+
+                  {/* Telemetry Footer Overlay */}
+                  <div className="absolute bottom-2 left-2 right-2 z-20 bg-background/95 backdrop-blur-md p-2.5 rounded-xl border border-border flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                      <span className="font-semibold text-secondary">Ramesh Kumar (EV Partner)</span>
+                    </div>
+                    <a
+                      href="tel:09090007108"
+                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 shadow"
+                    >
+                      <PhoneCall className="w-3 h-3" /> Call Rider
+                    </a>
+                  </div>
+                </div>
+
+                {/* Stepper Timeline */}
+                <div className="relative pl-6 space-y-4 border-l-2 border-emerald-500/40 ml-2">
                   {[
-                    { title: "Order Placed & Confirmed", desc: "Payment received & order logged", done: true },
+                    { title: "Order Confirmed", desc: "Farm produce reserved & logged", done: true },
                     { title: "Plucked & Packed at Farm", desc: "Quality inspected by organic supervisor", done: true },
-                    { title: "Out for Express Delivery", desc: selectedOrderTrack.estimatedDelivery, done: selectedOrderTrack.status !== "pending" },
-                    { title: "Delivered to Customer", desc: selectedOrderTrack.shippingAddress, done: selectedOrderTrack.status === "delivered" },
+                    { title: "Out for Express Delivery", desc: selectedOrderTrack.estimatedDelivery || "Express EV Delivery (14 mins away)", done: selectedOrderTrack.status !== "pending" },
+                    { title: "Delivered to Customer", desc: selectedOrderTrack.shippingAddress || "Customer Home Address", done: selectedOrderTrack.status === "delivered" },
                   ].map((step, idx) => (
                     <div key={idx} className="relative">
                       <div
-                        className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                          step.done ? "bg-primary text-white" : "bg-muted text-muted-foreground border"
+                        className={`absolute -left-[31px] top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                          step.done ? "bg-emerald-600 text-white shadow-sm" : "bg-muted text-muted-foreground border"
                         }`}
                       >
                         ✓
                       </div>
-                      <h4 className="font-bold text-sm text-secondary">{step.title}</h4>
-                      <p className="text-xs text-muted-foreground">{step.desc}</p>
+                      <h4 className="font-bold text-xs text-secondary">{step.title}</h4>
+                      <p className="text-[11px] text-muted-foreground">{step.desc}</p>
                     </div>
                   ))}
                 </div>
 
-                <div className="p-4 bg-muted/40 rounded-2xl text-xs space-y-2 font-mono">
+                <div className="p-3 bg-muted/40 rounded-xl text-xs space-y-1.5 font-mono">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tracking No:</span>
+                    <span className="text-muted-foreground">Tracking Number:</span>
                     <strong>{selectedOrderTrack.trackingNumber || "TRK-98124019"}</strong>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Payment Status:</span>
-                    <strong className="text-emerald-600 font-bold">{selectedOrderTrack.paymentStatus?.toUpperCase()}</strong>
+                    <strong className="text-emerald-600 font-bold">{(selectedOrderTrack.paymentStatus || "unpaid").toUpperCase()}</strong>
                   </div>
                 </div>
               </div>
