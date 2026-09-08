@@ -61,7 +61,12 @@ export default function DeliveryRegistration() {
       }
       setSubmitted(true);
     } catch (err: any) {
-      toast.error(err.message || "Failed to submit onboarding form");
+      const msg = err?.message || "";
+      if (msg.includes("502") || msg.includes("503") || msg.includes("504") || msg.includes("Bad Gateway")) {
+        toast.error("Service Gateway Error (502): The backend delivery server is restarting or initializing. Please retry in a moment.");
+      } else {
+        toast.error(msg || "Failed to submit onboarding form");
+      }
     } finally {
       setLoading(false);
     }
