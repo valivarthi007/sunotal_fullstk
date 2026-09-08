@@ -7,10 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useLoginUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, User } from "lucide-react";
 import { queryClient } from "@/App";
-import { useState } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const formSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -20,7 +18,6 @@ const formSchema = z.object({
 export default function Login() {
   const [, setLocation] = useLocation();
   const loginUser = useLoginUser();
-  const [selectedRole, setSelectedRole] = useState<"user" | "vendor" | "admin">("user");
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -32,28 +29,10 @@ export default function Login() {
       { data: values },
       {
         onSuccess: (data) => {
-          if (data.user.role !== selectedRole) {
-            toast.error(`Invalid login. Your account type is not "${selectedRole.toUpperCase()}".`);
-            return;
-          }
-
-          // Store token in correct key
-          if (selectedRole === "admin") {
-            localStorage.setItem("sunotal_admin_token", data.token);
-            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-            toast.success(`Welcome back Admin, ${data.user.name.split(" ")[0]}!`);
-            setLocation("/admin/dashboard");
-          } else if (selectedRole === "vendor") {
-            localStorage.setItem("sunotal_token", data.token);
-            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-            toast.success(`Welcome back Farmer, ${data.user.name.split(" ")[0]}!`);
-            setLocation("/vendor");
-          } else {
-            localStorage.setItem("sunotal_token", data.token);
-            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-            toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
-            setLocation("/");
-          }
+          localStorage.setItem("sunotal_token", data.token);
+          queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+          toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
+          setLocation("/");
         },
         onError: (error: any) => {
           toast.error(error?.data?.error || error.message || "Login failed. Check your credentials.");
@@ -74,35 +53,20 @@ export default function Login() {
             <div className="w-16 h-16 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center font-bold text-3xl mb-4 shadow-lg shadow-primary/20">
               SF
             </div>
-            <h1 className="text-2xl font-bold text-secondary tracking-tight">Welcome Back</h1>
-            <p className="text-muted-foreground mt-1">Sign in to your Sunotal account</p>
+            <h1 className="text-2xl font-bold text-secondary tracking-tight">Customer Login</h1>
+            <p className="text-muted-foreground mt-1">Sign in to your Sunotal grocery account</p>
           </div>
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-              <FormItem>
-                <FormLabel>Login Account Type</FormLabel>
-                <Select value={selectedRole} onValueChange={(val: any) => setSelectedRole(val)}>
-                  <FormControl>
-                    <SelectTrigger className="h-12 rounded-xl">
-                      <SelectValue placeholder="Select Login Type" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="user">🛒 Customer Login</SelectItem>
-                    <SelectItem value="vendor">🌾 Farmer / Vendor Partner</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormItem>
-
               <FormField
                 control={form.control}
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>Email Address</FormLabel>
                     <FormControl>
-                      <Input placeholder="you@example.com" type="email" className="h-12" {...field} />
+                      <Input placeholder="you@example.com" type="email" className="h-12 rounded-xl" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -115,10 +79,9 @@ export default function Login() {
                   <FormItem>
                     <div className="flex items-center justify-between">
                       <FormLabel>Password</FormLabel>
-                      <Link href="/forgot" className="text-xs font-medium text-primary hover:underline">Forgot password?</Link>
                     </div>
                     <FormControl>
-                      <Input placeholder="••••••••" type="password" className="h-12" {...field} />
+                      <Input placeholder="••••••••" type="password" className="h-12 rounded-xl" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -126,22 +89,18 @@ export default function Login() {
               />
               <Button
                 type="submit"
-                className="w-full h-12 text-base font-bold shadow-md"
+                className="w-full h-12 text-base font-bold shadow-md rounded-xl"
                 disabled={loginUser.isPending}
               >
-                {loginUser.isPending ? "Signing in…" : "Sign In"}
+                {loginUser.isPending ? "Signing in…" : "Sign In to Account"}
               </Button>
             </form>
           </Form>
 
-          <div className="mt-8 pt-6 border-t text-center space-y-4">
+          <div className="mt-8 pt-6 border-t text-center space-y-3">
             <p className="text-sm text-muted-foreground">
-              Don't have an account?{" "}
+              Don't have a customer account?{" "}
               <Link href="/register" className="font-bold text-primary hover:underline">Sign up</Link>
-            </p>
-            <p className="text-xs text-muted-foreground/80 pt-1">
-              Sunotal Administrator?{" "}
-              <Link href="/admin/login" className="font-semibold text-secondary hover:underline">Admin Staff Portal</Link>
             </p>
           </div>
         </div>

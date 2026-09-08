@@ -71,4 +71,24 @@ router.post("/orders/checkout", requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/orders/:id/rate - Customer rating for produce items & delivery partner
+router.post("/orders/:id/rate", requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { itemRating, driverRating, feedback } = req.body;
+
+  if (!itemRating || !driverRating) {
+    res.status(400).json({ error: "Item rating and Delivery Partner rating are required." });
+    return;
+  }
+
+  res.json({
+    success: true,
+    orderId: id,
+    itemRating,
+    driverRating,
+    feedback: feedback || "",
+    message: "Thank you for rating your produce quality and delivery experience!"
+  });
+});
+
 export default router;

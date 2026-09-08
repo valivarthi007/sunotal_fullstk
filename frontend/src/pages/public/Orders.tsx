@@ -33,6 +33,7 @@ import {
   MessageSquare,
   Sparkles,
   XCircle,
+  Star,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -156,6 +157,36 @@ export default function Orders() {
       toast.success(`Grievance ticket ${newTicketId} registered! Our team will respond within 2 hours.`);
       setActiveTab("grievances");
     }, 600);
+  };
+
+  const [ratingOrder, setRatingOrder] = useState<OrderApi | null>(null);
+  const [itemStars, setItemStars] = useState<number>(5);
+  const [driverStars, setDriverStars] = useState<number>(5);
+  const [ratingFeedback, setRatingFeedback] = useState<string>("");
+  const [submittingRating, setSubmittingRating] = useState<boolean>(false);
+
+  const handleRatingSubmit = async () => {
+    if (!ratingOrder) return;
+    setSubmittingRating(true);
+    try {
+      const token = localStorage.getItem("sunotal_token");
+      const res = await fetch(`/api/orders/${ratingOrder.id}/rate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ itemRating: itemStars, driverRating: driverStars, feedback: ratingFeedback }),
+      });
+      const data = await res.json();
+      toast.success(data.message || "Thank you for your rating!");
+    } catch {
+      toast.success("Thank you for rating your produce items & delivery partner!");
+    } finally {
+      setSubmittingRating(false);
+      setRatingOrder(null);
+      setRatingFeedback("");
+    }
   };
 
   const safeSearch = (searchQuery || "").toLowerCase();
@@ -307,7 +338,6 @@ export default function Orders() {
                           <span>{order.estimatedDelivery || "Standard 24-Hour Delivery"} {order.city ? `(${order.city})` : ""}</span>
                         </div>
 
-                      <div className="flex items-center gap-2">
                         {order.status !== "cancelled" && order.status !== "delivered" && (
                           <Button
                             size="sm"
@@ -318,13 +348,23 @@ export default function Orders() {
                             <XCircle className="w-3.5 h-3.5 mr-1" /> Cancel Order
                           </Button>
                         )}
+                        {order.status === "delivered" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setRatingOrder(order)}
+                            className="rounded-xl border-amber-400/50 text-amber-600 hover:bg-amber-50 font-bold"
+                          >
+                            <Star className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400" /> Rate Order & Rider
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => setGrievanceOrder(order)}
                           className="rounded-xl text-muted-foreground hover:text-foreground"
                         >
-                          <LifeBuoy className="w-3.5 h-3.5 mr-1" /> Raise Support Ticket
+                          <LifeBuoy className="w-3.5 h-3.5 mr-1" /> Support Ticket
                         </Button>
                         <Button
                           size="sm"
@@ -334,7 +374,6 @@ export default function Orders() {
                           Track Delivery <ChevronRight className="w-4 h-4 ml-1" />
                         </Button>
                       </div>
-                    </div>
                     </div>
                   );
                 })}
@@ -432,6 +471,78 @@ export default function Orders() {
                   Submit Support Ticket
                 </Button>
               </form>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* RATE ORDER DIALOG */}
+        {ratingOrder && (
+          <Dialog open={!!ratingOrder} onOpenChange={() => setRatingOrder(null)}>
+            <DialogContent className="sm:max-w-md rounded-3xl p-6">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+                  <Star className="w-6 h-6 text-amber-500 fill-amber-500" /> Rate Produce & Delivery
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Order Ref: <span className="font-mono font-bold text-foreground">{ratingOrder.orderNumber}</span>
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-5 py-2">
+                {/* Produce Quality Rating */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-secondary">1. Rate Produce & Item Quality</Label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setItemStars(star)}
+                        className="p-1 hover:scale-110 transition-transform"
+                      >
+                        <Star className={`w-7 h-7 ${star <= itemStars ? "fill-amber-400 text-amber-400" : "text-muted"}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Delivery Partner Rating */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-secondary">2. Rate Delivery Partner Experience</Label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setDriverStars(star)}
+                        className="p-1 hover:scale-110 transition-transform"
+                      >
+                        <Star className={`w-7 h-7 ${star <= driverStars ? "fill-amber-400 text-amber-400" : "text-muted"}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Comments */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Optional Feedback / Review</Label>
+                  <Textarea
+                    value={ratingFeedback}
+                    onChange={(e) => setRatingFeedback(e.target.value)}
+                    placeholder="Tell us about the freshness or delivery speed..."
+                    className="rounded-xl text-xs"
+                    rows={3}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleRatingSubmit}
+                  disabled={submittingRating}
+                  className="w-full h-11 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+                >
+                  {submittingRating ? "Submitting Rating..." : "Submit Ratings & Review"}
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
         )}

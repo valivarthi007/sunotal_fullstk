@@ -22,11 +22,11 @@ interface LocationContextType {
 }
 
 const DEFAULT_LOCATION: UserLocation = {
-  city: "Hyderabad",
-  state: "Telangana",
+  city: "Select Location",
+  state: "",
   country: "India",
-  pincode: "500033",
-  formattedAddress: "Hyderabad, TG, India",
+  pincode: "",
+  formattedAddress: "Select Location",
   isDetected: false,
   source: "manual",
 };

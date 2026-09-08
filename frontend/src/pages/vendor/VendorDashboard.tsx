@@ -55,41 +55,27 @@ export default function VendorDashboard() {
   });
   const { data: categories } = useListCategories();
 
-  const [vendorProfile, setVendorProfile] = useState<any>({
-    firstName: "Ramesh",
-    lastName: "Gowda",
-    phone: "9876543210",
-    location: "Mandya, Karnataka",
-    farmSize: "12 Acres",
-    status: "approved",
-  });
+  const [vendorProfile, setVendorProfile] = useState<any>(null);
+  const [quotations, setQuotations] = useState<any[]>([]);
 
-  const [quotations, setQuotations] = useState<any[]>([
-    {
-      id: 101,
-      produce: "Organic Sona Masoori Rice",
-      category: "Grains",
-      unit: "Quintal",
-      quantity: 15,
-      price: 4200,
-      qualityGrade: "Grade A (Organic / Premium)",
-      darkStoreAllocation: "HSR Layout Dark Store #104",
-      status: "accepted",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 102,
-      produce: "Fresh A2 Farm Buffalo Milk",
-      category: "Dairy",
-      unit: "Liters",
-      quantity: 500,
-      price: 55,
-      qualityGrade: "Grade A (Organic / Premium)",
-      darkStoreAllocation: "Indiranagar Dark Store #108",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+  useEffect(() => {
+    if (user) {
+      setVendorProfile({
+        firstName: user.name.split(" ")[0] || "Vendor",
+        lastName: user.name.split(" ").slice(1).join(" ") || "",
+        phone: user.phone || "N/A",
+        location: user.city || "Direct Sourcing Mandal",
+        status: user.active ? "approved" : "pending",
+      });
+
+      fetch("/api/vendors/quotations")
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          if (Array.isArray(data)) setQuotations(data);
+        })
+        .catch(() => setQuotations([]));
+    }
+  }, [user]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<"submit" | "history" | "payouts">("submit");

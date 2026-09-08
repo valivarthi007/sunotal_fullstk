@@ -71,7 +71,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "All Products", path: "/products" },
-    { name: "Farmer Partner 🌾", path: "/farmer" },
     ...categoryNavLinks,
   ];
 
@@ -493,22 +492,32 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             <div>
-              <h4 className="font-bold text-base mb-4 text-white">Partner & Admin</h4>
+              <h4 className="font-bold text-base mb-4 text-white">Partner Onboarding</h4>
               <ul className="flex flex-col gap-2.5 text-sm">
                 <li>
-                  <Link href="/farmer" className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors flex items-center gap-1.5">
-                    🌾 Farmer Partner Portal
+                  <Link href="/vendor/register" className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors flex items-center gap-1.5">
+                    🌾 Vendor / Farmer Registration
                   </Link>
                 </li>
                 <li>
-                  <Link href="/vendor" className="text-secondary-foreground/70 hover:text-white transition-colors flex items-center gap-1.5">
-                    🏪 Vendor Dashboard
+                  <Link href="/delivery/register" className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors flex items-center gap-1.5">
+                    🛵 Delivery Partner Registration
                   </Link>
                 </li>
                 <li>
-                  <Link href="/admin/login" className="text-secondary-foreground/70 hover:text-white transition-colors flex items-center gap-1.5">
+                  <a href="http://vendor-sunotal.automateuniverse.space" className="text-secondary-foreground/70 hover:text-white transition-colors flex items-center gap-1.5">
+                    🏪 Vendor Portal Login
+                  </a>
+                </li>
+                <li>
+                  <a href="http://delivery-sunotal.automateuniverse.space" className="text-secondary-foreground/70 hover:text-white transition-colors flex items-center gap-1.5">
+                    ⚡ Delivery Rider Portal Login
+                  </a>
+                </li>
+                <li>
+                  <a href="http://admin-sunotal.automateuniverse.space" className="text-secondary-foreground/70 hover:text-white transition-colors flex items-center gap-1.5">
                     🔑 Admin Portal Login
-                  </Link>
+                  </a>
                 </li>
               </ul>
             </div>

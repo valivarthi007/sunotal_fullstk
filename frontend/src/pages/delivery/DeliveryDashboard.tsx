@@ -15,19 +15,20 @@ export default function DeliveryDashboard() {
   const [acceptedOrder, setAcceptedOrder] = useState<any | null>(null);
   const [orderStage, setOrderStage] = useState<"accepted" | "at_warehouse" | "picked_up" | "delivered">("accepted");
   
-  // Reports & Logic Payment Data
+  // Reports & Logic Payment Data (Initialized to 0)
   const [stats, setStats] = useState({
-    completedDeliveries: 18,
-    totalKmsRun: 64.5,
+    completedDeliveries: 0,
+    totalKmsRun: 0,
     basePayPerOrder: 30,
     distanceRatePerKm: 10,
-    totalBasePay: 540,
-    totalDistancePay: 645,
-    totalTips: 240,
-    totalPayout: 1425,
-    payoutStatus: "Ready for Payout",
+    totalBasePay: 0,
+    totalDistancePay: 0,
+    totalTips: 0,
+    totalPayout: 0,
+    payoutStatus: "No Pending Payout",
   });
 
+  const [riderUser, setRiderUser] = useState<any>(null);
   const [payoutRequested, setPayoutRequested] = useState(false);
 
   // Map Container Ref
@@ -35,14 +36,18 @@ export default function DeliveryDashboard() {
   const mapInstanceRef = React.useRef<any>(null);
   const mapProvider = getMapProvider();
 
-  // Fetch stats on mount
+  // Fetch logged in user and stats on mount
   useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((u) => { if (u) setRiderUser(u); })
+      .catch(() => setRiderUser(null));
+
     fetch("/api/delivery/stats")
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data.completedDeliveries) setStats(data);
+        if (data && typeof data.completedDeliveries === "number") setStats(data);
       })
-      .catch((err) => console.warn("Using local fallback delivery stats:", err));
   }, []);
 
   // Countdown timer for Order Acceptance Window
@@ -165,12 +170,12 @@ export default function DeliveryDashboard() {
               </div>
               <div>
                 <div className="font-bold text-base text-secondary flex items-center gap-2">
-                  <span>Ramesh Kumar</span>
+                  <span>{riderUser?.name || "Delivery Partner"}</span>
                   <span className="text-xs bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-mono font-bold">
-                    ★ 4.9 Rating
+                    Active Rider
                   </span>
                 </div>
-                <div className="text-xs text-muted-foreground">EV Fleet • KA-05-EV-9821 • Bengaluru South Hub</div>
+                <div className="text-xs text-muted-foreground">{riderUser?.city || "Local Sourcing Hub"} • Verified Rider Fleet</div>
               </div>
             </div>
 
