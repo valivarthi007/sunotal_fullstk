@@ -6,12 +6,16 @@ import { useListCategories } from "@workspace/api-client-react";
 import { useListBanners } from "@/lib/api-client";
 import useEmblaCarousel from "embla-carousel-react";
 import { useCallback, useEffect, useState, useMemo } from "react";
-import { CheckCircle2, ShieldCheck, Clock, MapPin, Truck, LifeBuoy, PhoneCall, ArrowRight, Search, ShieldAlert, Sparkles } from "lucide-react";
+import { CheckCircle2, ShieldCheck, Clock, MapPin, Truck, LifeBuoy, PhoneCall, ArrowRight, Search, ShieldAlert, Sparkles, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocationState } from "@/lib/location-context";
 import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
 import { GrievanceRedressalModal } from "@/components/ui/GrievanceRedressalModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ExpressHeaderBanner } from "@/components/ui/ExpressHeaderBanner";
+import { CategoryPills } from "@/components/ui/CategoryPills";
+import { CartBar } from "@/components/ui/CartBar";
+import { InteractiveMapPickerModal } from "@/components/ui/InteractiveMapPickerModal";
 
 const FALLBACK_SLIDES = [
   {
@@ -69,10 +73,11 @@ export default function Home() {
     }));
   }, [dbCategories]);
 
-  // Modals state
   const [showGrievanceModal, setShowGrievanceModal] = useState(false);
   const [trackOrderInput, setTrackOrderInput] = useState("");
   const [showTrackModal, setShowTrackModal] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (!emblaApi) return;
@@ -93,6 +98,23 @@ export default function Home() {
 
   return (
     <PublicLayout>
+      {/* Quick Commerce Express Delivery Banner */}
+      <ExpressHeaderBanner
+        onOpenLocationModal={() => setShowMapModal(true)}
+        onOpenCart={() => setLocation("/checkout")}
+        searchQuery={searchQuery}
+        onSearchChange={(q) => {
+          setSearchQuery(q);
+          if (q.trim()) setLocation(`/products?search=${encodeURIComponent(q)}`);
+        }}
+      />
+
+      {/* Grocery Category Filter Pills Bar */}
+      <CategoryPills
+        selectedCategory="All"
+        onSelectCategory={(catId) => setLocation(catId === "All" ? "/products" : `/products?category=${encodeURIComponent(catId)}`)}
+      />
+
       {/* Hero Carousel */}
       <section className="relative overflow-hidden bg-secondary">
         <div className="overflow-hidden" ref={emblaRef}>
@@ -315,6 +337,16 @@ export default function Home() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Floating Bottom Cart Bar */}
+      <CartBar onCheckout={() => setLocation("/checkout")} />
+
+      {/* Address Picker Map Modal */}
+      <InteractiveMapPickerModal
+        isOpen={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        onSelectAddress={() => setShowMapModal(false)}
+      />
     </PublicLayout>
   );
 }

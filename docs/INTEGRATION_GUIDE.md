@@ -1,91 +1,73 @@
-# Third-Party Integration Guide: Geoapify API & Razorpay UPI API
+# 🔌 SOLID Strategy Pattern Integration Guide
 
-This guide explains how to enable production / live integrations for **Geoapify Maps & Reverse Geocoding API** and **Razorpay UPI API** in the Sunotal Farms application.
-
----
-
-## 1. Geoapify API Integration
-
-### Prerequisites
-1. A [Geoapify Developer Account](https://myprojects.geoapify.com/).
-2. An API Key generated from the Geoapify MyProjects Dashboard.
-
-### Enabled APIs Required
-In your Geoapify Project Dashboard, ensure the following API services are enabled:
-- **Map Tiles API** (for interactive map tiles and marker pinning)
-- **Reverse Geocoding REST API** (`https://api.geoapify.com/v1/geocode/reverse`)
-- **Address Autocomplete API** (optional for enhanced address search)
-
-### Steps to Include in Codebase / Workflow
-
-1. **Configure Environment Variables**:
-   Add the following line to `frontend/.env` (or pass dynamically as a secret/build variable during workflow runs):
-   ```env
-   VITE_GEOAPIFY_API_KEY=your_geoapify_api_key_here
-   ```
-
-2. **Script Injection & Dynamic SDK Loading**:
-   In `frontend/src/lib/geoapify-sdk.ts`, Geoapify map tile URLs and reverse geocoding queries are loaded:
-   ```ts
-   https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&apiKey=${apiKey}
-   ```
-
-3. **Workflow Environment Injection**:
-   During workflow execution (e.g., CI/CD pipeline, Docker build, GitHub Actions), `VITE_GEOAPIFY_API_KEY` is dynamically read by `frontend/src/lib/geoapify-sdk.ts`.
-
-4. **Fallback & Robustness**:
-   The application components (`InteractiveMapPickerModal.tsx`, `location-context.tsx`) automatically detect if `VITE_GEOAPIFY_API_KEY` is present. If unconfigured or offline, the app falls back to interactive coordinate inputs and OpenStreetMap reverse geocoding to prevent application crashes.
+Guide for extending the application with production Payment Gateways (Razorpay, Stripe, PhonePe) and Map Providers (Google Maps, Mapbox) using SOLID principles.
 
 ---
 
-## 2. Razorpay UPI & Payment Gateway Integration
+## 1. How to Add a Live Payment Gateway (e.g. Production Razorpay)
 
-### Prerequisites
-1. A [Razorpay Merchant Account](https://razorpay.com/).
-2. Key ID and Key Secret from **Razorpay Dashboard -> Settings -> API Keys**.
+### Step 1: Create Provider Class
+Create `frontend/src/lib/providers/payment/razorpay-payment.provider.ts`:
+```typescript
+import { IPaymentProvider, PaymentRequest, PaymentResponse } from "./payment-provider.interface";
 
-### Steps to Include in Codebase
+export class RazorpayPaymentProvider implements IPaymentProvider {
+  readonly id = "razorpay";
+  readonly name = "Razorpay Production Gateway";
 
-1. **Configure Frontend Environment Variable**:
-   Add your Razorpay Key ID to `frontend/.env`:
-   ```env
-   VITE_RAZORPAY_KEY_ID=rzp_test_YourKeyIdHere
-   ```
+  async initialize(): Promise<boolean> {
+    // Load Razorpay Checkout SDK dynamically
+    return true;
+  }
 
-2. **Load Razorpay Checkout SDK**:
-   In `frontend/index.html`, include the Razorpay Checkout script inside `<head>`:
-   ```html
-   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-   ```
+  getSupportedMethods() {
+    return ["upi_qr", "upi_vpa", "card", "netbanking"];
+  }
 
-3. **Backend Order & Webhook Setup**:
-   - In your payment microservice, create Razorpay orders using the official `razorpay` npm package:
-     ```typescript
-     import Razorpay from 'razorpay';
+  async processPayment(req: PaymentRequest): Promise<PaymentResponse> {
+    // Call Razorpay Standard Checkout SDK
+    return {
+      success: true,
+      paymentId: "PAY-RZP-LIVE-12345",
+      method: req.method,
+      amount: req.amount,
+      timestamp: new Date().toISOString(),
+    };
+  }
 
-     const instance = new Razorpay({
-       key_id: process.env.RAZORPAY_KEY_ID,
-       key_secret: process.env.RAZORPAY_KEY_SECRET,
-     });
+  async verifyPayment(paymentId: string, orderId: number): Promise<boolean> {
+    return true;
+  }
+}
+```
 
-     const order = await instance.orders.create({
-       amount: amountInPaise,
-       currency: "INR",
-       receipt: `receipt_${orderId}`,
-     });
-     ```
-   - Verify Razorpay payment signatures on backend `/api/payments/verify`:
-     ```typescript
-     import crypto from 'crypto';
+### Step 2: Register in Factory
+In `frontend/src/lib/providers/payment/payment-provider.factory.ts`:
+```typescript
+case "razorpay":
+  currentProvider = new RazorpayPaymentProvider();
+  break;
+```
 
-     const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
-     hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
-     const generated_signature = hmac.digest('hex');
+### Step 3: Configure Environment
+Set `VITE_PAYMENT_PROVIDER=razorpay` in `.env`.
+**Zero changes are required in `PaymentGatewayModal.tsx` or any UI component!**
 
-     if (generated_signature === razorpay_signature) {
-       // Payment confirmed
-     }
-     ```
+---
 
-4. **Fallback & Demo Mode**:
-   When `VITE_RAZORPAY_KEY_ID` is not set, `PaymentGatewayModal.tsx` operates in **Simulated POC Mode**, allowing instant 3D-secure OTP test approvals so testing checkout workflows never fails or crashes.
+## 2. How to Add a Live Map Provider (e.g. Google Maps or Mapbox)
+
+### Step 1: Create Provider Class
+Create `frontend/src/lib/providers/map/google-maps.provider.ts` implementing `IMapProvider`.
+
+### Step 2: Register in Factory
+In `frontend/src/lib/providers/map/map-provider.factory.ts`:
+```typescript
+case "google":
+  currentMapProvider = new GoogleMapsProvider();
+  break;
+```
+
+### Step 3: Configure Environment
+Set `VITE_MAP_PROVIDER=google` in `.env`.
+**Zero changes are required in `InteractiveMapPickerModal.tsx` or `LiveDeliveryMapTracker.tsx`!**

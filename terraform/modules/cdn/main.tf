@@ -425,9 +425,52 @@ data "aws_route53_zone" "primary" {
   private_zone = false
 }
 
-resource "aws_route53_record" "sunotal" {
+# 1. Customer Grocery Storefront Subdomain
+resource "aws_route53_record" "sunotal_main" {
   zone_id         = data.aws_route53_zone.primary.zone_id
   name            = "sunotal.automateuniverse.space"
+  type            = "A"
+  allow_overwrite = true
+
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# 2. Farmer & Vendor Portal Subdomain
+resource "aws_route53_record" "sunotal_vendor" {
+  zone_id         = data.aws_route53_zone.primary.zone_id
+  name            = "vendor-sunotal.automateuniverse.space"
+  type            = "A"
+  allow_overwrite = true
+
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# 3. Admin Control Center Subdomain
+resource "aws_route53_record" "sunotal_admin" {
+  zone_id         = data.aws_route53_zone.primary.zone_id
+  name            = "admin-sunotal.automateuniverse.space"
+  type            = "A"
+  allow_overwrite = true
+
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# 4. Delivery Partner Application Subdomain
+resource "aws_route53_record" "sunotal_delivery" {
+  zone_id         = data.aws_route53_zone.primary.zone_id
+  name            = "delivery-sunotal.automateuniverse.space"
   type            = "A"
   allow_overwrite = true
 

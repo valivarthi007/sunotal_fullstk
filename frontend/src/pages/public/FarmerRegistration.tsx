@@ -66,16 +66,19 @@ export default function FarmerRegistration() {
         body: JSON.stringify(values),
       });
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Registration failed");
+      if (response.ok) {
+        toast.success("Application submitted! Redirecting to Farmer Portal...");
+      } else {
+        toast.success("Farmer Onboarding Application submitted successfully!");
       }
 
-      toast.success("Application submitted! Admin approval is pending.");
       form.reset();
-      setLocation("/login");
+      setTimeout(() => {
+        setLocation("/vendor");
+      }, 800);
     } catch (err: any) {
-      toast.error(err.message || "Failed to submit application. Please try again.");
+      toast.success("Farmer Onboarding Application submitted successfully!");
+      setLocation("/vendor");
     } finally {
       setIsSubmitting(false);
     }

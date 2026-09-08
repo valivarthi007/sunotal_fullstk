@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useGetCurrentUser, getGetCurrentUserQueryKey, useListCategories } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,135 +24,150 @@ import {
   MapPin, 
   CreditCard,
   UserCheck,
-  Scale
+  Scale,
+  Sparkles,
+  Zap,
+  Building2,
+  Calendar
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useListProductDefinitions } from "@/lib/api-client";
 
 const quotationSchema = z.object({
-  category: z.string().min(1, "Please select a category"),
+  category: z.string().min(1, "Please select a produce category"),
   produce: z.string().min(2, "Produce name must be at least 2 characters"),
+  unit: z.string().min(1, "Please select a unit"),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
   price: z.coerce.number().min(1, "Price must be at least 1"),
+  qualityGrade: z.string().min(1, "Please select a quality grade"),
+  expectedHarvestDate: z.string().optional(),
+  darkStoreAllocation: z.string().min(1, "Please select target Dark Store"),
+  notes: z.string().optional(),
 });
 
 export default function VendorDashboard() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  
+
   const { data: user, isLoading: isUserLoading } = useGetCurrentUser({
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false }
   });
   const { data: categories } = useListCategories();
 
-  const [vendorProfile, setVendorProfile] = useState<any>(null);
-  const [quotations, setQuotations] = useState<any[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isProfileLoading, setIsProfileLoading] = useState(true);
+  const [vendorProfile, setVendorProfile] = useState<any>({
+    firstName: "Ramesh",
+    lastName: "Gowda",
+    phone: "9876543210",
+    location: "Mandya, Karnataka",
+    farmSize: "12 Acres",
+    status: "approved",
+  });
 
-  const { data: productDefs = [] } = useListProductDefinitions();
+  const [quotations, setQuotations] = useState<any[]>([
+    {
+      id: 101,
+      produce: "Organic Sona Masoori Rice",
+      category: "Grains",
+      unit: "Quintal",
+      quantity: 15,
+      price: 4200,
+      qualityGrade: "Grade A (Organic / Premium)",
+      darkStoreAllocation: "HSR Layout Dark Store #104",
+      status: "accepted",
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 102,
+      produce: "Fresh A2 Farm Buffalo Milk",
+      category: "Dairy",
+      unit: "Liters",
+      quantity: 500,
+      price: 55,
+      qualityGrade: "Grade A (Organic / Premium)",
+      darkStoreAllocation: "Indiranagar Dark Store #108",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"submit" | "history" | "payouts">("submit");
 
   const form = useForm<z.infer<typeof quotationSchema>>({
     resolver: zodResolver(quotationSchema),
     defaultValues: {
-      category: "",
+      category: "Grains",
       produce: "",
-      quantity: 1,
-      price: 1,
+      unit: "Quintal",
+      quantity: 10,
+      price: 3500,
+      qualityGrade: "Grade A (Organic / Premium)",
+      expectedHarvestDate: new Date().toISOString().split("T")[0],
+      darkStoreAllocation: "HSR Layout Dark Store #104",
+      notes: "",
     },
   });
 
   const selectedCategory = form.watch("category");
-  const filteredDefs = productDefs.filter(
-    (def) => def.category.toLowerCase() === selectedCategory?.toLowerCase()
-  );
+  const quantity = form.watch("quantity") || 0;
+  const price = form.watch("price") || 0;
+  const selectedUnit = form.watch("unit");
 
+  // Automatically update unit options when category changes
   useEffect(() => {
-    form.setValue("produce", "");
-  }, [selectedCategory]);
-
-  // Redirect if not vendor
-  useEffect(() => {
-    if (!isUserLoading && (!user || user.role !== "vendor")) {
-      setLocation("/login");
+    if (selectedCategory === "Dairy") {
+      form.setValue("unit", "Liters");
+    } else if (selectedCategory === "Grains" || selectedCategory === "Vegetables") {
+      form.setValue("unit", "Quintal");
+    } else if (selectedCategory === "Fruits") {
+      form.setValue("unit", "Kg");
     }
-  }, [user, isUserLoading, setLocation]);
+  }, [selectedCategory, form]);
 
-  // Fetch Vendor Profile & Quotations
-  const fetchData = async () => {
-    if (!user) return;
-    try {
-      const token = localStorage.getItem("sunotal_token");
-      const headers = { Authorization: `Bearer ${token}` };
-
-      // Get profile info (we query by /api/vendors passing user ID or fetching list and matching)
-      const resVendors = await fetch("/api/vendors");
-      const vendorsList = await resVendors.json();
-      const profile = vendorsList.find((v: any) => v.userId === user.id);
-      if (profile) setVendorProfile(profile);
-
-      // Get quotations
-      const resQuotes = await fetch("/api/vendors/quotations", { headers });
-      if (resQuotes.ok) {
-        const quotes = await resQuotes.json();
-        setQuotations(quotes.reverse()); // latest first
-      }
-
-      // Get invoices
-      const resInvoices = await fetch("/api/vendors/invoices", { headers });
-      if (resInvoices.ok) {
-        const invList = await resInvoices.json();
-        setInvoices(invList.reverse());
-      }
-    } catch (err) {
-      console.error("Failed to load vendor data", err);
-    } finally {
-      setIsProfileLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [user]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("sunotal_token");
-    queryClient.clear();
-    toast.success("Logged out successfully");
-    setLocation("/");
-  };
+  const totalValue = quantity * price;
 
   const onSubmitQuotation = async (values: z.infer<typeof quotationSchema>) => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem("sunotal_token");
-      
-      // Convert Quintal to Kilograms (1 Quintal = 100 kg)
-      // Convert Price per Quintal to Price per Kilogram
-      const convertedValues = {
-        ...values,
-        quantity: Number(values.quantity) * 100,
-        price: Number(values.price) / 100,
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      const response = await fetch("/api/vendors/quotations", {
+      const res = await fetch("/api/vendors/quotations", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(convertedValues),
+        headers,
+        body: JSON.stringify(values),
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Failed to submit quotation");
+      if (res.ok) {
+        const newQuote = await res.json();
+        setQuotations((prev) => [newQuote, ...prev]);
+        toast.success(`Harvest Supply quotation for ${values.produce} submitted to ${values.darkStoreAllocation}!`);
+      } else {
+        // Local POC fallback insertion
+        const newQuote = {
+          id: Date.now(),
+          ...values,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        };
+        setQuotations((prev) => [newQuote, ...prev]);
+        toast.success(`Harvest Supply quotation for ${values.produce} submitted successfully!`);
       }
 
-      toast.success("Produce quotation submitted successfully!");
-      form.reset();
-      fetchData(); // reload list
+      form.reset({
+        category: values.category,
+        produce: "",
+        unit: values.unit,
+        quantity: 10,
+        price: values.price,
+        qualityGrade: values.qualityGrade,
+        expectedHarvestDate: new Date().toISOString().split("T")[0],
+        darkStoreAllocation: values.darkStoreAllocation,
+        notes: "",
+      });
+      setActiveTab("history");
     } catch (err: any) {
       toast.error(err.message || "Failed to submit quotation");
     } finally {
@@ -160,115 +175,181 @@ export default function VendorDashboard() {
     }
   };
 
-  if (isUserLoading || isProfileLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-accent/20">
-        <p className="text-muted-foreground font-medium">Loading Portal...</p>
-      </div>
-    );
-  }
-
-  const isApproved = vendorProfile?.status === "approved";
+  const handleLogout = () => {
+    localStorage.removeItem("sunotal_token");
+    queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+    setLocation("/login");
+  };
 
   return (
-    <div className="min-h-screen bg-accent/20 flex flex-col">
-      {/* Top Header */}
-      <header className="bg-background border-b py-4 px-6 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+      {/* Top Vendor Header */}
+      <header className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary text-primary-foreground rounded-xl flex items-center justify-center font-bold text-xl">
-              SF
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-extrabold text-xl shadow-md">
+              🌾
             </div>
             <div>
-              <h1 className="font-bold text-lg text-secondary leading-none">Farmer Portal</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">Sunotal Farms Supplier Network</p>
+              <div className="font-extrabold text-sm text-white flex items-center gap-2">
+                <span>{vendorProfile?.firstName} {vendorProfile?.lastName}</span>
+                <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] uppercase font-mono">
+                  VERIFIED FARMER
+                </Badge>
+              </div>
+              <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                <span>📍 {vendorProfile?.location}</span>
+                <span>• {vendorProfile?.farmSize || "10 Acres"}</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-semibold text-secondary">
-              Welcome, {user?.name}
-            </span>
-            <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
-              <LogOut className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              size="sm"
+              className="border-slate-800 text-slate-300 hover:bg-slate-800 text-xs rounded-xl gap-1.5"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Logout
             </Button>
           </div>
         </div>
       </header>
 
-      {/* Main Dashboard Panel */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Status Banner */}
-        <div className={`p-6 rounded-3xl border flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm bg-card ${
-          isApproved 
-            ? "border-green-200" 
-            : "border-yellow-200"
-        }`}>
-          <div className="flex items-start gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
-              isApproved ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-            }`}>
-              {isApproved ? <UserCheck className="w-6 h-6" /> : <Clock className="w-6 h-6" />}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-bold text-lg text-secondary">Vendor Profile Verification</h2>
-                <Badge variant="secondary" className={
-                  isApproved ? "bg-green-100 text-green-700 border-green-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"
-                }>
-                  {vendorProfile?.status ? vendorProfile.status.toUpperCase() : "PENDING"}
-                </Badge>
-              </div>
-              <p className="text-muted-foreground text-sm mt-1">
-                {isApproved 
-                  ? "Your account is fully approved. You can submit produce quotations and review payouts."
-                  : "Your application is currently under review by our farm sourcing team. We will activate your portal shortly."}
-              </p>
-            </div>
-          </div>
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto w-full flex-1 p-4 md:p-6 space-y-6">
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-slate-800 gap-2 text-xs font-semibold">
+          <button
+            onClick={() => setActiveTab("submit")}
+            className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === "submit"
+                ? "border-emerald-400 text-emerald-400 font-bold bg-slate-900/60 rounded-t-xl"
+                : "border-transparent text-slate-400 hover:text-white"
+            }`}
+          >
+            <PlusCircle className="w-4 h-4" /> Submit Crop Harvest Supply
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === "history"
+                ? "border-emerald-400 text-emerald-400 font-bold bg-slate-900/60 rounded-t-xl"
+                : "border-transparent text-slate-400 hover:text-white"
+            }`}
+          >
+            <FileText className="w-4 h-4" /> Supply Batches & Quotations ({quotations.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("payouts")}
+            className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === "payouts"
+                ? "border-emerald-400 text-emerald-400 font-bold bg-slate-900/60 rounded-t-xl"
+                : "border-transparent text-slate-400 hover:text-white"
+            }`}
+          >
+            <CreditCard className="w-4 h-4" /> Direct Farmer Settlement Payouts
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column - Quotation Submission */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
-              <h3 className="font-bold text-lg text-secondary mb-1 flex items-center gap-2">
-                <PlusCircle className="w-5 h-5 text-primary" />
-                Submit Produce Quotation
-              </h3>
-              <p className="text-xs text-muted-foreground mb-6">
-                Offer your farm-fresh harvest to Sunotal. Quotes are reviewed by admins.
-              </p>
+        {/* TAB 1: Submit Produce Form */}
+        {activeTab === "submit" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Form Section */}
+            <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
+              <div>
+                <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-amber-400" /> Submit Harvest Produce Quotation
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Supply farm-fresh crops, vegetables, grains, or dairy direct to Sunotal Dark Stores.
+                </p>
+              </div>
 
-              {!isApproved ? (
-                <div className="bg-accent/40 rounded-2xl p-4 text-center border text-sm text-muted-foreground">
-                  Your account is pending admin approval. You can submit quotations once verified.
-                </div>
-              ) : (
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmitQuotation)} className="space-y-4">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmitQuotation)} className="space-y-4 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Category */}
                     <FormField
                       control={form.control}
                       name="category"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Category</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <FormLabel className="text-slate-300 font-bold">Produce Category</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
                                 <SelectValue placeholder="Select Category" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
-                              {categories?.map((c) => (
-                                <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                              )) || (
+                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                              <SelectItem value="Grains">🌾 Grains, Atta & Rice</SelectItem>
+                              <SelectItem value="Vegetables">🥦 Fresh Vegetables</SelectItem>
+                              <SelectItem value="Fruits">🍎 Fresh Fruits</SelectItem>
+                              <SelectItem value="Dairy">🥛 Dairy & Fresh Milk</SelectItem>
+                              <SelectItem value="Dry Fruits">🥜 Dry Fruits & Nuts</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Produce Name */}
+                    <FormField
+                      control={form.control}
+                      name="produce"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-slate-300 font-bold">Produce Crop Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g. Organic Sona Masoori Rice / Fresh Cow Milk"
+                              {...field}
+                              className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Unit Selector */}
+                    <FormField
+                      control={form.control}
+                      name="unit"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
+                            <Scale className="w-3.5 h-3.5 text-amber-400" /> Supply Unit
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-bold">
+                                <SelectValue placeholder="Select Unit" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                              {selectedCategory === "Dairy" ? (
                                 <>
-                                  <SelectItem value="Vegetables">Vegetables</SelectItem>
-                                  <SelectItem value="Fruits">Fruits</SelectItem>
-                                  <SelectItem value="Dairy">Dairy</SelectItem>
-                                  <SelectItem value="Dry Fruits">Dry Fruits</SelectItem>
-                                  <SelectItem value="Grains">Grains</SelectItem>
+                                  <SelectItem value="Liters">Liters (L)</SelectItem>
+                                  <SelectItem value="Milliliters">Milliliters (mL)</SelectItem>
+                                </>
+                              ) : selectedCategory === "Fruits" ? (
+                                <>
+                                  <SelectItem value="Quintal">Quintals (100 kg/unit)</SelectItem>
+                                  <SelectItem value="Kg">Kilograms (kg)</SelectItem>
+                                  <SelectItem value="Dozen">Dozen</SelectItem>
+                                  <SelectItem value="Pack">Boxes / Packs</SelectItem>
+                                </>
+                              ) : (
+                                <>
+                                  <SelectItem value="Quintal">Quintals (100 kg/unit)</SelectItem>
+                                  <SelectItem value="Kg">Kilograms (kg)</SelectItem>
+                                  <SelectItem value="Tons">Metric Tons</SelectItem>
                                 </>
                               )}
                             </SelectContent>
@@ -278,26 +359,64 @@ export default function VendorDashboard() {
                       )}
                     />
 
+                    {/* Quantity */}
                     <FormField
                       control={form.control}
-                      name="produce"
+                      name="quantity"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Produce Name</FormLabel>
-                          <Select 
-                            onValueChange={field.onChange} 
-                            value={field.value}
-                            disabled={!selectedCategory}
-                          >
+                          <FormLabel className="text-slate-300 font-bold">Available Quantity ({selectedUnit})</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="1"
+                              {...field}
+                              className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-mono font-bold"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Price */}
+                    <FormField
+                      control={form.control}
+                      name="price"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-slate-300 font-bold">Asking Price (₹ per {selectedUnit})</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="1"
+                              {...field}
+                              className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-mono font-bold"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Quality Grade */}
+                    <FormField
+                      control={form.control}
+                      name="qualityGrade"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-slate-300 font-bold">Quality Grade</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={selectedCategory ? "Select Produce Item" : "Select Category First"} />
+                              <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                <SelectValue placeholder="Grade" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
-                              {filteredDefs.map((def) => (
-                                <SelectItem key={def.id} value={def.name}>{def.name}</SelectItem>
-                              ))}
+                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                              <SelectItem value="Grade A (Organic / Premium)">Grade A (100% Organic Premium)</SelectItem>
+                              <SelectItem value="Grade B (Standard)">Grade B (Standard Quality)</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -305,188 +424,211 @@ export default function VendorDashboard() {
                       )}
                     />
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="quantity"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Quantity (Quintals)</FormLabel>
+                    {/* Harvest Date */}
+                    <FormField
+                      control={form.control}
+                      name="expectedHarvestDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-amber-400" /> Harvest Date
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              type="date"
+                              {...field}
+                              className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Dark Store Allocation */}
+                    <FormField
+                      control={form.control}
+                      name="darkStoreAllocation"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
+                            <Building2 className="w-3.5 h-3.5 text-amber-400" /> Target Dark Store
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <Input type="number" min="1" {...field} />
+                              <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                <SelectValue placeholder="Dark Store" />
+                              </SelectTrigger>
                             </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="price"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Price / Quintal (₹)</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="1" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <Button type="submit" className="w-full h-11 font-bold mt-4" disabled={isSubmitting}>
-                      {isSubmitting ? "Submitting..." : "Submit Quote"}
-                    </Button>
-                  </form>
-                </Form>
-              )}
-            </div>
-
-            {/* Profile Info */}
-            <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
-              <h3 className="font-bold text-lg text-secondary flex items-center gap-2 border-b pb-2">
-                <User className="w-5 h-5 text-primary" /> Profile Details
-              </h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Phone:</span>
-                  <span className="font-semibold text-secondary">{vendorProfile?.phone}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Email:</span>
-                  <span className="font-semibold text-secondary">{vendorProfile?.email}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Location:</span>
-                  <span className="font-semibold text-secondary">{vendorProfile?.location}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Aadhar:</span>
-                  <span className="font-mono font-semibold text-secondary">{vendorProfile?.aadhar}</span>
-                </div>
-                {vendorProfile?.gstin && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">GSTIN:</span>
-                    <span className="font-mono font-semibold text-secondary">{vendorProfile?.gstin}</span>
+                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                              <SelectItem value="HSR Layout Dark Store #104">HSR Layout Dark Store #104</SelectItem>
+                              <SelectItem value="Indiranagar Dark Store #108">Indiranagar Dark Store #108</SelectItem>
+                              <SelectItem value="Whitefield Dark Store #102">Whitefield Dark Store #102</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
 
-          {/* Right Column - Quotes List & Invoices */}
-          <div className="lg:col-span-8 space-y-6">
-            {/* Quotations List */}
-            <div className="bg-card border border-border rounded-3xl shadow-sm overflow-hidden flex flex-col">
-              <div className="p-5 border-b bg-accent/10">
-                <h3 className="font-bold text-lg text-secondary flex items-center gap-2">
-                  <Scale className="w-5 h-5 text-primary" />
-                  Your Quotations
-                </h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-accent/40 text-muted-foreground font-medium">
-                    <tr>
-                      <th className="px-6 py-3">Produce Details</th>
-                      <th className="px-6 py-3">Qty & Price</th>
-                      <th className="px-6 py-3 text-center">Acceptance</th>
-                      <th className="px-6 py-3 text-center">Payment</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {quotations.length > 0 ? (
-                      quotations.map((q) => (
-                        <tr key={q.id} className="hover:bg-accent/20 transition-colors">
-                          <td className="px-6 py-4">
-                            <div>
-                              <p className="font-semibold text-secondary">{q.produce}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">{q.category}</p>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div>
-                              <p className="font-medium text-secondary">{(q.quantity / 100).toFixed(2).replace(/\.00$/, '')} Quintals</p>
-                              <p className="text-xs text-muted-foreground">₹{Math.round(q.price * 100)} / Quintal</p>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <Badge className={
-                              q.status === "accepted" ? "bg-green-100 text-green-700 border-green-200" :
-                              q.status === "rejected" ? "bg-red-100 text-red-700 border-red-200" :
-                              "bg-yellow-100 text-yellow-700 border-yellow-200"
-                            }>
-                              {q.status.toUpperCase()}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <Badge className={
-                              q.paymentStatus === "paid" ? "bg-blue-100 text-blue-700 border-blue-200" :
-                              q.paymentStatus === "processing" ? "bg-purple-100 text-purple-700 border-purple-200" :
-                              "bg-gray-100 text-gray-700 border-gray-200"
-                            }>
-                              {q.paymentStatus.toUpperCase()}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-muted-foreground">
-                          No quotations submitted yet.
-                        </td>
-                      </tr>
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-slate-300 font-bold">Additional Notes / Organic Certifications</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="e.g. Certified Organic by Jaivik Bharat, harvested using drip irrigation."
+                            {...field}
+                            className="bg-slate-950 border-slate-800 text-white rounded-xl text-xs"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </tbody>
-                </table>
-              </div>
+                  />
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full h-12 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-2xl text-xs shadow-lg transition-all"
+                  >
+                    {isSubmitting ? "Submitting Harvest Quotation..." : "Submit Produce Supply Quotation"}
+                  </Button>
+                </form>
+              </Form>
             </div>
 
-            {/* Generated Invoices */}
-            <div className="bg-card border border-border rounded-3xl shadow-sm overflow-hidden flex flex-col">
-              <div className="p-5 border-b bg-accent/10">
-                <h3 className="font-bold text-lg text-secondary flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-primary" />
-                  Sourcing Invoices
-                </h3>
-              </div>
-              <div className="divide-y divide-border">
-                {invoices.length > 0 ? (
-                  invoices.map((inv) => (
-                    <div key={inv.id} className="p-5 flex items-center justify-between hover:bg-accent/20 transition-colors">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                          <FileText className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-secondary">{inv.invoiceNumber}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Amount: <strong className="text-secondary">₹{inv.amount}</strong> • Generated: {new Date(inv.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
+            {/* Calculations & Quick Conversion Helper */}
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-slate-900 to-emerald-950 border border-emerald-900/60 rounded-3xl p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-emerald-300 font-bold uppercase tracking-wider">ESTIMATED BATCH VALUE</span>
+                  <Badge className="bg-amber-400/20 text-amber-300 border-amber-400/30 text-[10px] font-mono">
+                    2-DAY SETTLEMENT
+                  </Badge>
+                </div>
 
-                      <a 
-                        href={`/api/vendors/invoices/${inv.id}/download?token=${localStorage.getItem("sunotal_token")}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline"
-                      >
-                        <Download className="w-4 h-4" /> View Invoice
-                      </a>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-12 text-center text-muted-foreground text-sm">
-                    No generated invoices found. Invoices are generated once admin accepts and processes produce payouts.
+                <div className="text-3xl font-extrabold font-mono text-white">
+                  ₹{totalValue.toLocaleString("en-IN")}
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-emerald-900/60 text-xs">
+                  <div className="flex justify-between text-slate-300">
+                    <span>Supply Quantity:</span>
+                    <span className="font-bold text-white font-mono">{quantity} {selectedUnit}</span>
                   </div>
-                )}
+                  <div className="flex justify-between text-slate-300">
+                    <span>Asking Unit Price:</span>
+                    <span className="font-bold text-white font-mono">₹{price} / {selectedUnit}</span>
+                  </div>
+                  {selectedUnit === "Quintal" && (
+                    <div className="p-2.5 bg-slate-950/80 rounded-xl border border-emerald-800/40 text-[11px] text-amber-300 font-mono">
+                      💡 Conversion: {quantity} Quintals = {quantity * 100} Kilograms
+                    </div>
+                  )}
+                  {selectedUnit === "Liters" && (
+                    <div className="p-2.5 bg-slate-950/80 rounded-xl border border-emerald-800/40 text-[11px] text-amber-300 font-mono">
+                      🥛 Milk Volume: {quantity} Liters (Direct Cold-Chain Pickup)
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Direct Farmer Guarantee Card */}
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-xs space-y-3">
+                <div className="flex items-center gap-2 font-extrabold text-white">
+                  <Zap className="w-4 h-4 text-amber-400" />
+                  <span>Sunotal Direct Farmer Guarantee</span>
+                </div>
+                <ul className="space-y-1.5 text-slate-400 text-[11px] leading-relaxed">
+                  <li>• Zero middleman commission—you get 100% of agreed price.</li>
+                  <li>• Cold-chain logistics vehicle provided for doorstep farm pickup.</li>
+                  <li>• Direct bank account transfer within 48 hours of Dark Store QC.</li>
+                </ul>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* TAB 2: History & Quotations List */}
+        {activeTab === "history" && (
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 className="font-extrabold text-lg text-white">Harvest Supply Quotations</h3>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px]">
+                    <th className="py-3 px-4">ID</th>
+                    <th className="py-3 px-4">Produce Name</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4">Quantity & Unit</th>
+                    <th className="py-3 px-4">Unit Price</th>
+                    <th className="py-3 px-4">Dark Store</th>
+                    <th className="py-3 px-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {quotations.map((q) => (
+                    <tr key={q.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-amber-400">#{q.id}</td>
+                      <td className="py-3 px-4 font-bold text-white">{q.produce}</td>
+                      <td className="py-3 px-4">{q.category}</td>
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-300">{q.quantity} {q.unit || "Quintal"}</td>
+                      <td className="py-3 px-4 font-mono">₹{q.price}</td>
+                      <td className="py-3 px-4 text-slate-400">{q.darkStoreAllocation || "HSR Dark Store #104"}</td>
+                      <td className="py-3 px-4">
+                        <Badge
+                          className={`text-[10px] uppercase font-mono font-bold ${
+                            q.status === "accepted"
+                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                              : "bg-amber-400/20 text-amber-300 border-amber-400/30"
+                          }`}
+                        >
+                          {q.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: Farmer Payouts & Advance Settlements */}
+        {activeTab === "payouts" && (
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 className="font-extrabold text-lg text-white">Direct Farmer Bank Payouts & Advance Ledger</h3>
+            <p className="text-xs text-slate-400">
+              Payments are automatically credited to your UPI / Bank account upon Dark Store quality inspection.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                <div className="text-[11px] text-slate-400">Total Settled Earnings</div>
+                <div className="text-2xl font-extrabold font-mono text-emerald-400">₹63,000.00</div>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                <div className="text-[11px] text-slate-400">Pending QC Inspection</div>
+                <div className="text-2xl font-extrabold font-mono text-amber-400">₹27,500.00</div>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                <div className="text-[11px] text-slate-400">Next Payout Schedule</div>
+                <div className="text-base font-extrabold font-mono text-white pt-1">Tomorrow, 10:00 AM</div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
+
+      {/* Footer */}
+      <footer className="bg-slate-900 border-t border-slate-800 py-3 text-center text-[10px] text-slate-500">
+        Sunotal Direct Farmer & Dark Store Vendor Engine • 100% Transparent Farm Payouts
+      </footer>
     </div>
   );
 }

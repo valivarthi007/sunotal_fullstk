@@ -12,6 +12,7 @@ import Login from "@/pages/public/Login";
 import Register from "@/pages/public/Register";
 import Profile from "@/pages/public/Profile";
 import Checkout from "@/pages/public/Checkout";
+import Orders from "@/pages/public/Orders";
 
 import AdminLogin from "@/pages/admin/AdminLogin";
 import Dashboard from "@/pages/admin/Dashboard";
@@ -26,15 +27,20 @@ import { ObservabilityDashboard } from "@/pages/admin/ObservabilityDashboard";
 import { AdminLedger } from "@/pages/admin/Ledger";
 
 import VendorDashboard from "@/pages/vendor/VendorDashboard";
+import DeliveryDashboard from "@/pages/delivery/DeliveryDashboard";
+import DeliveryRegistration from "@/pages/delivery/DeliveryRegistration";
+
 import NotFound from "@/pages/not-found";
 import Redirect from "@/lib/redirect";
+import { LocationProvider } from "@/lib/location-context";
+import { ApiStatusProvider } from "@/lib/api-status";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: false,
       staleTime: 1000 * 60, // 1 minute
-      throwOnError: false,  // Never crash the component tree on API errors (401, 500, etc.)
+      throwOnError: false,
     },
     mutations: {
       throwOnError: false,
@@ -42,21 +48,68 @@ const queryClient = new QueryClient({
   },
 });
 
-// Export queryClient so login/register pages can invalidate the user query
 export { queryClient };
 
-import Orders from "@/pages/public/Orders";
+// Subdomain Portal Auto-Detection
+function getSubdomain(): "main" | "admin" | "vendor" | "delivery" {
+  if (typeof window === "undefined") return "main";
+  const hostname = window.location.hostname.toLowerCase();
+  if (hostname.startsWith("admin-") || hostname.startsWith("admin.")) return "admin";
+  if (hostname.startsWith("vendor-") || hostname.startsWith("vendor.") || hostname.startsWith("farmer-")) return "vendor";
+  if (hostname.startsWith("delivery-") || hostname.startsWith("delivery.") || hostname.startsWith("rider-")) return "delivery";
+  return "main";
+}
 
-function Router() {
+function SubdomainRouter() {
+  const subdomain = getSubdomain();
+
+  if (subdomain === "admin") {
+    return (
+      <Switch>
+        <Route path="/" component={AdminLogin} />
+        <Route path="/admin/login" component={AdminLogin} />
+        <Route path="/admin/dashboard" component={Dashboard} />
+        <Route path="/admin/products" component={ProductsAdmin} />
+        <Route path="/admin/warehouses" component={WarehouseManager} />
+        <Route path="/admin/warehouse" component={WarehouseManager} />
+        <Route path="/admin/ledger" component={AdminLedger} />
+        <Route path="/admin/observability" component={ObservabilityDashboard} />
+        <Route path="/admin/banners" component={BannersAdmin} />
+        <Route path="/admin/inventory" component={InventoryAdmin} />
+        <Route path="/admin/vendors" component={VendorsAdmin} />
+        <Route path="/admin/quotations" component={QuotationsAdmin} />
+        <Route path="/admin/users" component={UsersAdmin} />
+        <Route component={AdminLogin} />
+      </Switch>
+    );
+  }
+
+  if (subdomain === "vendor") {
+    return (
+      <Switch>
+        <Route path="/" component={FarmerRegistration} />
+        <Route path="/farmer" component={FarmerRegistration} />
+        <Route path="/vendor" component={VendorDashboard} />
+        <Route component={FarmerRegistration} />
+      </Switch>
+    );
+  }
+
+  if (subdomain === "delivery") {
+    return (
+      <Switch>
+        <Route path="/" component={DeliveryDashboard} />
+        <Route path="/delivery" component={DeliveryDashboard} />
+        <Route path="/register" component={DeliveryRegistration} />
+        <Route path="/delivery/register" component={DeliveryRegistration} />
+        <Route component={DeliveryDashboard} />
+      </Switch>
+    );
+  }
+
+  // Primary Domain (Customer Grocery Storefront)
   return (
     <Switch>
-      {/* Redirect legacy /admin/product -> /admin/products */}
-      <Route path="/admin/product">
-        <Redirect to="/admin/products" />
-      </Route>
-      <Route path="/admin/product/:rest+">
-        <Redirect to="/admin/products" />
-      </Route>
       <Route path="/" component={Home} />
       <Route path="/products"><ProductsPage initialCategory="All" /></Route>
       <Route path="/vegetables"><ProductsPage initialCategory="Vegetables" /></Route>
@@ -67,21 +120,16 @@ function Router() {
       <Route path="/farmer" component={FarmerRegistration} />
       <Route path="/profile" component={Profile} />
       <Route path="/orders" component={Orders} />
-      <Route path="/orders/:rest+">
-        <Redirect to="/orders" />
-      </Route>
-      <Route path="/oders">
-        <Redirect to="/orders" />
-      </Route>
-      <Route path="/oders/:rest+">
-        <Redirect to="/orders" />
-      </Route>
+      <Route path="/orders/:rest+"><Redirect to="/orders" /></Route>
+      <Route path="/oders"><Redirect to="/orders" /></Route>
       <Route path="/checkout" component={Checkout} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
-
       <Route path="/vendor" component={VendorDashboard} />
+      <Route path="/delivery" component={DeliveryDashboard} />
+      <Route path="/delivery/register" component={DeliveryRegistration} />
 
+      {/* Admin routes accessible on main domain as fallbacks */}
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={Dashboard} />
       <Route path="/admin/products" component={ProductsAdmin} />
@@ -100,9 +148,6 @@ function Router() {
   );
 }
 
-import { LocationProvider } from "@/lib/location-context";
-import { ApiStatusProvider } from "@/lib/api-status";
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -111,7 +156,7 @@ function App() {
           <CartProvider>
             <ApiStatusProvider>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                <Router />
+                <SubdomainRouter />
               </WouterRouter>
             </ApiStatusProvider>
             <Toaster />

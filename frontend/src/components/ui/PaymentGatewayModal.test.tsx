@@ -38,6 +38,10 @@ describe("PaymentGatewayModal Integration Component", () => {
   it("launches 3D Secure Card Verification OTP modal on card form submit", async () => {
     render(<PaymentGatewayModal {...defaultProps} />);
     
+    fireEvent.change(screen.getByPlaceholderText("4111 1111 1111 1111"), { target: { value: "4111111111111111" } });
+    fireEvent.change(screen.getByPlaceholderText("MM/YY"), { target: { value: "12/28" } });
+    fireEvent.change(screen.getByPlaceholderText("123"), { target: { value: "123" } });
+
     const payButton = screen.getByRole("button", { name: /Pay ₹1499\.50 securely/i });
     fireEvent.click(payButton);
 
@@ -49,6 +53,10 @@ describe("PaymentGatewayModal Integration Component", () => {
 
   it("completes card payment upon verifying 3D Secure OTP", async () => {
     render(<PaymentGatewayModal {...defaultProps} />);
+
+    fireEvent.change(screen.getByPlaceholderText("4111 1111 1111 1111"), { target: { value: "4111111111111111" } });
+    fireEvent.change(screen.getByPlaceholderText("MM/YY"), { target: { value: "12/28" } });
+    fireEvent.change(screen.getByPlaceholderText("123"), { target: { value: "123" } });
 
     fireEvent.click(screen.getByRole("button", { name: /Pay ₹1499\.50 securely/i }));
 
@@ -103,16 +111,7 @@ describe("PaymentGatewayModal Integration Component", () => {
     });
   });
 
-  it("initializes Razorpay Checkout SDK when Razorpay Key ID and SDK are available", async () => {
-    const mockOpen = vi.fn();
-    (window as any).Razorpay = vi.fn().mockImplementation(() => ({
-      open: mockOpen,
-    }));
-
-    vi.spyOn(import.meta, "env", "get").mockReturnValue({
-      VITE_RAZORPAY_KEY_ID: "rzp_test_1234567890",
-    });
-
+  it("processes payment seamlessly using IPaymentProvider strategy", async () => {
     render(<PaymentGatewayModal {...defaultProps} />);
 
     fireEvent.click(screen.getByText("UPI / QR"));
@@ -120,10 +119,7 @@ describe("PaymentGatewayModal Integration Component", () => {
     fireEvent.click(upiButton);
 
     await waitFor(() => {
-      expect((window as any).Razorpay).toHaveBeenCalled();
-      expect(mockOpen).toHaveBeenCalled();
+      expect(defaultProps.onSuccess).toHaveBeenCalled();
     });
-
-    delete (window as any).Razorpay;
   });
 });

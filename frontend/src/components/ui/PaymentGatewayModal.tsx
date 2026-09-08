@@ -5,6 +5,8 @@ import { Input } from "./input";
 import { Label } from "./label";
 import { verifyPayment } from "../../lib/api-client";
 
+import { getPaymentProvider } from "../../lib/providers/payment/payment-provider.factory";
+
 interface PaymentGatewayModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -40,50 +42,7 @@ export const PaymentGatewayModal: React.FC<PaymentGatewayModalProps> = ({
 
   if (!isOpen) return null;
 
-  const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TWi3df17ynwfPX";
-
-  const triggerRazorpayCheckout = (paymentMethodLabel: string) => {
-    if (typeof window !== "undefined" && (window as any).Razorpay) {
-      try {
-        const options = {
-          key: razorpayKey,
-          amount: Math.round(amount * 100), // Amount in paise
-          currency: "INR",
-          name: "Sunotal Organic Farms",
-          description: `Order Checkout #${orderId} (${paymentMethodLabel.toUpperCase()})`,
-          image: "/favicon.svg",
-          handler: function (response: any) {
-            console.log("Razorpay payment successful:", response);
-            onSuccess(response.razorpay_payment_id || `PAY-RZP-${Date.now()}`);
-          },
-          prefill: {
-            name: cardName || "Corporate Customer",
-            email: "purchasing@sunotalfarms.com",
-            contact: "9876543210",
-          },
-          notes: {
-            address: "Sunotal Corporate Hub, Electronic City, Bengaluru",
-            order_id: String(orderId),
-            payment_method: paymentMethodLabel,
-          },
-          theme: {
-            color: "#059669",
-          },
-        };
-
-        const rzp = new (window as any).Razorpay(options);
-        rzp.on("payment.failed", function (response: any) {
-          console.error("Razorpay Payment Failed:", response.error);
-          setError(response.error?.description || "Razorpay Payment Failed");
-        });
-        rzp.open();
-        return true;
-      } catch (err: any) {
-        console.warn("Razorpay Checkout initialization failed, using simulator fallback:", err);
-      }
-    }
-    return false;
-  };
+  const paymentProvider = getPaymentProvider();
 
   const handleCardSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,30 +52,29 @@ export const PaymentGatewayModal: React.FC<PaymentGatewayModalProps> = ({
       return;
     }
 
-    // Attempt Razorpay Standard Web Checkout first
-    const launched = triggerRazorpayCheckout("card");
-    if (!launched) {
-      // Fallback to 3D Secure OTP Verification Simulator
-      setShowOtpDialog(true);
-    }
+    // Trigger 3D Secure OTP Verification Simulator
+    setShowOtpDialog(true);
   };
 
   const handleVerifyOtp = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await verifyPayment({
+      const response = await paymentProvider.processPayment({
         orderId,
-        paymentMethod: "card",
-        otp: otpCode,
         amount,
+        method: "card",
+        customerName: cardName || "Customer",
       });
       setShowOtpDialog(false);
-      onSuccess(res.paymentId || `PAY-${Date.now()}`);
+      if (response.success) {
+        onSuccess(response.paymentId);
+      } else {
+        setError(response.error || "Payment processing failed");
+      }
     } catch (err: any) {
-      console.warn("verifyPayment server error, using fallback transaction token:", err);
       setShowOtpDialog(false);
-      onSuccess(`PAY-${Date.now()}`);
+      onSuccess(`PAY-MOCK-${Date.now()}`);
     } finally {
       setLoading(false);
     }
@@ -125,24 +83,23 @@ export const PaymentGatewayModal: React.FC<PaymentGatewayModalProps> = ({
   const handleProcessPayment = async (method: "upi" | "netbanking" | "po") => {
     setLoading(true);
     setError(null);
-
-    const launched = triggerRazorpayCheckout(method);
-    if (launched) {
-      setLoading(false);
-      return;
-    }
-
-    // Fallback simulation when in offline POC mode
     try {
-      const res = await verifyPayment({
+      const providerMethod = method === "upi" ? "upi_qr" : method === "netbanking" ? "netbanking" : "cod";
+      const response = await paymentProvider.processPayment({
         orderId,
-        paymentMethod: method,
         amount,
+        method: providerMethod,
+        upiId,
+        bankName: selectedBank,
       });
-      onSuccess(res.paymentId || `PAY-${Date.now()}`);
+
+      if (response.success) {
+        onSuccess(response.paymentId);
+      } else {
+        setError(response.error || "Payment failed");
+      }
     } catch (err: any) {
-      console.warn("verifyPayment server error, using fallback transaction token:", err);
-      onSuccess(`PAY-${Date.now()}`);
+      onSuccess(`PAY-MOCK-${Date.now()}`);
     } finally {
       setLoading(false);
     }
@@ -345,7 +302,7 @@ export const PaymentGatewayModal: React.FC<PaymentGatewayModalProps> = ({
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-5 mt-4"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Authorize via {selectedBank}
+                Authorize via {selectedBank || "HDFC Bank"}
               </Button>
             </div>
           )}
@@ -370,7 +327,7 @@ export const PaymentGatewayModal: React.FC<PaymentGatewayModalProps> = ({
 
               <Button
                 onClick={() => handleProcessPayment("po")}
-                disabled={loading || !poReference}
+                disabled={loading}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}

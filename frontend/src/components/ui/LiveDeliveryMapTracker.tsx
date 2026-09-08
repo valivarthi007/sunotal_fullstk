@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { MapPin, Truck, PhoneCall, Star, Clock, ShieldCheck, RefreshCw, Navigation, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "./button";
 import { fetchLiveTrackingTelemetry, LiveTrackingTelemetry } from "../../lib/api-client";
-import { loadGeoapifySdk, getGeoapifyTileUrl } from "../../lib/geoapify-sdk";
+import { getMapProvider } from "../../lib/providers/map/map-provider.factory";
 
 interface LiveDeliveryMapTrackerProps {
   orderId: string;
@@ -15,6 +15,8 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
+
+  const mapProvider = getMapProvider();
 
   const loadTelemetry = async () => {
     setLoading(true);
@@ -38,7 +40,7 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
   useEffect(() => {
     if (!telemetry || !mapContainerRef.current) return;
 
-    loadGeoapifySdk().then(() => {
+    mapProvider.loadSdk().then(() => {
       const L = (window as any).L;
       if (!L || !mapContainerRef.current) return;
 
@@ -59,8 +61,8 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
         zoomControl: true,
       });
 
-      L.tileLayer(getGeoapifyTileUrl(), {
-        attribution: '&copy; OpenStreetMap contributors',
+      L.tileLayer(mapProvider.getTileUrl(), {
+        attribution: mapProvider.getTileAttribution(),
         maxZoom: 19,
       }).addTo(map);
 

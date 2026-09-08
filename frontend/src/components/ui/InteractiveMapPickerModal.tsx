@@ -3,8 +3,8 @@ import { MapPin, Navigation, Crosshair, Home, Briefcase, Building, Tag, Check, L
 import { Button } from "./button";
 import { Input } from "./input";
 import { Label } from "./label";
-import { saveUserAddress, fetchUserAddresses, UserAddressApi } from "../../lib/api-client";
-import { loadGeoapifySdk, reverseGeocodeGeoapify, getGeoapifyTileUrl, searchPlaceGeoapify, GeoapifySearchResult } from "../../lib/geoapify-sdk";
+import { getMapProvider } from "../../lib/providers/map/map-provider.factory";
+import { GeocodeResult } from "../../lib/providers/map/map-provider.interface";
 
 interface InteractiveMapPickerModalProps {
   isOpen: boolean;
@@ -41,16 +41,18 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
 
   // Place Search & Autocomplete State
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<GeoapifySearchResult[]>([]);
+  const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
   const [geocoding, setGeocoding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<UserAddressApi[]>([]);
-  const [geoapifyLoaded, setGeoapifyLoaded] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+
+  const mapProvider = getMapProvider();
 
   useEffect(() => {
     if (isOpen) {
@@ -58,8 +60,8 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
         .then((data) => setSavedAddresses(data))
         .catch((err) => console.error("Failed to load saved addresses", err));
 
-      loadGeoapifySdk().then((success) => {
-        setGeoapifyLoaded(success);
+      mapProvider.loadSdk().then((success) => {
+        setMapLoaded(success);
       });
     }
   }, [isOpen]);
@@ -67,7 +69,7 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
   useEffect(() => {
     if (!isOpen || activeTab !== "map" || !mapContainerRef.current) return;
 
-    loadGeoapifySdk().then(() => {
+    mapProvider.loadSdk().then(() => {
       const L = (window as any).L;
       if (!L || !mapContainerRef.current) return;
 
@@ -82,8 +84,8 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
         zoomControl: true,
       });
 
-      L.tileLayer(getGeoapifyTileUrl(), {
-        attribution: '&copy; OpenStreetMap contributors',
+      L.tileLayer(mapProvider.getTileUrl(), {
+        attribution: mapProvider.getTileAttribution(),
         maxZoom: 19,
       }).addTo(map);
 
@@ -125,31 +127,18 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
 
   if (!isOpen) return null;
 
-  // Reverse Geocoding Lookup via Geoapify REST API & Nominatim Fallback
+  // Reverse Geocoding Lookup via IMapProvider
   const reverseGeocode = async (latitude: number, longitude: number) => {
     setGeocoding(true);
     try {
-      const geoapifyRes = await reverseGeocodeGeoapify(latitude, longitude);
-      if (geoapifyRes) {
-        if (geoapifyRes.city) setCity(geoapifyRes.city);
-        if (geoapifyRes.state) setStateName(geoapifyRes.state);
-        if (geoapifyRes.pincode) setPincode(geoapifyRes.pincode);
-        if (geoapifyRes.street) setStreet(geoapifyRes.street);
-        if (geoapifyRes.houseNo) setHouseNo(geoapifyRes.houseNo);
-        if (geoapifyRes.landmark) setLandmark(geoapifyRes.landmark);
-      } else {
-        // Nominatim fallback
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const addr = data.address || {};
-          setCity(addr.city || addr.town || addr.suburb || "Bengaluru");
-          setStateName(addr.state || "Karnataka");
-          setPincode(addr.postcode || "560038");
-          setStreet(data.display_name?.split(",").slice(0, 2).join(",") || street);
-        }
+      const res = await mapProvider.reverseGeocode(latitude, longitude);
+      if (res) {
+        if (res.city) setCity(res.city);
+        if (res.state) setStateName(res.state);
+        if (res.pincode) setPincode(res.pincode);
+        if (res.street) setStreet(res.street);
+        if (res.houseNo) setHouseNo(res.houseNo);
+        if (res.landmark) setLandmark(res.landmark);
       }
     } catch (err) {
       console.error("Geocoding failed", err);
@@ -193,7 +182,7 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
     }
     setIsSearching(true);
     try {
-      const results = await searchPlaceGeoapify(q);
+      const results = await mapProvider.searchPlaces(q);
       setSearchResults(results);
     } catch (err) {
       console.error("Place search error", err);
@@ -202,16 +191,18 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
     }
   };
 
-  const handleSelectSearchResult = (result: GeoapifySearchResult) => {
-    setLat(result.lat);
-    setLng(result.lng);
-    if (result.city) setCity(result.city);
-    if (result.state) setStateName(result.state);
-    if (result.pincode) setPincode(result.pincode);
-    if (result.street) setStreet(result.street);
-    setSearchResults([]);
-    setSearchQuery(result.formatted);
-    reverseGeocode(result.lat, result.lng);
+  const handleSelectSearchResult = (result: GeocodeResult) => {
+    if (result.lat && result.lng) {
+      setLat(result.lat);
+      setLng(result.lng);
+      if (result.city) setCity(result.city);
+      if (result.state) setStateName(result.state);
+      if (result.pincode) setPincode(result.pincode);
+      if (result.street) setStreet(result.street);
+      setSearchResults([]);
+      setSearchQuery(result.formattedAddress || "");
+      reverseGeocode(result.lat, result.lng);
+    }
   };
 
   const handleConfirmAddress = async () => {
@@ -294,7 +285,7 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
             </div>
             <div>
               <h2 className="font-bold text-base text-foreground">Pin Delivery Location on Map</h2>
-              <p className="text-xs text-muted-foreground">Hyperlocal delivery powered by Geoapify Maps</p>
+              <p className="text-xs text-muted-foreground">Hyperlocal delivery powered by CartoDB Voyager Map Engine</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 text-muted-foreground hover:text-foreground rounded-full hover:bg-accent">
@@ -333,7 +324,7 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
                   <Input
                     value={searchQuery}
                     onChange={(e) => handleSearchLocation(e.target.value)}
-                    placeholder="Search area, street, landmark (e.g. Indiranagar, Electronic City)..."
+                    placeholder="Search area, street, landmark (e.g. Benz Circle Vijayawada, HSR Layout)..."
                     className="pl-9 pr-8 h-10 rounded-xl text-xs bg-accent/40 border-emerald-600/30 focus-visible:border-emerald-600"
                   />
                   {isSearching && <Loader2 className="w-4 h-4 absolute right-3 top-3 animate-spin text-emerald-600" />}
@@ -351,18 +342,51 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
                       >
                         <MapPin className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                         <span className="truncate font-medium text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
-                          {res.formatted}
+                          {res.formattedAddress || `${res.city}, ${res.state}`}
                         </span>
                       </button>
                     ))}
                   </div>
                 )}
+
+                {/* Quick Select NTR District / Vijayawada & Indian Hub Chips */}
+                <div className="flex items-center gap-1.5 overflow-x-auto py-2 no-scrollbar">
+                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider shrink-0">NTR / AP Hubs:</span>
+                  {[
+                    { name: "Benz Circle, Vijayawada", lat: 16.5062, lng: 80.6480, city: "Vijayawada", state: "Andhra Pradesh", pincode: "520010" },
+                    { name: "One Town / KR Market", lat: 16.5165, lng: 80.6150, city: "Vijayawada", state: "Andhra Pradesh", pincode: "520001" },
+                    { name: "Patamata Autonagar", lat: 16.4950, lng: 80.6650, city: "Vijayawada", state: "Andhra Pradesh", pincode: "520007" },
+                    { name: "Kondapalli Fort", lat: 16.6150, lng: 80.5350, city: "NTR District", state: "Andhra Pradesh", pincode: "521228" },
+                    { name: "Ibrahimpatnam", lat: 16.5890, lng: 80.5280, city: "NTR District", state: "Andhra Pradesh", pincode: "521456" },
+                    { name: "Mylavaram", lat: 16.7600, lng: 80.6400, city: "NTR District", state: "Andhra Pradesh", pincode: "521230" },
+                    { name: "Nandigama", lat: 16.7750, lng: 80.2900, city: "NTR District", state: "Andhra Pradesh", pincode: "521185" },
+                    { name: "Jaggayyapeta", lat: 16.8920, lng: 80.0970, city: "NTR District", state: "Andhra Pradesh", pincode: "521175" },
+                  ].map((hub, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setLat(hub.lat);
+                        setLng(hub.lng);
+                        setCity(hub.city);
+                        setStateName(hub.state);
+                        setPincode(hub.pincode);
+                        setStreet(hub.name);
+                        setSearchQuery(hub.name);
+                        reverseGeocode(hub.lat, hub.lng);
+                      }}
+                      className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold hover:bg-emerald-200 transition-colors shrink-0"
+                    >
+                      📍 {hub.name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Interactive Vector Map Tile Visualization */}
               <div className="relative w-full h-52 bg-slate-900 border-2 border-emerald-600/60 rounded-2xl overflow-hidden shadow-inner group">
-                {/* Geoapify Map Container */}
-                <div ref={mapContainerRef} id="geoapify-map-container" className="absolute inset-0 w-full h-full z-0" />
+                {/* CartoDB Voyager Map Container */}
+                <div ref={mapContainerRef} id="cartodb-map-container" className="absolute inset-0 w-full h-full z-0" />
 
                 {/* Grid Overlay Fallback */}
                 <div className="absolute inset-0 opacity-20 pointer-events-none bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]" />

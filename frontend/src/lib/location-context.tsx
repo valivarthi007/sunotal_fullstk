@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
-import { reverseGeocodeGeoapify } from "./geoapify-sdk";
+import { getMapProvider } from "./providers/map/map-provider.factory";
 
 export interface UserLocation {
   city: string;
@@ -89,26 +89,26 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     return null;
   }, [saveLocation]);
 
-  // Reverse Geocoding via Geoapify API with OpenStreetMap fallback
+  // Reverse Geocoding via IMapProvider
   const reverseGeocode = async (lat: number, lon: number): Promise<UserLocation> => {
-    // 1. Primary: Geoapify Reverse Geocoding API
     try {
-      const geoapifyData = await reverseGeocodeGeoapify(lat, lon);
-      if (geoapifyData && (geoapifyData.city || geoapifyData.formattedAddress)) {
+      const mapProvider = getMapProvider();
+      const res = await mapProvider.reverseGeocode(lat, lon);
+      if (res && (res.city || res.formattedAddress)) {
         return {
-          city: geoapifyData.city || "Detected Location",
-          state: geoapifyData.state || "",
+          city: res.city || "Detected Location",
+          state: res.state || "",
           country: "India",
-          pincode: geoapifyData.pincode || "",
-          formattedAddress: geoapifyData.formattedAddress || `${geoapifyData.city}, ${geoapifyData.state}`,
+          pincode: res.pincode || "",
+          formattedAddress: res.formattedAddress || `${res.city}, ${res.state}`,
           isDetected: true,
           latitude: lat,
           longitude: lon,
           source: "geolocation",
         };
       }
-    } catch (geoapifyErr) {
-      console.warn("Geoapify reverse geocode error, falling back to OSM:", geoapifyErr);
+    } catch (mapErr) {
+      console.warn("Map provider reverse geocode error:", mapErr);
     }
 
     // 2. Secondary Fallback: Nominatim OpenStreetMap
