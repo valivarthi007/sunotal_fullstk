@@ -254,3 +254,5 @@ export function useLocationState() {
   }
   return ctx;
 }
+
+export const useLocation = useLocationState;

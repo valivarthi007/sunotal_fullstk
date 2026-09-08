@@ -16,7 +16,7 @@ async function seed() {
     await db.insert(usersTable).values([
       { name: 'Admin User', email: 'admin@sunotal.com', passwordHash, role: 'admin', active: true, phone: '+91 98765 00001', city: 'Hyderabad' },
       { name: 'Farmer Ramesh Gowda', email: 'farmer@sunotal.com', passwordHash, role: 'vendor', active: true, phone: '+91 98765 00002', city: 'Mandya' },
-      { name: 'Rider Suresh Kumar', email: 'rider@sunotal.com', passwordHash, role: 'customer', active: true, phone: '+91 98765 00003', city: 'Bengaluru' }
+      { name: 'Rider Suresh Kumar', email: 'rider@sunotal.com', passwordHash, role: 'user', active: true, phone: '+91 98765 00003', city: 'Bengaluru' }
     ]).onConflictDoUpdate({ target: usersTable.email, set: { passwordHash } });
 
     // Categories
