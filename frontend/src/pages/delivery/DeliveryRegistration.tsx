@@ -26,7 +26,7 @@ export default function DeliveryRegistration() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/delivery/register", {
+      let res = await fetch("/api/delivery/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -40,6 +40,21 @@ export default function DeliveryRegistration() {
           emergencyPhone,
         }),
       });
+
+      if (!res.ok && (res.status === 502 || res.status === 503 || res.status === 504 || res.status === 404)) {
+        res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: fullName,
+            email,
+            password,
+            role: "delivery",
+            phone,
+            city,
+          }),
+        });
+      }
 
       const contentType = res.headers.get("content-type") || "";
       let data: any = {};

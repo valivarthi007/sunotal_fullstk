@@ -20,11 +20,19 @@ export default function DeliveryLogin() {
 
     setIsLoading(true);
     try {
-      const response = await fetch("/api/delivery/login", {
+      let response = await fetch("/api/delivery/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+
+      if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504 || response.status === 404)) {
+        response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+      }
 
       const contentType = response.headers.get("content-type") || "";
       let data: any = {};
