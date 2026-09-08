@@ -50,12 +50,12 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
       }
 
       const { warehouseOrigin, customerDestination, driverLocation, driverProfile } = telemetry;
-      const wLat = warehouseOrigin.latitude || 12.9352;
-      const wLng = warehouseOrigin.longitude || 77.6245;
-      const cLat = customerDestination.latitude || 12.9716;
-      const cLng = customerDestination.longitude || 77.5946;
-      const dLat = driverLocation.latitude || (wLat + cLat) / 2;
-      const dLng = driverLocation.longitude || (wLng + cLng) / 2;
+      const wLat = warehouseOrigin.lat || 12.9352;
+      const wLng = warehouseOrigin.lng || 77.6245;
+      const cLat = customerDestination.lat || 12.9716;
+      const cLng = customerDestination.lng || 77.5946;
+      const dLat = driverLocation.lat || (wLat + cLat) / 2;
+      const dLng = driverLocation.lng || (wLng + cLng) / 2;
 
       const map = L.map(mapContainerRef.current, {
         zoomControl: true,

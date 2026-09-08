@@ -15,6 +15,7 @@ import { uploadRouter } from './routes/upload.js';
 import { bannersRouter } from './routes/banners.js';
 import ordersRouter from './routes/orders.js';
 import productDefinitionsRouter from './routes/productDefinitions.js';
+import deliveryRouter from './routes/delivery.js';
 import { initDatabase } from './lib/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,7 +28,17 @@ if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
 
 // ── Middleware ─────────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      origin.includes('localhost') ||
+      origin.includes('automateuniverse.space') ||
+      (process.env.FRONTEND_URL && origin.startsWith(process.env.FRONTEND_URL))
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -49,6 +60,7 @@ app.use('/api/banners', bannersRouter);
 app.use('/api', bannersRouter);
 app.use('/api', ordersRouter);
 app.use('/api', productDefinitionsRouter);
+app.use('/api', deliveryRouter);
 app.get('/api/healthz', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Serve built frontend in production ─────────────────────────────────

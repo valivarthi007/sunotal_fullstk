@@ -17,7 +17,7 @@ export const ExpressHeaderBanner: React.FC<ExpressHeaderBannerProps> = ({
   onSearchChange,
 }) => {
   const { location } = useLocation();
-  const { totalItems, subtotal } = useCart();
+  const { totalItems, totalPrice: subtotal } = useCart();
 
   return (
     <header className="sticky top-0 z-40 bg-emerald-950 text-white shadow-md border-b border-emerald-900">

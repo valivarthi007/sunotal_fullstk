@@ -1,3 +1,4 @@
+import React, { Component, ReactNode } from "react";
 import { Route, Switch, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -27,13 +28,61 @@ import { ObservabilityDashboard } from "@/pages/admin/ObservabilityDashboard";
 import { AdminLedger } from "@/pages/admin/Ledger";
 
 import VendorDashboard from "@/pages/vendor/VendorDashboard";
+import VendorLogin from "@/pages/vendor/VendorLogin";
 import DeliveryDashboard from "@/pages/delivery/DeliveryDashboard";
 import DeliveryRegistration from "@/pages/delivery/DeliveryRegistration";
+import DeliveryLogin from "@/pages/delivery/DeliveryLogin";
 
 import NotFound from "@/pages/not-found";
 import Redirect from "@/lib/redirect";
 import { LocationProvider } from "@/lib/location-context";
 import { ApiStatusProvider } from "@/lib/api-status";
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Uncaught React Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-6 text-center">
+          <div className="max-w-md bg-card border rounded-3xl p-8 shadow-xl space-y-4">
+            <h2 className="text-2xl font-bold text-destructive">Application Error</h2>
+            <p className="text-xs text-muted-foreground">
+              An unexpected error occurred. Please reload the page to restore your session.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs"
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -87,10 +136,12 @@ function SubdomainRouter() {
   if (subdomain === "vendor") {
     return (
       <Switch>
-        <Route path="/" component={FarmerRegistration} />
+        <Route path="/" component={VendorDashboard} />
+        <Route path="/vendor/login" component={VendorLogin} />
+        <Route path="/vendor/register" component={FarmerRegistration} />
         <Route path="/farmer" component={FarmerRegistration} />
         <Route path="/vendor" component={VendorDashboard} />
-        <Route component={FarmerRegistration} />
+        <Route component={VendorDashboard} />
       </Switch>
     );
   }
@@ -100,6 +151,8 @@ function SubdomainRouter() {
       <Switch>
         <Route path="/" component={DeliveryDashboard} />
         <Route path="/delivery" component={DeliveryDashboard} />
+        <Route path="/login" component={DeliveryLogin} />
+        <Route path="/delivery/login" component={DeliveryLogin} />
         <Route path="/register" component={DeliveryRegistration} />
         <Route path="/delivery/register" component={DeliveryRegistration} />
         <Route component={DeliveryDashboard} />
@@ -125,9 +178,12 @@ function SubdomainRouter() {
       <Route path="/checkout" component={Checkout} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/vendor/login" component={VendorLogin} />
+      <Route path="/vendor/register" component={FarmerRegistration} />
       <Route path="/vendor" component={VendorDashboard} />
-      <Route path="/delivery" component={DeliveryDashboard} />
+      <Route path="/delivery/login" component={DeliveryLogin} />
       <Route path="/delivery/register" component={DeliveryRegistration} />
+      <Route path="/delivery" component={DeliveryDashboard} />
 
       {/* Admin routes accessible on main domain as fallbacks */}
       <Route path="/admin/login" component={AdminLogin} />
@@ -150,21 +206,23 @@ function SubdomainRouter() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <LocationProvider>
-          <CartProvider>
-            <ApiStatusProvider>
-              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                <SubdomainRouter />
-              </WouterRouter>
-            </ApiStatusProvider>
-            <Toaster />
-            <Sonner richColors position="top-right" />
-          </CartProvider>
-        </LocationProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <LocationProvider>
+            <CartProvider>
+              <ApiStatusProvider>
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <SubdomainRouter />
+                </WouterRouter>
+              </ApiStatusProvider>
+              <Toaster />
+              <Sonner richColors position="top-right" />
+            </CartProvider>
+          </LocationProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

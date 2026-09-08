@@ -28,10 +28,10 @@ export class MockPaymentProvider implements IPaymentProvider {
     // Try verifying on backend if API client is available
     try {
       await verifyPaymentApi({
-        razorpay_order_id: `ORD-${request.orderId}`,
-        razorpay_payment_id: mockPaymentId,
-        razorpay_signature: "mock_verified_signature_poc",
         orderId: request.orderId,
+        paymentMethod: request.method === "upi_qr" || request.method === "upi_vpa" ? "upi" : "card",
+        paymentId: mockPaymentId,
+        amount: request.amount,
       });
     } catch (err) {
       console.warn("Backend payment verification API ping failed, continuing with mock response:", err);
@@ -51,10 +51,10 @@ export class MockPaymentProvider implements IPaymentProvider {
     if (!paymentId) return false;
     try {
       await verifyPaymentApi({
-        razorpay_order_id: `ORD-${orderId}`,
-        razorpay_payment_id: paymentId,
-        razorpay_signature: "mock_verified_signature_poc",
         orderId,
+        paymentMethod: "upi",
+        paymentId,
+        amount: 100,
       });
       return true;
     } catch {

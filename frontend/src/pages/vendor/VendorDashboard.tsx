@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+import { PublicLayout } from "@/components/layout/PublicLayout";
+
 const quotationSchema = z.object({
   category: z.string().min(1, "Please select a produce category"),
   produce: z.string().min(2, "Produce name must be at least 2 characters"),
@@ -182,55 +184,54 @@ export default function VendorDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      {/* Top Vendor Header */}
-      <header className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-extrabold text-xl shadow-md">
-              🌾
+    <PublicLayout>
+      <div className="py-8 bg-background">
+        {/* Main Container */}
+        <main className="max-w-7xl mx-auto w-full flex-1 p-4 md:p-6 space-y-6">
+          {/* Top Vendor Profile Banner */}
+          <div className="bg-card border border-border rounded-3xl p-5 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold text-2xl shadow-md">
+                🌾
+              </div>
+              <div>
+                <div className="font-bold text-base text-secondary flex items-center gap-2">
+                  <span>{vendorProfile?.firstName} {vendorProfile?.lastName}</span>
+                  <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] uppercase font-mono font-bold">
+                    VERIFIED FARM VENDOR
+                  </Badge>
+                </div>
+                <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                  <span>📍 {vendorProfile?.location}</span>
+                  <span>• {vendorProfile?.farmSize || "10 Acres"}</span>
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="font-extrabold text-sm text-white flex items-center gap-2">
-                <span>{vendorProfile?.firstName} {vendorProfile?.lastName}</span>
-                <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] uppercase font-mono">
-                  VERIFIED FARMER
-                </Badge>
-              </div>
-              <div className="text-[11px] text-slate-400 flex items-center gap-2">
-                <span>📍 {vendorProfile?.location}</span>
-                <span>• {vendorProfile?.farmSize || "10 Acres"}</span>
-              </div>
+
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                size="sm"
+                className="rounded-full text-xs font-bold gap-1.5"
+              >
+                <LogOut className="w-3.5 h-3.5" /> Logout
+              </Button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              size="sm"
-              className="border-slate-800 text-slate-300 hover:bg-slate-800 text-xs rounded-xl gap-1.5"
+          {/* Navigation Tabs */}
+          <div className="flex border-b border-border gap-2 text-xs font-semibold">
+            <button
+              onClick={() => setActiveTab("submit")}
+              className={`py-3 px-5 border-b-2 transition-all flex items-center gap-2 rounded-t-xl ${
+                activeTab === "submit"
+                  ? "border-emerald-600 text-emerald-600 font-bold bg-accent/40"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
             >
-              <LogOut className="w-3.5 h-3.5" /> Logout
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto w-full flex-1 p-4 md:p-6 space-y-6">
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-800 gap-2 text-xs font-semibold">
-          <button
-            onClick={() => setActiveTab("submit")}
-            className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === "submit"
-                ? "border-emerald-400 text-emerald-400 font-bold bg-slate-900/60 rounded-t-xl"
-                : "border-transparent text-slate-400 hover:text-white"
-            }`}
-          >
-            <PlusCircle className="w-4 h-4" /> Submit Crop Harvest Supply
-          </button>
+              <PlusCircle className="w-4 h-4" /> Submit Crop Harvest Supply
+            </button>
           <button
             onClick={() => setActiveTab("history")}
             className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 ${
@@ -624,11 +625,7 @@ export default function VendorDashboard() {
           </div>
         )}
       </main>
-
-      {/* Footer */}
-      <footer className="bg-slate-900 border-t border-slate-800 py-3 text-center text-[10px] text-slate-500">
-        Sunotal Direct Farmer & Dark Store Vendor Engine • 100% Transparent Farm Payouts
-      </footer>
     </div>
-  );
+  </PublicLayout>
+);
 }

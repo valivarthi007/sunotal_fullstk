@@ -7,7 +7,7 @@ interface CartBarProps {
 }
 
 export const CartBar: React.FC<CartBarProps> = ({ onCheckout }) => {
-  const { totalItems, subtotal } = useCart();
+  const { totalItems, totalPrice: subtotal } = useCart();
 
   if (totalItems === 0) return null;
 
