@@ -33,6 +33,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 import { VendorLayout } from "@/components/layout/VendorLayout";
+import { fetchWarehouses, Warehouse } from "@/lib/api-client/warehouses";
 
 const quotationSchema = z.object({
   category: z.string().min(1, "Please select a produce category"),
@@ -57,6 +58,24 @@ export default function VendorDashboard() {
 
   const [vendorProfile, setVendorProfile] = useState<any>(null);
   const [quotations, setQuotations] = useState<any[]>([]);
+  const [targetWarehouses, setTargetWarehouses] = useState<Warehouse[]>([]);
+
+  useEffect(() => {
+    fetchWarehouses()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const activeStores = data.filter((w) => w.isActive);
+          setTargetWarehouses(activeStores);
+          if (activeStores.length > 0 && activeStores[0]?.name) {
+            const defaultStoreStr = `${activeStores[0].name} (${activeStores[0].city})`;
+            form.setValue("darkStoreAllocation", defaultStoreStr);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch warehouses dynamically:", err);
+      });
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -442,16 +461,44 @@ export default function VendorDashboard() {
                           <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
                             <Building2 className="w-3.5 h-3.5 text-amber-400" /> Target Dark Store
                           </FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
-                                <SelectValue placeholder="Dark Store" />
+                                <SelectValue placeholder="Select Target Store / Warehouse" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                              <SelectItem value="HSR Layout Dark Store #104">HSR Layout Dark Store #104</SelectItem>
-                              <SelectItem value="Indiranagar Dark Store #108">Indiranagar Dark Store #108</SelectItem>
-                              <SelectItem value="Whitefield Dark Store #102">Whitefield Dark Store #102</SelectItem>
+                            <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
+                              {targetWarehouses.length > 0 ? (
+                                targetWarehouses.map((wh) => {
+                                  const labelVal = `${wh.name} (${wh.city})`;
+                                  return (
+                                    <SelectItem key={wh.id} value={labelVal}>
+                                      🏢 {wh.name} — {wh.address}, {wh.city}
+                                    </SelectItem>
+                                  );
+                                })
+                              ) : (
+                                <>
+                                  <SelectItem value="Bengaluru Central Fulfillment Hub (Bengaluru)">
+                                    🏢 Bengaluru Central Hub — Indiranagar, Bengaluru
+                                  </SelectItem>
+                                  <SelectItem value="Vijayawada Logistics Center (Vijayawada)">
+                                    🏢 Vijayawada Logistics Center — Bhavani Puram, Vijayawada
+                                  </SelectItem>
+                                  <SelectItem value="Hyderabad Express Hub (Hyderabad)">
+                                    🏢 Hyderabad Express Hub — HITEC City, Hyderabad
+                                  </SelectItem>
+                                  <SelectItem value="HSR Layout Dark Store #104 (Bengaluru)">
+                                    🏢 HSR Layout Dark Store #104 — HSR Layout, Bengaluru
+                                  </SelectItem>
+                                  <SelectItem value="Indiranagar Dark Store #108 (Bengaluru)">
+                                    🏢 Indiranagar Dark Store #108 — Indiranagar, Bengaluru
+                                  </SelectItem>
+                                  <SelectItem value="Whitefield Dark Store #102 (Bengaluru)">
+                                    🏢 Whitefield Dark Store #102 — Whitefield, Bengaluru
+                                  </SelectItem>
+                                </>
+                              )}
                             </SelectContent>
                           </Select>
                           <FormMessage />

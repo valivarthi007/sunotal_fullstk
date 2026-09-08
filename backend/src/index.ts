@@ -16,6 +16,7 @@ import { bannersRouter } from './routes/banners.js';
 import ordersRouter from './routes/orders.js';
 import productDefinitionsRouter from './routes/productDefinitions.js';
 import deliveryRouter from './routes/delivery.js';
+import warehousesRouter from './routes/warehouses.js';
 import { initDatabase } from './lib/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -61,6 +62,7 @@ app.use('/api', bannersRouter);
 app.use('/api', ordersRouter);
 app.use('/api', productDefinitionsRouter);
 app.use('/api', deliveryRouter);
+app.use('/api', warehousesRouter);
 app.get('/api/healthz', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Serve built frontend in production ─────────────────────────────────

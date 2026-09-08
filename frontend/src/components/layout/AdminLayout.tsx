@@ -33,7 +33,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { name: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
     { name: "Products", path: "/admin/products", icon: Package },
-    { name: "Warehouse", path: "/admin/warehouses", icon: Navigation },
+    { name: "Stores & Warehouses", path: "/admin/warehouses", icon: Navigation },
     { name: "Ledger & Reports", path: "/admin/ledger", icon: BookOpen },
     { name: "Observability", path: "/admin/observability", icon: Activity },
     { name: "Banners", path: "/admin/banners", icon: GalleryHorizontalEnd },

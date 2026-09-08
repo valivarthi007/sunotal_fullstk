@@ -189,10 +189,10 @@ export const WarehouseManager: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <Navigation className="w-7 h-7 text-emerald-600" />
-              <h1 className="text-2xl font-bold tracking-tight">Warehouse & Delivery Logistics Engine</h1>
+              <h1 className="text-2xl font-bold tracking-tight">Target Stores & Fulfillment Hub Logistics Engine</h1>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Configure fulfillment hub locations, 25km free delivery radius thresholds, and distance rates.
+              Configure target dark stores, fulfillment hubs, free delivery radius thresholds, and vendor quotation target destinations.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -202,7 +202,7 @@ export const WarehouseManager: React.FC = () => {
             </Button>
             <Button onClick={handleOpenAdd} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
               <Plus className="w-4 h-4 mr-2" />
-              Add Warehouse Hub
+              Add Target Store / Warehouse
             </Button>
           </div>
         </div>
