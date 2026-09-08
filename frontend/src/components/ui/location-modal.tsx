@@ -15,6 +15,7 @@ import { toast } from "sonner";
 interface LocationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenMapPicker?: () => void;
 }
 
 const CORPORATE_HUBS = [
@@ -28,7 +29,7 @@ const CORPORATE_HUBS = [
   { city: "Ahmedabad", state: "Gujarat", hub: "GIFT City" },
 ];
 
-export function LocationModal({ open, onOpenChange }: LocationModalProps) {
+export function LocationModal({ open, onOpenChange, onOpenMapPicker }: LocationModalProps) {
   const { location, isLoading, detectLocation, setManualLocation } = useLocationState();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -72,30 +73,33 @@ export function LocationModal({ open, onOpenChange }: LocationModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 pt-3">
-          {/* Primary Action: Auto-Detect GPS Button */}
-          <Button
-            onClick={handleAutoDetect}
-            disabled={isLoading}
-            className="w-full h-13 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold flex items-center justify-between px-5 shadow-lg shadow-primary/20 transition-all duration-200"
-          >
-            <div className="flex items-center gap-3">
+        <div className="space-y-4 pt-2">
+          {/* Dual Options: Auto-Detect GPS + Interactive Map Pin Picker */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Button
+              onClick={handleAutoDetect}
+              disabled={isLoading}
+              className="h-12 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold flex items-center justify-center gap-2 shadow-md shadow-primary/10 text-xs"
+            >
               {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <Navigation className="w-5 h-5 fill-current" />
+                <Navigation className="w-4 h-4 fill-current" />
               )}
-              <div className="text-left">
-                <p className="text-sm font-bold leading-none">
-                  {isLoading ? "Detecting location..." : "Auto-Detect My Location"}
-                </p>
-                <p className="text-[11px] font-normal opacity-90 leading-tight mt-0.5">
-                  Using GPS & IP Geolocation
-                </p>
-              </div>
-            </div>
-            <Sparkles className="w-5 h-5 text-yellow-300" />
-          </Button>
+              <span>Auto-Detect GPS</span>
+            </Button>
+
+            {onOpenMapPicker && (
+              <Button
+                variant="outline"
+                onClick={onOpenMapPicker}
+                className="h-12 rounded-2xl border-emerald-600/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 font-bold flex items-center justify-center gap-2 text-xs"
+              >
+                <MapPin className="w-4 h-4" />
+                <span>Pin on Live Map</span>
+              </Button>
+            )}
+          </div>
 
           {/* Current Status Pill */}
           <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-accent/50 border border-border text-xs">

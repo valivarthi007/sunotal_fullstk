@@ -32,7 +32,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
 
-  const { location: userLoc, isLoading: isLocLoading } = useLocationState();
+  const { location: userLoc, isLoading: isLocLoading, setManualLocation } = useLocationState();
 
   const queryClient = useQueryClient();
   const { data: user } = useGetCurrentUser({
@@ -82,11 +82,22 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary/20 selection:text-primary">
       {/* Location Modal */}
-      <LocationModal open={locationModalOpen} onOpenChange={setLocationModalOpen} />
+      <LocationModal
+        open={locationModalOpen}
+        onOpenChange={setLocationModalOpen}
+        onOpenMapPicker={() => {
+          setLocationModalOpen(false);
+          setMapModalOpen(true);
+        }}
+      />
       <InteractiveMapPickerModal
         isOpen={mapModalOpen}
         onClose={() => setMapModalOpen(false)}
-        onSelectAddress={(addr) => setLocationModalOpen(false)}
+        onSelectAddress={(addr) => {
+          const fullAddr = [addr.houseNo, addr.street, addr.city, addr.state, addr.pincode].filter(Boolean).join(", ");
+          setManualLocation(addr.city || "Bengaluru", addr.state || "Karnataka", addr.pincode || "", fullAddr, addr.lat, addr.lng);
+          setMapModalOpen(false);
+        }}
       />
 
       {/* Top Express Delivery Ticker Strip */}
@@ -217,49 +228,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* Desktop Nav */}
-      <nav className="hidden lg:block bg-background border-b sticky top-[73px] z-40 shadow-sm">
-        <div className="container mx-auto px-4 overflow-x-auto no-scrollbar">
-          <ul className="flex items-center gap-1 py-1">
-            {navLinks.map((link) => (
-              <li key={link.name}>
-                <Link
-                  href={link.path}
-                  className={cn(
-                    "px-4 py-2.5 rounded-full text-sm font-medium transition-all inline-block whitespace-nowrap",
-                    location === link.path
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                  )}
-                >
-                  {link.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </nav>
 
-      {/* Mobile Nav (scrollable category strip) */}
-      <nav className="lg:hidden bg-background border-b overflow-x-auto no-scrollbar">
-        <ul className="flex items-center px-4 py-2 gap-2 w-max">
-          {navLinks.map((link) => (
-            <li key={link.name}>
-              <Link
-                href={link.path}
-                className={cn(
-                  "px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
-                  location === link.path
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-accent/50 text-muted-foreground"
-                )}
-              >
-                {link.name}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (

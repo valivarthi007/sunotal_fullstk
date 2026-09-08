@@ -18,7 +18,7 @@ interface LocationContextType {
   isLoading: boolean;
   error: string | null;
   detectLocation: () => Promise<UserLocation | null>;
-  setManualLocation: (city: string, state?: string, pincode?: string) => void;
+  setManualLocation: (city: string, state?: string, pincode?: string, formattedAddress?: string, latitude?: number, longitude?: number) => void;
 }
 
 const DEFAULT_LOCATION: UserLocation = {
@@ -209,14 +209,16 @@ export function LocationProvider({ children }: { children: ReactNode }) {
 
   // Manual Location Override
   const setManualLocation = useCallback(
-    (city: string, state = "", pincode = "") => {
+    (city: string, state = "", pincode = "", formattedAddress = "", latitude?: number, longitude?: number) => {
       const manualLoc: UserLocation = {
-        city,
+        city: city || "Bengaluru",
         state,
         country: "India",
         pincode,
-        formattedAddress: `${city}${state ? ", " + state : ""}`,
+        formattedAddress: formattedAddress || `${city}${state ? ", " + state : ""}`,
         isDetected: false,
+        latitude,
+        longitude,
         source: "manual",
       };
       saveLocation(manualLoc);

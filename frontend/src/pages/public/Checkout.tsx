@@ -58,7 +58,7 @@ export default function Checkout() {
   const [, setLocation] = useLocation();
   const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
   const { items, totalItems, totalPrice, clearCart } = useCart();
-  const { location: userLoc } = useLocationState();
+  const { location: userLoc, setManualLocation } = useLocationState();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderConfirmed, setOrderConfirmed] = useState<any>(null);
@@ -591,10 +591,14 @@ export default function Checkout() {
           isOpen={showMapModal}
           onClose={() => setShowMapModal(false)}
           onSelectAddress={(addr) => {
-            form.setValue("streetAddress", `${addr.houseNo}, ${addr.street}`);
-            form.setValue("city", addr.city);
-            form.setValue("state", addr.state);
-            form.setValue("pincode", addr.pincode);
+            const streetVal = [addr.houseNo, addr.street].filter(Boolean).join(", ");
+            form.setValue("streetAddress", streetVal || addr.street || "Main Street");
+            form.setValue("city", addr.city || "Bengaluru");
+            form.setValue("state", addr.state || "Karnataka");
+            form.setValue("pincode", addr.pincode || "560001");
+            const fullAddr = [streetVal, addr.city, addr.state, addr.pincode].filter(Boolean).join(", ");
+            setManualLocation(addr.city || "Bengaluru", addr.state || "Karnataka", addr.pincode || "", fullAddr, addr.lat, addr.lng);
+            setShowMapModal(false);
           }}
         />
       </div>

@@ -46,7 +46,7 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const { location: userLoc } = useLocationState();
+  const { location: userLoc, setManualLocation } = useLocationState();
 
   const { data: apiBanners = [] } = useListBanners();
 
@@ -334,7 +334,11 @@ export default function Home() {
       <InteractiveMapPickerModal
         isOpen={showMapModal}
         onClose={() => setShowMapModal(false)}
-        onSelectAddress={() => setShowMapModal(false)}
+        onSelectAddress={(addr) => {
+          const fullAddr = [addr.houseNo, addr.street, addr.city, addr.state, addr.pincode].filter(Boolean).join(", ");
+          setManualLocation(addr.city || "Bengaluru", addr.state || "Karnataka", addr.pincode || "", fullAddr, addr.lat, addr.lng);
+          setShowMapModal(false);
+        }}
       />
     </PublicLayout>
   );
