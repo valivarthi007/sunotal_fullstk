@@ -3,7 +3,7 @@ import { Bike, ArrowRight, CheckCircle2, User, Phone, FileText, MapPin, Lock, Ma
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PublicLayout } from "@/components/layout/PublicLayout";
+import { DeliveryLayout } from "@/components/layout/DeliveryLayout";
 import { toast } from "sonner";
 import { useLocation, Link } from "wouter";
 
@@ -58,7 +58,7 @@ export default function DeliveryRegistration() {
   };
 
   return (
-    <PublicLayout>
+    <DeliveryLayout>
       <div className="py-12 bg-accent/20">
         <div className="container mx-auto px-4 max-w-xl">
           {submitted ? (
@@ -235,6 +235,6 @@ export default function DeliveryRegistration() {
           )}
         </div>
       </div>
-    </PublicLayout>
+    </DeliveryLayout>
   );
 }

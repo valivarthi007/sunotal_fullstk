@@ -1,4 +1,4 @@
-import { PublicLayout } from "@/components/layout/PublicLayout";
+import { VendorLayout } from "@/components/layout/VendorLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -85,7 +85,7 @@ export default function FarmerRegistration() {
   };
 
   return (
-    <PublicLayout>
+    <VendorLayout>
       <div className="bg-secondary text-secondary-foreground py-20 relative overflow-hidden">
         <div className="absolute inset-0 bg-primary/10" />
         <div className="container mx-auto px-4 relative z-10">
@@ -327,6 +327,6 @@ export default function FarmerRegistration() {
           </div>
         </div>
       </div>
-    </PublicLayout>
+    </VendorLayout>
   );
 }

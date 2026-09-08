@@ -89,6 +89,22 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         onSelectAddress={(addr) => setLocationModalOpen(false)}
       />
 
+      {/* Top Express Delivery Ticker Strip */}
+      <div className="bg-emerald-950 text-white text-[11px] font-medium py-1.5 px-4 flex items-center justify-between border-b border-emerald-900 z-50">
+        <div className="container mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="bg-amber-400 text-slate-950 font-bold px-2 py-0.5 rounded-full text-[10px] animate-pulse flex items-center gap-1">
+              ⚡ 10-15 MINS
+            </span>
+            <span className="text-emerald-100 font-semibold">Hyperlocal Dark Store Express Delivery Active</span>
+          </div>
+          <div className="hidden sm:flex items-center gap-4 text-[11px] text-emerald-200">
+            <span>🌱 100% Traceable Organic Farmers</span>
+            <span className="text-emerald-400 font-bold">Free Express Delivery on orders above ₹199</span>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <header
         className={cn(

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Bike, Power, Navigation, DollarSign, Bell, RefreshCw, Calculator, Route, CheckCircle2, Award, Calendar, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PublicLayout } from "@/components/layout/PublicLayout";
+import { DeliveryLayout } from "@/components/layout/DeliveryLayout";
 import { getMapProvider } from "@/lib/providers/map/map-provider.factory";
 import { toast } from "sonner";
 
@@ -158,7 +158,7 @@ export default function DeliveryDashboard() {
   };
 
   return (
-    <PublicLayout>
+    <DeliveryLayout user={riderUser}>
       <div className="py-8 bg-background">
         <div className="container mx-auto px-4 max-w-4xl space-y-6">
           
@@ -446,6 +446,6 @@ export default function DeliveryDashboard() {
 
         </div>
       </div>
-    </PublicLayout>
+    </DeliveryLayout>
   );
 }

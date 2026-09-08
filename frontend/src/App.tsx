@@ -142,6 +142,30 @@ function DomainRestrictionNotice({ portalName, targetDomain }: { portalName: str
   );
 }
 
+function VendorRouteGuard() {
+  const token = typeof window !== "undefined"
+    ? localStorage.getItem("sunotal_vendor_token") || localStorage.getItem("sunotal_token")
+    : null;
+
+  if (!token) {
+    return <VendorLogin />;
+  }
+
+  return <VendorDashboard />;
+}
+
+function DeliveryRouteGuard() {
+  const token = typeof window !== "undefined"
+    ? localStorage.getItem("sunotal_delivery_token") || localStorage.getItem("sunotal_token")
+    : null;
+
+  if (!token) {
+    return <DeliveryLogin />;
+  }
+
+  return <DeliveryDashboard />;
+}
+
 function SubdomainRouter() {
   const subdomain = getSubdomain();
   const isLocalhost = typeof window !== "undefined" && window.location.hostname.includes("localhost");
@@ -170,12 +194,14 @@ function SubdomainRouter() {
   if (subdomain === "vendor") {
     return (
       <Switch>
-        <Route path="/" component={VendorDashboard} />
+        <Route path="/" component={VendorRouteGuard} />
+        <Route path="/login" component={VendorLogin} />
         <Route path="/vendor/login" component={VendorLogin} />
+        <Route path="/register" component={FarmerRegistration} />
         <Route path="/vendor/register" component={FarmerRegistration} />
         <Route path="/farmer" component={FarmerRegistration} />
-        <Route path="/vendor" component={VendorDashboard} />
-        <Route component={VendorDashboard} />
+        <Route path="/vendor" component={VendorRouteGuard} />
+        <Route component={VendorRouteGuard} />
       </Switch>
     );
   }
@@ -183,13 +209,13 @@ function SubdomainRouter() {
   if (subdomain === "delivery") {
     return (
       <Switch>
-        <Route path="/" component={DeliveryDashboard} />
-        <Route path="/delivery" component={DeliveryDashboard} />
+        <Route path="/" component={DeliveryRouteGuard} />
         <Route path="/login" component={DeliveryLogin} />
         <Route path="/delivery/login" component={DeliveryLogin} />
         <Route path="/register" component={DeliveryRegistration} />
         <Route path="/delivery/register" component={DeliveryRegistration} />
-        <Route component={DeliveryDashboard} />
+        <Route path="/delivery" component={DeliveryRouteGuard} />
+        <Route component={DeliveryRouteGuard} />
       </Switch>
     );
   }
@@ -217,13 +243,13 @@ function SubdomainRouter() {
         {isLocalhost ? <AdminLogin /> : <DomainRestrictionNotice portalName="Admin Portal" targetDomain="admin-sunotal.automateuniverse.space" />}
       </Route>
       <Route path="/vendor/:rest*">
-        {isLocalhost ? <VendorDashboard /> : <DomainRestrictionNotice portalName="Vendor Portal" targetDomain="vendor-sunotal.automateuniverse.space" />}
+        {isLocalhost ? <VendorRouteGuard /> : <DomainRestrictionNotice portalName="Vendor Portal" targetDomain="vendor-sunotal.automateuniverse.space" />}
       </Route>
       <Route path="/farmer">
         {isLocalhost ? <FarmerRegistration /> : <DomainRestrictionNotice portalName="Vendor Portal" targetDomain="vendor-sunotal.automateuniverse.space" />}
       </Route>
       <Route path="/delivery/:rest*">
-        {isLocalhost ? <DeliveryDashboard /> : <DomainRestrictionNotice portalName="Delivery Partner Portal" targetDomain="delivery-sunotal.automateuniverse.space" />}
+        {isLocalhost ? <DeliveryRouteGuard /> : <DomainRestrictionNotice portalName="Delivery Partner Portal" targetDomain="delivery-sunotal.automateuniverse.space" />}
       </Route>
 
       <Route component={NotFound} />

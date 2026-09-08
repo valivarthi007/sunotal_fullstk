@@ -98,17 +98,6 @@ export default function Home() {
 
   return (
     <PublicLayout>
-      {/* Quick Commerce Express Delivery Banner */}
-      <ExpressHeaderBanner
-        onOpenLocationModal={() => setShowMapModal(true)}
-        onOpenCart={() => setLocation("/checkout")}
-        searchQuery={searchQuery}
-        onSearchChange={(q) => {
-          setSearchQuery(q);
-          if (q.trim()) setLocation(`/products?search=${encodeURIComponent(q)}`);
-        }}
-      />
-
       {/* Grocery Category Filter Pills Bar */}
       <CategoryPills
         selectedCategory="All"

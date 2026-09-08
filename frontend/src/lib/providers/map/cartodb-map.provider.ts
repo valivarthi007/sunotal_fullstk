@@ -47,12 +47,12 @@ export class CartoDBVoyagerMapProvider implements IMapProvider {
   }
 
   getTileUrl(_style?: string): string {
-    // High-DPI CartoDB Voyager clean tile layer
-    return "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+    // OpenStreetMap clean tile layer without API Key watermarks
+    return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
   }
 
   getTileAttribution(): string {
-    return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+    return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
   }
 
   async reverseGeocode(lat: number, lng: number): Promise<GeocodeResult | null> {

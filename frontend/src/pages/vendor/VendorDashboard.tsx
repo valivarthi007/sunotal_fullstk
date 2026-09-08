@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-import { PublicLayout } from "@/components/layout/PublicLayout";
+import { VendorLayout } from "@/components/layout/VendorLayout";
 
 const quotationSchema = z.object({
   category: z.string().min(1, "Please select a produce category"),
@@ -164,13 +164,14 @@ export default function VendorDashboard() {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("sunotal_vendor_token");
     localStorage.removeItem("sunotal_token");
     queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-    setLocation("/login");
+    setLocation("/vendor/login");
   };
 
   return (
-    <PublicLayout>
+    <VendorLayout user={user}>
       <div className="py-8 bg-background">
         {/* Main Container */}
         <main className="max-w-7xl mx-auto w-full flex-1 p-4 md:p-6 space-y-6">
@@ -612,6 +613,6 @@ export default function VendorDashboard() {
         )}
       </main>
     </div>
-  </PublicLayout>
-);
+    </VendorLayout>
+  );
 }
