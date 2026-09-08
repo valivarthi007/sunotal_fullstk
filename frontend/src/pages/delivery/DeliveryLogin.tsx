@@ -26,7 +26,16 @@ export default function DeliveryLogin() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+      let data: any = {};
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(`Server response error (${response.status}): ${text.slice(0, 100) || response.statusText}`);
+        }
+      }
 
       if (!response.ok) {
         throw new Error(data.error || "Login failed");

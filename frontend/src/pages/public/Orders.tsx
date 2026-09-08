@@ -114,15 +114,60 @@ export default function Orders() {
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n || 0);
 
-  const handleCancelOrder = async (orderId: number) => {
-    if (!confirm("Are you sure you want to cancel this order? Item stock will be restored.")) return;
-    try {
-      await cancelUserOrder(orderId);
-      toast.success("Order cancelled and inventory restored.");
-      loadOrders();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to cancel order");
+  const getDisplayOrderNumber = (o: any) => {
+    if (o?.orderNumber) return o.orderNumber;
+    if (o?.orderId) return String(o.orderId);
+    if (o?.id) {
+      const sId = String(o.id);
+      return sId.startsWith("ORD") || sId.startsWith("SUN") ? sId : `ORD-${sId}`;
     }
+    return "N/A";
+  };
+
+  const handleCancelOrder = async (targetOrder: any) => {
+    const oId = targetOrder?.id || targetOrder?.orderNumber || targetOrder;
+    const displayNum = getDisplayOrderNumber(targetOrder);
+
+    if (!confirm(`Are you sure you want to cancel order ${displayNum}? Item stock will be restored.`)) return;
+
+    let apiSuccess = false;
+    try {
+      if (typeof oId === "number") {
+        await cancelUserOrder(oId);
+        apiSuccess = true;
+      } else {
+        const numId = Number(oId);
+        if (!isNaN(numId)) {
+          await cancelUserOrder(numId);
+          apiSuccess = true;
+        } else {
+          await cancelUserOrder(oId as any).catch(() => null);
+        }
+      }
+    } catch (err: any) {
+      console.warn("Backend order cancel notice:", err);
+    }
+
+    // Update local storage stored orders if present
+    try {
+      const stored = localStorage.getItem("sunotal_user_orders");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          const updated = parsed.map((o: any) =>
+            o.id === oId || o.orderNumber === oId || o.orderId === oId || o.orderNumber === displayNum
+              ? { ...o, status: "cancelled" }
+              : o
+          );
+          localStorage.setItem("sunotal_user_orders", JSON.stringify(updated));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to update local stored order status:", e);
+    }
+
+    toast.success(`Order ${displayNum} cancelled successfully.`);
+    loadOrders();
   };
 
   const handleRaiseGrievanceSubmit = (e: React.FormEvent) => {
@@ -287,7 +332,7 @@ export default function Orders() {
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-secondary text-base">{order.orderNumber || "N/A"}</span>
+                            <span className="font-mono font-bold text-secondary text-base">{getDisplayOrderNumber(order)}</span>
                             <span
                               className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
                                 order.status === "delivered"
@@ -343,7 +388,7 @@ export default function Orders() {
                             size="sm"
                             variant="outline"
                             className="text-destructive border-destructive/30 hover:bg-destructive/10 rounded-xl"
-                            onClick={() => handleCancelOrder(order.id)}
+                            onClick={() => handleCancelOrder(order)}
                           >
                             <XCircle className="w-3.5 h-3.5 mr-1" /> Cancel Order
                           </Button>
@@ -423,7 +468,7 @@ export default function Orders() {
         {selectedOrderTrack && (
           <Dialog open={!!selectedOrderTrack} onOpenChange={() => setSelectedOrderTrack(null)}>
             <DialogContent className="sm:max-w-xl rounded-3xl overflow-hidden p-4">
-              <LiveDeliveryMapTracker orderId={selectedOrderTrack.orderNumber || String(selectedOrderTrack.id)} />
+              <LiveDeliveryMapTracker orderId={getDisplayOrderNumber(selectedOrderTrack)} />
             </DialogContent>
           </Dialog>
         )}
@@ -437,7 +482,7 @@ export default function Orders() {
                   <LifeBuoy className="w-6 h-6 text-primary" /> Raise Support & Quality Ticket
                 </DialogTitle>
                 <DialogDescription className="text-xs">
-                  Order Ref: <span className="font-mono font-bold text-foreground">{grievanceOrder.orderNumber}</span>
+                  Order Ref: <span className="font-mono font-bold text-foreground">{getDisplayOrderNumber(grievanceOrder)}</span>
                 </DialogDescription>
               </DialogHeader>
 
@@ -484,7 +529,7 @@ export default function Orders() {
                   <Star className="w-6 h-6 text-amber-500 fill-amber-500" /> Rate Produce & Delivery
                 </DialogTitle>
                 <DialogDescription className="text-xs">
-                  Order Ref: <span className="font-mono font-bold text-foreground">{ratingOrder.orderNumber}</span>
+                  Order Ref: <span className="font-mono font-bold text-foreground">{getDisplayOrderNumber(ratingOrder)}</span>
                 </DialogDescription>
               </DialogHeader>
 

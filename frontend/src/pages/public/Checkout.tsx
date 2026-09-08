@@ -155,17 +155,23 @@ export default function Checkout() {
       const confirmData = {
         id: orderNumber,
         orderId: orderNumber,
+        orderNumber: orderNumber,
         date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
         items: items.map((i) => ({
           id: i.product.id,
+          productName: i.product.name,
           name: i.product.name,
           unit: i.product.unit,
           price: i.product.price,
+          unitPrice: i.product.price,
           quantity: i.quantity,
+          subtotal: i.product.price * i.quantity,
           image: i.product.image,
         })),
         totalPrice: finalPayable,
+        finalAmount: finalPayable,
         status: "processing",
+        paymentStatus: "paid",
         estimatedDelivery: deliveryCalc?.estimatedHours || "Express Delivery within 2 Hours",
         deliveryAddress: values.streetAddress,
         city: values.city,
@@ -173,7 +179,17 @@ export default function Checkout() {
         pincode: values.pincode,
         paymentId: generatedPaymentId,
         paymentMethod: values.paymentMethod,
+        createdAt: new Date().toISOString(),
       };
+
+      try {
+        const existingStored = localStorage.getItem("sunotal_user_orders");
+        const parsedStored = existingStored ? JSON.parse(existingStored) : [];
+        const updatedStored = [confirmData, ...(Array.isArray(parsedStored) ? parsedStored : [])];
+        localStorage.setItem("sunotal_user_orders", JSON.stringify(updatedStored));
+      } catch (e) {
+        console.error("Failed to update local user orders:", e);
+      }
 
       setOrderConfirmed(confirmData);
       clearCart();

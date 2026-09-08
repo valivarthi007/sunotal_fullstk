@@ -41,8 +41,18 @@ export default function DeliveryRegistration() {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Registration failed");
+      const contentType = res.headers.get("content-type") || "";
+      let data: any = {};
+      if (contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(`Server response standard error (${res.status}): ${text.slice(0, 100) || res.statusText}`);
+        }
+      }
+
+      if (!res.ok) throw new Error(data.error || data.message || "Registration failed");
 
       toast.success("Delivery partner application submitted!");
       if (data.token) {

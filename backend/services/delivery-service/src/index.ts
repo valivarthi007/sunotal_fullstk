@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import addressesRouter from './routes/addresses.js';
 import trackingRouter from './routes/tracking.js';
+import deliveryRouter from './routes/delivery.js';
 import { metricsMiddleware, metricsHandler } from './lib/metrics.js';
 
 export const app = express();
@@ -20,6 +21,7 @@ app.use(metricsMiddleware('delivery-service'));
 
 app.use('/api', addressesRouter);
 app.use('/api', trackingRouter);
+app.use('/api', deliveryRouter);
 
 app.get('/metrics', metricsHandler);
 

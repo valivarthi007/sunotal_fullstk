@@ -20,12 +20,13 @@ router.get("/delivery/track/:orderId", async (req, res) => {
   const { orderId } = req.params;
 
   try {
-    // 1. Fetch order details
-    const [order] = await db
-      .select()
-      .from(ordersTable)
-      .where(eq(ordersTable.orderNumber, orderId))
-      .limit(1);
+    const numId = Number(orderId);
+    const isValidNum = !isNaN(numId) && String(numId) === String(orderId);
+
+    // 1. Fetch order details by numeric id or string orderNumber
+    const [order] = isValidNum
+      ? await db.select().from(ordersTable).where(eq(ordersTable.id, numId)).limit(1)
+      : await db.select().from(ordersTable).where(eq(ordersTable.orderNumber, String(orderId))).limit(1);
 
     // Fallback coordinates
     const customerLat = order ? (order.customerLat || 12.9716) : 12.9716;
