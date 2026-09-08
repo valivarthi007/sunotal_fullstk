@@ -74,11 +74,6 @@ jobs:
       - name: Install backend dependencies
         run: cd backend && pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Clean Seeded Data (Keep Admin Only)
-        env:
-          DATABASE_URL: postgresql://sunotal:sunotalpass123@localhost:5432/sunotal
-        run: cd backend && pnpm exec tsx src/seed.ts || true
-
       - name: Type check frontend
         run: cd frontend && pnpm exec tsc --noEmit || true
 
