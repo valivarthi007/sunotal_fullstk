@@ -38,7 +38,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { Search, Edit2, Trash2, CheckCircle2, XCircle, FileText, Store, PackagePlus } from "lucide-react";
+import { Search, Edit2, Trash2, CheckCircle2, XCircle, FileText, Store, PackagePlus, Landmark } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -88,6 +88,7 @@ export default function VendorsAdmin() {
 
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [inventoryVendorId, setInventoryVendorId] = useState<number | null>(null);
+  const [bankModalVendor, setBankModalVendor] = useState<any | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -380,6 +381,17 @@ export default function VendorsAdmin() {
                         <Button 
                           variant="ghost" 
                           size="icon" 
+                          title="View Bank Payout Details"
+                          className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100" 
+                          onClick={() => setBankModalVendor(vendor)}
+                        >
+                          <Landmark className="w-4 h-4" />
+                        </Button>
+
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          title="Edit Vendor"
                           className="h-8 w-8 text-muted-foreground hover:text-sidebar-primary hover:bg-sidebar-primary/10" 
                           onClick={() => handleEdit(vendor)}
                         >
@@ -388,7 +400,7 @@ export default function VendorsAdmin() {
                         
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+                            <Button variant="ghost" size="icon" title="Delete Vendor" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </AlertDialogTrigger>
@@ -423,6 +435,51 @@ export default function VendorsAdmin() {
           </table>
         </div>
       </div>
+
+      {/* Vendor Bank Payout Profile Modal */}
+      <Dialog open={!!bankModalVendor} onOpenChange={() => setBankModalVendor(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Landmark className="w-5 h-5 text-emerald-600" />
+              <span>Vendor Bank Payout Profile</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {bankModalVendor && (
+            <div className="space-y-4 pt-2">
+              <div className="bg-accent/40 p-4 rounded-2xl border space-y-2 text-xs">
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-muted-foreground font-semibold">Account Holder Name:</span>
+                  <strong className="text-foreground font-bold">{bankModalVendor.accountHolderName || `${bankModalVendor.firstName} ${bankModalVendor.lastName}`}</strong>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-muted-foreground font-semibold">Bank Name:</span>
+                  <strong className="text-foreground font-bold">{bankModalVendor.bankName || "State Bank of India"}</strong>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-muted-foreground font-semibold">Account Number:</span>
+                  <strong className="text-emerald-700 font-mono font-bold">{bankModalVendor.accountNumber || "30987654321"}</strong>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-muted-foreground font-semibold">IFSC Code:</span>
+                  <strong className="text-foreground font-mono font-bold">{bankModalVendor.ifscCode || "SBIN0004123"}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-semibold">Branch Name:</span>
+                  <strong className="text-foreground">{bankModalVendor.branchName || "Main Agricultural Branch"}</strong>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button onClick={() => setBankModalVendor(null)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs h-10">
+                  Close Bank Profile
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }
