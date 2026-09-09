@@ -135,6 +135,10 @@ variable "tags" {
   description = "Common resource tags"
 }
 
+output "frontend_repository_url" {
+  value = aws_ecr_repository.user_app.repository_url
+}
+
 output "user_app_repository_url" {
   value = aws_ecr_repository.user_app.repository_url
 }

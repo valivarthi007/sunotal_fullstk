@@ -143,6 +143,31 @@ resource "aws_lb_target_group" "user" {
   })
 }
 
+# Delivery Target Group
+resource "aws_lb_target_group" "delivery" {
+  name        = "sunotal-delivery-tg"
+  port        = 5006
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    path                = "/api/healthz"
+    protocol            = "HTTP"
+    port                = "5006"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    matcher             = "200-499"
+  }
+
+  tags = merge(var.tags, {
+    Name = "sunotal-delivery-tg"
+  })
+}
+
 # Support Target Group
 resource "aws_lb_target_group" "support" {
   name        = "sunotal-support-tg"
@@ -168,8 +193,19 @@ resource "aws_lb_target_group" "support" {
   })
 }
 
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend.arn
+  }
+}
+
 resource "aws_lb_listener_rule" "support_api" {
-  listener_arn = aws_lb_listener.https.arn
+  listener_arn = aws_lb_listener.http.arn
   priority     = 55
 
   action {

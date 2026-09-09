@@ -42,3 +42,8 @@ output "delivery_target_group_arn" {
   value       = aws_lb_target_group.delivery.arn
   description = "Delivery Target Group ARN"
 }
+
+output "support_target_group_arn" {
+  value       = aws_lb_target_group.support.arn
+  description = "Support Target Group ARN"
+}
