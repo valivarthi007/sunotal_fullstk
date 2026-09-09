@@ -1,6 +1,7 @@
 import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
 import { productsTable } from "./products.js";
 import { vendorsTable } from "./vendors.js";
+import { warehousesTable } from "./warehouses.js";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -12,6 +13,9 @@ export const inventoryTable = pgTable("inventory", {
   vendorId: integer("vendor_id")
     .notNull()
     .references(() => vendorsTable.id, { onDelete: 'cascade' }),
+  warehouseId: integer("warehouse_id")
+    .references(() => warehousesTable.id, { onDelete: 'set null' }),
+  warehouseName: text("warehouse_name"),
   quantity: integer("quantity").notNull().default(0),
   status: text("status", { enum: ["in_stock", "low_stock", "out_of_stock"] })
     .notNull()

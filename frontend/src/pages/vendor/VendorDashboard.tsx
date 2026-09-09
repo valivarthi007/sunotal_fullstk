@@ -33,7 +33,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 import { VendorLayout } from "@/components/layout/VendorLayout";
-import { fetchWarehouses, Warehouse } from "@/lib/api-client/warehouses";
+import { fetchWarehouses, Warehouse, useListProductDefinitions, useListProducts } from "@/lib/api-client";
 
 const quotationSchema = z.object({
   category: z.string().min(1, "Please select a produce category"),
@@ -55,6 +55,8 @@ export default function VendorDashboard() {
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false }
   });
   const { data: categories } = useListCategories();
+  const { data: productDefs } = useListProductDefinitions();
+  const { data: products } = useListProducts();
 
   const [vendorProfile, setVendorProfile] = useState<any>(null);
   const [quotations, setQuotations] = useState<any[]>([]);
@@ -118,6 +120,32 @@ export default function VendorDashboard() {
   const quantity = form.watch("quantity") || 0;
   const price = form.watch("price") || 0;
   const selectedUnit = form.watch("unit");
+
+  const availableProduceItems = React.useMemo(() => {
+    const list: string[] = [];
+    const set = new Set<string>();
+
+    for (const def of productDefs || []) {
+      if (def.name && (!selectedCategory || def.category === selectedCategory || selectedCategory === "All") && !set.has(def.name)) {
+        set.add(def.name);
+        list.push(def.name);
+      }
+    }
+    for (const p of products || []) {
+      if (p.name && (!selectedCategory || p.category === selectedCategory || selectedCategory === "All") && !set.has(p.name)) {
+        set.add(p.name);
+        list.push(p.name);
+      }
+    }
+    if (list.length === 0) {
+      if (selectedCategory === "Vegetables") return ["Organic Tomatoes", "Farm Fresh Potatoes", "Fresh Onions", "Green Capsicum", "Organic Spinach"];
+      if (selectedCategory === "Fruits") return ["Shimla Apples", "Robusta Bananas", "Nagpur Oranges", "Alphonso Mangoes"];
+      if (selectedCategory === "Dairy") return ["A2 Desi Cow Milk", "Fresh Paneer", "Amul Butter 500g", "Fresh Curd"];
+      if (selectedCategory === "Grains") return ["Sona Masoori Rice", "Whole Wheat Atta", "Toor Dal", "Basmati Rice"];
+      return ["Sona Masoori Rice", "Organic Tomatoes", "A2 Desi Cow Milk", "Shimla Apples", "Amul Butter 500g"];
+    }
+    return list;
+  }, [productDefs, products, selectedCategory]);
 
   // Automatically update unit options when category changes
   useEffect(() => {
@@ -277,25 +305,35 @@ export default function VendorDashboard() {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmitQuotation)} className="space-y-4 text-xs">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Category */}
+                    {/* Category - Strict Admin Control */}
                     <FormField
                       control={form.control}
                       name="category"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-slate-300 font-bold">Produce Category</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormLabel className="text-slate-300 font-bold">Produce Category (Admin Catalog)</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
-                                <SelectValue placeholder="Select Category" />
+                                <SelectValue placeholder="Select Admin Category" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                              <SelectItem value="Grains">🌾 Grains, Atta & Rice</SelectItem>
-                              <SelectItem value="Vegetables">🥦 Fresh Vegetables</SelectItem>
-                              <SelectItem value="Fruits">🍎 Fresh Fruits</SelectItem>
-                              <SelectItem value="Dairy">🥛 Dairy & Fresh Milk</SelectItem>
-                              <SelectItem value="Dry Fruits">🥜 Dry Fruits & Nuts</SelectItem>
+                              {categories && categories.length > 0 ? (
+                                categories.map((cat: any) => (
+                                  <SelectItem key={cat.id || cat.name} value={cat.name}>
+                                    📦 {cat.name}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <>
+                                  <SelectItem value="Grains">🌾 Grains, Atta & Rice</SelectItem>
+                                  <SelectItem value="Vegetables">🥦 Fresh Vegetables</SelectItem>
+                                  <SelectItem value="Fruits">🍎 Fresh Fruits</SelectItem>
+                                  <SelectItem value="Dairy">🥛 Dairy & Fresh Milk</SelectItem>
+                                  <SelectItem value="Dry Fruits">🥜 Dry Fruits & Nuts</SelectItem>
+                                </>
+                              )}
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -303,20 +341,27 @@ export default function VendorDashboard() {
                       )}
                     />
 
-                    {/* Produce Name */}
+                    {/* Produce Name - Strict Admin Control */}
                     <FormField
                       control={form.control}
                       name="produce"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-slate-300 font-bold">Produce Crop Name</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="e.g. Organic Sona Masoori Rice / Fresh Cow Milk"
-                              {...field}
-                              className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
-                            />
-                          </FormControl>
+                          <FormLabel className="text-slate-300 font-bold">Produce Crop Name (Admin Defined Catalog)</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                <SelectValue placeholder="Select Product defined by Admin..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
+                              {availableProduceItems.map((prodName) => (
+                                <SelectItem key={prodName} value={prodName}>
+                                  🌱 {prodName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}

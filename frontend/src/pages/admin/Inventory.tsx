@@ -187,6 +187,7 @@ export default function InventoryAdmin() {
               <tr>
                 <th className="px-6 py-4 font-medium">Product</th>
                 <th className="px-6 py-4 font-medium">Supplied By</th>
+                <th className="px-6 py-4 font-medium">Warehouse Location</th>
                 <th className="px-6 py-4 font-medium">Quantity</th>
                 <th className="px-6 py-4 font-medium text-center">Status</th>
                 <th className="px-6 py-4 font-medium">Last Updated</th>
@@ -195,12 +196,17 @@ export default function InventoryAdmin() {
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">Loading inventory...</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">Loading inventory...</td></tr>
               ) : filteredInventory && filteredInventory.length > 0 ? (
                 filteredInventory.map((item: any) => (
                   <tr key={item.id} className="hover:bg-accent/30 transition-colors group">
                     <td className="px-6 py-4 font-semibold text-foreground">{item.productName || `Product #${item.productId}`}</td>
                     <td className="px-6 py-4 font-medium">{item.vendorName || `Vendor #${item.vendorId}`}</td>
+                    <td className="px-6 py-4 font-medium">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/20">
+                        📍 {item.warehouseName || item.warehouseCity || "Central Dark Store Hub"}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 font-bold text-lg">{item.quantity}</td>
                     <td className="px-6 py-4 text-center">
                       <Badge variant="secondary" className={cn(

@@ -3,9 +3,11 @@ import { Bike, Power, Navigation, DollarSign, Bell, RefreshCw, Calculator, Route
 import { Button } from "@/components/ui/button";
 import { DeliveryLayout } from "@/components/layout/DeliveryLayout";
 import { getMapProvider } from "@/lib/providers/map/map-provider.factory";
+import { useLocationState } from "@/lib/location-context";
 import { toast } from "sonner";
 
 export default function DeliveryDashboard() {
+  const { location: userLoc } = useLocationState();
   const [isOnline, setIsOnline] = useState(true);
   const [activeTab, setActiveTab] = useState<"orders" | "earnings" | "reports">("orders");
 
@@ -74,7 +76,15 @@ export default function DeliveryDashboard() {
         mapInstanceRef.current = null;
       }
 
-      const map = L.map(mapContainerRef.current).setView([12.9716, 77.5946], 14);
+      // Dynamic customer and dark store coordinates based on user location
+      const custLat = acceptedOrder?.lat || userLoc?.latitude || 16.5062;
+      const custLng = acceptedOrder?.lng || userLoc?.longitude || 80.6480;
+      const hubLat = Number((custLat - 0.015).toFixed(4));
+      const hubLng = Number((custLng - 0.012).toFixed(4));
+      const midLat = Number(((hubLat + custLat) / 2).toFixed(4));
+      const midLng = Number(((hubLng + custLng) / 2).toFixed(4));
+
+      const map = L.map(mapContainerRef.current).setView([custLat, custLng], 14);
       L.tileLayer(mapProvider.getTileUrl(), {
         attribution: mapProvider.getTileAttribution(),
         maxZoom: 19,
@@ -86,7 +96,9 @@ export default function DeliveryDashboard() {
         html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981">DS</div>',
         iconSize: [34, 34],
       });
-      L.marker([12.9352, 77.6245], { icon: darkStoreIcon }).addTo(map).bindPopup("<b>Sunotal Dark Store #104</b>");
+      L.marker([hubLat, hubLng], { icon: darkStoreIcon })
+        .addTo(map)
+        .bindPopup(`<b>Sunotal Dark Store Hub (${userLoc?.city || "Local Hub"})</b>`);
 
       // Customer Destination Marker
       const custIcon = L.divIcon({
@@ -94,27 +106,33 @@ export default function DeliveryDashboard() {
         html: '<div style="background:#059669;color:white;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;border:2px solid white">📍</div>',
         iconSize: [34, 34],
       });
-      L.marker([12.9716, 77.5946], { icon: custIcon }).addTo(map).bindPopup("<b>Delivery Destination</b>");
+      L.marker([custLat, custLng], { icon: custIcon })
+        .addTo(map)
+        .bindPopup(`<b>Delivery Destination (${acceptedOrder?.customerName || "Customer"})</b>`);
 
       // Route polyline
-      L.polyline([[12.9352, 77.6245], [12.9534, 77.6095], [12.9716, 77.5946]], {
+      L.polyline([[hubLat, hubLng], [midLat, midLng], [custLat, custLng]], {
         color: "#059669",
         weight: 5,
       }).addTo(map);
 
+      map.fitBounds([[hubLat, hubLng], [custLat, custLng]], { padding: [40, 40] });
+
       mapInstanceRef.current = map;
     });
-  }, [acceptedOrder]);
+  }, [acceptedOrder, userLoc]);
 
   const handleAcceptOrder = () => {
     setHasAlert(false);
     setAcceptedOrder({
       id: "ORD-9842",
       customerName: "Ananya Roy",
-      address: "Flat 402, Green Glen Layout, Bellandur, Bengaluru",
+      address: `Flat 402, Green Glen Layout, ${userLoc?.city || "Electronic City"}`,
       items: ["Fresh Tomatoes 1kg", "Amul Butter 500g", "Toned Milk 2L"],
       distanceKm: 3.4,
       pay: 64, // 30 base + (3.4 * 10) distance + 0 tip
+      lat: userLoc?.latitude || 16.5062,
+      lng: userLoc?.longitude || 80.6480,
     });
     setOrderStage("accepted");
   };
@@ -125,6 +143,43 @@ export default function DeliveryDashboard() {
     else if (orderStage === "picked_up") {
       setOrderStage("delivered");
       toast.success("Order delivered successfully!");
+
+      // Update backend status API
+      if (acceptedOrder?.id) {
+        fetch(`/api/orders/${acceptedOrder.id}/status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "delivered" }),
+        }).catch((err) => console.error("Backend order status update error:", err));
+      }
+
+      // Update localStorage sunotal_user_orders
+      try {
+        const stored = localStorage.getItem("sunotal_user_orders");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const updated = parsed.map((o: any) => {
+              if (
+                o.id === acceptedOrder?.id ||
+                o.orderNumber === acceptedOrder?.id ||
+                o.orderId === acceptedOrder?.id ||
+                o.status === "processing" ||
+                o.status === "shipped"
+              ) {
+                return { ...o, status: "delivered" };
+              }
+              return o;
+            });
+            localStorage.setItem("sunotal_user_orders", JSON.stringify(updated));
+            window.dispatchEvent(new Event("storage"));
+            window.dispatchEvent(new Event("order-status-changed"));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to update user orders in localStorage:", e);
+      }
+
       setStats((prev) => {
         const newCount = prev.completedDeliveries + 1;
         const newKms = Number((prev.totalKmsRun + 3.4).toFixed(1));

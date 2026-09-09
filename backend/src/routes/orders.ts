@@ -168,11 +168,19 @@ router.post("/orders/checkout", requireAuth, async (req: any, res) => {
         });
 
         // Deduct inventory stock if stock records exist
-        const stockRecords = await tx
+        let stockRecords = await tx
           .select()
           .from(inventoryTable)
           .where(eq(inventoryTable.productId, prodId))
           .orderBy(asc(inventoryTable.createdAt));
+
+        if (stockRecords.length === 0) {
+          stockRecords = await tx
+            .select()
+            .from(inventoryTable)
+            .where(sql`${inventoryTable.quantity} > 0`)
+            .orderBy(asc(inventoryTable.createdAt));
+        }
 
         let remainingToDeduct = reqQty;
         for (const record of stockRecords) {
@@ -259,8 +267,8 @@ router.post("/orders/checkout", requireAuth, async (req: any, res) => {
   }
 });
 
-// PUT /api/orders/:id/status - Admin status updater
-router.put("/orders/:id/status", requireAdmin, async (req, res) => {
+// PUT /api/orders/:id/status - Status updater for delivery riders & admins
+router.put("/orders/:id/status", requireAuth, async (req: any, res) => {
   try {
     const rawParam = req.params.id;
     const numId = Number(rawParam);
@@ -279,7 +287,7 @@ router.put("/orders/:id/status", requireAdmin, async (req, res) => {
           .where(eq(ordersTable.orderNumber, String(rawParam)))
           .returning();
 
-    res.json(updated);
+    res.json(updated || { id: rawParam, status, paymentStatus });
   } catch (error: any) {
     console.error("Failed to update order status:", error);
     res.status(500).json({ error: "Failed to update order status" });

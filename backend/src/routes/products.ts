@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, productsTable, inventoryTable, vendorsTable } from "../lib/db.js";
+import { db, productsTable, inventoryTable, vendorsTable, warehousesTable } from "../lib/db.js";
 import { eq, ilike, and, desc, asc, SQL, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
@@ -15,7 +15,22 @@ import {
 const router = Router();
 const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || "us-east-1" });
 
-function formatProduct(p: any) {
+function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Number((R * c).toFixed(1));
+}
+
+function formatProduct(p: any, isUnserviceable: boolean = false, distanceKm?: number) {
+  const rawStock = Number(p.stock) || 0;
+  const effectiveStock = isUnserviceable ? 0 : rawStock;
+  const isAvailable = effectiveStock > 0;
+
   return {
     id: p.id,
     name: p.name,
@@ -29,17 +44,50 @@ function formatProduct(p: any) {
     organic: p.organic,
     active: p.active,
     description: p.description,
-    createdAt: p.createdAt.toISOString(),
+    createdAt: p.createdAt ? (typeof p.createdAt === "string" ? p.createdAt : p.createdAt.toISOString()) : new Date().toISOString(),
     location: p.locations || null,
-    stock: Number(p.stock) || 0,
+    stock: effectiveStock,
+    inStock: isAvailable,
+    stockStatus: isUnserviceable ? "unserviceable_radius" : isAvailable ? "in_stock" : "out_of_stock",
+    proximityKm: distanceKm !== undefined ? distanceKm : null,
   };
 }
 
 // GET /api/products
 router.get("/products", async (req, res) => {
   const parsed = ListProductsQueryParams.safeParse(req.query);
-  console.log("GET /products query:", req.query, "parsed:", parsed.success ? parsed.data : parsed.error);
   const { category, search, organic, sort, all } = parsed.success ? parsed.data : {};
+
+  // Extract user coordinates for dark store proximity stock calculation
+  const reqLat = req.query.lat ? Number(req.query.lat) : undefined;
+  const reqLng = req.query.lng ? Number(req.query.lng) : undefined;
+
+  let minDistance = 0;
+  let isUnserviceable = false;
+
+  if (reqLat !== undefined && reqLng !== undefined && !isNaN(reqLat) && !isNaN(reqLng)) {
+    try {
+      const activeWarehouses = await db.select().from(warehousesTable).where(eq(warehousesTable.isActive, true));
+      if (activeWarehouses.length > 0) {
+        let nearest = activeWarehouses[0];
+        let minD = haversineDistanceKm(reqLat, reqLng, nearest.latitude, nearest.longitude);
+        for (const wh of activeWarehouses) {
+          const d = haversineDistanceKm(reqLat, reqLng, wh.latitude, wh.longitude);
+          if (d < minD) {
+            minD = d;
+            nearest = wh;
+          }
+        }
+        minDistance = minD;
+        const maxRadius = nearest.maxServiceRadiusKm || 70;
+        if (minDistance > maxRadius) {
+          isUnserviceable = true;
+        }
+      }
+    } catch (e) {
+      console.error("Proximity calculation error:", e);
+    }
+  }
 
   const conditions: SQL[] = [];
   if (!all) {
@@ -83,7 +131,7 @@ router.get("/products", async (req, res) => {
 
   const products = await sortedQuery;
 
-  res.json(products.map(formatProduct));
+  res.json(products.map(p => formatProduct(p, isUnserviceable, reqLat !== undefined ? minDistance : undefined)));
 });
 
 // POST /api/products
