@@ -1,73 +1,123 @@
 # 🔌 SOLID Strategy Pattern Integration Guide
 
-Guide for extending the application with production Payment Gateways (Razorpay, Stripe, PhonePe) and Map Providers (Google Maps, Mapbox) using SOLID principles.
+Developer guide for extending the platform with production Payment Gateways (Razorpay, Stripe, PhonePe, PayU) and Map Providers (Google Maps JS API, Mapbox GL JS, Leaflet) using SOLID strategy pattern principles.
 
 ---
 
-## 1. How to Add a Live Payment Gateway (e.g. Production Razorpay)
+## 1. Extending Payment Gateways (`IPaymentProvider`)
 
-### Step 1: Create Provider Class
-Create `frontend/src/lib/providers/payment/razorpay-payment.provider.ts`:
+High-level UI components (`PaymentGatewayModal.tsx`, `Checkout.tsx`) do NOT depend on specific payment SDKs. They consume the `IPaymentProvider` interface contract.
+
+### Contract Definition (`payment-provider.interface.ts`):
 ```typescript
-import { IPaymentProvider, PaymentRequest, PaymentResponse } from "./payment-provider.interface";
+export interface PaymentRequest {
+  orderId: number;
+  amount: number;
+  currency: string;
+  method: "card" | "upi_qr" | "netbanking" | "cod";
+  customerEmail: string;
+  customerPhone?: string;
+}
 
-export class RazorpayPaymentProvider implements IPaymentProvider {
-  readonly id = "razorpay";
-  readonly name = "Razorpay Production Gateway";
+export interface PaymentResponse {
+  success: boolean;
+  paymentId: string;
+  method: string;
+  amount: number;
+  timestamp: string;
+  error?: string;
+}
 
-  async initialize(): Promise<boolean> {
-    // Load Razorpay Checkout SDK dynamically
-    return true;
-  }
-
-  getSupportedMethods() {
-    return ["upi_qr", "upi_vpa", "card", "netbanking"];
-  }
-
-  async processPayment(req: PaymentRequest): Promise<PaymentResponse> {
-    // Call Razorpay Standard Checkout SDK
-    return {
-      success: true,
-      paymentId: "PAY-RZP-LIVE-12345",
-      method: req.method,
-      amount: req.amount,
-      timestamp: new Date().toISOString(),
-    };
-  }
-
-  async verifyPayment(paymentId: string, orderId: number): Promise<boolean> {
-    return true;
-  }
+export interface IPaymentProvider {
+  readonly id: string;
+  readonly name: string;
+  initialize(): Promise<boolean>;
+  getSupportedMethods(): string[];
+  processPayment(request: PaymentRequest): Promise<PaymentResponse>;
+  verifyPayment(paymentId: string, orderId: number): Promise<boolean>;
 }
 ```
 
-### Step 2: Register in Factory
-In `frontend/src/lib/providers/payment/payment-provider.factory.ts`:
-```typescript
-case "razorpay":
-  currentProvider = new RazorpayPaymentProvider();
-  break;
-```
+### Adding a Live Gateway (e.g. Production Razorpay):
+1. **Create Provider Class**: Create `frontend/src/lib/providers/payment/razorpay-payment.provider.ts`:
+   ```typescript
+   import { IPaymentProvider, PaymentRequest, PaymentResponse } from "./payment-provider.interface";
 
-### Step 3: Configure Environment
-Set `VITE_PAYMENT_PROVIDER=razorpay` in `.env`.
-**Zero changes are required in `PaymentGatewayModal.tsx` or any UI component!**
+   export class RazorpayPaymentProvider implements IPaymentProvider {
+     readonly id = "razorpay";
+     readonly name = "Razorpay Gateway";
+
+     async initialize(): Promise<boolean> {
+       // Dynamically inject Razorpay checkout SDK script tag
+       return true;
+     }
+
+     getSupportedMethods() {
+       return ["card", "upi_qr", "netbanking"];
+     }
+
+     async processPayment(req: PaymentRequest): Promise<PaymentResponse> {
+       // Invoke Razorpay Checkout window
+       return {
+         success: true,
+         paymentId: "pay_rzp_live_" + Date.now(),
+         method: req.method,
+         amount: req.amount,
+         timestamp: new Date().toISOString(),
+       };
+     }
+
+     async verifyPayment(paymentId: string, orderId: number): Promise<boolean> {
+       return true;
+     }
+   }
+   ```
+
+2. **Register in Factory**: In `payment-provider.factory.ts`:
+   ```typescript
+   case "razorpay":
+     currentProvider = new RazorpayPaymentProvider();
+     break;
+   ```
+
+3. **Configure Environment**: Set `VITE_PAYMENT_PROVIDER=razorpay` in `.env`.  
+   *Zero modifications are required in any UI component or checkout page!*
 
 ---
 
-## 2. How to Add a Live Map Provider (e.g. Google Maps or Mapbox)
+## 2. Extending Mapping Engine (`IMapProvider`)
 
-### Step 1: Create Provider Class
-Create `frontend/src/lib/providers/map/google-maps.provider.ts` implementing `IMapProvider`.
+Map components (`InteractiveMapPickerModal.tsx`, `LiveDeliveryMapTracker.tsx`, `DeliveryDashboard.tsx`) consume the `IMapProvider` interface contract.
 
-### Step 2: Register in Factory
-In `frontend/src/lib/providers/map/map-provider.factory.ts`:
+### Contract Definition (`map-provider.interface.ts`):
 ```typescript
-case "google":
-  currentMapProvider = new GoogleMapsProvider();
-  break;
+export interface GeocodeResult {
+  latitude: number;
+  longitude: number;
+  formattedAddress: string;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
+export interface IMapProvider {
+  readonly id: string;
+  readonly name: string;
+  loadSdk(): Promise<boolean>;
+  getTileUrl(): string;
+  getTileAttribution(): string;
+  reverseGeocode(lat: number, lng: number): Promise<GeocodeResult>;
+  searchPlaces(query: string): Promise<GeocodeResult[]>;
+}
 ```
 
-### Step 3: Configure Environment
-Set `VITE_MAP_PROVIDER=google` in `.env`.
-**Zero changes are required in `InteractiveMapPickerModal.tsx` or `LiveDeliveryMapTracker.tsx`!**
+### Adding a Live Map Provider (e.g. Google Maps or Mapbox):
+1. **Create Provider Class**: Create `frontend/src/lib/providers/map/google-maps.provider.ts` implementing `IMapProvider`.
+2. **Register in Factory**: In `map-provider.factory.ts`:
+   ```typescript
+   case "google":
+     currentMapProvider = new GoogleMapsProvider();
+     break;
+   ```
+3. **Configure Environment**: Set `VITE_MAP_PROVIDER=google` in `.env`.  
+   *Zero modifications are required in any map rendering component!*
