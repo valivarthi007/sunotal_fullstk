@@ -149,7 +149,7 @@ jobs:
           # Warm-up / Target Group Health Check Readiness Loop
           echo "⏳ Waiting for ALB targets to register and return HTTP 200 (up to 120s)..."
           for i in {1..24}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$BASE/" || echo 000)
+            STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 5 "$BASE/" || echo 000)
             if [ "$STATUS" = "200" ]; then
               echo "✅ Target group is healthy and returning HTTP 200!"
               break
@@ -159,17 +159,17 @@ jobs:
           done
 
           # Test 1: Customer Frontend Webpage
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$BASE/" || echo 000)
+          STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 15 "$BASE/" || echo 000)
           echo "Test 1 [Customer Storefront]: HTTP $STATUS"
           if [ "$STATUS" != "200" ]; then echo "❌ Customer storefront test failed"; exit 1; fi
 
           # Test 2: Auth Service Healthz
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 --retry 5 --retry-delay 5 "$BASE/api/healthz" || echo 000)
+          STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 15 --retry 5 --retry-delay 5 "$BASE/api/healthz" || echo 000)
           echo "Test 2 [Auth Service Healthz]: HTTP $STATUS"
           if [ "$STATUS" != "200" ]; then echo "❌ Healthz test failed"; exit 1; fi
 
           # Test 3: Admin Login & JWT Token
-          LOGIN_RES=$(curl -s -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" -d '{"email":"admin@sunotal.com","password":"admin123"}' || echo "")
+          LOGIN_RES=$(curl -s -L -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" -d '{"email":"admin@sunotal.com","password":"admin123"}' || echo "")
           TOKEN=$(echo "$LOGIN_RES" | grep -o '"token":"[^"]*' | cut -d'"' -f4 || echo "")
           if [ -n "$TOKEN" ]; then
             echo "Test 3 [Admin Login API]: HTTP 200 (Token obtained successfully)"
@@ -179,12 +179,12 @@ jobs:
           fi
 
           # Test 4: Admin Dashboard Stats API
-          STATS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE/api/admin/stats" || echo 000)
+          STATS_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE/api/admin/stats" || echo 000)
           echo "Test 4 [Admin Stats API]: HTTP $STATS_STATUS"
           if [ "$STATS_STATUS" != "200" ]; then echo "❌ Admin stats test failed"; exit 1; fi
 
           # Test 5: Admin Quotations API
-          QUOTES_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE/api/admin/quotations" || echo 000)
+          QUOTES_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE/api/admin/quotations" || echo 000)
           echo "Test 5 [Admin Quotations API]: HTTP $QUOTES_STATUS"
           if [ "$QUOTES_STATUS" != "200" ]; then echo "❌ Admin quotations test failed"; exit 1; fi
 

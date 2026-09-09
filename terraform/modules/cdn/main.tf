@@ -199,13 +199,31 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = data.aws_acm_certificate.sunotal.arn
+
+  default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.frontend.arn
   }
 }
 
 resource "aws_lb_listener_rule" "auth_api" {
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = aws_lb_listener.https.arn
   priority     = 10
 
   action {
@@ -224,7 +242,7 @@ resource "aws_lb_listener_rule" "auth_api" {
 }
 
 resource "aws_lb_listener_rule" "operations_api" {
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = aws_lb_listener.https.arn
   priority     = 20
 
   action {
@@ -246,7 +264,7 @@ resource "aws_lb_listener_rule" "operations_api" {
 }
 
 resource "aws_lb_listener_rule" "inventory_api" {
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = aws_lb_listener.https.arn
   priority     = 30
 
   action {
@@ -266,7 +284,7 @@ resource "aws_lb_listener_rule" "inventory_api" {
 }
 
 resource "aws_lb_listener_rule" "user_api" {
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = aws_lb_listener.https.arn
   priority     = 40
 
   action {
@@ -285,7 +303,7 @@ resource "aws_lb_listener_rule" "user_api" {
 }
 
 resource "aws_lb_listener_rule" "delivery_api" {
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = aws_lb_listener.https.arn
   priority     = 50
 
   action {
@@ -304,7 +322,7 @@ resource "aws_lb_listener_rule" "delivery_api" {
 }
 
 resource "aws_lb_listener_rule" "support_api" {
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = aws_lb_listener.https.arn
   priority     = 55
 
   action {
@@ -320,6 +338,7 @@ resource "aws_lb_listener_rule" "support_api" {
     }
   }
 }
+
 
 
 resource "aws_cloudfront_origin_access_control" "s3_oac" {
@@ -400,6 +419,12 @@ resource "aws_s3_bucket_policy" "allow_cloudfront" {
       }
     ]
   })
+}
+
+data "aws_acm_certificate" "sunotal" {
+  domain      = "sunotal.automateuniverse.space"
+  statuses    = ["ISSUED"]
+  most_recent = true
 }
 
 data "aws_route53_zone" "primary" {
