@@ -8,26 +8,32 @@ export const AdminLedger: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentFilter, setPaymentFilter] = useState<"all" | "card" | "upi" | "netbanking" | "po">("all");
 
-  const ledgerSummary = {
-    totalRevenue: 284500,
-    onlineCollections: 214000,
-    upiCollections: 54500,
-    poReceivables: 16000,
-    completedSettlements: 198000,
-    pendingVendorPayouts: 86500,
-  };
+  const [ledgerSummary, setLedgerSummary] = useState({
+    totalRevenue: 0,
+    onlineCollections: 0,
+    upiCollections: 0,
+    poReceivables: 0,
+    completedSettlements: 0,
+    pendingVendorPayouts: 0,
+  });
 
-  const dailyTransactions = [
-    { id: "TXN-90412", orderId: "ORD-2026-8801", time: "18:45 PM", customer: "John Doe", type: "UPI", VPA: "user@okicici", amount: 1450, status: "SUCCESS", payoutStatus: "SETTLED" },
-    { id: "TXN-90413", orderId: "ORD-2026-8802", time: "17:30 PM", customer: "Tech Corp Inc", type: "po", VPA: "PO-2026-SUN-0091", amount: 16000, status: "SUCCESS", payoutStatus: "PENDING_NET30" },
-    { id: "TXN-90414", orderId: "ORD-2026-8803", time: "15:20 PM", customer: "Ananya Sharma", type: "card", VPA: "VISA **** 4111", amount: 2350, status: "SUCCESS", payoutStatus: "SETTLED" },
-    { id: "TXN-90415", orderId: "ORD-2026-8804", time: "12:10 PM", customer: "Ramesh Farmer Procurement", type: "netbanking", VPA: "HDFC-NetBank", amount: 45000, status: "SUCCESS", payoutStatus: "SETTLED" },
-    { id: "TXN-90416", orderId: "ORD-2026-8805", time: "10:05 AM", customer: "Priya Patel", type: "upi", VPA: "priya@gpay", amount: 890, status: "SUCCESS", payoutStatus: "SETTLED" },
-  ];
+  const [dailyTransactions, setDailyTransactions] = useState<any[]>([]);
 
   const filteredTransactions = dailyTransactions.filter(
     (t) => paymentFilter === "all" || t.type === paymentFilter
   );
+
+  const handleClearLedger = () => {
+    setLedgerSummary({
+      totalRevenue: 0,
+      onlineCollections: 0,
+      upiCollections: 0,
+      poReceivables: 0,
+      completedSettlements: 0,
+      pendingVendorPayouts: 0,
+    });
+    setDailyTransactions([]);
+  };
 
   const handleExportCsv = () => {
     const headers = "Transaction ID,Order Ref,Time,Customer,Method,Details,Amount (INR),Status,Settlement\n";
@@ -70,7 +76,10 @@ export const AdminLedger: React.FC = () => {
               className="bg-transparent border-none outline-none font-mono text-xs text-foreground cursor-pointer"
             />
           </div>
-          <Button onClick={handleExportCsv} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
+          <Button variant="outline" onClick={handleClearLedger} className="border-rose-500/40 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 text-xs">
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Reset Ledger to ₹0
+          </Button>
+          <Button onClick={handleExportCsv} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm text-xs">
             <Download className="w-4 h-4 mr-2" /> Export CSV Report
           </Button>
         </div>
@@ -84,7 +93,7 @@ export const AdminLedger: React.FC = () => {
             <DollarSign className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-3xl font-extrabold text-foreground font-mono">{fmt(ledgerSummary.totalRevenue)}</p>
-          <p className="text-[11px] text-emerald-600 font-medium">100% reconciled against DB orders</p>
+          <p className="text-[11px] text-emerald-600 font-medium">Reconciled against active DB orders</p>
         </div>
 
         <div className="border rounded-2xl p-5 bg-card shadow-sm space-y-2">
@@ -158,31 +167,39 @@ export const AdminLedger: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y font-mono">
-              {filteredTransactions.map((t) => (
-                <tr key={t.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="p-3 font-bold text-foreground">{t.id}</td>
-                  <td className="p-3 text-emerald-600">{t.orderId}</td>
-                  <td className="p-3 text-muted-foreground">{t.time}</td>
-                  <td className="p-3 font-sans font-medium text-foreground">{t.customer}</td>
-                  <td className="p-3 uppercase font-bold text-xs">{t.type}</td>
-                  <td className="p-3 text-muted-foreground">{t.VPA}</td>
-                  <td className="p-3 text-right font-extrabold text-foreground">{fmt(t.amount)}</td>
-                  <td className="p-3 text-center">
-                    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-sans font-semibold">
-                      <CheckCircle2 className="w-3 h-3" /> {t.status}
-                    </span>
-                  </td>
-                  <td className="p-3 text-center">
-                    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-sans font-semibold ${
-                      t.payoutStatus === "SETTLED"
-                        ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
-                        : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                    }`}>
-                      <Clock className="w-3 h-3" /> {t.payoutStatus}
-                    </span>
+              {filteredTransactions.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center text-muted-foreground font-sans">
+                    No active transactions recorded for {selectedDate}. All financial metrics reset to ₹0.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredTransactions.map((t) => (
+                  <tr key={t.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="p-3 font-bold text-foreground">{t.id}</td>
+                    <td className="p-3 text-emerald-600">{t.orderId}</td>
+                    <td className="p-3 text-muted-foreground">{t.time}</td>
+                    <td className="p-3 font-sans font-medium text-foreground">{t.customer}</td>
+                    <td className="p-3 uppercase font-bold text-xs">{t.type}</td>
+                    <td className="p-3 text-muted-foreground">{t.VPA}</td>
+                    <td className="p-3 text-right font-extrabold text-foreground">{fmt(t.amount)}</td>
+                    <td className="p-3 text-center">
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-sans font-semibold">
+                        <CheckCircle2 className="w-3 h-3" /> {t.status}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-sans font-semibold ${
+                        t.payoutStatus === "SETTLED"
+                          ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                          : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                      }`}>
+                        <Clock className="w-3 h-3" /> {t.payoutStatus}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
