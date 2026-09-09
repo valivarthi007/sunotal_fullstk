@@ -188,5 +188,15 @@ jobs:
           echo "Test 5 [Admin Quotations API]: HTTP $QUOTES_STATUS"
           if [ "$QUOTES_STATUS" != "200" ]; then echo "❌ Admin quotations test failed"; exit 1; fi
 
-          echo "🎉 All 5 Post-Deployment Tests Passed Successfully! Microservices deployment is live and error-free."
+          # Test 6: Delivery Active Orders API
+          DELIVERY_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" "$BASE/api/delivery/orders/active" || echo 000)
+          echo "Test 6 [Delivery Active Orders API]: HTTP $DELIVERY_STATUS"
+          if [ "$DELIVERY_STATUS" != "200" ]; then echo "❌ Delivery API test failed"; exit 1; fi
+
+          # Test 7: Support Tickets API
+          SUPPORT_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" "$BASE/api/support/tickets" || echo 000)
+          echo "Test 7 [Support Tickets API]: HTTP $SUPPORT_STATUS"
+          if [ "$SUPPORT_STATUS" != "200" ]; then echo "❌ Support API test failed"; exit 1; fi
+
+          echo "🎉 All 7 Post-Deployment Tests Passed Successfully! Microservices deployment is live and error-free."
         continue-on-error: false

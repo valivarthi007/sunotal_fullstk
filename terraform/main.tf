@@ -100,6 +100,7 @@ module "ecs" {
   ecr_inventory_url  = module.ecr.inventory_repository_url
   ecr_user_url       = module.ecr.user_repository_url
   ecr_delivery_url   = module.ecr.delivery_repository_url
+  ecr_support_url    = module.ecr.support_repository_url
 
   frontend_target_group_arn   = module.cdn.frontend_target_group_arn
   auth_target_group_arn       = module.cdn.auth_target_group_arn
@@ -107,6 +108,7 @@ module "ecs" {
   inventory_target_group_arn  = module.cdn.inventory_target_group_arn
   user_target_group_arn       = module.cdn.user_target_group_arn
   delivery_target_group_arn   = module.cdn.delivery_target_group_arn
+  support_target_group_arn    = module.cdn.support_target_group_arn
 
   mongodb_uri       = "mongodb://localhost:27017/sunotal"
   cloudfront_domain = module.cdn.cloudfront_domain_name

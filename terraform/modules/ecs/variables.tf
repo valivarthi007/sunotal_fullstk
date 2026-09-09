@@ -54,6 +54,11 @@ variable "ecr_delivery_url" {
   description = "ECR Repository URL for delivery service"
 }
 
+variable "ecr_support_url" {
+  type        = string
+  description = "ECR Repository URL for support service"
+}
+
 variable "frontend_target_group_arn" {
   type        = string
   description = "ALB Target Group ARN for frontend"
@@ -82,6 +87,11 @@ variable "user_target_group_arn" {
 variable "delivery_target_group_arn" {
   type        = string
   description = "ALB Target Group ARN for delivery service"
+}
+
+variable "support_target_group_arn" {
+  type        = string
+  description = "ALB Target Group ARN for support service"
 }
 
 variable "mongodb_uri" {

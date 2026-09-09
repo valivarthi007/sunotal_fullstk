@@ -56,7 +56,7 @@ resource "aws_iam_role_policy_attachment" "ecs_s3_attach" {
 
 # Cloudwatch Log Groups
 resource "aws_cloudwatch_log_group" "ecs_logs" {
-  for_each          = toset(["frontend", "auth", "operations", "inventory", "user", "delivery"])
+  for_each          = toset(["frontend", "auth", "operations", "inventory", "user", "delivery", "support"])
   name              = "/ecs/sunotal-${each.key}"
   retention_in_days = 7
   tags              = var.tags
@@ -490,6 +490,78 @@ resource "aws_ecs_service" "delivery" {
     target_group_arn = var.delivery_target_group_arn
     container_name   = "delivery"
     container_port   = 5006
+  }
+
+  tags = var.tags
+}
+
+# Support Service Task Definition
+resource "aws_ecs_task_definition" "support" {
+  family                   = "sunotal-support"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "support"
+      image     = "${var.ecr_support_url}:latest"
+      essential = true
+      portMappings = [
+        {
+          containerPort = 5007
+          hostPort      = 5007
+        }
+      ]
+      environment = [
+        { name = "PORT", value = "5007" },
+        { name = "NODE_ENV", value = "production" },
+        { name = "MONGODB_URI", value = var.mongodb_uri },
+        { name = "SESSION_SECRET", value = var.session_secret },
+        { name = "FRONTEND_URL", value = var.frontend_url }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs_logs["support"].name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "support"
+        }
+      }
+    }
+  ])
+
+  tags = var.tags
+
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
+}
+
+# Support Service
+resource "aws_ecs_service" "support" {
+  name            = "sunotal-support"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.support.arn
+  desired_count   = 1
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    weight            = 100
+  }
+
+  network_configuration {
+    subnets          = var.public_subnet_ids
+    security_groups  = [var.ecs_security_group_id]
+    assign_public_ip = true
+  }
+
+  load_balancer {
+    target_group_arn = var.support_target_group_arn
+    container_name   = "support"
+    container_port   = 5007
   }
 
   tags = var.tags
