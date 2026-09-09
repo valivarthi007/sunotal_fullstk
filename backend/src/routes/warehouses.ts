@@ -36,57 +36,6 @@ function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 router.get("/warehouses", async (req, res) => {
   try {
     const warehouses = await db.select().from(warehousesTable).orderBy(desc(warehousesTable.createdAt));
-    
-    // Seed default warehouse hubs if database table is empty
-    if (warehouses.length === 0) {
-      const defaultHubs = [
-        {
-          name: "Bengaluru Central Fulfillment Hub",
-          address: "100 Feet Rd, Indiranagar",
-          city: "Bengaluru",
-          latitude: 12.9716,
-          longitude: 77.5946,
-          freeDeliveryRadiusKm: 30.0,
-          baseDeliveryFee: 50.0,
-          perKmRate: 8.0,
-          maxServiceRadiusKm: 70.0,
-          isActive: true,
-        },
-        {
-          name: "Vijayawada Logistics Center",
-          address: "Bhavani Puram, RR Nagar",
-          city: "Vijayawada",
-          latitude: 16.5062,
-          longitude: 80.6480,
-          freeDeliveryRadiusKm: 30.0,
-          baseDeliveryFee: 50.0,
-          perKmRate: 8.0,
-          maxServiceRadiusKm: 70.0,
-          isActive: true,
-        },
-        {
-          name: "Hyderabad Express Hub",
-          address: "HITEC City Phase 2",
-          city: "Hyderabad",
-          latitude: 17.3850,
-          longitude: 78.4867,
-          freeDeliveryRadiusKm: 30.0,
-          baseDeliveryFee: 50.0,
-          perKmRate: 8.0,
-          maxServiceRadiusKm: 70.0,
-          isActive: true,
-        },
-      ];
-
-      const inserted = [];
-      for (const hub of defaultHubs) {
-        const [w] = await db.insert(warehousesTable).values(hub).returning();
-        inserted.push(w);
-      }
-      res.json(inserted);
-      return;
-    }
-
     res.json(warehouses);
   } catch (error: any) {
     console.error("Failed to fetch warehouses:", error);

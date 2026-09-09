@@ -85,10 +85,8 @@ export const WarehouseManager: React.FC = () => {
     setError(null);
     try {
       const data = await fetchWarehouses();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setWarehouses(data);
-      } else {
-        setWarehouses(DEFAULT_FALLBACK_WAREHOUSES);
       }
     } catch (err: any) {
       console.warn("API warehouse fetch fallback to defaults:", err);

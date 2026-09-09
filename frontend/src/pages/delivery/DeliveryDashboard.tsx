@@ -186,9 +186,84 @@ export default function DeliveryDashboard() {
     };
   }, [acceptedOrder, userLoc]);
 
+  const [pendingOrders, setPendingOrders] = useState<any[]>([]);
+  const [currentAlertOrder, setCurrentAlertOrder] = useState<any | null>(null);
+
+  // Fetch real active user orders from backend / localStorage
+  useEffect(() => {
+    const loadRealOrders = async () => {
+      let realOrders: any[] = [];
+
+      try {
+        const res = await fetch("/api/delivery/orders/active");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            realOrders = data.map((o: any) => ({
+              id: o.id || o.orderNumber,
+              numericId: o.numericId || o.id,
+              customerName: o.customerName || "Customer",
+              address: o.address || "Delivery Address",
+              city: o.city || userLoc?.city || "Bengaluru",
+              items: Array.isArray(o.items) ? o.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Item"} (${i.quantity || 1})`) : ["Fresh Produce"],
+              distanceKm: 3.4,
+              pay: Math.round(30 + 3.4 * 10),
+              totalAmount: o.totalAmount || 250,
+              status: o.status || "placed",
+              lat: o.lat || (o.city?.toLowerCase().includes("hyderabad") ? 17.3850 : o.city?.toLowerCase().includes("vijayawada") ? 16.5062 : 12.9716),
+              lng: o.lng || (o.city?.toLowerCase().includes("hyderabad") ? 78.4867 : o.city?.toLowerCase().includes("vijayawada") ? 80.6480 : 77.5946),
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("Backend active orders fetch fallback:", err);
+      }
+
+      // Check localStorage for recently placed user orders
+      try {
+        const stored = localStorage.getItem("sunotal_user_orders");
+        if (stored) {
+          const userOrders = JSON.parse(stored);
+          if (Array.isArray(userOrders)) {
+            const activeUserOrders = userOrders.filter((o: any) => o.status !== "delivered" && o.status !== "cancelled");
+            for (const uo of activeUserOrders) {
+              const orderIdStr = String(uo.id || uo.orderNumber || uo.orderId);
+              if (!realOrders.some((ro) => String(ro.id) === orderIdStr)) {
+                realOrders.unshift({
+                  id: orderIdStr,
+                  numericId: uo.id || uo.numericId,
+                  customerName: uo.customerName || uo.name || uo.deliveryAddress?.name || "Sunotal Customer",
+                  address: uo.address || `${uo.deliveryAddress?.addressLine1 || "Main Street"}, ${uo.city || userLoc?.city || "Bengaluru"}`,
+                  city: uo.city || userLoc?.city || "Bengaluru",
+                  items: Array.isArray(uo.items) ? uo.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Item"} (${i.quantity || 1})`) : ["Fresh Groceries Pack"],
+                  distanceKm: 3.4,
+                  pay: Math.round(30 + 3.4 * 10),
+                  totalAmount: uo.totalAmount || uo.finalAmount || 250,
+                  status: uo.status || "placed",
+                  lat: uo.lat || (uo.city?.toLowerCase().includes("hyderabad") ? 17.3850 : uo.city?.toLowerCase().includes("vijayawada") ? 16.5062 : 12.9716),
+                  lng: uo.lng || (uo.city?.toLowerCase().includes("hyderabad") ? 78.4867 : uo.city?.toLowerCase().includes("vijayawada") ? 80.6480 : 77.5946),
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse localStorage user orders:", e);
+      }
+
+      if (realOrders.length > 0) {
+        setPendingOrders(realOrders);
+        setCurrentAlertOrder(realOrders[0]);
+        setHasAlert(true);
+      }
+    };
+
+    loadRealOrders();
+  }, [userLoc]);
+
   const handleAcceptOrder = () => {
     setHasAlert(false);
-    setAcceptedOrder({
+    const targetOrder = currentAlertOrder || {
       id: "ORD-9842",
       customerName: "Ananya Roy",
       address: `Flat 402, Green Glen Layout, ${userLoc?.city || "Electronic City"}`,
@@ -197,7 +272,8 @@ export default function DeliveryDashboard() {
       pay: 64, // 30 base + (3.4 * 10) distance + 0 tip
       lat: userLoc?.latitude || 16.5062,
       lng: userLoc?.longitude || 80.6480,
-    });
+    };
+    setAcceptedOrder(targetOrder);
     setOrderStage("accepted");
   };
 
@@ -349,18 +425,22 @@ export default function DeliveryDashboard() {
                   </div>
 
                   <div className="bg-card p-4 rounded-2xl border space-y-2 text-xs">
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Dark Store Pick-up:</span>
-                      <strong className="text-foreground">Sunotal Dark Store #104 (1.1 km)</strong>
+                    <div className="flex items-center justify-between border-b pb-2">
+                      <span className="font-bold text-emerald-600 text-sm">{currentAlertOrder ? `Order #${currentAlertOrder.id}` : "Express Order"}</span>
+                      <strong className="text-foreground">{currentAlertOrder?.customerName || "Ananya Roy"}</strong>
                     </div>
                     <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Customer Distance:</span>
-                      <strong className="text-foreground">3.4 km Total</strong>
+                      <span>Delivery Address:</span>
+                      <strong className="text-foreground text-right max-w-[220px] truncate">{currentAlertOrder?.address || "HSR Layout Sector 3, Bengaluru"}</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Order Items:</span>
+                      <strong className="text-emerald-700 text-right max-w-[220px] truncate">{currentAlertOrder?.items?.join(", ") || "Fresh Groceries Pack"}</strong>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t text-sm">
-                      <span className="text-muted-foreground font-semibold">Calculated Payout:</span>
+                      <span className="text-muted-foreground font-semibold">Calculated Rider Payout:</span>
                       <strong className="text-emerald-600 font-mono font-bold text-base">
-                        ₹{30 + Math.round(3.4 * 10)}.00 (Base ₹30 + 3.4km × ₹10)
+                        ₹{currentAlertOrder?.pay || (30 + Math.round(3.4 * 10))}.00
                       </strong>
                     </div>
                   </div>

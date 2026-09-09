@@ -147,6 +147,66 @@ router.post("/delivery/payout", requireAuth, async (req, res) => {
 });
 
 // GET /api/delivery/track/:orderId - Live GPS tracking telemetry for order
+// Helper city coordinate map for dynamic location-aware live GPS tracking
+const CITY_COORDINATE_MAP: Record<string, { warehouse: { name: string; lat: number; lng: number }; destination: { lat: number; lng: number } }> = {
+  hyderabad: {
+    warehouse: { name: "Hyderabad HITEC City Dark Store Hub #201", lat: 17.4401, lng: 78.3489 },
+    destination: { lat: 17.3850, lng: 78.4867 }
+  },
+  vijayawada: {
+    warehouse: { name: "Vijayawada Bhavanipuram Logistics Center #302", lat: 16.5186, lng: 80.6200 },
+    destination: { lat: 16.5062, lng: 80.6480 }
+  },
+  visakhapatnam: {
+    warehouse: { name: "Vizag Direct Farm Hub #401", lat: 17.7200, lng: 83.3000 },
+    destination: { lat: 17.6868, lng: 83.2185 }
+  },
+  chennai: {
+    warehouse: { name: "Chennai Guindy Dark Store Hub #501", lat: 13.0400, lng: 80.2200 },
+    destination: { lat: 13.0827, lng: 80.2707 }
+  },
+  mumbai: {
+    warehouse: { name: "Mumbai Andheri Fulfillment Center #601", lat: 19.1170, lng: 72.8630 },
+    destination: { lat: 19.0760, lng: 72.8777 }
+  },
+  bengaluru: {
+    warehouse: { name: "Bengaluru Central Dark Store Hub #104", lat: 12.9352, lng: 77.6245 },
+    destination: { lat: 12.9716, lng: 77.5946 }
+  }
+};
+
+// GET /api/delivery/orders/active - Fetch real user orders assigned for delivery
+router.get("/delivery/orders/active", async (req, res) => {
+  try {
+    const orders = await db
+      .select()
+      .from(ordersTable)
+      .orderBy(ordersTable.createdAt)
+      .limit(20);
+
+    const formatted = orders.map((o: any) => ({
+      id: o.orderNumber || `ORD-${o.id}`,
+      numericId: o.id,
+      customerName: o.name || "Customer",
+      phone: o.phone || "+91 98765 43210",
+      address: `${o.address || "Main Street"}, ${o.city || "Bengaluru"}`,
+      city: o.city || "Bengaluru",
+      totalAmount: Number(o.finalAmount || o.totalAmount || 0),
+      paymentMethod: o.paymentMethod || "online",
+      paymentStatus: o.paymentStatus || "paid",
+      status: o.status || "placed",
+      createdAt: o.createdAt,
+      items: o.items ? (typeof o.items === "string" ? JSON.parse(o.items) : o.items) : [],
+    }));
+
+    res.json(formatted);
+  } catch (error) {
+    console.error("Failed to fetch active delivery orders:", error);
+    res.status(500).json({ error: "Failed to fetch delivery orders" });
+  }
+});
+
+// GET /api/delivery/track/:orderId - Live GPS tracking telemetry for order
 router.get("/delivery/track/:orderId", async (req, res) => {
   const { orderId } = req.params;
 
@@ -161,17 +221,21 @@ router.get("/delivery/track/:orderId", async (req, res) => {
 
     order = found || null;
 
+    // Detect target city dynamically from order
+    const orderCity = (order?.city || "Bengaluru").toLowerCase().trim();
+    const cityData = CITY_COORDINATE_MAP[orderCity] || CITY_COORDINATE_MAP["bengaluru"];
+
     const warehouseOrigin = {
-      name: "Bengaluru Central Dark Store Hub #104",
-      lat: 12.9352,
-      lng: 77.6245,
+      name: cityData.warehouse.name,
+      lat: cityData.warehouse.lat,
+      lng: cityData.warehouse.lng,
     };
 
     const customerDestination = {
-      address: order?.address || "HSR Layout Sector 3, Bengaluru",
+      address: order?.address || `Central Delivery Zone, ${order?.city || "Bengaluru"}`,
       city: order?.city || "Bengaluru",
-      lat: 12.9716,
-      lng: 77.5946,
+      lat: cityData.destination.lat,
+      lng: cityData.destination.lng,
     };
 
     const now = Date.now();

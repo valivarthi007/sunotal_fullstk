@@ -39,28 +39,6 @@ function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 router.get("/warehouses", async (req, res) => {
   try {
     const warehouses = await db.select().from(warehousesTable).orderBy(desc(warehousesTable.createdAt));
-    
-    // Seed default warehouse if none exist
-    if (warehouses.length === 0) {
-      const [defaultWh] = await db
-        .insert(warehousesTable)
-        .values({
-          name: "Bengaluru Central Fulfillment Hub",
-          address: "100 Feet Rd, Indiranagar",
-          city: "Bengaluru",
-          latitude: 12.9716,
-          longitude: 77.5946,
-          freeDeliveryRadiusKm: 30.0,
-          baseDeliveryFee: 50.0,
-          perKmRate: 8.0,
-          maxServiceRadiusKm: 70.0,
-          isActive: true,
-        })
-        .returning();
-      res.json([defaultWh]);
-      return;
-    }
-
     res.json(warehouses);
   } catch (error: any) {
     console.error("Failed to fetch warehouses:", error);
