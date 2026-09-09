@@ -75,7 +75,7 @@ jobs:
       - name: Ensure ECR Repositories Are Ready For Provisioning
         run: |
           echo "Checking for any orphaned ECR repositories to prevent RepositoryAlreadyExistsException..."
-          for repo in sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery; do
+          for repo in sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery sunotal-support sunotal-user-app sunotal-admin-app sunotal-vendor-app sunotal-delivery-app sunotal-support-app; do
             if aws ecr describe-repositories --repository-names "$repo" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
               echo "Existing repository detected: $repo. Force purging orphaned repository so Terraform can manage creation cleanly..."
               aws ecr delete-repository --repository-name "$repo" --force --region "${{ env.AWS_REGION }}" || true
