@@ -61,31 +61,83 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // IP-based fallback detection
+  // Multi-provider IP-based fallback detection
   const detectIpLocation = useCallback(async (): Promise<UserLocation | null> => {
+    // Provider 1: ipapi.co
     try {
       const res = await fetch("https://ipapi.co/json/", { cache: "no-store" });
-      if (!res.ok) throw new Error("IP API failed");
-      const data = await res.json();
-      
-      if (data.city) {
-        const ipLoc: UserLocation = {
-          city: data.city,
-          state: data.region || "",
-          country: data.country_name || "India",
-          pincode: data.postal || "",
-          formattedAddress: `${data.city}, ${data.region_code || data.region || ""}`,
-          isDetected: true,
-          latitude: data.latitude,
-          longitude: data.longitude,
-          source: "ip",
-        };
-        saveLocation(ipLoc);
-        return ipLoc;
+      if (res.ok) {
+        const data = await res.json();
+        if (data.city && data.latitude && data.longitude) {
+          const ipLoc: UserLocation = {
+            city: data.city,
+            state: data.region || "",
+            country: data.country_name || "India",
+            pincode: data.postal || "",
+            formattedAddress: `${data.city}, ${data.region || ""}`,
+            isDetected: true,
+            latitude: Number(data.latitude),
+            longitude: Number(data.longitude),
+            source: "ip",
+          };
+          saveLocation(ipLoc);
+          return ipLoc;
+        }
       }
     } catch (err) {
-      console.warn("IP Geolocation fallback failed:", err);
+      console.warn("ipapi.co failed, trying ipwho.is:", err);
     }
+
+    // Provider 2: ipwho.is
+    try {
+      const res = await fetch("https://ipwho.is/", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.city && data.latitude && data.longitude) {
+          const ipLoc: UserLocation = {
+            city: data.city,
+            state: data.region || "",
+            country: data.country || "India",
+            pincode: data.postal || "",
+            formattedAddress: `${data.city}, ${data.region || ""}`,
+            isDetected: true,
+            latitude: Number(data.latitude),
+            longitude: Number(data.longitude),
+            source: "ip",
+          };
+          saveLocation(ipLoc);
+          return ipLoc;
+        }
+      }
+    } catch (err) {
+      console.warn("ipwho.is failed, trying freeipapi:", err);
+    }
+
+    // Provider 3: freeipapi.com
+    try {
+      const res = await fetch("https://freeipapi.com/api/json", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.cityName && data.latitude && data.longitude) {
+          const ipLoc: UserLocation = {
+            city: data.cityName,
+            state: data.regionName || "",
+            country: data.countryName || "India",
+            pincode: data.zipCode || "",
+            formattedAddress: `${data.cityName}, ${data.regionName || ""}`,
+            isDetected: true,
+            latitude: Number(data.latitude),
+            longitude: Number(data.longitude),
+            source: "ip",
+          };
+          saveLocation(ipLoc);
+          return ipLoc;
+        }
+      }
+    } catch (err) {
+      console.warn("freeipapi failed:", err);
+    }
+
     return null;
   }, [saveLocation]);
 

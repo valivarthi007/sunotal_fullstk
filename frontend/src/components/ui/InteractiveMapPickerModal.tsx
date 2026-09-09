@@ -6,6 +6,8 @@ import { Label } from "./label";
 import { getMapProvider } from "../../lib/providers/map/map-provider.factory";
 import { GeocodeResult } from "../../lib/providers/map/map-provider.interface";
 import { UserAddressApi, fetchUserAddresses, saveUserAddress } from "@/lib/api-client/delivery";
+import { useLocationState } from "@/lib/location-context";
+import { toast } from "sonner";
 
 interface InteractiveMapPickerModalProps {
   isOpen: boolean;
@@ -27,7 +29,9 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
   onClose,
   onSelectAddress,
 }) => {
+  const { location: userLoc, detectLocation } = useLocationState();
   const [activeTab, setActiveTab] = useState<"map" | "saved">("map");
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
 
   // Map Coordinates & Address State
   const [lat, setLat] = useState(12.9716);
@@ -57,6 +61,28 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
 
   useEffect(() => {
     if (isOpen) {
+      // Initialize map position with user's detected location if available
+      if (userLoc.latitude && userLoc.longitude) {
+        setLat(userLoc.latitude);
+        setLng(userLoc.longitude);
+        if (userLoc.city && userLoc.city !== "Select Location") setCity(userLoc.city);
+        if (userLoc.state) setStateName(userLoc.state);
+        if (userLoc.pincode) setPincode(userLoc.pincode);
+        reverseGeocode(userLoc.latitude, userLoc.longitude);
+      } else {
+        // Auto-detect current position immediately so map never defaults to Bangalore
+        detectLocation().then((loc) => {
+          if (loc && loc.latitude && loc.longitude) {
+            setLat(loc.latitude);
+            setLng(loc.longitude);
+            if (loc.city) setCity(loc.city);
+            if (loc.state) setStateName(loc.state);
+            if (loc.pincode) setPincode(loc.pincode);
+            reverseGeocode(loc.latitude, loc.longitude);
+          }
+        });
+      }
+
       fetchUserAddresses()
         .then((data) => setSavedAddresses(data))
         .catch((err) => console.error("Failed to load saved addresses", err));
@@ -148,21 +174,52 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
     }
   };
 
-  // HTML5 Current Position Handler
-  const handleDetectGps = () => {
+  // HTML5 Current Position Handler with Robust IP Fallback
+  const handleDetectGps = async () => {
+    setIsDetectingGps(true);
+
+    const applyPosition = (latitude: number, longitude: number) => {
+      setLat(latitude);
+      setLng(longitude);
+      if (mapInstanceRef.current && markerRef.current) {
+        mapInstanceRef.current.setView([latitude, longitude], 15);
+        markerRef.current.setLatLng([latitude, longitude]);
+      }
+      reverseGeocode(latitude, longitude);
+    };
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const newLat = pos.coords.latitude;
           const newLng = pos.coords.longitude;
-          setLat(newLat);
-          setLng(newLng);
-          reverseGeocode(newLat, newLng);
+          applyPosition(newLat, newLng);
+          setIsDetectingGps(false);
+          toast.success("GPS Current Location detected!");
         },
-        () => {
-          alert("GPS access denied. Defaulting to current map location.");
-        }
+        async (geoErr) => {
+          console.warn("HTML5 Geolocation access failed, resolving via IP API...", geoErr);
+          toast.info("HTML5 GPS access restricted. Resolving current location via network IP...");
+          const loc = await detectLocation();
+          if (loc && loc.latitude && loc.longitude) {
+            applyPosition(loc.latitude, loc.longitude);
+            toast.success(`Current location updated to ${loc.city}, ${loc.state}`);
+          } else {
+            toast.error("Could not resolve current location automatically. Please click on the map.");
+          }
+          setIsDetectingGps(false);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
       );
+    } else {
+      const loc = await detectLocation();
+      if (loc && loc.latitude && loc.longitude) {
+        applyPosition(loc.latitude, loc.longitude);
+        toast.success(`Current location updated to ${loc.city}, ${loc.state}`);
+      } else {
+        toast.error("Geolocation is not supported by your browser.");
+      }
+      setIsDetectingGps(false);
     }
   };
 
@@ -404,8 +461,19 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
 
                 {/* Map Controls */}
                 <div className="absolute top-3 right-3 z-20 flex flex-col gap-1.5">
-                  <Button size="icon" variant="secondary" className="w-8 h-8 rounded-lg shadow" onClick={handleDetectGps}>
-                    <Crosshair className="w-4 h-4 text-emerald-600" />
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    className="w-9 h-9 rounded-lg shadow-md hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-all"
+                    onClick={handleDetectGps}
+                    disabled={isDetectingGps}
+                    title="Locate Current Position"
+                  >
+                    {isDetectingGps ? (
+                      <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+                    ) : (
+                      <Crosshair className="w-4 h-4 text-emerald-600" />
+                    )}
                   </Button>
                 </div>
 
