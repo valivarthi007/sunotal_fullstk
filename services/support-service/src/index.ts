@@ -96,59 +96,12 @@ app.put("/api/support/tickets/:id/resolve", async (req: any, res: any) => {
 
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "support-service" }));
 
-async function seedInitialTickets() {
-  try {
-    const count = await SupportTicket.countDocuments();
-    if (count === 0) {
-      console.log("🌱 Seeding initial support tickets into MongoDB...");
-      await SupportTicket.insertMany([
-        {
-          id: 101,
-          ticketId: "TKT-2026-8941",
-          role: "user",
-          senderName: "Ananya Sharma",
-          senderEmail: "user@sunotal.com",
-          category: "delivery",
-          subject: "Delay in 2-Hour Express Delivery",
-          description: "Order placed 1.5 hours ago is still showing out for delivery.",
-          status: "open",
-        },
-        {
-          id: 102,
-          ticketId: "TKT-2026-7723",
-          role: "vendor",
-          senderName: "Sunotal Farm Vendor",
-          senderEmail: "vendor@sunotal.com",
-          category: "payment",
-          subject: "Quotation #42 Payout Settlement Delay",
-          description: "Produce accepted 3 days ago. Requesting payout credit to SBI bank account.",
-          status: "open",
-        },
-        {
-          id: 103,
-          ticketId: "TKT-2026-3391",
-          role: "delivery",
-          senderName: "Sunotal Delivery Rider",
-          senderEmail: "rider@sunotal.com",
-          category: "payment",
-          subject: "Day-Out Payout Credit Query",
-          description: "Completed 18 deliveries today. Requesting direct UPI settlement confirmation.",
-          status: "in_progress",
-        },
-      ]);
-      console.log("✅ Support tickets seeded into MongoDB");
-    }
-  } catch (err: any) {
-    console.warn("⚠️ Failed to seed tickets:", err.message);
-  }
-}
-
-mongoose.connect(MONGODB_URI, { tlsInsecure: true }).then(async () => {
+mongoose.connect(MONGODB_URI, { tlsInsecure: true }).then(() => {
   console.log("⚡ [support-service] Connected to MongoDB");
-  await seedInitialTickets();
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [support-service] Running on port ${PORT}`));
 }).catch((err) => {
   console.warn("⚠️ [support-service] MongoDB connection warning:", err.message);
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [support-service] Running on port ${PORT}`));
 });
+
 

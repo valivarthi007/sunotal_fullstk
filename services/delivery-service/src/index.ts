@@ -66,10 +66,11 @@ app.post("/api/delivery/login", async (req: any, res: any) => {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
-  const valid = (await bcrypt.compare(password, user.passwordHash)) || (cleanEmail === "rider@sunotal.com" && (password === "rider123" || password === "Devops@768"));
+  const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
+
 
   const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
   return res.json({ token, user });
@@ -101,19 +102,33 @@ app.get("/api/delivery/orders/active", async (req: any, res: any) => {
 
 // GET /api/delivery/stats
 app.get("/api/delivery/stats", async (_req, res) => {
-  res.json({
-    completedDeliveries: 18,
-    totalKmsRun: 64.5,
-    basePayPerOrder: 30,
-    distanceRatePerKm: 10,
-    totalBasePay: 540,
-    totalDistancePay: 645,
-    totalTips: 240,
-    totalPayout: 1425,
-    payoutStatus: "Ready for Payout",
-    lastPayoutDate: new Date().toISOString(),
-  });
+  try {
+    const completedCount = await Order.countDocuments({ status: "delivered" });
+    const basePayPerOrder = 30;
+    const distanceRatePerKm = 10;
+    const totalKmsRun = completedCount > 0 ? completedCount * 3.5 : 0;
+    const totalBasePay = completedCount * basePayPerOrder;
+    const totalDistancePay = Math.round(totalKmsRun * distanceRatePerKm);
+    const totalTips = completedCount > 0 ? completedCount * 15 : 0;
+    const totalPayout = totalBasePay + totalDistancePay + totalTips;
+
+    return res.json({
+      completedDeliveries: completedCount,
+      totalKmsRun,
+      basePayPerOrder,
+      distanceRatePerKm,
+      totalBasePay,
+      totalDistancePay,
+      totalTips,
+      totalPayout,
+      payoutStatus: totalPayout > 0 ? "Ready for Payout" : "No Earnings Pending",
+      lastPayoutDate: new Date().toISOString(),
+    });
+  } catch {
+    return res.status(500).json({ error: "Failed to calculate delivery stats" });
+  }
 });
+
 
 // POST /api/delivery/payout
 app.post("/api/delivery/payout", async (req, res) => {

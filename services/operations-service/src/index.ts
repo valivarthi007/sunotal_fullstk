@@ -84,10 +84,10 @@ app.post("/api/admin/login", async (req: any, res: any) => {
   }
 
   const isMatch = await bcrypt.compare(password, user.passwordHash);
-  const isRolePassword = cleanEmail === "admin@sunotal.com" && (password === "admin123" || password === "admin");
-  if (!isMatch && !isRolePassword) {
+  if (!isMatch) {
     return res.status(401).json({ error: "Invalid admin credentials" });
   }
+
 
   const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
   return res.json({ token, user });
