@@ -234,13 +234,16 @@ function SubdomainRouter() {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <Switch>
-          <Route path="/" component={DeliveryRouteGuard} />
           <Route path="/login" component={DeliveryLogin} />
           <Route path="/delivery/login" component={DeliveryLogin} />
           <Route path="/register" component={DeliveryRegistration} />
           <Route path="/delivery/register" component={DeliveryRegistration} />
+          <Route path="/earnings" component={DeliveryEarnings} />
           <Route path="/delivery/earnings" component={DeliveryEarnings} />
+          <Route path="/payouts" component={DeliveryEarnings} />
+          <Route path="/delivery/payouts" component={DeliveryEarnings} />
           <Route path="/delivery" component={DeliveryRouteGuard} />
+          <Route path="/" component={DeliveryRouteGuard} />
           <Route component={DeliveryRouteGuard} />
         </Switch>
       </Suspense>

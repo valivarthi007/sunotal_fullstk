@@ -133,6 +133,9 @@ export async function initDatabase() {
         active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
+
+      ALTER TABLE inventory ADD COLUMN IF NOT EXISTS warehouse_id INTEGER REFERENCES warehouses(id) ON DELETE SET NULL;
+      ALTER TABLE inventory ADD COLUMN IF NOT EXISTS warehouse_name TEXT;
     `);
 
     // Seed default admin user ONLY (password: admin123 or admin)

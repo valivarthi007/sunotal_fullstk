@@ -65,61 +65,79 @@ export default function DeliveryDashboard() {
 
   // Load Map when Order is Accepted
   useEffect(() => {
-    if (!acceptedOrder || !mapContainerRef.current) return;
+    if (!acceptedOrder) return;
 
-    mapProvider.loadSdk().then(() => {
-      const L = (window as any).L;
-      if (!L || !mapContainerRef.current) return;
+    let isMounted = true;
+    const timerId = setTimeout(() => {
+      if (!mapContainerRef.current || !isMounted) return;
 
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
+      mapProvider.loadSdk().then(() => {
+        const L = (window as any).L;
+        if (!L || !mapContainerRef.current || !isMounted) return;
 
-      // Dynamic customer and dark store coordinates based on user location
-      const custLat = acceptedOrder?.lat || userLoc?.latitude || 16.5062;
-      const custLng = acceptedOrder?.lng || userLoc?.longitude || 80.6480;
-      const hubLat = Number((custLat - 0.015).toFixed(4));
-      const hubLng = Number((custLng - 0.012).toFixed(4));
-      const midLat = Number(((hubLat + custLat) / 2).toFixed(4));
-      const midLng = Number(((hubLng + custLng) / 2).toFixed(4));
+        if (mapInstanceRef.current) {
+          try { mapInstanceRef.current.remove(); } catch {}
+          mapInstanceRef.current = null;
+        }
 
-      const map = L.map(mapContainerRef.current).setView([custLat, custLng], 14);
-      L.tileLayer(mapProvider.getTileUrl(), {
-        attribution: mapProvider.getTileAttribution(),
-        maxZoom: 19,
-      }).addTo(map);
+        // Dynamic customer and dark store coordinates based on user location
+        const custLat = acceptedOrder?.lat || userLoc?.latitude || 16.5062;
+        const custLng = acceptedOrder?.lng || userLoc?.longitude || 80.6480;
+        const hubLat = Number((custLat - 0.015).toFixed(4));
+        const hubLng = Number((custLng - 0.012).toFixed(4));
+        const midLat = Number(((hubLat + custLat) / 2).toFixed(4));
+        const midLng = Number(((hubLng + custLng) / 2).toFixed(4));
 
-      // Dark Store Warehouse Marker
-      const darkStoreIcon = L.divIcon({
-        className: "ds-marker",
-        html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981">DS</div>',
-        iconSize: [34, 34],
+        const map = L.map(mapContainerRef.current, {
+          zoomControl: true,
+          scrollWheelZoom: false,
+        }).setView([custLat, custLng], 14);
+
+        L.tileLayer(mapProvider.getTileUrl(), {
+          attribution: mapProvider.getTileAttribution(),
+          maxZoom: 19,
+        }).addTo(map);
+
+        // Dark Store Warehouse Marker
+        const darkStoreIcon = L.divIcon({
+          className: "ds-marker",
+          html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">HUB</div>',
+          iconSize: [36, 36],
+        });
+        L.marker([hubLat, hubLng], { icon: darkStoreIcon })
+          .addTo(map)
+          .bindPopup(`<b>Sunotal Dark Store Hub (${userLoc?.city || "Local Hub"})</b>`);
+
+        // Customer Destination Marker
+        const custIcon = L.divIcon({
+          className: "cust-marker",
+          html: '<div style="background:#059669;color:white;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">📍</div>',
+          iconSize: [36, 36],
+        });
+        L.marker([custLat, custLng], { icon: custIcon })
+          .addTo(map)
+          .bindPopup(`<b>Delivery Destination (${acceptedOrder?.customerName || "Customer"})</b>`);
+
+        // Route polyline
+        L.polyline([[hubLat, hubLng], [midLat, midLng], [custLat, custLng]], {
+          color: "#059669",
+          weight: 5,
+          dashArray: "8, 8",
+        }).addTo(map);
+
+        map.fitBounds([[hubLat, hubLng], [custLat, custLng]], { padding: [50, 50] });
+        setTimeout(() => {
+          if (map) map.invalidateSize();
+        }, 200);
+
+        mapInstanceRef.current = map;
       });
-      L.marker([hubLat, hubLng], { icon: darkStoreIcon })
-        .addTo(map)
-        .bindPopup(`<b>Sunotal Dark Store Hub (${userLoc?.city || "Local Hub"})</b>`);
+    }, 150);
 
-      // Customer Destination Marker
-      const custIcon = L.divIcon({
-        className: "cust-marker",
-        html: '<div style="background:#059669;color:white;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;border:2px solid white">📍</div>',
-        iconSize: [34, 34],
-      });
-      L.marker([custLat, custLng], { icon: custIcon })
-        .addTo(map)
-        .bindPopup(`<b>Delivery Destination (${acceptedOrder?.customerName || "Customer"})</b>`);
-
-      // Route polyline
-      L.polyline([[hubLat, hubLng], [midLat, midLng], [custLat, custLng]], {
-        color: "#059669",
-        weight: 5,
-      }).addTo(map);
-
-      map.fitBounds([[hubLat, hubLng], [custLat, custLng]], { padding: [40, 40] });
-
-      mapInstanceRef.current = map;
-    });
+    return () => {
+      isMounted = false;
+      clearTimeout(timerId);
+    };
   }, [acceptedOrder, userLoc]);
 
   const handleAcceptOrder = () => {

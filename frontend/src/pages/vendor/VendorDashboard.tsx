@@ -60,6 +60,7 @@ export default function VendorDashboard() {
 
   const [vendorProfile, setVendorProfile] = useState<any>(null);
   const [quotations, setQuotations] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [targetWarehouses, setTargetWarehouses] = useState<Warehouse[]>([]);
 
   useEffect(() => {
@@ -89,12 +90,22 @@ export default function VendorDashboard() {
         status: user.active ? "approved" : "pending",
       });
 
-      fetch("/api/vendors/quotations")
+      const token = localStorage.getItem("sunotal_vendor_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
+      const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+
+      fetch("/api/vendors/quotations", { headers })
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => {
           if (Array.isArray(data)) setQuotations(data);
         })
         .catch(() => setQuotations([]));
+
+      fetch("/api/vendors/invoices", { headers })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          if (Array.isArray(data)) setInvoices(data);
+        })
+        .catch(() => setInvoices([]));
     }
   }, [user]);
 
@@ -163,7 +174,7 @@ export default function VendorDashboard() {
   const onSubmitQuotation = async (values: z.infer<typeof quotationSchema>) => {
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem("sunotal_token");
+      const token = localStorage.getItem("sunotal_vendor_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
       const headers = {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -681,25 +692,107 @@ export default function VendorDashboard() {
 
         {/* TAB 3: Farmer Payouts & Advance Settlements */}
         {activeTab === "payouts" && (
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-            <h3 className="font-extrabold text-lg text-white">Direct Farmer Bank Payouts & Advance Ledger</h3>
-            <p className="text-xs text-slate-400">
-              Payments are automatically credited to your UPI / Bank account upon Dark Store quality inspection.
-            </p>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-extrabold text-lg text-white flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-emerald-400" /> Direct Farmer Bank Payouts & Settlement Ledger
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Payments are automatically credited to your bank account upon Dark Store quality inspection and admin invoice issuance.
+                </p>
+              </div>
+              <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 px-3 py-1 font-mono text-xs">
+                VERIFIED FARM VENDOR
+              </Badge>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-                <div className="text-[11px] text-slate-400">Total Settled Earnings</div>
-                <div className="text-2xl font-extrabold font-mono text-emerald-400">₹63,000.00</div>
+            {/* Metrics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Total Settled Earnings</div>
+                <div className="text-2xl font-extrabold font-mono text-emerald-400">
+                  ₹{quotations.filter((q) => q.paymentStatus === "paid" || q.status === "accepted").reduce((acc, q) => acc + (q.quantity * q.price), 0).toLocaleString("en-IN")}
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono">100% Direct Bank Transfer</div>
               </div>
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-                <div className="text-[11px] text-slate-400">Pending QC Inspection</div>
-                <div className="text-2xl font-extrabold font-mono text-amber-400">₹27,500.00</div>
+
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Pending QC / Payouts</div>
+                <div className="text-2xl font-extrabold font-mono text-amber-400">
+                  ₹{quotations.filter((q) => q.status === "pending" || q.paymentStatus === "processing").reduce((acc, q) => acc + (q.quantity * q.price), 0).toLocaleString("en-IN")}
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono">QC Clearance within 48h</div>
               </div>
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-                <div className="text-[11px] text-slate-400">Next Payout Schedule</div>
-                <div className="text-base font-extrabold font-mono text-white pt-1">Tomorrow, 10:00 AM</div>
+
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Invoices Generated</div>
+                <div className="text-2xl font-extrabold font-mono text-white">
+                  {invoices.length > 0 ? invoices.length : quotations.filter((q) => q.status === "accepted").length}
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono">Official GST & Mandi Records</div>
               </div>
+            </div>
+
+            {/* Invoices Table */}
+            <div className="space-y-3 pt-2">
+              <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-400" /> Settled Invoices & Payout Receipts
+              </h4>
+
+              {invoices.length > 0 ? (
+                <div className="overflow-x-auto rounded-2xl border border-slate-800">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px]">
+                        <th className="py-3 px-4">Invoice #</th>
+                        <th className="py-3 px-4">Date</th>
+                        <th className="py-3 px-4">Quotation ID</th>
+                        <th className="py-3 px-4">Amount</th>
+                        <th className="py-3 px-4">Payment Status</th>
+                        <th className="py-3 px-4 text-right">Invoice Document</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
+                      {invoices.map((inv) => {
+                        const token = localStorage.getItem("sunotal_vendor_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
+                        const downloadUrl = `/api/vendors/invoices/${inv.id}/download?token=${token}`;
+                        return (
+                          <tr key={inv.id} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-amber-400">{inv.invoiceNumber}</td>
+                            <td className="py-3 px-4 text-slate-300 font-mono">{new Date(inv.createdAt).toLocaleDateString()}</td>
+                            <td className="py-3 px-4 font-mono text-slate-400">#{inv.quotationId}</td>
+                            <td className="py-3 px-4 font-mono font-bold text-emerald-400">₹{Number(inv.amount).toLocaleString("en-IN")}</td>
+                            <td className="py-3 px-4">
+                              <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px] uppercase font-mono font-bold">
+                                PAID & SETTLED
+                              </Badge>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <a
+                                href={downloadUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all"
+                              >
+                                <Download className="w-3.5 h-3.5" /> Download HTML Invoice
+                              </a>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-8 text-center bg-slate-950/60 rounded-2xl border border-slate-800/80 text-slate-400 space-y-2">
+                  <Clock className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                  <p className="font-semibold text-xs text-slate-300">Previous Transactions Registered in Ledger</p>
+                  <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                    Quotations accepted by admin show up in your Harvest Supply Quotations tab. Invoices generated by admin will be available for download here.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

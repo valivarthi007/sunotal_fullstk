@@ -142,13 +142,15 @@ router.post("/inventory/deduct", async (req, res) => {
       const reqQty = Number(item.quantity) || 1;
       const name = item.productName || item.name;
 
-      // 1. Find inventory by productId
-      let records = await db
-        .select()
-        .from(inventoryTable)
-        .where(eq(inventoryTable.productId, prodId));
+      // 1. Find inventory records matching productId or product name
+      let records: any[] = [];
+      if (!isNaN(prodId) && prodId > 0) {
+        records = await db
+          .select()
+          .from(inventoryTable)
+          .where(eq(inventoryTable.productId, prodId));
+      }
 
-      // 2. Fallback: find via product name
       if (records.length === 0 && name) {
         const matchingProds = await db
           .select()
@@ -162,28 +164,62 @@ router.post("/inventory/deduct", async (req, res) => {
         }
       }
 
-      // 3. Fallback: find any available stock
       if (records.length === 0) {
         records = await db
           .select()
           .from(inventoryTable)
           .where(sql`${inventoryTable.quantity} > 0`)
-          .limit(1);
+          .limit(5);
       }
 
-      let remaining = reqQty;
-      for (const rec of records) {
-        if (remaining <= 0) break;
-        const deduct = Math.min(rec.quantity, remaining);
-        const newQty = Math.max(0, rec.quantity - deduct);
-        const newStatus = newQty === 0 ? "out_of_stock" : newQty < 5 ? "low_stock" : "in_stock";
+      // 2. If records exist in inventoryTable, deduct quantity
+      if (records.length > 0) {
+        let remaining = reqQty;
+        for (const rec of records) {
+          if (remaining <= 0) break;
+          const deduct = Math.min(rec.quantity, remaining);
+          const newQty = Math.max(0, rec.quantity - deduct);
+          const newStatus = newQty === 0 ? "out_of_stock" : newQty < 5 ? "low_stock" : "in_stock";
 
-        await db
-          .update(inventoryTable)
-          .set({ quantity: newQty, status: newStatus as any, updatedAt: new Date() })
-          .where(eq(inventoryTable.id, rec.id));
+          await db
+            .update(inventoryTable)
+            .set({ quantity: newQty, status: newStatus as any, updatedAt: new Date() })
+            .where(eq(inventoryTable.id, rec.id));
 
-        remaining -= deduct;
+          remaining -= deduct;
+        }
+      } else {
+        // If inventoryTable has no records for this product yet, create an inventory entry with deducted stock
+        let targetProdId = !isNaN(prodId) && prodId > 0 ? prodId : null;
+        if (!targetProdId && name) {
+          const [matched] = await db.select().from(productsTable).where(ilike(productsTable.name, `%${name}%`)).limit(1);
+          if (matched) targetProdId = matched.id;
+        }
+
+        if (targetProdId) {
+          let vendorId = 1;
+          const vendors = await db.select().from(vendorsTable).limit(1);
+          if (vendors.length > 0) {
+            vendorId = vendors[0].id;
+          } else {
+            const [newV] = await db.insert(vendorsTable).values({
+              firstName: "Sunotal",
+              lastName: "Farm Sourcing",
+              produce: "General Fresh Produce",
+              status: "approved",
+            }).returning();
+            vendorId = newV.id;
+          }
+
+          const defaultQty = Math.max(0, 50 - reqQty);
+          await db.insert(inventoryTable).values({
+            productId: targetProdId,
+            vendorId: vendorId,
+            quantity: defaultQty,
+            status: defaultQty === 0 ? "out_of_stock" : defaultQty < 5 ? "low_stock" : "in_stock",
+            notes: `Auto-created stock record after checkout deduction (${reqQty} units ordered)`,
+          });
+        }
       }
     }
 
