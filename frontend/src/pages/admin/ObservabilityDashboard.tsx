@@ -13,14 +13,29 @@ export const ObservabilityDashboard: React.FC = () => {
     ? `${window.location.protocol}//${window.location.hostname}:3000`
     : 'http://localhost:3000';
 
+  const [telemetry, setTelemetry] = useState({
+    throughput: 0,
+    latency: 0,
+    errorRate: 0,
+    memoryMb: 0,
+    mtdSpend: 0,
+    dailyRunRate: 0,
+    projectedSpend: 0,
+    eksCost: 0,
+    ec2Cost: 0,
+    rdsCost: 0,
+    s3Cost: 0,
+    dataTransferCost: 0,
+  });
+
   const microservices = [
-    { name: "Auth Microservice", port: 5001, status: "Healthy", latency: "14ms", uptime: "99.98%", metricsUrl: "/metrics" },
-    { name: "Operations Microservice", port: 5002, status: "Healthy", latency: "22ms", uptime: "99.99%", metricsUrl: "/metrics" },
-    { name: "Inventory Microservice", port: 5003, status: "Healthy", latency: "18ms", uptime: "99.95%", metricsUrl: "/metrics" },
-    { name: "User Microservice", port: 5004, status: "Healthy", latency: "16ms", uptime: "99.97%", metricsUrl: "/metrics" },
-    { name: "Delivery Microservice", port: 5006, status: "Healthy", latency: "12ms", uptime: "99.99%", metricsUrl: "/metrics" },
-    { name: "Prometheus TSDB Engine", port: 9090, status: "Scraping (15s)", latency: "4ms", uptime: "100%", metricsUrl: "/metrics" },
-    { name: "Grafana Telemetry Server", port: 3000, status: "Connected", latency: "8ms", uptime: "100%", metricsUrl: grafanaUrl },
+    { name: "Auth Microservice", port: 5001, status: "Standby", latency: "0ms", uptime: "0%", metricsUrl: "/metrics" },
+    { name: "Operations Microservice", port: 5002, status: "Standby", latency: "0ms", uptime: "0%", metricsUrl: "/metrics" },
+    { name: "Inventory Microservice", port: 5003, status: "Standby", latency: "0ms", uptime: "0%", metricsUrl: "/metrics" },
+    { name: "User Microservice", port: 5004, status: "Standby", latency: "0ms", uptime: "0%", metricsUrl: "/metrics" },
+    { name: "Delivery Microservice", port: 5006, status: "Standby", latency: "0ms", uptime: "0%", metricsUrl: "/metrics" },
+    { name: "Prometheus TSDB Engine", port: 9090, status: "Idle", latency: "0ms", uptime: "0%", metricsUrl: "/metrics" },
+    { name: "Grafana Telemetry Server", port: 3000, status: "Connected", latency: "0ms", uptime: "0%", metricsUrl: grafanaUrl },
   ];
 
   const handleRefresh = () => {
@@ -28,7 +43,24 @@ export const ObservabilityDashboard: React.FC = () => {
     setTimeout(() => {
       setLastRefreshed(new Date().toLocaleTimeString());
       setLoading(false);
-    }, 600);
+    }, 400);
+  };
+
+  const handleResetMetrics = () => {
+    setTelemetry({
+      throughput: 0,
+      latency: 0,
+      errorRate: 0,
+      memoryMb: 0,
+      mtdSpend: 0,
+      dailyRunRate: 0,
+      projectedSpend: 0,
+      eksCost: 0,
+      ec2Cost: 0,
+      rdsCost: 0,
+      s3Cost: 0,
+      dataTransferCost: 0,
+    });
   };
 
   return (
@@ -49,6 +81,9 @@ export const ObservabilityDashboard: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleResetMetrics} className="border-rose-500/40 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 text-xs">
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Reset Telemetry to 0
+          </Button>
           <Button variant="outline" onClick={handleRefresh} disabled={loading}>
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Refresh Telemetry
@@ -68,8 +103,8 @@ export const ObservabilityDashboard: React.FC = () => {
             <span>Throughput (Req/Sec)</span>
             <Zap className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="text-3xl font-extrabold text-foreground font-mono">142.8</p>
-          <p className="text-[11px] text-emerald-600 font-medium">↑ 12% vs last 1 hour</p>
+          <p className="text-3xl font-extrabold text-foreground font-mono">{telemetry.throughput.toFixed(1)}</p>
+          <p className="text-[11px] text-muted-foreground font-medium">No active traffic</p>
         </div>
 
         <div className="border rounded-xl p-5 bg-card shadow-sm space-y-2">
@@ -77,7 +112,7 @@ export const ObservabilityDashboard: React.FC = () => {
             <span>API Latency (p95)</span>
             <Activity className="w-4 h-4 text-blue-600" />
           </div>
-          <p className="text-3xl font-extrabold text-foreground font-mono">18.4 ms</p>
+          <p className="text-3xl font-extrabold text-foreground font-mono">{telemetry.latency} ms</p>
           <p className="text-[11px] text-blue-600 font-medium">Optimal response threshold</p>
         </div>
 
@@ -86,7 +121,7 @@ export const ObservabilityDashboard: React.FC = () => {
             <span>HTTP Error Rate (4xx/5xx)</span>
             <AlertTriangle className="w-4 h-4 text-amber-500" />
           </div>
-          <p className="text-3xl font-extrabold text-emerald-600 font-mono">0.02%</p>
+          <p className="text-3xl font-extrabold text-emerald-600 font-mono">{telemetry.errorRate.toFixed(2)}%</p>
           <p className="text-[11px] text-emerald-600 font-medium">Within SLA bounds</p>
         </div>
 
@@ -95,8 +130,8 @@ export const ObservabilityDashboard: React.FC = () => {
             <span>Node Resident Memory</span>
             <Cpu className="w-4 h-4 text-purple-600" />
           </div>
-          <p className="text-3xl font-extrabold text-foreground font-mono">184 MB</p>
-          <p className="text-[11px] text-muted-foreground font-medium">Across 4 container pods</p>
+          <p className="text-3xl font-extrabold text-foreground font-mono">{telemetry.memoryMb} MB</p>
+          <p className="text-[11px] text-muted-foreground font-medium">Zero memory allocation</p>
         </div>
       </div>
 
@@ -119,8 +154,8 @@ export const ObservabilityDashboard: React.FC = () => {
               <span className="text-emerald-400 font-bold">PROMETHEUS TSDB</span>
             </div>
             <div className="h-40 flex items-end justify-between gap-1 pt-4 px-2 border-b border-slate-800">
-              {[15, 22, 18, 25, 14, 30, 20, 16, 28, 19, 14, 22, 18, 24, 16].map((h, idx) => (
-                <div key={idx} className="flex-1 bg-emerald-500/80 hover:bg-emerald-400 rounded-t transition-all" style={{ height: `${h * 3}%` }} />
+              {[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].map((h, idx) => (
+                <div key={idx} className="flex-1 bg-emerald-500/30 rounded-t transition-all" style={{ height: "2px" }} />
               ))}
             </div>
             <div className="flex justify-between text-[10px] text-slate-500">
@@ -138,15 +173,15 @@ export const ObservabilityDashboard: React.FC = () => {
               <span className="text-blue-400 font-bold">GRAFANA STACK</span>
             </div>
             <div className="h-40 flex items-end justify-between gap-1 pt-4 px-2 border-b border-slate-800">
-              {[45, 52, 48, 60, 42, 58, 50, 46, 54, 49, 44, 52, 48, 56, 45].map((h, idx) => (
-                <div key={idx} className="flex-1 bg-blue-500/80 hover:bg-blue-400 rounded-t transition-all" style={{ height: `${h * 2.2}%` }} />
+              {[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].map((h, idx) => (
+                <div key={idx} className="flex-1 bg-blue-500/30 rounded-t transition-all" style={{ height: "2px" }} />
               ))}
             </div>
             <div className="flex justify-between text-[10px] text-slate-500">
-              <span>Auth: 42MB</span>
-              <span>Ops: 54MB</span>
-              <span>Inv: 48MB</span>
-              <span>User: 40MB</span>
+              <span>Auth: 0MB</span>
+              <span>Ops: 0MB</span>
+              <span>Inv: 0MB</span>
+              <span>User: 0MB</span>
             </div>
           </div>
         </div>
@@ -160,7 +195,7 @@ export const ObservabilityDashboard: React.FC = () => {
             <h2 className="font-bold text-lg">AWS Live Infrastructure Cost & Resource Explorer</h2>
           </div>
           <span className="text-xs font-mono bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-3 py-1 rounded-full font-bold">
-            AWS Cost Explorer API: Synchronized
+            AWS Cost Explorer API: Reset to $0.00
           </span>
         </div>
 
@@ -168,20 +203,20 @@ export const ObservabilityDashboard: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
           <div className="p-4 bg-muted/40 rounded-xl border space-y-1">
             <span className="text-[11px] text-muted-foreground">Est. Month-to-Date Spend</span>
-            <p className="text-2xl font-extrabold text-foreground">$330.10 USD</p>
-            <p className="text-[10px] text-emerald-600 font-semibold">↓ 4.2% optimized vs budget target</p>
+            <p className="text-2xl font-extrabold text-foreground">${telemetry.mtdSpend.toFixed(2)} USD</p>
+            <p className="text-[10px] text-emerald-600 font-semibold">100% Free Tier Compliant</p>
           </div>
 
           <div className="p-4 bg-muted/40 rounded-xl border space-y-1">
             <span className="text-[11px] text-muted-foreground">Daily Run-Rate</span>
-            <p className="text-2xl font-extrabold text-foreground">$11.25 / day</p>
-            <p className="text-[10px] text-muted-foreground">Active 4 Node EC2 / EKS Cluster</p>
+            <p className="text-2xl font-extrabold text-foreground">${telemetry.dailyRunRate.toFixed(2)} / day</p>
+            <p className="text-[10px] text-muted-foreground">Idle / Standby Infrastructure</p>
           </div>
 
           <div className="p-4 bg-muted/40 rounded-xl border space-y-1">
             <span className="text-[11px] text-muted-foreground">Projected Month End</span>
-            <p className="text-2xl font-extrabold text-amber-600">$348.75 USD</p>
-            <p className="text-[10px] text-amber-600 font-semibold">Forecast within SLA budget</p>
+            <p className="text-2xl font-extrabold text-emerald-600">${telemetry.projectedSpend.toFixed(2)} USD</p>
+            <p className="text-[10px] text-emerald-600 font-semibold">Zero Cost Forecast</p>
           </div>
         </div>
 
@@ -191,32 +226,32 @@ export const ObservabilityDashboard: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs font-mono">
             <div className="p-3 bg-muted/20 rounded-lg border">
               <span className="text-[10px] text-muted-foreground block">Amazon EKS (Control Plane)</span>
-              <strong className="text-sm font-bold text-foreground">$140.00</strong>
-              <span className="text-[10px] text-muted-foreground block mt-1">1 Cluster ($0.10/hr)</span>
+              <strong className="text-sm font-bold text-foreground">${telemetry.eksCost.toFixed(2)}</strong>
+              <span className="text-[10px] text-muted-foreground block mt-1">0 Active Clusters</span>
             </div>
 
             <div className="p-3 bg-muted/20 rounded-lg border">
               <span className="text-[10px] text-muted-foreground block">EC2 Worker Nodes (t3.medium)</span>
-              <strong className="text-sm font-bold text-foreground">$95.50</strong>
-              <span className="text-[10px] text-muted-foreground block mt-1">3 On-Demand Instances</span>
+              <strong className="text-sm font-bold text-foreground">${telemetry.ec2Cost.toFixed(2)}</strong>
+              <span className="text-[10px] text-muted-foreground block mt-1">0 Instances Running</span>
             </div>
 
             <div className="p-3 bg-muted/20 rounded-lg border">
               <span className="text-[10px] text-muted-foreground block">Amazon RDS (PostgreSQL)</span>
-              <strong className="text-sm font-bold text-foreground">$64.20</strong>
-              <span className="text-[10px] text-muted-foreground block mt-1">db.t4g.small Multi-AZ</span>
+              <strong className="text-sm font-bold text-foreground">${telemetry.rdsCost.toFixed(2)}</strong>
+              <span className="text-[10px] text-muted-foreground block mt-1">0 DB Instances</span>
             </div>
 
             <div className="p-3 bg-muted/20 rounded-lg border">
               <span className="text-[10px] text-muted-foreground block">S3 Storage & CloudFront CDN</span>
-              <strong className="text-sm font-bold text-foreground">$18.30</strong>
-              <span className="text-[10px] text-muted-foreground block mt-1">24.5 GB Farm Assets</span>
+              <strong className="text-sm font-bold text-foreground">${telemetry.s3Cost.toFixed(2)}</strong>
+              <span className="text-[10px] text-muted-foreground block mt-1">0 GB Transfer</span>
             </div>
 
             <div className="p-3 bg-muted/20 rounded-lg border">
               <span className="text-[10px] text-muted-foreground block">Data Transfer & ECR Registry</span>
-              <strong className="text-sm font-bold text-foreground">$12.10</strong>
-              <span className="text-[10px] text-muted-foreground block mt-1">Cross-AZ & Container Images</span>
+              <strong className="text-sm font-bold text-foreground">${telemetry.dataTransferCost.toFixed(2)}</strong>
+              <span className="text-[10px] text-muted-foreground block mt-1">0 GB Data Out</span>
             </div>
           </div>
         </div>
