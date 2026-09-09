@@ -52,9 +52,10 @@ jobs:
       - name: Purge ECR Repositories & Images
         if: ${{ github.event.inputs.destroy_method == 'all' || github.event.inputs.destroy_method == 'aws_cli' }}
         run: |
-          echo "Force purging all ECR repositories to prevent RepositoryNotEmptyException..."
-          for repo in sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user; do
-            if aws ecr describe-repositories --repository-names "$repo" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
+          echo "Force purging all sunotal ECR repositories to prevent RepositoryNotEmptyException / RepositoryAlreadyExistsException..."
+          REPOS=$(aws ecr describe-repositories --region "${{ env.AWS_REGION }}" --query "repositories[?contains(repositoryName, 'sunotal')].repositoryName" --output text 2>/dev/null || echo "")
+          for repo in $REPOS; do
+            if [ -n "$repo" ] && [ "$repo" != "None" ]; then
               echo "Force deleting repository: $repo"
               aws ecr delete-repository --repository-name "$repo" --force --region "${{ env.AWS_REGION }}" || true
             fi
@@ -79,7 +80,7 @@ jobs:
             sleep 15
           fi
 
-          for tg in sunotal-app-tg sunotal-frontend-tg sunotal-auth-tg sunotal-operations-tg sunotal-inventory-tg sunotal-user-tg; do
+          for tg in sunotal-app-tg sunotal-frontend-tg sunotal-auth-tg sunotal-operations-tg sunotal-inventory-tg sunotal-user-tg sunotal-delivery-tg; do
             TG_ARN=$(aws elbv2 describe-target-groups --names "$tg" --region "${{ env.AWS_REGION }}" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
             if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
               TARGETS=$(aws elbv2 describe-target-health --target-group-arn "$TG_ARN" --region "${{ env.AWS_REGION }}" --query "TargetHealthDescriptions[*].Target.Id" --output text 2>/dev/null || echo "")
@@ -98,7 +99,7 @@ jobs:
         run: |
           if aws ecs describe-clusters --clusters sunotal-cluster --region "${{ env.AWS_REGION }}" --query "clusters[0].status" --output text 2>/dev/null | grep -q "ACTIVE"; then
             echo "Scaling down ECS services in sunotal-cluster..."
-            for svc in sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user; do
+            for svc in sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery; do
               aws ecs update-service --cluster sunotal-cluster --service "$svc" --desired-count 0 --region "${{ env.AWS_REGION }}" 2>/dev/null || true
             done
             
