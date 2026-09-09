@@ -20,7 +20,9 @@ import { toast } from "sonner";
 
 export default function Earnings() {
   const [, setLocation] = useLocation();
-  const [upiId, setUpiId] = useState("partner@okaxis");
+  const [upiId, setUpiId] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("sunotal_rider_upi_id") || "" : ""
+  );
   const [payoutRequested, setPayoutRequested] = useState(false);
 
   const earnings = {

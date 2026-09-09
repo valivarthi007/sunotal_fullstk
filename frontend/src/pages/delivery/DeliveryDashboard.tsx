@@ -30,6 +30,9 @@ export default function DeliveryDashboard() {
 
   const [riderUser, setRiderUser] = useState<any>(null);
   const [payoutRequested, setPayoutRequested] = useState(false);
+  const [riderUpiId, setRiderUpiId] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("sunotal_rider_upi_id") || "" : ""
+  );
 
   // Map Container Ref
   const mapContainerRef = React.useRef<HTMLDivElement | null>(null);
@@ -142,18 +145,23 @@ export default function DeliveryDashboard() {
   };
 
   const handlePayoutRequest = async () => {
+    if (!riderUpiId.trim() || !riderUpiId.includes("@")) {
+      toast.error("Please enter a valid UPI ID (e.g. name@upi) to receive your payout.");
+      return;
+    }
+
     try {
       const res = await fetch("/api/delivery/payout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ upiId: "rider@upi" }),
+        body: JSON.stringify({ upiId: riderUpiId }),
       });
       const data = await res.json();
       setPayoutRequested(true);
-      toast.success(data.message || "Day-out payout initiated!");
+      toast.success(data.message || `Day-out payout initiated to ${riderUpiId}!`);
     } catch {
       setPayoutRequested(true);
-      toast.success("Day-out payout transfer requested to UPI!");
+      toast.success(`Day-out payout transfer requested to ${riderUpiId}!`);
     }
   };
 
@@ -421,12 +429,22 @@ export default function DeliveryDashboard() {
                   </span>
                 </div>
 
-                <div className="space-y-3 text-xs bg-accent/30 p-4 rounded-2xl border">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Primary UPI ID:</span>
-                    <strong className="font-mono text-foreground">ramesh.kumar@okicici</strong>
+                <div className="space-y-4 bg-accent/30 p-4 rounded-2xl border">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Rider Payout UPI ID</label>
+                    <Input
+                      type="text"
+                      placeholder="Enter your UPI ID (e.g. rider@upi, phone@paytm)..."
+                      value={riderUpiId}
+                      onChange={(e) => {
+                        setRiderUpiId(e.target.value);
+                        localStorage.setItem("sunotal_rider_upi_id", e.target.value);
+                      }}
+                      className="h-11 font-mono text-xs bg-background border-border rounded-xl focus-visible:ring-emerald-500"
+                    />
                   </div>
-                  <div className="flex justify-between">
+
+                  <div className="flex justify-between text-xs pt-1 border-t border-border/50">
                     <span className="text-muted-foreground">Payout Transfer Speed:</span>
                     <strong className="text-emerald-600 font-bold">Instant 15-Min Credit</strong>
                   </div>
@@ -434,11 +452,11 @@ export default function DeliveryDashboard() {
 
                 <Button
                   onClick={handlePayoutRequest}
-                  disabled={payoutRequested}
+                  disabled={payoutRequested || stats.totalPayout <= 0}
                   className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs gap-2 shadow-md shadow-emerald-600/20"
                 >
                   <DollarSign className="w-4 h-4" />
-                  {payoutRequested ? "Payout Transfer Initiated to UPI" : "Request Day-Out Instant Payout to UPI"}
+                  {payoutRequested ? `Payout Transfer Initiated to ${riderUpiId}` : "Request Day-Out Instant Payout to UPI"}
                 </Button>
               </div>
             </div>
