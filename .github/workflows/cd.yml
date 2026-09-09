@@ -118,12 +118,27 @@ jobs:
             exit 1
           fi
 
-          echo "Updating ECS Services..."
-          for svc in sunotal-user-app sunotal-admin-app sunotal-vendor-app sunotal-delivery-app sunotal-support-app sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery sunotal-support; do
-            aws ecs update-service --cluster sunotal-cluster --service "$svc" --force-new-deployment || true
-          done
+          echo "Fetching active ECS service names in cluster..."
+          ACTIVE_SERVICES=$(aws ecs list-services --cluster sunotal-cluster --query "serviceArns[*]" --output text 2>/dev/null | tr '\t' '\n' | xargs -n1 basename 2>/dev/null || echo "")
 
-          aws ecs wait services-stable --cluster sunotal-cluster --services sunotal-user-app sunotal-admin-app sunotal-vendor-app sunotal-delivery-app sunotal-support-app sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery sunotal-support || true
+          if [ -z "$ACTIVE_SERVICES" ]; then
+            echo "⚠️ No active ECS services found in cluster sunotal-cluster."
+            echo "👉 Please run the 'Infrastructure Automation' workflow (infra.yml) to provision the ECS cluster and services via Terraform."
+          else
+            echo "Updating existing ECS Services..."
+            for svc in $ACTIVE_SERVICES; do
+              echo "Updating service: $svc"
+              aws ecs update-service --cluster sunotal-cluster --service "$svc" --force-new-deployment || true
+            done
+
+            echo "Waiting for services to reach stable state (in batches of max 8)..."
+            echo "$ACTIVE_SERVICES" | xargs -n 8 | while read -r batch; do
+              if [ -n "$batch" ]; then
+                echo "Waiting for batch: $batch"
+                aws ecs wait services-stable --cluster sunotal-cluster --services $batch || true
+              fi
+            done
+          fi
         continue-on-error: true
 
       - name: Post-Deployment Automated Test Suite
