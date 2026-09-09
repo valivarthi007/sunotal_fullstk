@@ -153,10 +153,13 @@ router.get("/delivery/track/:orderId", async (req, res) => {
   try {
     let order: any = null;
     const numericId = Number(orderId);
-    if (!isNaN(numericId) && numericId > 0) {
-      const [found] = await db.select().from(ordersTable).where(eq(ordersTable.id, numericId)).limit(1);
-      order = found;
-    }
+    const isValidNum = !isNaN(numericId) && String(numericId) === String(orderId);
+
+    const [found] = isValidNum
+      ? await db.select().from(ordersTable).where(eq(ordersTable.id, numericId)).limit(1)
+      : await db.select().from(ordersTable).where(eq(ordersTable.orderNumber, String(orderId))).limit(1);
+
+    order = found || null;
 
     const warehouseOrigin = {
       name: "Bengaluru Central Dark Store Hub #104",
