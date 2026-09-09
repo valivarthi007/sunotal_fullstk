@@ -1,70 +1,56 @@
 import { Router } from "express";
-import { db, productDefinitionsTable } from "../lib/db.js";
-import { eq } from "drizzle-orm";
+import { Product } from "../lib/db.js";
 import { requireAdmin } from "../lib/auth.js";
-import { insertProductDefinitionSchema } from "../schema/productDefinitions.js";
 
 const router = Router();
 
 // GET /api/product-definitions
 router.get("/product-definitions", async (req, res) => {
   try {
-    const list = await db.select().from(productDefinitionsTable);
-    res.json(list);
+    const products = await Product.find({}, "id name category createdAt");
+    res.json(products.map((p: any) => ({ id: p.id, name: p.name, category: p.category, createdAt: p.createdAt })));
   } catch (error) {
     console.error("Failed to list product definitions:", error);
     res.status(500).json({ error: "Failed to list product definitions" });
   }
 });
 
-// POST /api/product-definitions - Admin only
+// POST /api/product-definitions
 router.post("/product-definitions", requireAdmin, async (req, res) => {
-  const parsed = insertProductDefinitionSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid product definition fields. Name and Category are required." });
+  const { name, category } = req.body;
+  if (!name || !category) {
+    res.status(400).json({ error: "Name and Category are required." });
     return;
   }
 
   try {
-    const [existing] = await db
-      .select()
-      .from(productDefinitionsTable)
-      .where(eq(productDefinitionsTable.name, parsed.data.name))
-      .limit(1);
-
+    const existing = await Product.findOne({ name: name.trim() });
     if (existing) {
       res.status(409).json({ error: "Product name already exists in catalog definitions." });
       return;
     }
 
-    const [newDef] = await db
-      .insert(productDefinitionsTable)
-      .values(parsed.data)
-      .returning();
+    const newProd = await Product.create({
+      name: name.trim(),
+      category: category.trim(),
+      unit: "1 kg",
+      price: 50,
+      originalPrice: 60,
+      image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80",
+    });
 
-    res.status(201).json(newDef);
+    res.status(201).json({ id: newProd.id, name: newProd.name, category: newProd.category, createdAt: newProd.createdAt });
   } catch (error) {
     console.error("Failed to create product definition:", error);
     res.status(500).json({ error: "Failed to create product definition" });
   }
 });
 
-// DELETE /api/product-definitions/:id - Admin only
+// DELETE /api/product-definitions/:id
 router.delete("/product-definitions/:id", requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
-    const [existing] = await db
-      .select()
-      .from(productDefinitionsTable)
-      .where(eq(productDefinitionsTable.id, Number(id)))
-      .limit(1);
-
-    if (!existing) {
-      res.status(404).json({ error: "Product definition not found." });
-      return;
-    }
-
-    await db.delete(productDefinitionsTable).where(eq(productDefinitionsTable.id, Number(id)));
+    await Product.findOneAndDelete({ id: Number(id) });
     res.status(200).json({ success: true, message: "Product definition deleted successfully." });
   } catch (error) {
     console.error("Failed to delete product definition:", error);

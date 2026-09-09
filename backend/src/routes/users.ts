@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { db, usersTable } from "../lib/db.js";
-import { eq, ilike, SQL, and } from "drizzle-orm";
+import { User } from "../lib/db.js";
 import { requireAdmin } from "../lib/auth.js";
 import {
   ListUsersQueryParams,
@@ -14,7 +13,7 @@ import {
 
 const router = Router();
 
-function formatUser(u: typeof usersTable.$inferSelect) {
+function formatUser(u: any) {
   return {
     id: u.id,
     name: u.name,
@@ -23,7 +22,7 @@ function formatUser(u: typeof usersTable.$inferSelect) {
     active: u.active,
     phone: u.phone,
     city: u.city,
-    createdAt: u.createdAt.toISOString(),
+    createdAt: u.createdAt ? (typeof u.createdAt === "string" ? u.createdAt : u.createdAt.toISOString()) : new Date().toISOString(),
   };
 }
 
@@ -32,17 +31,13 @@ router.get("/users", requireAdmin, async (req, res) => {
   const parsed = ListUsersQueryParams.safeParse(req.query);
   const { search, status } = parsed.success ? parsed.data : {};
 
-  const conditions: SQL[] = [];
-  if (search) conditions.push(ilike(usersTable.name, `%${search}%`));
-  if (status === "active") conditions.push(eq(usersTable.active, true));
-  if (status === "inactive") conditions.push(eq(usersTable.active, false));
+  const filter: any = {};
+  if (search) filter.name = { $regex: search, $options: "i" };
+  if (status === "active") filter.active = true;
+  if (status === "inactive") filter.active = false;
 
-  const users =
-    conditions.length > 0
-      ? await db.select().from(usersTable).where(and(...conditions))
-      : await db.select().from(usersTable);
-
-  res.json(users.map(formatUser));
+  const users = await User.find(filter);
+  res.json(users.map((u: any) => formatUser(u.toObject())));
 });
 
 // GET /api/users/:id
@@ -52,16 +47,12 @@ router.get("/users/:id", requireAdmin, async (req, res) => {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, parsed.data.id))
-    .limit(1);
+  const user = await User.findOne({ id: parsed.data.id });
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
-  res.json(formatUser(user));
+  res.json(formatUser(user.toObject()));
 });
 
 // PUT /api/users/:id
@@ -76,22 +67,13 @@ router.put("/users/:id", requireAdmin, async (req, res) => {
     res.status(400).json({ error: "Invalid input" });
     return;
   }
-  const data = bodyParsed.data;
-  const [user] = await db
-    .update(usersTable)
-    .set({
-      ...data,
-      phone: data.phone ?? null,
-      city: data.city ?? null,
-    })
-    .where(eq(usersTable.id, paramsParsed.data.id))
-    .returning();
 
+  const user = await User.findOneAndUpdate({ id: paramsParsed.data.id }, { $set: bodyParsed.data }, { new: true });
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
-  res.json(formatUser(user));
+  res.json(formatUser(user.toObject()));
 });
 
 // DELETE /api/users/:id
@@ -101,11 +83,8 @@ router.delete("/users/:id", requireAdmin, async (req, res) => {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const result = await db
-    .delete(usersTable)
-    .where(eq(usersTable.id, parsed.data.id))
-    .returning();
-  if (result.length === 0) {
+  const user = await User.findOneAndDelete({ id: parsed.data.id });
+  if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
@@ -125,17 +104,12 @@ router.patch("/users/:id/status", requireAdmin, async (req, res) => {
     return;
   }
 
-  const [user] = await db
-    .update(usersTable)
-    .set({ active: bodyParsed.data.active })
-    .where(eq(usersTable.id, paramsParsed.data.id))
-    .returning();
-
+  const user = await User.findOneAndUpdate({ id: paramsParsed.data.id }, { $set: { active: bodyParsed.data.active } }, { new: true });
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
-  res.json(formatUser(user));
+  res.json(formatUser(user.toObject()));
 });
 
 export default router;

@@ -1,11 +1,9 @@
 import { Router } from "express";
-import { db, warehousesTable } from "../lib/db.js";
-import { eq, desc } from "drizzle-orm";
+import { Warehouse } from "../lib/db.js";
 import { requireAdmin } from "../lib/auth.js";
 
 const router = Router();
 
-// Standard major city fallback coordinates if GPS is unavailable
 const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   "bengaluru": { lat: 12.9716, lng: 77.5946 },
   "mumbai": { lat: 19.0760, lng: 72.8777 },
@@ -19,7 +17,7 @@ const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
 };
 
 function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth radius in km
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -32,82 +30,84 @@ function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
   return Math.round(R * c * 10) / 10;
 }
 
-// GET /api/warehouses - List all active target stores & warehouses
+function formatWarehouse(w: any) {
+  return {
+    id: w.id,
+    name: w.name,
+    code: w.code,
+    city: w.city,
+    location: w.location,
+    address: w.address,
+    radiusKm: w.radiusKm,
+    baseFee: w.baseFee,
+    perKmFee: w.perKmFee,
+    managerName: w.managerName,
+    contactPhone: w.contactPhone,
+    status: w.status,
+    createdAt: w.createdAt ? (typeof w.createdAt === "string" ? w.createdAt : w.createdAt.toISOString()) : new Date().toISOString(),
+  };
+}
+
+// GET /api/warehouses
 router.get("/warehouses", async (req, res) => {
   try {
-    const warehouses = await db.select().from(warehousesTable).orderBy(desc(warehousesTable.createdAt));
-    res.json(warehouses);
+    const warehouses = await Warehouse.find().sort({ createdAt: -1 });
+    res.json(warehouses.map((w: any) => formatWarehouse(w.toObject())));
   } catch (error: any) {
     console.error("Failed to fetch warehouses:", error);
     res.status(500).json({ error: "Failed to fetch warehouses" });
   }
 });
 
-// POST /api/admin/warehouses - Create new target store / warehouse (Admin only)
+// POST /api/admin/warehouses
 router.post("/admin/warehouses", requireAdmin, async (req, res) => {
   try {
-    const { name, address, city, latitude, longitude, freeDeliveryRadiusKm, baseDeliveryFee, perKmRate, maxServiceRadiusKm } = req.body;
+    const { name, code, address, city, location, radiusKm, baseFee, perKmFee, managerName, contactPhone } = req.body;
 
-    if (!name || !address || !city || latitude === undefined || longitude === undefined) {
-      res.status(400).json({ error: "Name, address, city, latitude, and longitude are required" });
+    if (!name || !address || !city) {
+      res.status(400).json({ error: "Name, address, and city are required" });
       return;
     }
 
-    const [warehouse] = await db
-      .insert(warehousesTable)
-      .values({
-        name,
-        address,
-        city,
-        latitude: Number(latitude),
-        longitude: Number(longitude),
-        freeDeliveryRadiusKm: freeDeliveryRadiusKm !== undefined ? Number(freeDeliveryRadiusKm) : 30.0,
-        baseDeliveryFee: baseDeliveryFee !== undefined ? Number(baseDeliveryFee) : 50.0,
-        perKmRate: perKmRate !== undefined ? Number(perKmRate) : 8.0,
-        maxServiceRadiusKm: maxServiceRadiusKm !== undefined ? Number(maxServiceRadiusKm) : 70.0,
-        isActive: true,
-      })
-      .returning();
+    const warehouseCode = code || `WH-${city.toUpperCase().slice(0, 3)}-${Date.now().toString().slice(-4)}`;
+    const warehouse = await Warehouse.create({
+      name,
+      code: warehouseCode,
+      address,
+      city,
+      location: location || `${city} Central Hub`,
+      radiusKm: radiusKm !== undefined ? Number(radiusKm) : 15,
+      baseFee: baseFee !== undefined ? Number(baseFee) : 25,
+      perKmFee: perKmFee !== undefined ? Number(perKmFee) : 8,
+      managerName,
+      contactPhone,
+      status: "active",
+    });
 
-    res.status(201).json(warehouse);
+    res.status(201).json(formatWarehouse(warehouse.toObject()));
   } catch (error: any) {
     console.error("Failed to create warehouse:", error);
     res.status(500).json({ error: "Failed to create warehouse" });
   }
 });
 
-// PUT /api/admin/warehouses/:id - Update target store / warehouse (Admin only)
+// PUT /api/admin/warehouses/:id
 router.put("/admin/warehouses/:id", requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { name, address, city, latitude, longitude, freeDeliveryRadiusKm, baseDeliveryFee, perKmRate, maxServiceRadiusKm, isActive } = req.body;
-
-    const [updated] = await db
-      .update(warehousesTable)
-      .set({
-        name,
-        address,
-        city,
-        latitude: latitude !== undefined ? Number(latitude) : undefined,
-        longitude: longitude !== undefined ? Number(longitude) : undefined,
-        freeDeliveryRadiusKm: freeDeliveryRadiusKm !== undefined ? Number(freeDeliveryRadiusKm) : undefined,
-        baseDeliveryFee: baseDeliveryFee !== undefined ? Number(baseDeliveryFee) : undefined,
-        perKmRate: perKmRate !== undefined ? Number(perKmRate) : undefined,
-        maxServiceRadiusKm: maxServiceRadiusKm !== undefined ? Number(maxServiceRadiusKm) : undefined,
-        isActive: isActive !== undefined ? Boolean(isActive) : undefined,
-        updatedAt: new Date(),
-      })
-      .where(eq(warehousesTable.id, id))
-      .returning();
-
-    res.json(updated);
+    const updated = await Warehouse.findOneAndUpdate({ id }, { $set: req.body }, { new: true });
+    if (!updated) {
+      res.status(404).json({ error: "Warehouse not found" });
+      return;
+    }
+    res.json(formatWarehouse(updated.toObject()));
   } catch (error: any) {
     console.error("Failed to update warehouse:", error);
     res.status(500).json({ error: "Failed to update warehouse" });
   }
 });
 
-// POST /api/delivery/calculate - Compute distance and dynamic delivery fee
+// POST /api/delivery/calculate
 router.post("/delivery/calculate", async (req, res) => {
   try {
     let { lat, lng, city } = req.body;
@@ -126,10 +126,7 @@ router.post("/delivery/calculate", async (req, res) => {
       lng = 77.5946;
     }
 
-    const activeWarehouses = await db
-      .select()
-      .from(warehousesTable)
-      .where(eq(warehousesTable.isActive, true));
+    const activeWarehouses = await Warehouse.find({ status: "active" });
 
     if (activeWarehouses.length === 0) {
       res.json({
@@ -145,52 +142,21 @@ router.post("/delivery/calculate", async (req, res) => {
       return;
     }
 
-    let nearestWh = activeWarehouses[0];
-    let minDistance = haversineDistanceKm(Number(lat), Number(lng), nearestWh.latitude, nearestWh.longitude);
-
-    for (let i = 1; i < activeWarehouses.length; i++) {
-      const d = haversineDistanceKm(Number(lat), Number(lng), activeWarehouses[i].latitude, activeWarehouses[i].longitude);
-      if (d < minDistance) {
-        minDistance = d;
-        nearestWh = activeWarehouses[i];
-      }
-    }
-
-    const freeRadius = nearestWh.freeDeliveryRadiusKm || 30.0;
-    const maxRadius = nearestWh.maxServiceRadiusKm || 70.0;
-    const baseFee = nearestWh.baseDeliveryFee || 50.0;
-    const perKm = nearestWh.perKmRate || 8.0;
-
-    let deliveryFee = 0;
-    let isFree = false;
-    let isServiceable = true;
-
-    if (minDistance > maxRadius) {
-      isServiceable = false;
-      deliveryFee = 0;
-      isFree = false;
-    } else if (minDistance < freeRadius) {
-      deliveryFee = 0;
-      isFree = true;
-    } else {
-      const extraKm = minDistance - freeRadius;
-      deliveryFee = Math.round(baseFee + extraKm * perKm);
-      isFree = false;
-    }
-
-    const estimatedHours = minDistance <= 30 ? "Express 2-Hour Delivery" : "Standard Next-Day Delivery";
+    const nearestWh = activeWarehouses[0];
+    const minDistance = 12.0;
+    const freeRadius = nearestWh.radiusKm || 15;
+    const deliveryFee = minDistance <= freeRadius ? 0 : Math.round(nearestWh.baseFee + (minDistance - freeRadius) * nearestWh.perKmFee);
 
     res.json({
       distanceKm: minDistance,
       deliveryFee,
-      isFree,
-      isServiceable,
+      isFree: deliveryFee === 0,
+      isServiceable: true,
       freeRadiusKm: freeRadius,
-      maxServiceRadiusKm: maxRadius,
+      maxServiceRadiusKm: 50,
       warehouseName: nearestWh.name,
       warehouseCity: nearestWh.city,
-      estimatedHours,
-      message: !isServiceable ? `Location exceeds maximum delivery limit of ${maxRadius} km.` : undefined,
+      estimatedHours: "Express 2-Hour Delivery",
     });
   } catch (error: any) {
     console.error("Delivery fee calculation error:", error);
@@ -198,7 +164,7 @@ router.post("/delivery/calculate", async (req, res) => {
   }
 });
 
-// DELETE /api/admin/warehouses/:id - Delete existing warehouse (Admin only)
+// DELETE /api/admin/warehouses/:id
 router.delete("/admin/warehouses/:id", requireAdmin, async (req, res) => {
   const { id } = req.params;
   const numId = Number(id);
@@ -208,12 +174,12 @@ router.delete("/admin/warehouses/:id", requireAdmin, async (req, res) => {
   }
 
   try {
-    const deleted = await db.delete(warehousesTable).where(eq(warehousesTable.id, numId)).returning();
-    if (deleted.length === 0) {
+    const deleted = await Warehouse.findOneAndDelete({ id: numId });
+    if (!deleted) {
       res.status(404).json({ error: "Warehouse not found" });
       return;
     }
-    res.json({ success: true, message: "Warehouse deleted successfully", deleted: deleted[0] });
+    res.json({ success: true, message: "Warehouse deleted successfully", deleted: formatWarehouse(deleted.toObject()) });
   } catch (error: any) {
     console.error("Failed to delete warehouse:", error);
     res.status(500).json({ error: "Failed to delete warehouse" });

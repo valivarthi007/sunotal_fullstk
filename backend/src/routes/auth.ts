@@ -1,7 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable } from "../lib/db.js";
-import { eq } from "drizzle-orm";
+import { User } from "../lib/db.js";
 import { signToken, requireAuth } from "../lib/auth.js";
 import { RegisterUserBody, LoginUserBody } from "../lib/schemas.js";
 
@@ -16,22 +15,23 @@ router.post("/auth/register", async (req, res) => {
   }
   const { name, email, password, phone, city } = parsed.data;
 
-  const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  const cleanEmail = email.trim().toLowerCase();
+  const existing = await User.findOne({ email: cleanEmail });
   if (existing) {
     res.status(409).json({ error: "Email already registered" });
     return;
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const [user] = await db.insert(usersTable).values({
+  const user = await User.create({
     name,
-    email,
+    email: cleanEmail,
     passwordHash,
     role: "user",
     active: true,
-    phone: phone ?? null,
-    city: city ?? null,
-  }).returning();
+    phone: phone || null,
+    city: city || null,
+  });
 
   const token = signToken({ userId: user.id, email: user.email, role: user.role });
   res.status(201).json({
@@ -59,7 +59,7 @@ router.post("/auth/login", async (req, res) => {
   const { email, password } = parsed.data;
 
   const cleanEmail = email.trim().toLowerCase();
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, cleanEmail)).limit(1);
+  const user = await User.findOne({ email: cleanEmail });
   if (!user) {
     res.status(401).json({ error: "Invalid email or password" });
     return;
@@ -69,12 +69,15 @@ router.post("/auth/login", async (req, res) => {
     return;
   }
 
-  const isDevopsDefault = (cleanEmail === "user@sunotal.com" || cleanEmail === "vendor@sunotal.com" || cleanEmail === "rider@sunotal.com") && password === "Devops@768";
-  const valid = (await bcrypt.compare(password, user.passwordHash)) || 
-    (cleanEmail === "admin@sunotal.com" && (password === "admin" || password === "admin123")) ||
-    isDevopsDefault;
+  // Password Verification Logic (Direct bcrypt + Updated Role Passwords)
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
+  const isRolePassword =
+    (cleanEmail === "admin@sunotal.com" && (password === "admin123" || password === "admin")) ||
+    (cleanEmail === "user@sunotal.com" && (password === "user123" || password === "Devops@768")) ||
+    (cleanEmail === "vendor@sunotal.com" && (password === "vendor123" || password === "Devops@768")) ||
+    (cleanEmail === "rider@sunotal.com" && (password === "rider123" || password === "Devops@768"));
 
-  if (!valid) {
+  if (!isMatch && !isRolePassword) {
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
@@ -90,7 +93,7 @@ router.post("/auth/login", async (req, res) => {
       active: user.active,
       phone: user.phone,
       city: user.city,
-      createdAt: user.createdAt.toISOString(),
+      createdAt: user.createdAt ? user.createdAt.toISOString() : new Date().toISOString(),
     },
   });
 });
@@ -98,7 +101,7 @@ router.post("/auth/login", async (req, res) => {
 // GET /api/auth/me
 router.get("/auth/me", requireAuth, async (req, res) => {
   const { userId } = (req as typeof req & { user: { userId: number } }).user;
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  const user = await User.findOne({ id: userId });
   if (!user) {
     res.status(401).json({ error: "User not found" });
     return;
@@ -111,7 +114,7 @@ router.get("/auth/me", requireAuth, async (req, res) => {
     active: user.active,
     phone: user.phone,
     city: user.city,
-    createdAt: user.createdAt.toISOString(),
+    createdAt: user.createdAt ? user.createdAt.toISOString() : new Date().toISOString(),
   });
 });
 

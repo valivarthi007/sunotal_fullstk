@@ -1,27 +1,41 @@
 import { Router } from "express";
-import { db, supportTicketsTable } from "../lib/db.js";
-import { eq, desc, and, SQL, ilike } from "drizzle-orm";
+import { SupportTicket } from "../lib/db.js";
 
 const router = Router();
 
-// GET /api/support/tickets - Fetch all tickets with role/category/status filters
+function formatTicket(t: any) {
+  return {
+    id: t.id,
+    ticketId: t.ticketId,
+    role: t.role,
+    senderName: t.senderName,
+    senderEmail: t.senderEmail,
+    senderPhone: t.senderPhone,
+    category: t.category,
+    orderId: t.orderId,
+    subject: t.subject,
+    description: t.description,
+    status: t.status,
+    resolution: t.resolution,
+    resolvedBy: t.resolvedBy,
+    createdAt: t.createdAt ? (typeof t.createdAt === "string" ? t.createdAt : t.createdAt.toISOString()) : new Date().toISOString(),
+    updatedAt: t.updatedAt ? (typeof t.updatedAt === "string" ? t.updatedAt : t.updatedAt.toISOString()) : new Date().toISOString(),
+  };
+}
+
+// GET /api/support/tickets
 router.get("/support/tickets", async (req, res) => {
   try {
     const { role, category, status, search } = req.query;
 
-    const conditions: SQL[] = [];
-    if (role && typeof role === "string") conditions.push(eq(supportTicketsTable.role, role));
-    if (category && typeof category === "string") conditions.push(eq(supportTicketsTable.category, category));
-    if (status && typeof status === "string") conditions.push(eq(supportTicketsTable.status, status));
-    if (search && typeof search === "string") {
-      conditions.push(ilike(supportTicketsTable.subject, `%${search}%`));
-    }
+    const filter: any = {};
+    if (role && typeof role === "string") filter.role = role;
+    if (category && typeof category === "string") filter.category = category;
+    if (status && typeof status === "string") filter.status = status;
+    if (search && typeof search === "string") filter.subject = { $regex: search, $options: "i" };
 
-    const tickets = conditions.length > 0
-      ? await db.select().from(supportTicketsTable).where(and(...conditions)).orderBy(desc(supportTicketsTable.createdAt))
-      : await db.select().from(supportTicketsTable).orderBy(desc(supportTicketsTable.createdAt));
+    const tickets = await SupportTicket.find(filter).sort({ createdAt: -1 });
 
-    // Fallback mock seed tickets if DB table is empty
     if (tickets.length === 0) {
       const mockTickets = [
         {
@@ -29,15 +43,13 @@ router.get("/support/tickets", async (req, res) => {
           ticketId: "TKT-2026-8941",
           role: "user",
           senderName: "Ananya Sharma",
-          senderEmail: "ananya@example.com",
+          senderEmail: "user@sunotal.com",
           senderPhone: "+91 98765 12345",
           category: "delivery",
           orderId: "ORD-2026-4891",
           subject: "Delay in 2-Hour Express Delivery",
           description: "Order placed 1.5 hours ago is still showing out for delivery.",
           status: "open",
-          resolution: null,
-          resolvedBy: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
@@ -45,7 +57,7 @@ router.get("/support/tickets", async (req, res) => {
           id: 102,
           ticketId: "TKT-2026-7723",
           role: "vendor",
-          senderName: "Raju Green Farms",
+          senderName: "Sunotal Farm Vendor",
           senderEmail: "vendor@sunotal.com",
           senderPhone: "+91 91234 56789",
           category: "payment",
@@ -53,8 +65,6 @@ router.get("/support/tickets", async (req, res) => {
           subject: "Quotation #42 Payout Settlement Delay",
           description: "Produce accepted 3 days ago. Requesting payout credit to SBI bank account.",
           status: "open",
-          resolution: null,
-          resolvedBy: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
@@ -62,7 +72,7 @@ router.get("/support/tickets", async (req, res) => {
           id: 103,
           ticketId: "TKT-2026-3391",
           role: "delivery",
-          senderName: "Suresh Rider",
+          senderName: "Sunotal Delivery Rider",
           senderEmail: "rider@sunotal.com",
           senderPhone: "+91 99887 76655",
           category: "payment",
@@ -70,24 +80,22 @@ router.get("/support/tickets", async (req, res) => {
           subject: "Day-Out Payout Credit Query",
           description: "Completed 18 deliveries today. Requesting direct UPI settlement confirmation.",
           status: "in_progress",
-          resolution: null,
-          resolvedBy: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-        }
+        },
       ];
       res.json(mockTickets);
       return;
     }
 
-    res.json(tickets);
+    res.json(tickets.map((t: any) => formatTicket(t.toObject())));
   } catch (error: any) {
     console.error("Failed to fetch support tickets:", error);
     res.status(500).json({ error: "Failed to fetch support tickets" });
   }
 });
 
-// POST /api/support/tickets - Submit new support ticket (User, Vendor, Rider)
+// POST /api/support/tickets
 router.post("/support/tickets", async (req, res) => {
   try {
     const { role = "user", senderName, senderEmail, senderPhone, category, orderId, subject, description } = req.body;
@@ -97,9 +105,6 @@ router.post("/support/tickets", async (req, res) => {
       return;
     }
 
-    // Role-based Category Validation Rule:
-    // User: product, payment, packaging, delivery
-    // Vendor/Delivery: payment only
     if ((role === "vendor" || role === "delivery") && category !== "payment") {
       res.status(400).json({ error: "Vendors and Delivery Partners can only submit Payment support queries." });
       return;
@@ -107,7 +112,7 @@ router.post("/support/tickets", async (req, res) => {
 
     const ticketId = `TKT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const [ticket] = await db.insert(supportTicketsTable).values({
+    const ticket = await SupportTicket.create({
       ticketId,
       role,
       senderName,
@@ -118,31 +123,41 @@ router.post("/support/tickets", async (req, res) => {
       subject,
       description,
       status: "open",
-    }).returning();
+    });
 
-    res.status(201).json(ticket);
+    res.status(201).json(formatTicket(ticket.toObject()));
   } catch (error: any) {
     console.error("Failed to create support ticket:", error);
     res.status(500).json({ error: "Failed to create support ticket" });
   }
 });
 
-// PUT /api/support/tickets/:id/resolve - Support agent resolves/solves a ticket
+// PUT /api/support/tickets/:id/resolve
 router.put("/support/tickets/:id/resolve", async (req, res) => {
   try {
     const { id } = req.params;
     const { resolution = "Resolved by Support Agent", status = "resolved", resolvedBy = "Support Portal Admin" } = req.body;
 
-    const numericId = Number(id);
-    const isValidId = !isNaN(numericId);
+    const numId = Number(id);
+    let updated = null;
+    if (!isNaN(numId)) {
+      updated = await SupportTicket.findOneAndUpdate(
+        { id: numId },
+        { $set: { status, resolution, resolvedBy } },
+        { new: true }
+      );
+    }
+    if (!updated) {
+      updated = await SupportTicket.findOneAndUpdate(
+        { ticketId: String(id) },
+        { $set: { status, resolution, resolvedBy } },
+        { new: true }
+      );
+    }
 
-    const [existing] = isValidId
-      ? await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.id, numericId)).limit(1)
-      : await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.ticketId, id)).limit(1);
-
-    if (!existing) {
+    if (!updated) {
       res.json({
-        id: numericId || Date.now(),
+        id: numId || Date.now(),
         ticketId: id,
         status: "resolved",
         resolution,
@@ -152,18 +167,7 @@ router.put("/support/tickets/:id/resolve", async (req, res) => {
       return;
     }
 
-    const [updated] = await db
-      .update(supportTicketsTable)
-      .set({
-        status,
-        resolution,
-        resolvedBy,
-        updatedAt: new Date(),
-      })
-      .where(eq(supportTicketsTable.id, existing.id))
-      .returning();
-
-    res.json(updated);
+    res.json(formatTicket(updated.toObject()));
   } catch (error: any) {
     console.error("Failed to resolve ticket:", error);
     res.status(500).json({ error: "Failed to resolve support ticket" });

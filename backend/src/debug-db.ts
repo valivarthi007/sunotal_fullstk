@@ -1,10 +1,14 @@
 import 'dotenv/config';
-import { db, productsTable, inventoryTable, vendorQuotationsTable } from "./lib/db.js";
+import mongoose from "mongoose";
+import { Product, Inventory, VendorQuotation } from "./lib/db.js";
 
 async function main() {
-  const products = await db.select().from(productsTable);
-  const inventory = await db.select().from(inventoryTable);
-  const quotations = await db.select().from(vendorQuotationsTable);
+  const MONGODB_URI = process.env.MONGODB_URI || process.env.DATABASE_URL || "mongodb://127.0.0.1:27017/sunotal";
+  await mongoose.connect(MONGODB_URI);
+
+  const products = await Product.find();
+  const inventory = await Inventory.find();
+  const quotations = await VendorQuotation.find();
 
   console.log("=== PRODUCTS ===");
   console.log(JSON.stringify(products, null, 2));
@@ -14,6 +18,8 @@ async function main() {
 
   console.log("=== QUOTATIONS ===");
   console.log(JSON.stringify(quotations, null, 2));
+
+  await mongoose.disconnect();
 }
 
 main().catch(console.error);

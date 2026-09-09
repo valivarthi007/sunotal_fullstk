@@ -34,12 +34,44 @@ import {
 import { toast } from "sonner";
 
 export default function SupportPortal() {
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const token = localStorage.getItem("sunotal_admin_token") || localStorage.getItem("sunotal_token");
+    return !!token;
+  });
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError("");
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem("sunotal_admin_token", data.token);
+        setIsAdminAuthenticated(true);
+        toast.success("Support Portal Admin authenticated successfully");
+      } else {
+        const err = await res.json();
+        setLoginError(err.error || "Invalid Admin credentials");
+      }
+    } catch {
+      setLoginError("Failed to connect to authentication service");
+    }
+  };
 
   // Resolve Modal State
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
@@ -173,6 +205,60 @@ export default function SupportPortal() {
       toast.error("Failed to submit ticket");
     }
   };
+
+  if (!isAdminAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-3">
+            <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-2xl flex items-center justify-center mx-auto">
+              <LifeBuoy className="w-8 h-8 animate-pulse" />
+            </div>
+            <h2 className="text-xl font-bold text-white">Support Portal Admin Login</h2>
+            <p className="text-xs text-slate-400">
+              Access to support-sunotal.automateuniverse.space requires Admin credentials (<code className="text-emerald-400">admin@sunotal.com</code> / <code className="text-emerald-400">admin123</code>).
+            </p>
+          </div>
+
+          <form onSubmit={handleAdminLoginSubmit} className="space-y-4 text-xs">
+            {loginError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-center font-bold">
+                {loginError}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-300">Admin Email</label>
+              <Input
+                type="email"
+                required
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="admin@sunotal.com"
+                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-300">Admin Password</label>
+              <Input
+                type="password"
+                required
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="admin123"
+                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+              />
+            </div>
+            <Button
+              type="submit"
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs h-11 shadow-lg shadow-emerald-500/20"
+            >
+              Sign In to Support Portal
+            </Button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">

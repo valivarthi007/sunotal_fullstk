@@ -1,7 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, productsTable, vendorsTable, ordersTable } from "../lib/db.js";
-import { eq, desc } from "drizzle-orm";
+import { User, Product, Vendor, Order } from "../lib/db.js";
 import { signToken, requireAdmin } from "../lib/auth.js";
 import { AdminLoginBody } from "../lib/schemas.js";
 
@@ -16,18 +15,14 @@ router.post("/admin/login", async (req, res) => {
   }
   const { email, password } = parsed.data;
   const cleanEmail = email.trim().toLowerCase();
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, cleanEmail))
-    .limit(1);
+  const user = await User.findOne({ email: cleanEmail });
 
   if (!user || user.role !== "admin") {
     res.status(401).json({ error: "Invalid credentials or not an admin" });
     return;
   }
 
-  const valid = (await bcrypt.compare(password, user.passwordHash)) || 
+  const valid = (await bcrypt.compare(password, user.passwordHash)) ||
     (cleanEmail === "admin@sunotal.com" && (password === "admin" || password === "admin123"));
   if (!valid) {
     res.status(401).json({ error: "Invalid credentials" });
@@ -45,7 +40,7 @@ router.post("/admin/login", async (req, res) => {
       active: user.active,
       phone: user.phone,
       city: user.city,
-      createdAt: user.createdAt.toISOString(),
+      createdAt: user.createdAt ? user.createdAt.toISOString() : new Date().toISOString(),
     },
   });
 });
@@ -53,15 +48,15 @@ router.post("/admin/login", async (req, res) => {
 // GET /api/admin/stats
 router.get("/admin/stats", requireAdmin, async (req, res) => {
   const [products, vendors, users] = await Promise.all([
-    db.select().from(productsTable),
-    db.select().from(vendorsTable),
-    db.select().from(usersTable),
+    Product.find(),
+    Vendor.find(),
+    User.find(),
   ]);
 
   const totalProducts = products.length;
   const totalVendors = vendors.length;
   const totalUsers = users.length;
-  const activeVendors = vendors.filter((v) => v.status === "approved").length;
+  const activeVendors = vendors.filter((v: any) => v.status === "approved").length;
 
   // Category breakdown
   const catMap: Record<string, number> = {};
@@ -75,17 +70,17 @@ router.get("/admin/stats", requireAdmin, async (req, res) => {
 
   // Recent 5 vendors and users
   const recentVendors = vendors
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5)
-    .map((v) => ({
-      ...v,
-      createdAt: v.createdAt.toISOString(),
+    .map((v: any) => ({
+      ...v.toObject(),
+      createdAt: v.createdAt ? v.createdAt.toISOString() : new Date().toISOString(),
     }));
 
   const recentUsers = users
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5)
-    .map((u) => ({
+    .map((u: any) => ({
       id: u.id,
       name: u.name,
       email: u.email,
@@ -93,7 +88,7 @@ router.get("/admin/stats", requireAdmin, async (req, res) => {
       active: u.active,
       phone: u.phone,
       city: u.city,
-      createdAt: u.createdAt.toISOString(),
+      createdAt: u.createdAt ? u.createdAt.toISOString() : new Date().toISOString(),
     }));
 
   res.json({
@@ -107,10 +102,10 @@ router.get("/admin/stats", requireAdmin, async (req, res) => {
   });
 });
 
-// GET /api/admin/ledger - Real-time financial ledger & settlement calculation
+// GET /api/admin/ledger
 router.get("/admin/ledger", requireAdmin, async (req, res) => {
   try {
-    const orders = await db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt));
+    const orders = await Order.find().sort({ createdAt: -1 });
 
     let totalRevenue = 0;
     let onlineCollections = 0;
@@ -118,13 +113,13 @@ router.get("/admin/ledger", requireAdmin, async (req, res) => {
     let poReceivables = 0;
     let completedSettlements = 0;
 
-    const transactions = orders.map((o, idx) => {
-      const amt = Number(o.finalAmount || o.totalAmount || 0);
+    const transactions = orders.map((o: any, idx: number) => {
+      const amt = Number(o.totalAmount || 0);
       totalRevenue += amt;
 
       if (o.paymentMethod === "upi") {
         upiCollections += amt;
-      } else if (o.paymentMethod === ("po" as any) || (o.paymentMethod as any) === "corporate_po") {
+      } else if (o.paymentMethod === "po" || o.paymentMethod === "corporate_po") {
         poReceivables += amt;
       } else {
         onlineCollections += amt;
@@ -136,11 +131,11 @@ router.get("/admin/ledger", requireAdmin, async (req, res) => {
 
       return {
         id: `TXN-${1000 + idx}`,
-        orderId: o.orderNumber,
-        time: o.createdAt ? o.createdAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "10:00 AM",
-        customer: o.shippingAddress ? `${o.city || "Client"} (${o.shippingAddress.slice(0, 20)}...)` : "Customer",
+        orderId: o.orderId,
+        time: o.createdAt ? new Date(o.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "10:00 AM",
+        customer: o.address ? `${o.city || "Client"} (${o.address.slice(0, 20)}...)` : "Customer",
         type: o.paymentMethod === "po" ? "corporate_po" : o.paymentMethod,
-        VPA: o.paymentMethod === "upi" ? "user@okicici" : o.paymentMethod === "po" ? o.corporatePoRef || "PO-REF" : "CARD-GATEWAY",
+        VPA: o.paymentMethod === "upi" ? "user@okicici" : o.paymentMethod === "po" ? "PO-REF" : "CARD-GATEWAY",
         amount: amt,
         status: o.paymentStatus === "paid" ? "Captured" : "Pending",
         payoutStatus: o.status === "delivered" ? "Settled" : "Processing",
@@ -166,21 +161,20 @@ router.get("/admin/ledger", requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/admin/observability - Live Prometheus TSDB & AWS infrastructure cost metrics
+// GET /api/admin/observability
 router.get("/admin/observability", requireAdmin, async (req, res) => {
   try {
     const [products, vendors, users, orders] = await Promise.all([
-      db.select().from(productsTable),
-      db.select().from(vendorsTable),
-      db.select().from(usersTable),
-      db.select().from(ordersTable),
+      Product.find(),
+      Vendor.find(),
+      User.find(),
+      Order.find(),
     ]);
 
     const memMb = Math.round(process.memoryUsage().heapUsed / (1024 * 1024));
     const now = new Date();
     const dayOfMonth = Math.max(1, now.getDate());
 
-    // Dynamic cost calculation based on active system load
     const baseDailyRunRate = Number((3.5 + (products.length + users.length) * 0.05).toFixed(2));
     const mtdSpend = Number((dayOfMonth * baseDailyRunRate).toFixed(2));
     const projectedSpend = Number((baseDailyRunRate * 30).toFixed(2));
@@ -212,8 +206,8 @@ router.get("/admin/observability", requireAdmin, async (req, res) => {
         { name: "Inventory Microservice", port: 5003, status: "Active", latency: "11ms", uptime: "99.99%", metricsUrl: "/metrics" },
         { name: "User Microservice", port: 5004, status: "Active", latency: "15ms", uptime: "99.92%", metricsUrl: "/metrics" },
         { name: "Delivery Microservice", port: 5006, status: "Active", latency: "22ms", uptime: "99.90%", metricsUrl: "/metrics" },
-        { name: "Prometheus TSDB Engine", port: 9090, status: "Connected", latency: "4ms", uptime: "100%", metricsUrl: "/metrics" },
-        { name: "Grafana Telemetry Server", port: 3000, status: "Connected", latency: "8ms", uptime: "100%", metricsUrl: "http://localhost:3000" },
+        { name: "MongoDB Document Cluster", port: 27017, status: "Connected", latency: "2ms", uptime: "100%", metricsUrl: "/metrics" },
+        { name: "Redis Caching Container", port: 6379, status: "Connected", latency: "1ms", uptime: "100%", metricsUrl: "/metrics" },
       ],
     });
   } catch (error: any) {

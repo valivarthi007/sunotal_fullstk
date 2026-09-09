@@ -13,10 +13,6 @@ services:
       - frontend
       - backend
       - delivery-service
-      - auth-service
-      - operations-service
-      - inventory-service
-      - user-service
 
   frontend:
     image: ${ECR_REGISTRY}/sunotal-frontend:${IMAGE_TAG}
@@ -34,7 +30,8 @@ services:
     environment:
       - PORT=5000
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
+      - MONGODB_URI=${MONGODB_URI}
+      - REDIS_HOST=${REDIS_HOST}
       - SESSION_SECRET=${SESSION_SECRET}
       - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
       - FRONTEND_URL=${FRONTEND_URL}
@@ -48,63 +45,8 @@ services:
     environment:
       - PORT=5006
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
-      - FRONTEND_URL=${FRONTEND_URL}
-
-  auth-service:
-    image: ${ECR_REGISTRY}/sunotal-auth:${IMAGE_TAG}
-    container_name: sunotal-auth
-    restart: unless-stopped
-    expose:
-      - "5001"
-    environment:
-      - PORT=5001
-      - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
-      - FRONTEND_URL=${FRONTEND_URL}
-
-  operations-service:
-    image: ${ECR_REGISTRY}/sunotal-operations:${IMAGE_TAG}
-    container_name: sunotal-operations
-    restart: unless-stopped
-    expose:
-      - "5002"
-    environment:
-      - PORT=5002
-      - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
-      - FRONTEND_URL=${FRONTEND_URL}
-
-  inventory-service:
-    image: ${ECR_REGISTRY}/sunotal-inventory:${IMAGE_TAG}
-    container_name: sunotal-inventory
-    restart: unless-stopped
-    expose:
-      - "5003"
-    environment:
-      - PORT=5003
-      - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
-      - FRONTEND_URL=${FRONTEND_URL}
-
-  user-service:
-    image: ${ECR_REGISTRY}/sunotal-user:${IMAGE_TAG}
-    container_name: sunotal-user
-    restart: unless-stopped
-    expose:
-      - "5004"
-    environment:
-      - PORT=5004
-      - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
+      - MONGODB_URI=${MONGODB_URI}
+      - REDIS_HOST=${REDIS_HOST}
       - SESSION_SECRET=${SESSION_SECRET}
       - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
       - FRONTEND_URL=${FRONTEND_URL}
