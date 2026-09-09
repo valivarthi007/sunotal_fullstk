@@ -187,6 +187,15 @@ jobs:
       - name: Deploy to ECS Fargate
         if: env.DEPLOY_TARGET == 'ecs'
         run: |
+          echo "Checking if ECS cluster 'sunotal-cluster' exists..."
+          CLUSTER_STATE=$(aws ecs describe-clusters --clusters sunotal-cluster --query "clusters[0].status" --output text 2>/dev/null || echo "MISSING")
+
+          if [ "$CLUSTER_STATE" != "ACTIVE" ]; then
+            echo "❌ Error: ECS Cluster 'sunotal-cluster' is $CLUSTER_STATE."
+            echo "👉 You MUST run the 'Infrastructure Automation' workflow (infra.yml) first to provision the ECS cluster, database, target groups, and task definitions via Terraform."
+            exit 1
+          fi
+
           echo "Updating ECS Services..."
           aws ecs update-service --cluster sunotal-cluster --service sunotal-frontend --force-new-deployment || true
           aws ecs update-service --cluster sunotal-cluster --service sunotal-auth --force-new-deployment || true
