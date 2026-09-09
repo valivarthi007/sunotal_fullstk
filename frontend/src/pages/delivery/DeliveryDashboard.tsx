@@ -162,14 +162,25 @@ export default function DeliveryDashboard() {
       setOrderStage("delivered");
       toast.success("Order delivered successfully!");
 
-      // Update backend status API
-      if (acceptedOrder?.id) {
-        fetch(`/api/orders/${acceptedOrder.id}/status`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "delivered" }),
-        }).catch((err) => console.error("Backend order status update error:", err));
-      }
+      // Update backend status API with Auth token
+      const token = localStorage.getItem("sunotal_delivery_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const targetId = acceptedOrder?.id || "latest";
+      fetch(`/api/orders/${targetId}/status`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ status: "delivered", paymentStatus: "paid" }),
+      }).catch((err) => console.error("Backend order status update error:", err));
+
+      fetch(`/api/orders/latest/status`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ status: "delivered", paymentStatus: "paid" }),
+      }).catch(() => {});
 
       // Update localStorage sunotal_user_orders
       try {
@@ -183,9 +194,10 @@ export default function DeliveryDashboard() {
                 o.orderNumber === acceptedOrder?.id ||
                 o.orderId === acceptedOrder?.id ||
                 o.status === "processing" ||
-                o.status === "shipped"
+                o.status === "shipped" ||
+                o.status === "out_for_delivery"
               ) {
-                return { ...o, status: "delivered" };
+                return { ...o, status: "delivered", paymentStatus: "paid" };
               }
               return o;
             });

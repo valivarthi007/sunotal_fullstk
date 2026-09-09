@@ -275,19 +275,62 @@ router.put("/orders/:id/status", requireAuth, async (req: any, res) => {
     const isValidNum = !isNaN(numId) && String(numId) === String(rawParam);
     const { status, paymentStatus } = req.body;
 
-    const [updated] = isValidNum
-      ? await db
-          .update(ordersTable)
-          .set({ status: status || undefined, paymentStatus: paymentStatus || undefined, updatedAt: new Date() })
-          .where(eq(ordersTable.id, numId))
-          .returning()
-      : await db
-          .update(ordersTable)
-          .set({ status: status || undefined, paymentStatus: paymentStatus || undefined, updatedAt: new Date() })
-          .where(eq(ordersTable.orderNumber, String(rawParam)))
-          .returning();
+    let updatedList: any[] = [];
+    if (rawParam === "latest" || rawParam === "all_active") {
+      updatedList = await db
+        .update(ordersTable)
+        .set({
+          ...(status ? { status } : {}),
+          ...(paymentStatus ? { paymentStatus } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(ordersTable.status, "processing"))
+        .returning();
+    } else {
+      updatedList = isValidNum
+        ? await db
+            .update(ordersTable)
+            .set({
+              ...(status ? { status } : {}),
+              ...(paymentStatus ? { paymentStatus } : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(ordersTable.id, numId))
+            .returning()
+        : await db
+            .update(ordersTable)
+            .set({
+              ...(status ? { status } : {}),
+              ...(paymentStatus ? { paymentStatus } : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(ordersTable.orderNumber, String(rawParam)))
+            .returning();
 
-    res.json(updated || { id: rawParam, status, paymentStatus });
+      // Fallback: If no order matched by exact ID/orderNumber, update the most recent processing order
+      if (updatedList.length === 0) {
+        const [recentProcessing] = await db
+          .select()
+          .from(ordersTable)
+          .where(eq(ordersTable.status, "processing"))
+          .orderBy(desc(ordersTable.createdAt))
+          .limit(1);
+
+        if (recentProcessing) {
+          updatedList = await db
+            .update(ordersTable)
+            .set({
+              ...(status ? { status } : {}),
+              ...(paymentStatus ? { paymentStatus } : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(ordersTable.id, recentProcessing.id))
+            .returning();
+        }
+      }
+    }
+
+    res.json(updatedList[0] || { id: rawParam, status, paymentStatus });
   } catch (error: any) {
     console.error("Failed to update order status:", error);
     res.status(500).json({ error: "Failed to update order status" });

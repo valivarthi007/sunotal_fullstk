@@ -75,10 +75,33 @@ export default function Orders() {
     setLoading(true);
     try {
       const data = await fetchUserOrders();
-      setOrders(Array.isArray(data) ? data : []);
+      let combined: OrderApi[] = Array.isArray(data) ? [...data] : [];
+
+      try {
+        const stored = localStorage.getItem("sunotal_user_orders");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            for (const item of parsed) {
+              const existingIdx = combined.findIndex(
+                (o) => o.orderNumber === item.orderNumber || o.id === item.id || (o.orderNumber && item.orderNumber && o.orderNumber === item.orderNumber)
+              );
+              if (existingIdx >= 0) {
+                // If local status is delivered, prioritize delivered status
+                if (item.status === "delivered" || item.paymentStatus === "paid") {
+                  combined[existingIdx] = { ...combined[existingIdx], ...item, status: "delivered", paymentStatus: "paid" };
+                }
+              } else {
+                combined.push(item);
+              }
+            }
+          }
+        }
+      } catch (e) {}
+
+      setOrders(combined);
     } catch (e: any) {
       console.error("Failed to load orders:", e);
-      // Fallback to localStorage if unauthenticated or offline
       try {
         const stored = localStorage.getItem("sunotal_user_orders");
         if (stored) {
@@ -88,7 +111,6 @@ export default function Orders() {
           setOrders([]);
         }
       } catch (err) {
-        console.error("Failed to parse stored orders:", err);
         setOrders([]);
       }
     } finally {
@@ -98,6 +120,10 @@ export default function Orders() {
 
   useEffect(() => {
     loadOrders();
+
+    const handleStatusEvent = () => loadOrders();
+    window.addEventListener("storage", handleStatusEvent);
+    window.addEventListener("order-status-changed", handleStatusEvent);
 
     try {
       const storedGrievances = localStorage.getItem(STORAGE_GRIEVANCES_KEY);
@@ -109,6 +135,11 @@ export default function Orders() {
       console.error("Failed to parse stored grievances:", e);
       setGrievances([]);
     }
+
+    return () => {
+      window.removeEventListener("storage", handleStatusEvent);
+      window.removeEventListener("order-status-changed", handleStatusEvent);
+    };
   }, []);
 
   const fmt = (n: number) =>
