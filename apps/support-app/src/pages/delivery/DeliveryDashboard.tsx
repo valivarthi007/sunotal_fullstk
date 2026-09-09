@@ -13,12 +13,12 @@ export default function DeliveryDashboard() {
   const [activeTab, setActiveTab] = useState<"orders" | "earnings" | "reports">("orders");
 
   // Order Alert Modal State
-  const [hasAlert, setHasAlert] = useState(true);
+  const [hasAlert, setHasAlert] = useState(false);
   const [timer, setTimer] = useState(30);
   const [acceptedOrder, setAcceptedOrder] = useState<any | null>(null);
   const [orderStage, setOrderStage] = useState<"accepted" | "at_warehouse" | "picked_up" | "delivered">("accepted");
   
-  // Reports & Logic Payment Data (Initialized with fallback & cached values)
+  // Reports & Logic Payment Data (Initialized cleanly without hardcoded presets)
   const [stats, setStats] = useState(() => {
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem("sunotal_delivery_stats");
@@ -27,22 +27,22 @@ export default function DeliveryDashboard() {
       }
     }
     return {
-      completedDeliveries: 18,
-      totalKmsRun: 64.5,
+      completedDeliveries: 0,
+      totalKmsRun: 0,
       basePayPerOrder: 30,
       distanceRatePerKm: 10,
-      totalBasePay: 540,
-      totalDistancePay: 645,
-      totalTips: 240,
-      totalPayout: 1425,
-      payoutStatus: "Ready for Payout",
+      totalBasePay: 0,
+      totalDistancePay: 0,
+      totalTips: 0,
+      totalPayout: 0,
+      payoutStatus: "No Earnings Pending",
     };
   });
 
   const [riderUser, setRiderUser] = useState<any>(null);
   const [payoutRequested, setPayoutRequested] = useState(false);
   const [riderUpiId, setRiderUpiId] = useState(() =>
-    typeof window !== "undefined" ? localStorage.getItem("sunotal_rider_upi_id") || "rider@upi" : "rider@upi"
+    typeof window !== "undefined" ? localStorage.getItem("sunotal_rider_upi_id") || "" : ""
   );
 
   // Handle Day-Out Payout Request
@@ -202,16 +202,16 @@ export default function DeliveryDashboard() {
             realOrders = data.map((o: any) => ({
               id: o.id || o.orderNumber,
               numericId: o.numericId || o.id,
-              customerName: o.customerName || "Customer",
-              address: o.address || "Delivery Address",
-              city: o.city || userLoc?.city || "Bengaluru",
-              items: Array.isArray(o.items) ? o.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Item"} (${i.quantity || 1})`) : ["Fresh Produce"],
-              distanceKm: 3.4,
-              pay: Math.round(30 + 3.4 * 10),
-              totalAmount: o.totalAmount || 250,
+              customerName: o.customerName || "",
+              address: o.address || "",
+              city: o.city || "",
+              items: Array.isArray(o.items) ? o.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || ""} (${i.quantity || 1})`) : [],
+              distanceKm: 0,
+              pay: Number(o.totalAmount || 0),
+              totalAmount: Number(o.totalAmount || 0),
               status: o.status || "placed",
-              lat: o.lat || (o.city?.toLowerCase().includes("hyderabad") ? 17.3850 : o.city?.toLowerCase().includes("vijayawada") ? 16.5062 : 12.9716),
-              lng: o.lng || (o.city?.toLowerCase().includes("hyderabad") ? 78.4867 : o.city?.toLowerCase().includes("vijayawada") ? 80.6480 : 77.5946),
+              lat: Number(o.lat || 0),
+              lng: Number(o.lng || 0),
             }));
           }
         }
@@ -232,16 +232,16 @@ export default function DeliveryDashboard() {
                 realOrders.unshift({
                   id: orderIdStr,
                   numericId: uo.id || uo.numericId,
-                  customerName: uo.customerName || uo.name || uo.deliveryAddress?.name || "Sunotal Customer",
-                  address: uo.address || `${uo.deliveryAddress?.addressLine1 || "Main Street"}, ${uo.city || userLoc?.city || "Bengaluru"}`,
-                  city: uo.city || userLoc?.city || "Bengaluru",
-                  items: Array.isArray(uo.items) ? uo.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Item"} (${i.quantity || 1})`) : ["Fresh Groceries Pack"],
-                  distanceKm: 3.4,
-                  pay: Math.round(30 + 3.4 * 10),
-                  totalAmount: uo.totalAmount || uo.finalAmount || 250,
+                  customerName: uo.customerName || uo.name || uo.deliveryAddress?.name || "",
+                  address: uo.address || (uo.deliveryAddress?.addressLine1 ? `${uo.deliveryAddress.addressLine1}${uo.city ? `, ${uo.city}` : ""}` : ""),
+                  city: uo.city || "",
+                  items: Array.isArray(uo.items) ? uo.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || ""} (${i.quantity || 1})`) : [],
+                  distanceKm: 0,
+                  pay: Number(uo.totalAmount || uo.finalAmount || 0),
+                  totalAmount: Number(uo.totalAmount || uo.finalAmount || 0),
                   status: uo.status || "placed",
-                  lat: uo.lat || (uo.city?.toLowerCase().includes("hyderabad") ? 17.3850 : uo.city?.toLowerCase().includes("vijayawada") ? 16.5062 : 12.9716),
-                  lng: uo.lng || (uo.city?.toLowerCase().includes("hyderabad") ? 78.4867 : uo.city?.toLowerCase().includes("vijayawada") ? 80.6480 : 77.5946),
+                  lat: Number(uo.lat || 0),
+                  lng: Number(uo.lng || 0),
                 });
               }
             }

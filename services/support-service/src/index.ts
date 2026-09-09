@@ -79,7 +79,7 @@ app.post("/api/support/tickets", async (req: any, res: any) => {
 // PUT /api/support/tickets/:id/resolve
 app.put("/api/support/tickets/:id/resolve", async (req: any, res: any) => {
   const { id } = req.params;
-  const { resolution = "Resolved by Support Agent", status = "resolved", resolvedBy = "Support Portal Admin" } = req.body;
+  const { resolution = "", status = "resolved", resolvedBy = "" } = req.body;
 
   const ticket = await SupportTicket.findOneAndUpdate(
     { ticketId: String(id) },

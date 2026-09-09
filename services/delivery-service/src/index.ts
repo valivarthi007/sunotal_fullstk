@@ -83,14 +83,14 @@ app.get("/api/delivery/orders/active", async (req: any, res: any) => {
     const formatted = orders.map((o: any) => ({
       id: o.orderId,
       numericId: o.id,
-      customerName: o.customerName || "Customer",
-      phone: "+91 98765 43210",
-      address: `${o.address || "Main Street"}, ${o.city || "Bengaluru"}`,
-      city: o.city || "Bengaluru",
+      customerName: o.customerName || "",
+      phone: o.phone || "",
+      address: o.address ? `${o.address}${o.city ? `, ${o.city}` : ""}` : "",
+      city: o.city || "",
       totalAmount: Number(o.totalAmount || 0),
-      paymentMethod: o.paymentMethod || "card",
-      paymentStatus: o.paymentStatus || "paid",
-      status: o.status || "placed",
+      paymentMethod: o.paymentMethod || "",
+      paymentStatus: o.paymentStatus || "",
+      status: o.status || "",
       createdAt: o.createdAt,
       items: o.items || [],
     }));
@@ -136,7 +136,7 @@ app.post("/api/delivery/payout", async (req, res) => {
   res.json({
     success: true,
     status: "PROCESSING",
-    upiId: upiId || "rider@upi",
+    upiId: upiId || "",
     referenceId: `UPI-${Date.now().toString().slice(-6)}`,
     message: "Day-out payout initiated. Amount will be credited to UPI within 15 minutes.",
   });

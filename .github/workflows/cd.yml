@@ -65,7 +65,9 @@ jobs:
           fi
 
           echo "DEPLOY_TARGET=$TARGET" >> $GITHUB_ENV
-          echo "✅ Active Deployment Target set to: $TARGET"      - name: Deploy to AWS EKS
+          echo "✅ Active Deployment Target set to: $TARGET"
+
+      - name: Deploy to AWS EKS
         if: env.DEPLOY_TARGET == 'eks'
         run: |
           echo "🚀 Deploying to AWS EKS Cluster (sunotal-cluster)..."

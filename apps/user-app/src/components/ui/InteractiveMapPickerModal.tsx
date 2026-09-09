@@ -34,8 +34,8 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
   const [isDetectingGps, setIsDetectingGps] = useState(false);
 
   // Map Coordinates & Address State
-  const [lat, setLat] = useState(12.9716);
-  const [lng, setLng] = useState(77.5946);
+  const [lat, setLat] = useState(() => userLoc?.latitude || 0);
+  const [lng, setLng] = useState(() => userLoc?.longitude || 0);
   const [houseNo, setHouseNo] = useState("");
   const [street, setStreet] = useState("");
   const [landmark, setLandmark] = useState("");

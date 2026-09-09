@@ -7,56 +7,8 @@ import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
 import { fetchWarehouses, createWarehouse, updateWarehouse, calculateDeliveryFee, Warehouse } from "../../lib/api-client";
 
-const DEFAULT_FALLBACK_WAREHOUSES: Warehouse[] = [
-  {
-    id: 1,
-    name: "Bengaluru Central Fulfillment Hub",
-    address: "100 Feet Road, Indiranagar",
-    city: "Bengaluru",
-    latitude: 12.9716,
-    longitude: 77.5946,
-    freeDeliveryRadiusKm: 30.0,
-    maxServiceRadiusKm: 70.0,
-    baseDeliveryFee: 50.0,
-    perKmRate: 8.0,
-    isActive: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    name: "Vijayawada Logistics Center",
-    address: "Bhavani Puram, RR Nagar",
-    city: "Vijayawada",
-    latitude: 16.5062,
-    longitude: 80.6480,
-    freeDeliveryRadiusKm: 30.0,
-    maxServiceRadiusKm: 70.0,
-    baseDeliveryFee: 50.0,
-    perKmRate: 8.0,
-    isActive: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 3,
-    name: "Hyderabad Express Hub",
-    address: "HITEC City Phase 2",
-    city: "Hyderabad",
-    latitude: 17.3850,
-    longitude: 78.4867,
-    freeDeliveryRadiusKm: 30.0,
-    maxServiceRadiusKm: 70.0,
-    baseDeliveryFee: 50.0,
-    perKmRate: 8.0,
-    isActive: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
 export const WarehouseManager: React.FC = () => {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>(DEFAULT_FALLBACK_WAREHOUSES);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,8 +41,8 @@ export const WarehouseManager: React.FC = () => {
         setWarehouses(data);
       }
     } catch (err: any) {
-      console.warn("API warehouse fetch fallback to defaults:", err);
-      setWarehouses(DEFAULT_FALLBACK_WAREHOUSES);
+      console.warn("Failed to fetch warehouses dynamically:", err);
+      setWarehouses([]);
     } finally {
       setLoading(false);
     }
