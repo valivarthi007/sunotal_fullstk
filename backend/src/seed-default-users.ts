@@ -10,7 +10,15 @@ async function seedDefaultUsers() {
     const passwordHash = await bcrypt.hash('Devops@768', 10);
     const adminPasswordHash = await bcrypt.hash('admin123', 10);
 
-    const testUsers = [
+    const testUsers: Array<{
+      name: string;
+      email: string;
+      passwordHash: string;
+      role: 'user' | 'admin' | 'vendor' | 'delivery';
+      active: boolean;
+      phone: string;
+      city: string;
+    }> = [
       { name: 'Sunotal Admin', email: 'admin@sunotal.com', passwordHash: adminPasswordHash, role: 'admin', active: true, phone: '+91 98765 00001', city: 'Hyderabad' },
       { name: 'Sunotal Customer', email: 'user@sunotal.com', passwordHash, role: 'user', active: true, phone: '+91 98765 00002', city: 'Bengaluru' },
       { name: 'Sunotal Vendor', email: 'vendor@sunotal.com', passwordHash, role: 'vendor', active: true, phone: '+91 98765 00003', city: 'Bengaluru Sourcing Hub' },

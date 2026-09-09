@@ -205,6 +205,8 @@ router.post("/inventory/deduct", async (req, res) => {
             const [newV] = await db.insert(vendorsTable).values({
               firstName: "Sunotal",
               lastName: "Farm Sourcing",
+              phone: "+91 9999999999",
+              location: "Local Farm Sourcing Hub",
               produce: "General Fresh Produce",
               status: "approved",
             }).returning();

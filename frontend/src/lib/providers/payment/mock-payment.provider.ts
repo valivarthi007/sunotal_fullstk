@@ -25,7 +25,6 @@ export class MockPaymentProvider implements IPaymentProvider {
     const mockPaymentId = `PAY-MOCK-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const transactionRef = `TXN-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
 
-    // Try verifying on backend if API client is available
     try {
       await verifyPaymentApi({
         orderId: request.orderId,
@@ -33,8 +32,10 @@ export class MockPaymentProvider implements IPaymentProvider {
         paymentId: mockPaymentId,
         amount: request.amount,
       });
-    } catch (err) {
-      console.warn("Backend payment verification API ping failed, continuing with mock response:", err);
+    } catch (err: any) {
+      if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && err?.code !== "ECONNREFUSED") {
+        console.warn("Backend payment verification API ping failed, continuing with mock response:", err);
+      }
     }
 
     return {

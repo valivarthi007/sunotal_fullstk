@@ -93,8 +93,14 @@ export default function Recipes() {
         id: ing.id,
         name: ing.name,
         price: ing.price,
+        originalPrice: ing.price,
+        discountPercentage: 0,
+        category: "Fruits" as any,
+        organic: true,
+        active: true,
         image: ing.image,
         unit: ing.qty,
+        createdAt: new Date().toISOString(),
       });
     });
 

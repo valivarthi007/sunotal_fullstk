@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, inventoryTable, productsTable, ordersTable, orderItemsTable, productReviewsTable, driverReviewsTable } from "../lib/db.js";
-import { eq, asc, desc } from "drizzle-orm";
+import { eq, asc, desc, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../lib/auth.js";
 
 const router = Router();
@@ -426,9 +426,8 @@ router.post("/orders/:id/rate", requireAuth, async (req: any, res) => {
       }
 
       await db.insert(driverReviewsTable).values({
-        orderId: order.id,
+        orderId: String(order.id),
         userId: user.id,
-        driverName: "Express Delivery Partner",
         rating: Number(driverRating),
         feedback: feedback || "Prompt & courteous delivery service",
       });

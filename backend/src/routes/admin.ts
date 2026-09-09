@@ -124,7 +124,7 @@ router.get("/admin/ledger", requireAdmin, async (req, res) => {
 
       if (o.paymentMethod === "upi") {
         upiCollections += amt;
-      } else if (o.paymentMethod === "po" || o.paymentMethod === "corporate_po") {
+      } else if (o.paymentMethod === ("po" as any) || (o.paymentMethod as any) === "corporate_po") {
         poReceivables += amt;
       } else {
         onlineCollections += amt;

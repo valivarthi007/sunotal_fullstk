@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Bike, Power, Navigation, DollarSign, Bell, RefreshCw, Calculator, Route, CheckCircle2, Award, Calendar, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { DeliveryLayout } from "@/components/layout/DeliveryLayout";
 import { getMapProvider } from "@/lib/providers/map/map-provider.factory";
 import { useLocationState } from "@/lib/location-context";
@@ -255,7 +256,7 @@ export default function DeliveryDashboard() {
         console.error("Failed to update user orders in localStorage:", e);
       }
 
-      setStats((prev) => {
+      setStats((prev: any) => {
         const newCount = prev.completedDeliveries + 1;
         const newKms = Number((prev.totalKmsRun + 3.4).toFixed(1));
         const newBase = newCount * prev.basePayPerOrder;
@@ -545,7 +546,7 @@ export default function DeliveryDashboard() {
                       type="text"
                       placeholder="Enter your UPI ID (e.g. rider@upi, phone@paytm)..."
                       value={riderUpiId}
-                      onChange={(e) => {
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         setRiderUpiId(e.target.value);
                         localStorage.setItem("sunotal_rider_upi_id", e.target.value);
                       }}
