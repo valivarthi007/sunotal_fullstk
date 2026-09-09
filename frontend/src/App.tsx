@@ -123,12 +123,13 @@ function LoadingFallback() {
 }
 
 // Subdomain Portal Auto-Detection
-function getSubdomain(): "main" | "admin" | "vendor" | "delivery" {
+function getSubdomain(): "main" | "admin" | "vendor" | "delivery" | "support" {
   if (typeof window === "undefined") return "main";
   const hostname = window.location.hostname.toLowerCase();
   if (hostname.startsWith("admin-") || hostname.startsWith("admin.")) return "admin";
   if (hostname.startsWith("vendor-") || hostname.startsWith("vendor.") || hostname.startsWith("farmer-")) return "vendor";
   if (hostname.startsWith("delivery-") || hostname.startsWith("delivery.") || hostname.startsWith("rider-")) return "delivery";
+  if (hostname.startsWith("support-") || hostname.startsWith("support.") || hostname.startsWith("help-") || hostname.startsWith("help.")) return "support";
   return "main";
 }
 
@@ -190,6 +191,14 @@ function DeliveryRouteGuard() {
 function SubdomainRouter() {
   const subdomain = getSubdomain();
   const isLocalhost = typeof window !== "undefined" && window.location.hostname.includes("localhost");
+
+  if (subdomain === "support") {
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <SupportPortal />
+      </Suspense>
+    );
+  }
 
   if (subdomain === "admin") {
     return (
@@ -270,6 +279,8 @@ function SubdomainRouter() {
         <Route path="/checkout" component={Checkout} />
         <Route path="/wallet" component={Wallet} />
         <Route path="/recipes" component={Recipes} />
+        <Route path="/support" component={SupportPortal} />
+        <Route path="/help" component={SupportPortal} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
 
