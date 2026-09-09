@@ -1,6 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable } from "../lib/db.js";
+import { db, usersTable, ordersTable } from "../lib/db.js";
 import { eq } from "drizzle-orm";
 import { signToken, requireAuth } from "../lib/auth.js";
 
@@ -144,6 +144,74 @@ router.post("/delivery/payout", requireAuth, async (req, res) => {
     referenceId: `UPI-${Date.now().toString().slice(-6)}`,
     message: "Day-out payout initiated. Amount will be credited to UPI within 15 minutes."
   });
+});
+
+// GET /api/delivery/track/:orderId - Live GPS tracking telemetry for order
+router.get("/delivery/track/:orderId", async (req, res) => {
+  const { orderId } = req.params;
+
+  try {
+    let order: any = null;
+    const numericId = Number(orderId);
+    if (!isNaN(numericId) && numericId > 0) {
+      const [found] = await db.select().from(ordersTable).where(eq(ordersTable.id, numericId)).limit(1);
+      order = found;
+    }
+
+    const warehouseOrigin = {
+      name: "Bengaluru Central Dark Store Hub #104",
+      lat: 12.9352,
+      lng: 77.6245,
+    };
+
+    const customerDestination = {
+      address: order?.address || "HSR Layout Sector 3, Bengaluru",
+      city: order?.city || "Bengaluru",
+      lat: 12.9716,
+      lng: 77.5946,
+    };
+
+    const now = Date.now();
+    const cycleTime = 120000; // 2 minute cycle for smooth continuous simulation
+    const progress = (now % cycleTime) / cycleTime; // 0.0 to 1.0
+
+    const driverLat = warehouseOrigin.lat + (customerDestination.lat - warehouseOrigin.lat) * progress;
+    const driverLng = warehouseOrigin.lng + (customerDestination.lng - warehouseOrigin.lng) * progress;
+
+    const remainingDistanceKm = Number((3.8 * (1 - progress)).toFixed(1));
+    const etaMinutes = Math.max(2, Math.round(14 * (1 - progress)));
+
+    res.json({
+      orderId: String(orderId),
+      status: order?.status || "out_for_delivery",
+      warehouseOrigin,
+      customerDestination,
+      driverLocation: {
+        lat: Number(driverLat.toFixed(5)),
+        lng: Number(driverLng.toFixed(5)),
+        speedKmh: 28 + Math.floor(progress * 10),
+        heading: 45,
+      },
+      etaMinutes,
+      remainingDistanceKm,
+      driverProfile: {
+        name: "Ramesh Kumar (EV Partner)",
+        phone: "+91 99089 70908",
+        vehicleNo: "KA-01-EV-8842",
+        rating: 4.9,
+        deliveriesCompleted: 412,
+        photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
+      },
+      routePolyline: [
+        [warehouseOrigin.lat, warehouseOrigin.lng],
+        [Number(driverLat.toFixed(5)), Number(driverLng.toFixed(5))],
+        [customerDestination.lat, customerDestination.lng],
+      ],
+    });
+  } catch (error) {
+    console.error("Error fetching live tracking telemetry:", error);
+    res.status(500).json({ error: "Failed to fetch live tracking telemetry" });
+  }
 });
 
 export default router;
