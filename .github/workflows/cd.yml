@@ -195,11 +195,19 @@ jobs:
           aws ecs update-service --cluster sunotal-cluster --service sunotal-user --force-new-deployment || true
           aws ecs update-service --cluster sunotal-cluster --service sunotal-delivery --force-new-deployment || true
 
-          SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=sunotal-vpc-private-subnet-1" --query "Subnets[0].SubnetId" --output text 2>/dev/null || echo "")
-          SECURITY_GROUP_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=sunotal-ecs-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "")
+          SUBNET_INFO=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=sunotal-vpc-public-subnet-1" --query "Subnets[0].[SubnetId,VpcId]" --output text 2>/dev/null || aws ec2 describe-subnets --filters "Name=tag:Name,Values=sunotal-vpc-private-subnet-1" --query "Subnets[0].[SubnetId,VpcId]" --output text 2>/dev/null || echo "")
+          SUBNET_ID=$(echo "$SUBNET_INFO" | awk '{print $1}')
+          VPC_ID=$(echo "$SUBNET_INFO" | awk '{print $2}')
+          
+          if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+            SECURITY_GROUP_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=sunotal-ecs-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "")
+            if [ -z "$SECURITY_GROUP_ID" ] || [ "$SECURITY_GROUP_ID" = "None" ]; then
+              SECURITY_GROUP_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=default" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "")
+            fi
+          fi
           
           if [ -n "$SUBNET_ID" ] && [ "$SUBNET_ID" != "None" ] && [ -n "$SECURITY_GROUP_ID" ] && [ "$SECURITY_GROUP_ID" != "None" ]; then
-            echo "Running DB migrations on ECS..."
+            echo "Running DB migrations on ECS in VPC $VPC_ID (Subnet: $SUBNET_ID, SG: $SECURITY_GROUP_ID)..."
             aws ecs run-task \
               --cluster sunotal-cluster \
               --task-definition sunotal-auth \
