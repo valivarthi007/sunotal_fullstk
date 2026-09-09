@@ -1,0 +1,46 @@
+import { test, expect } from '@playwright/test';
+
+test('admin can log in, create a banner, and view it', async ({ page }) => {
+  const uniqueTitle = `Special Summer Promotion ${Date.now()}`;
+
+  // 1. Visit Admin Login page
+  await page.goto('/admin/login');
+
+  // 2. Fill login credentials
+  await page.fill('input[type="email"]', 'admin@sunotal.com');
+  await page.fill('input[type="password"]', 'admin123');
+  await page.click('button[type="submit"]');
+
+  // 3. Verify redirection to Dashboard
+  await expect(page).toHaveURL(/\/admin\/dashboard/);
+
+  // 4. Navigate to Banners management
+  await page.goto('/admin/banners');
+
+  // 5. Check if banners page loads
+  await expect(page.getByRole('heading', { name: 'Hero Banners' })).toBeVisible();
+
+  // 6. Click on Add Banner
+  await page.click('button:has-text("Add Banner")');
+
+  // 7. Fill out the banner form
+  await page.fill('input[placeholder="e.g. Fresh Summer Sale"]', uniqueTitle);
+  await page.fill('input[placeholder="e.g. Up to 50% off on seasonal fruits"]', 'Up to 30% Off');
+  await page.fill('input[placeholder="Or paste image URL directly..."]', 'https://example.com/banner.jpg');
+
+  // 8. Click on Create Banner
+  await page.click('button:has-text("Create Banner")');
+
+  // 9. Verify success and new banner in grid
+  const bannerItem = page.getByText(uniqueTitle);
+  await expect(bannerItem).toBeVisible();
+
+  // 10. Delete the banner to clean up
+  const bannerCard = page.locator('.group', { hasText: uniqueTitle });
+  await bannerCard.getByRole('button', { name: 'Delete banner' }).click();
+  await page.getByRole('button', { name: 'Delete Banner' }).click();
+
+  // 11. Verify deleted banner is gone
+  await expect(bannerItem).not.toBeVisible();
+});
+

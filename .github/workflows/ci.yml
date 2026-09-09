@@ -5,9 +5,27 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'services/**'
+      - 'apps/**'
+      - 'terraform/**'
+      - 'k8s/**'
+      - 'docker-compose*.yml'
+      - 'nginx.conf'
   pull_request:
     branches:
       - main
+    paths:
+      - 'services/**'
+      - 'apps/**'
+      - 'terraform/**'
+      - 'k8s/**'
+      - 'docker-compose*.yml'
+      - 'nginx.conf'
+  workflow_run:
+    workflows: ["Infrastructure Automation"]
+    types:
+      - completed
 
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -15,43 +33,21 @@ env:
   AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
   S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME || 'jcs-raju-sunotal-final' }}
   NODE_VERSION: 20
-  PNPM_VERSION: 9.15.4
 
 jobs:
   ci_verify:
-    name: Install, Lint, Test & Build
+    name: Install, Lint, Test & Build Microservices
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: sunotal
-          POSTGRES_PASSWORD: sunotalpass123
-          POSTGRES_DB: sunotal
-        ports:
-          - 5432:5432
-        options: >
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js with caching
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          cache-dependency-path: '**/pnpm-lock.yaml'
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -61,32 +57,23 @@ jobs:
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
         continue-on-error: true
 
-      - name: SonarCloud Code Analysis
-        uses: SonarSource/sonarcloud-github-action@master
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Build & Verify Microservices
+        run: |
+          echo "Verifying backend services..."
+          for s in services/*; do
+            if [ -d "$s" ]; then
+              echo "Building $s..."
+              (cd "$s" && npm install && npm run build)
+            fi
+          done
 
-      - name: Install frontend dependencies
-        run: cd frontend && pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Install backend dependencies
-        run: cd backend && pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Type check frontend
-        run: cd frontend && pnpm exec tsc --noEmit || true
-
-      - name: Type check backend
-        run: cd backend && pnpm exec tsc --noEmit || true
-
-      - name: Run Backend Tests
-        env:
-          DATABASE_URL: postgresql://sunotal:sunotalpass123@localhost:5432/sunotal
-        run: cd backend && pnpm run test -- --reporter=json --outputFile=backend-report.json || true
-
-      - name: Run Frontend Tests
-        run: cd frontend && pnpm run test -- --reporter=json --outputFile=frontend-report.json || true
+          echo "Verifying frontend apps..."
+          for a in apps/*; do
+            if [ -d "$a" ]; then
+              echo "Building $a..."
+              (cd "$a" && npm install && npm run build)
+            fi
+          done
 
       - name: Run Trivy vulnerability scanner (Filesystem)
         uses: aquasecurity/trivy-action@master
@@ -99,16 +86,6 @@ jobs:
           output: 'trivy-report.json'
         continue-on-error: true
 
-      - name: Upload Test Reports to S3
-        run: |
-          if [ -f backend/backend-report.json ]; then
-            aws s3 cp backend/backend-report.json s3://${{ env.S3_BUCKET_NAME }}/test_result/node/backend-report.json || true
-          fi
-          if [ -f trivy-report.json ]; then
-            aws s3 cp trivy-report.json s3://${{ env.S3_BUCKET_NAME }}/test_result/trivy/trivy-report.json || true
-          fi
-        continue-on-error: true
-
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -117,8 +94,8 @@ jobs:
       - name: Ensure ECR Repositories Exist
         if: steps.login-ecr.outcome == 'success'
         run: |
-          for repo in sunotal-frontend sunotal-backend sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery; do
-            aws ecr create-repository --repository-name "$repo" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+          for repo in sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery sunotal-support sunotal-user-app sunotal-admin-app sunotal-vendor-app sunotal-delivery-app sunotal-support-app; do
+            aws ecr create-repository --repository-name "$repo" --region "${{ env.AWS_DEFAULT_REGION }}" 2>/dev/null || true
           done
 
       - name: Build Docker images
@@ -128,13 +105,18 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
 
         run: |
-          docker build --build-arg VITE_MAPPLS_API_KEY="${{ secrets.VITE_MAPPLS_API_KEY || secrets.MAPPLS_API_KEY }}" --build-arg VITE_RAZORPAY_KEY_ID="${{ secrets.VITE_RAZORPAY_KEY_ID || secrets.RAZORPAY_KEY_ID }}" -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest ./frontend || true
-          docker build -t $ECR_REGISTRY/sunotal-backend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-backend:latest ./backend || true
-          docker build -t $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-auth:latest ./backend/services/auth-service || true
-          docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-operations:latest ./backend/services/operations-service || true
-          docker build -t $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-inventory:latest ./backend/services/inventory-service || true
-          docker build -t $ECR_REGISTRY/sunotal-user:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user:latest ./backend/services/user-service || true
-          docker build -t $ECR_REGISTRY/sunotal-delivery:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-delivery:latest ./backend/services/delivery-service || true
+          docker build -t $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-auth:latest ./services/auth-service || true
+          docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-operations:latest ./services/operations-service || true
+          docker build -t $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-inventory:latest ./services/inventory-service || true
+          docker build -t $ECR_REGISTRY/sunotal-user:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user:latest ./services/user-service || true
+          docker build -t $ECR_REGISTRY/sunotal-delivery:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-delivery:latest ./services/delivery-service || true
+          docker build -t $ECR_REGISTRY/sunotal-support:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-support:latest ./services/support-service || true
+          
+          docker build -t $ECR_REGISTRY/sunotal-user-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user-app:latest ./apps/user-app || true
+          docker build -t $ECR_REGISTRY/sunotal-admin-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-admin-app:latest ./apps/admin-app || true
+          docker build -t $ECR_REGISTRY/sunotal-vendor-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-vendor-app:latest ./apps/vendor-app || true
+          docker build -t $ECR_REGISTRY/sunotal-delivery-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-delivery-app:latest ./apps/delivery-app || true
+          docker build -t $ECR_REGISTRY/sunotal-support-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-support-app:latest ./apps/support-app || true
 
       - name: Push Docker images to Amazon ECR
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
@@ -142,10 +124,6 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker push $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-frontend:latest || true
-          docker push $ECR_REGISTRY/sunotal-backend:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-backend:latest || true
           docker push $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG || true
           docker push $ECR_REGISTRY/sunotal-auth:latest || true
           docker push $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG || true
@@ -156,4 +134,18 @@ jobs:
           docker push $ECR_REGISTRY/sunotal-user:latest || true
           docker push $ECR_REGISTRY/sunotal-delivery:$IMAGE_TAG || true
           docker push $ECR_REGISTRY/sunotal-delivery:latest || true
+          docker push $ECR_REGISTRY/sunotal-support:$IMAGE_TAG || true
+          docker push $ECR_REGISTRY/sunotal-support:latest || true
+          
+          docker push $ECR_REGISTRY/sunotal-user-app:$IMAGE_TAG || true
+          docker push $ECR_REGISTRY/sunotal-user-app:latest || true
+          docker push $ECR_REGISTRY/sunotal-admin-app:$IMAGE_TAG || true
+          docker push $ECR_REGISTRY/sunotal-admin-app:latest || true
+          docker push $ECR_REGISTRY/sunotal-vendor-app:$IMAGE_TAG || true
+          docker push $ECR_REGISTRY/sunotal-vendor-app:latest || true
+          docker push $ECR_REGISTRY/sunotal-delivery-app:$IMAGE_TAG || true
+          docker push $ECR_REGISTRY/sunotal-delivery-app:latest || true
+          docker push $ECR_REGISTRY/sunotal-support-app:$IMAGE_TAG || true
+          docker push $ECR_REGISTRY/sunotal-support-app:latest || true
         continue-on-error: true
+

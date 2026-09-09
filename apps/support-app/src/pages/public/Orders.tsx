@@ -1,0 +1,628 @@
+import { useState, useEffect } from "react";
+import { useLocation, Link } from "wouter";
+import { getGetCurrentUserQueryKey, useGetCurrentUser } from "@workspace/api-client-react";
+import { PublicLayout } from "@/components/layout/PublicLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { fetchUserOrders, cancelUserOrder, OrderApi } from "@/lib/api-client";
+import { LiveDeliveryMapTracker } from "@/components/ui/LiveDeliveryMapTracker";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  ShoppingBag,
+  Truck,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  FileText,
+  PhoneCall,
+  ChevronRight,
+  ShieldAlert,
+  ArrowLeft,
+  Search,
+  RefreshCw,
+  Plus,
+  LifeBuoy,
+  MessageSquare,
+  Sparkles,
+  XCircle,
+  Star,
+} from "lucide-react";
+import { toast } from "sonner";
+
+export interface Grievance {
+  ticketId: string;
+  orderId: string;
+  type: string;
+  description: string;
+  preferredResolution: string;
+  status: "Open" | "In Review" | "Resolved" | "Refund Processed";
+  createdAt: string;
+  responseMsg?: string;
+}
+
+const STORAGE_GRIEVANCES_KEY = "sunotal_user_grievances";
+
+export default function Orders() {
+  const [, setLocation] = useLocation();
+  const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
+
+  const [orders, setOrders] = useState<OrderApi[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [grievances, setGrievances] = useState<Grievance[]>([]);
+  const [activeTab, setActiveTab] = useState<"orders" | "grievances">("orders");
+
+  // Selected Order for live tracker modal
+  const [selectedOrderTrack, setSelectedOrderTrack] = useState<OrderApi | null>(null);
+
+  // Selected Order for raising grievance
+  const [grievanceOrder, setGrievanceOrder] = useState<OrderApi | null>(null);
+  const [grievanceType, setGrievanceType] = useState("Damaged / Quality Issue");
+  const [grievanceDesc, setGrievanceDesc] = useState("");
+  const [grievanceResolution, setGrievanceResolution] = useState("Full Refund");
+  const [isSubmittingGrievance, setIsSubmittingGrievance] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const loadOrders = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchUserOrders();
+      let combined: OrderApi[] = Array.isArray(data) ? [...data] : [];
+
+      try {
+        const stored = localStorage.getItem("sunotal_user_orders");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            for (const item of parsed) {
+              const existingIdx = combined.findIndex(
+                (o) => o.orderNumber === item.orderNumber || o.id === item.id || (o.orderNumber && item.orderNumber && o.orderNumber === item.orderNumber)
+              );
+              if (existingIdx >= 0) {
+                // If local status is delivered, prioritize delivered status
+                if (item.status === "delivered" || item.paymentStatus === "paid") {
+                  combined[existingIdx] = { ...combined[existingIdx], ...item, status: "delivered", paymentStatus: "paid" };
+                }
+              } else {
+                combined.push(item);
+              }
+            }
+          }
+        }
+      } catch (e) {}
+
+      setOrders(combined);
+    } catch (e: any) {
+      console.error("Failed to load orders:", e);
+      try {
+        const stored = localStorage.getItem("sunotal_user_orders");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setOrders(Array.isArray(parsed) ? parsed : []);
+        } else {
+          setOrders([]);
+        }
+      } catch (err) {
+        setOrders([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOrders();
+
+    const handleStatusEvent = () => loadOrders();
+    window.addEventListener("storage", handleStatusEvent);
+    window.addEventListener("order-status-changed", handleStatusEvent);
+
+    try {
+      const storedGrievances = localStorage.getItem(STORAGE_GRIEVANCES_KEY);
+      if (storedGrievances) {
+        const parsed = JSON.parse(storedGrievances);
+        setGrievances(Array.isArray(parsed) ? parsed : []);
+      }
+    } catch (e) {
+      console.error("Failed to parse stored grievances:", e);
+      setGrievances([]);
+    }
+
+    return () => {
+      window.removeEventListener("storage", handleStatusEvent);
+      window.removeEventListener("order-status-changed", handleStatusEvent);
+    };
+  }, []);
+
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n || 0);
+
+  const getDisplayOrderNumber = (o: any) => {
+    if (o?.orderNumber) return o.orderNumber;
+    if (o?.orderId) return String(o.orderId);
+    if (o?.id) {
+      const sId = String(o.id);
+      return sId.startsWith("ORD") || sId.startsWith("SUN") ? sId : `ORD-${sId}`;
+    }
+    return "N/A";
+  };
+
+  const handleCancelOrder = async (targetOrder: any) => {
+    const oId = targetOrder?.id || targetOrder?.orderNumber || targetOrder;
+    const displayNum = getDisplayOrderNumber(targetOrder);
+
+    if (!confirm(`Are you sure you want to cancel order ${displayNum}? Item stock will be restored.`)) return;
+
+    let apiSuccess = false;
+    try {
+      if (typeof oId === "number") {
+        await cancelUserOrder(oId);
+        apiSuccess = true;
+      } else {
+        const numId = Number(oId);
+        if (!isNaN(numId)) {
+          await cancelUserOrder(numId);
+          apiSuccess = true;
+        } else {
+          await cancelUserOrder(oId as any).catch(() => null);
+        }
+      }
+    } catch (err: any) {
+      console.warn("Backend order cancel notice:", err);
+    }
+
+    // Update local storage stored orders if present
+    try {
+      const stored = localStorage.getItem("sunotal_user_orders");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          const updated = parsed.map((o: any) =>
+            o.id === oId || o.orderNumber === oId || o.orderId === oId || o.orderNumber === displayNum
+              ? { ...o, status: "cancelled" }
+              : o
+          );
+          localStorage.setItem("sunotal_user_orders", JSON.stringify(updated));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to update local stored order status:", e);
+    }
+
+    toast.success(`Order ${displayNum} cancelled successfully.`);
+    loadOrders();
+  };
+
+  const handleRaiseGrievanceSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!grievanceOrder) return;
+    if (!grievanceDesc.trim()) {
+      toast.error("Please describe your issue");
+      return;
+    }
+
+    setIsSubmittingGrievance(true);
+    setTimeout(() => {
+      const newTicketId = `GRV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const newGrievance: Grievance = {
+        ticketId: newTicketId,
+        orderId: grievanceOrder.orderNumber || String(grievanceOrder.id || "N/A"),
+        type: grievanceType,
+        description: grievanceDesc,
+        preferredResolution: grievanceResolution,
+        status: "In Review",
+        createdAt: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+        responseMsg: "Grievance received. Our Quality Inspection Team is reviewing your ticket.",
+      };
+
+      const updated = [newGrievance, ...(Array.isArray(grievances) ? grievances : [])];
+      setGrievances(updated);
+      localStorage.setItem(STORAGE_GRIEVANCES_KEY, JSON.stringify(updated));
+
+      setIsSubmittingGrievance(false);
+      setGrievanceOrder(null);
+      setGrievanceDesc("");
+      toast.success(`Grievance ticket ${newTicketId} registered! Our team will respond within 2 hours.`);
+      setActiveTab("grievances");
+    }, 600);
+  };
+
+  const [ratingOrder, setRatingOrder] = useState<OrderApi | null>(null);
+  const [itemStars, setItemStars] = useState<number>(5);
+  const [driverStars, setDriverStars] = useState<number>(5);
+  const [ratingFeedback, setRatingFeedback] = useState<string>("");
+  const [submittingRating, setSubmittingRating] = useState<boolean>(false);
+
+  const handleRatingSubmit = async () => {
+    if (!ratingOrder) return;
+    setSubmittingRating(true);
+    try {
+      const token = localStorage.getItem("sunotal_token");
+      const res = await fetch(`/api/orders/${ratingOrder.id}/rate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ itemRating: itemStars, driverRating: driverStars, feedback: ratingFeedback }),
+      });
+      const data = await res.json();
+      toast.success(data.message || "Thank you for your rating!");
+    } catch {
+      toast.success("Thank you for rating your produce items & delivery partner!");
+    } finally {
+      setSubmittingRating(false);
+      setRatingOrder(null);
+      setRatingFeedback("");
+    }
+  };
+
+  const safeSearch = (searchQuery || "").toLowerCase();
+  const filteredOrders = (Array.isArray(orders) ? orders : []).filter(
+    (o) =>
+      o?.orderNumber?.toLowerCase().includes(safeSearch) ||
+      o?.city?.toLowerCase().includes(safeSearch) ||
+      o?.items?.some((i) => i?.productName?.toLowerCase().includes(safeSearch))
+  );
+
+  return (
+    <PublicLayout>
+      <div className="container mx-auto px-4 py-8 max-w-5xl">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-extrabold text-secondary tracking-tight">My Orders & Tracking</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Track farm-to-door deliveries, view GST invoices, and resolve grievances.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={loadOrders} disabled={loading} className="rounded-xl">
+              <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+            <Link href="/products">
+              <Button size="sm" className="rounded-xl font-bold bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Plus className="w-4 h-4 mr-1" /> New Order
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex border-b border-border mb-6">
+          <button
+            onClick={() => setActiveTab("orders")}
+            className={`pb-3 px-4 font-semibold text-sm transition-all border-b-2 ${
+              activeTab === "orders"
+                ? "border-primary text-primary font-bold"
+                : "border-transparent text-muted-foreground hover:text-secondary"
+            }`}
+          >
+            My Orders ({orders.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("grievances")}
+            className={`pb-3 px-4 font-semibold text-sm transition-all border-b-2 ${
+              activeTab === "grievances"
+                ? "border-primary text-primary font-bold"
+                : "border-transparent text-muted-foreground hover:text-secondary"
+            }`}
+          >
+            Support Tickets & Grievances ({grievances.length})
+          </button>
+        </div>
+
+        {/* ORDERS TAB */}
+        {activeTab === "orders" && (
+          <div className="space-y-6">
+            {/* Search Bar */}
+            <div className="relative max-w-md">
+              <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search orders by item or order number..."
+                className="pl-9 h-10 rounded-xl"
+              />
+            </div>
+
+            {filteredOrders.length === 0 ? (
+              <div className="bg-card border border-border rounded-3xl p-12 text-center max-w-md mx-auto">
+                <ShoppingBag className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <h3 className="font-bold text-lg text-secondary">No orders found</h3>
+                <p className="text-xs text-muted-foreground mt-1 mb-4">
+                  {searchQuery ? "Try a different search query." : "You haven't placed any farm-fresh orders yet."}
+                </p>
+                <Link href="/products">
+                  <Button className="rounded-full px-6 text-xs font-bold">Start Shopping</Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredOrders.map((order, idx) => {
+                  const statusStr = (order.status || "processing").replace(/_/g, " ");
+                  const payStatusStr = (order.paymentStatus || "unpaid").toUpperCase();
+                  const formattedDate = order.createdAt
+                    ? new Date(order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                    : "Recent";
+
+                  return (
+                    <div
+                      key={order.id || order.orderNumber || idx}
+                      className="bg-card border border-border shadow-sm rounded-2xl p-6 hover:shadow-md transition-shadow space-y-4"
+                    >
+                      {/* Header */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-secondary text-base">{getDisplayOrderNumber(order)}</span>
+                            <span
+                              className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
+                                order.status === "delivered"
+                                  ? "bg-green-500/10 text-green-600"
+                                  : order.status === "cancelled"
+                                  ? "bg-destructive/10 text-destructive"
+                                  : "bg-amber-500/10 text-amber-600 animate-pulse"
+                              }`}
+                            >
+                              {statusStr}
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono ${
+                                order.paymentStatus === "paid" ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {payStatusStr}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Placed on: {formattedDate}
+                          </p>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-xs text-muted-foreground">Total</span>
+                          <p className="font-mono font-extrabold text-lg text-primary">{fmt(order.finalAmount || 0)}</p>
+                        </div>
+                      </div>
+
+                      {/* Items List */}
+                      <div className="space-y-2">
+                        {order.items?.map((item, itemIdx) => (
+                          <div key={item.id || itemIdx} className="flex items-center justify-between text-xs py-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-secondary">{item.productName || "Produce Item"}</span>
+                              <span className="text-muted-foreground font-mono">x {item.quantity || 1}</span>
+                            </div>
+                            <span className="font-mono font-semibold text-secondary">{fmt(item.subtotal || 0)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Truck className="w-4 h-4 text-emerald-600" />
+                          <span>{order.estimatedDelivery || "Standard 24-Hour Delivery"} {order.city ? `(${order.city})` : ""}</span>
+                        </div>
+
+                        {order.status !== "cancelled" && order.status !== "delivered" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive border-destructive/30 hover:bg-destructive/10 rounded-xl"
+                            onClick={() => handleCancelOrder(order)}
+                          >
+                            <XCircle className="w-3.5 h-3.5 mr-1" /> Cancel Order
+                          </Button>
+                        )}
+                        {order.status === "delivered" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setRatingOrder(order)}
+                            className="rounded-xl border-amber-400/50 text-amber-600 hover:bg-amber-50 font-bold"
+                          >
+                            <Star className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400" /> Rate Order & Rider
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setGrievanceOrder(order)}
+                          className="rounded-xl text-muted-foreground hover:text-foreground"
+                        >
+                          <LifeBuoy className="w-3.5 h-3.5 mr-1" /> Support Ticket
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => setSelectedOrderTrack(order)}
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl"
+                        >
+                          Track Delivery <ChevronRight className="w-4 h-4 ml-1" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* GRIEVANCES TAB */}
+        {activeTab === "grievances" && (
+          <div className="space-y-4">
+            {grievances.length === 0 ? (
+              <div className="bg-card border border-border rounded-3xl p-12 text-center max-w-md mx-auto">
+                <LifeBuoy className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <h3 className="font-bold text-lg text-secondary">No active grievances</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  All farm-fresh deliveries are operating smoothly with zero quality complaints.
+                </p>
+              </div>
+            ) : (
+              grievances.map((g) => (
+                <div key={g.ticketId} className="bg-card border border-border rounded-2xl p-5 space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-primary">{g.ticketId}</span>
+                      <span className="text-xs text-muted-foreground">Order: {g.orderId}</span>
+                    </div>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600">
+                      {g.status}
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-secondary">{g.type}</p>
+                  <p className="text-xs text-muted-foreground bg-accent/40 p-3 rounded-xl border">{g.description}</p>
+                  {g.responseMsg && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-900 dark:text-emerald-200">
+                      <strong className="block mb-0.5">Support Team Response:</strong>
+                      {g.responseMsg}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* LIVE ORDER TRACKER DIALOG */}
+        {selectedOrderTrack && (
+          <Dialog open={!!selectedOrderTrack} onOpenChange={() => setSelectedOrderTrack(null)}>
+            <DialogContent className="sm:max-w-xl rounded-3xl overflow-hidden p-4">
+              <LiveDeliveryMapTracker orderId={getDisplayOrderNumber(selectedOrderTrack)} />
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* RAISE GRIEVANCE DIALOG */}
+        {grievanceOrder && (
+          <Dialog open={!!grievanceOrder} onOpenChange={() => setGrievanceOrder(null)}>
+            <DialogContent className="sm:max-w-lg rounded-3xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+                  <LifeBuoy className="w-6 h-6 text-primary" /> Raise Support & Quality Ticket
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Order Ref: <span className="font-mono font-bold text-foreground">{getDisplayOrderNumber(grievanceOrder)}</span>
+                </DialogDescription>
+              </DialogHeader>
+
+              <form onSubmit={handleRaiseGrievanceSubmit} className="space-y-4 py-2">
+                <div>
+                  <Label className="text-xs">Issue Category</Label>
+                  <select
+                    value={grievanceType}
+                    onChange={(e) => setGrievanceType(e.target.value)}
+                    className="w-full h-11 mt-1 rounded-xl border border-input bg-background px-3 text-xs"
+                  >
+                    <option>Damaged / Quality Issue</option>
+                    <option>Missing Items in Package</option>
+                    <option>Delivery Delay</option>
+                    <option>Wrong Produce Delivered</option>
+                  </select>
+                </div>
+
+                <div>
+                  <Label className="text-xs">Description of Issue</Label>
+                  <Textarea
+                    value={grievanceDesc}
+                    onChange={(e) => setGrievanceDesc(e.target.value)}
+                    placeholder="Provide details about the issue..."
+                    className="mt-1 rounded-xl text-xs"
+                    rows={4}
+                  />
+                </div>
+
+                <Button type="submit" disabled={isSubmittingGrievance} className="w-full h-11 rounded-xl font-bold bg-primary hover:bg-primary/90">
+                  Submit Support Ticket
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* RATE ORDER DIALOG */}
+        {ratingOrder && (
+          <Dialog open={!!ratingOrder} onOpenChange={() => setRatingOrder(null)}>
+            <DialogContent className="sm:max-w-md rounded-3xl p-6">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+                  <Star className="w-6 h-6 text-amber-500 fill-amber-500" /> Rate Produce & Delivery
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Order Ref: <span className="font-mono font-bold text-foreground">{getDisplayOrderNumber(ratingOrder)}</span>
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-5 py-2">
+                {/* Produce Quality Rating */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-secondary">1. Rate Produce & Item Quality</Label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setItemStars(star)}
+                        className="p-1 hover:scale-110 transition-transform"
+                      >
+                        <Star className={`w-7 h-7 ${star <= itemStars ? "fill-amber-400 text-amber-400" : "text-muted"}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Delivery Partner Rating */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-secondary">2. Rate Delivery Partner Experience</Label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setDriverStars(star)}
+                        className="p-1 hover:scale-110 transition-transform"
+                      >
+                        <Star className={`w-7 h-7 ${star <= driverStars ? "fill-amber-400 text-amber-400" : "text-muted"}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Comments */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Optional Feedback / Review</Label>
+                  <Textarea
+                    value={ratingFeedback}
+                    onChange={(e) => setRatingFeedback(e.target.value)}
+                    placeholder="Tell us about the freshness or delivery speed..."
+                    className="rounded-xl text-xs"
+                    rows={3}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleRatingSubmit}
+                  disabled={submittingRating}
+                  className="w-full h-11 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+                >
+                  {submittingRating ? "Submitting Rating..." : "Submit Ratings & Review"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+    </PublicLayout>
+  );
+}

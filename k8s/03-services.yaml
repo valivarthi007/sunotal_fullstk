@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: sunotal-frontend
+  name: sunotal-user-app
   namespace: sunotal
   labels:
-    app: sunotal-frontend
+    app: sunotal-user-app
 spec:
   type: ClusterIP
   ports:
@@ -13,7 +13,75 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: sunotal-frontend
+    app: sunotal-user-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sunotal-admin-app
+  namespace: sunotal
+  labels:
+    app: sunotal-admin-app
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: sunotal-admin-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sunotal-vendor-app
+  namespace: sunotal
+  labels:
+    app: sunotal-vendor-app
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: sunotal-vendor-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sunotal-delivery-app
+  namespace: sunotal
+  labels:
+    app: sunotal-delivery-app
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: sunotal-delivery-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sunotal-support-app
+  namespace: sunotal
+  labels:
+    app: sunotal-support-app
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: sunotal-support-app
 ---
 apiVersion: v1
 kind: Service
@@ -99,3 +167,21 @@ spec:
       name: http
   selector:
     app: sunotal-delivery
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sunotal-support
+  namespace: sunotal
+  labels:
+    app: sunotal-support
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5007
+      targetPort: 5007
+      protocol: TCP
+      name: http
+  selector:
+    app: sunotal-support
+

@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sunotal-frontend
+  name: sunotal-user-app
   namespace: sunotal
   labels:
-    app: sunotal-frontend
+    app: sunotal-user-app
 spec:
   replicas: 2
   strategy:
@@ -14,15 +14,15 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: sunotal-frontend
+      app: sunotal-user-app
   template:
     metadata:
       labels:
-        app: sunotal-frontend
+        app: sunotal-user-app
     spec:
       containers:
-        - name: frontend
-          image: sunotal-frontend:latest
+        - name: user-app
+          image: sunotal-user-app:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80
@@ -39,16 +39,204 @@ spec:
               port: 80
             initialDelaySeconds: 15
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 5
           readinessProbe:
             httpGet:
               path: /
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunotal-admin-app
+  namespace: sunotal
+  labels:
+    app: sunotal-admin-app
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: sunotal-admin-app
+  template:
+    metadata:
+      labels:
+        app: sunotal-admin-app
+    spec:
+      containers:
+        - name: admin-app
+          image: sunotal-admin-app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunotal-vendor-app
+  namespace: sunotal
+  labels:
+    app: sunotal-vendor-app
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: sunotal-vendor-app
+  template:
+    metadata:
+      labels:
+        app: sunotal-vendor-app
+    spec:
+      containers:
+        - name: vendor-app
+          image: sunotal-vendor-app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunotal-delivery-app
+  namespace: sunotal
+  labels:
+    app: sunotal-delivery-app
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: sunotal-delivery-app
+  template:
+    metadata:
+      labels:
+        app: sunotal-delivery-app
+    spec:
+      containers:
+        - name: delivery-app
+          image: sunotal-delivery-app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunotal-support-app
+  namespace: sunotal
+  labels:
+    app: sunotal-support-app
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: sunotal-support-app
+  template:
+    metadata:
+      labels:
+        app: sunotal-support-app
+    spec:
+      containers:
+        - name: support-app
+          image: sunotal-support-app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -103,16 +291,12 @@ spec:
               port: 5001
             initialDelaySeconds: 20
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 5001
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 8
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -167,16 +351,12 @@ spec:
               port: 5002
             initialDelaySeconds: 20
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 5002
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 8
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -231,16 +411,12 @@ spec:
               port: 5003
             initialDelaySeconds: 20
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 5003
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 8
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -295,16 +471,12 @@ spec:
               port: 5004
             initialDelaySeconds: 20
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 5004
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 8
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -359,13 +531,70 @@ spec:
               port: 5006
             initialDelaySeconds: 20
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 5006
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 8
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunotal-support
+  namespace: sunotal
+  labels:
+    app: sunotal-support
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: sunotal-support
+  template:
+    metadata:
+      labels:
+        app: sunotal-support
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5007"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: support
+          image: sunotal-support:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5007
+          env:
+            - name: PORT
+              value: "5007"
+          envFrom:
+            - configMapRef:
+                name: sunotal-config
+            - secretRef:
+                name: sunotal-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 5007
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 5007
+            initialDelaySeconds: 10
+            periodSeconds: 5
+

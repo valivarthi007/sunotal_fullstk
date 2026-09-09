@@ -143,10 +143,10 @@ resource "aws_lb_target_group" "user" {
   })
 }
 
-# Delivery Target Group
-resource "aws_lb_target_group" "delivery" {
-  name        = "sunotal-delivery-tg"
-  port        = 5006
+# Support Target Group
+resource "aws_lb_target_group" "support" {
+  name        = "sunotal-support-tg"
+  port        = 5007
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
@@ -155,7 +155,7 @@ resource "aws_lb_target_group" "delivery" {
     enabled             = true
     path                = "/api/healthz"
     protocol            = "HTTP"
-    port                = "5006"
+    port                = "5007"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     timeout             = 5
@@ -164,181 +164,29 @@ resource "aws_lb_target_group" "delivery" {
   }
 
   tags = merge(var.tags, {
-    Name = "sunotal-delivery-tg"
+    Name = "sunotal-support-tg"
   })
 }
 
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type = "redirect"
-
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
-    }
-  }
-}
-
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = "arn:aws:acm:us-east-1:143797622495:certificate/62ed25b2-ce70-402a-aa8d-ea00a11188e7"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend.arn
-  }
-}
-
-# Listener Rules for path routing
-resource "aws_lb_listener_rule" "auth" {
+resource "aws_lb_listener_rule" "support_api" {
   listener_arn = aws_lb_listener.https.arn
-  priority     = 10
+  priority     = 55
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.auth.arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/api/auth", "/api/auth/*", "/api/healthz"]
-    }
-  }
-}
-
-resource "aws_lb_listener_rule" "operations" {
-  listener_arn = aws_lb_listener.https.arn
-  priority     = 20
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.operations.arn
+    target_group_arn = aws_lb_target_group.support.arn
   }
 
   condition {
     path_pattern {
       values = [
-        "/api/products",
-        "/api/products/*",
-        "/api/categories",
-        "/api/categories/*",
-        "/api/banners"
+        "/api/support",
+        "/api/support/*"
       ]
     }
   }
 }
 
-resource "aws_lb_listener_rule" "operations_additional" {
-  listener_arn = aws_lb_listener.https.arn
-  priority     = 21
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.operations.arn
-  }
-
-  condition {
-    path_pattern {
-      values = [
-        "/api/banners/*",
-        "/api/upload",
-        "/api/upload/*",
-        "/api/product-definitions*",
-        "/api/productDefinitions*"
-      ]
-    }
-  }
-}
-
-resource "aws_lb_listener_rule" "inventory" {
-  listener_arn = aws_lb_listener.https.arn
-  priority     = 30
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.inventory.arn
-  }
-
-  condition {
-    path_pattern {
-      values = [
-        "/api/inventory",
-        "/api/inventory/*",
-        "/api/orders",
-        "/api/orders/*"
-      ]
-    }
-  }
-}
-
-resource "aws_lb_listener_rule" "user" {
-  listener_arn = aws_lb_listener.https.arn
-  priority     = 40
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.user.arn
-  }
-
-  condition {
-    path_pattern {
-      values = [
-        "/api/users",
-        "/api/users/*",
-        "/api/vendors",
-        "/api/vendors/*",
-        "/api/admin"
-      ]
-    }
-  }
-}
-
-resource "aws_lb_listener_rule" "user_additional" {
-  listener_arn = aws_lb_listener.https.arn
-  priority     = 41
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.user.arn
-  }
-
-  condition {
-    path_pattern {
-      values = [
-        "/api/admin/*"
-      ]
-    }
-  }
-}
-
-resource "aws_lb_listener_rule" "delivery" {
-  listener_arn = aws_lb_listener.https.arn
-  priority     = 50
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.delivery.arn
-  }
-
-  condition {
-    path_pattern {
-      values = [
-        "/api/user/addresses",
-        "/api/user/addresses/*",
-        "/api/delivery",
-        "/api/delivery/*"
-      ]
-    }
-  }
-}
 
 resource "aws_cloudfront_origin_access_control" "s3_oac" {
   name                              = "sunotal-s3-oac"
