@@ -94,7 +94,7 @@ jobs:
       - name: Ensure ECR Repositories Exist
         if: steps.login-ecr.outcome == 'success'
         run: |
-          for repo in sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery sunotal-support sunotal-user-app sunotal-admin-app sunotal-vendor-app sunotal-delivery-app sunotal-support-app; do
+          for repo in sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery sunotal-support sunotal-frontend sunotal-user-app sunotal-admin-app sunotal-vendor-app sunotal-delivery-app sunotal-support-app; do
             aws ecr create-repository --repository-name "$repo" --region "${{ env.AWS_DEFAULT_REGION }}" 2>/dev/null || true
           done
 
@@ -112,6 +112,7 @@ jobs:
           docker build -t $ECR_REGISTRY/sunotal-delivery:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-delivery:latest ./services/delivery-service || true
           docker build -t $ECR_REGISTRY/sunotal-support:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-support:latest ./services/support-service || true
           
+          docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest ./apps/user-app || true
           docker build -t $ECR_REGISTRY/sunotal-user-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user-app:latest ./apps/user-app || true
           docker build -t $ECR_REGISTRY/sunotal-admin-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-admin-app:latest ./apps/admin-app || true
           docker build -t $ECR_REGISTRY/sunotal-vendor-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-vendor-app:latest ./apps/vendor-app || true
@@ -137,6 +138,8 @@ jobs:
           docker push $ECR_REGISTRY/sunotal-support:$IMAGE_TAG || true
           docker push $ECR_REGISTRY/sunotal-support:latest || true
           
+          docker push $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG || true
+          docker push $ECR_REGISTRY/sunotal-frontend:latest || true
           docker push $ECR_REGISTRY/sunotal-user-app:$IMAGE_TAG || true
           docker push $ECR_REGISTRY/sunotal-user-app:latest || true
           docker push $ECR_REGISTRY/sunotal-admin-app:$IMAGE_TAG || true

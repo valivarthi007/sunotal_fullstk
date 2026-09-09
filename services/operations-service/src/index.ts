@@ -96,6 +96,24 @@ const inMemoryStats = {
   activeVendors: 42,
   activeDarkStores: 8,
   deliverySuccessRate: 99.4,
+  totalProducts: 48,
+  totalVendors: 12,
+  totalUsers: 156,
+  categoryBreakdown: [
+    { category: "Vegetables", count: 18 },
+    { category: "Fruits", count: 14 },
+    { category: "Leafy Greens", count: 10 },
+    { category: "Dairy & Eggs", count: 6 },
+  ],
+  recentUsers: [
+    { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin" },
+    { id: 2, name: "Sunotal Customer", email: "user@sunotal.com", role: "user" },
+    { id: 3, name: "Farm Vendor", email: "vendor@sunotal.com", role: "vendor" },
+  ],
+  recentVendors: [
+    { id: 1, firstName: "Ramesh", lastName: "Kumar", location: "Mysuru", produce: "Organic Tomatoes", createdAt: new Date().toISOString(), status: "approved" },
+    { id: 2, firstName: "Suresh", lastName: "Patel", location: "Mandya", produce: "Fresh Spinach", createdAt: new Date().toISOString(), status: "pending" },
+  ],
 };
 
 const inMemoryQuotations = [
@@ -188,12 +206,17 @@ app.get("/api/admin/stats", async (_req, res) => {
   try {
     if (mongoose.connection.readyState === 1) {
       const orderCount = await Product.countDocuments();
+      const productCount = await Product.countDocuments();
+      const vendorCount = await Vendor.countDocuments();
+      const userCount = await User.countDocuments();
       return res.json({
+        ...inMemoryStats,
         totalOrders: 1284 + orderCount,
-        totalRevenue: 485900,
-        activeVendors: await Vendor.countDocuments() || 42,
+        totalProducts: productCount || 48,
+        totalVendors: vendorCount || 12,
+        totalUsers: userCount || 156,
+        activeVendors: vendorCount || 42,
         activeDarkStores: await Warehouse.countDocuments() || 8,
-        deliverySuccessRate: 99.4,
       });
     }
   } catch {

@@ -81,13 +81,13 @@ export default function VendorDashboard() {
   }, []);
 
   useEffect(() => {
-    if (user) {
+      const userName = user?.name || user?.email || "Vendor";
       setVendorProfile({
-        firstName: user.name.split(" ")[0] || "Vendor",
-        lastName: user.name.split(" ").slice(1).join(" ") || "",
-        phone: user.phone || "N/A",
-        location: user.city || "Direct Sourcing Mandal",
-        status: user.active ? "approved" : "pending",
+        firstName: userName.split(" ")[0] || "Vendor",
+        lastName: userName.split(" ").slice(1).join(" ") || "",
+        phone: user?.phone || "N/A",
+        location: user?.city || "Direct Sourcing Mandal",
+        status: user?.active ? "approved" : "pending",
       });
 
       const token = localStorage.getItem("sunotal_vendor_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
