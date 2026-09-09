@@ -125,7 +125,7 @@ resource "aws_ecs_task_definition" "auth" {
       environment = [
         { name = "PORT", value = "5001" },
         { name = "NODE_ENV", value = "production" },
-        { name = "DATABASE_URL", value = var.database_url },
+        { name = "MONGODB_URI", value = var.mongodb_uri },
         { name = "SESSION_SECRET", value = var.session_secret },
         { name = "CLOUDFRONT_DOMAIN", value = var.cloudfront_domain },
         { name = "FRONTEND_URL", value = var.frontend_url }
@@ -172,7 +172,7 @@ resource "aws_ecs_task_definition" "operations" {
       environment = [
         { name = "PORT", value = "5002" },
         { name = "NODE_ENV", value = "production" },
-        { name = "DATABASE_URL", value = var.database_url },
+        { name = "MONGODB_URI", value = var.mongodb_uri },
         { name = "SESSION_SECRET", value = var.session_secret },
         { name = "CLOUDFRONT_DOMAIN", value = var.cloudfront_domain },
         { name = "FRONTEND_URL", value = var.frontend_url },
@@ -221,7 +221,7 @@ resource "aws_ecs_task_definition" "inventory" {
       environment = [
         { name = "PORT", value = "5003" },
         { name = "NODE_ENV", value = "production" },
-        { name = "DATABASE_URL", value = var.database_url },
+        { name = "MONGODB_URI", value = var.mongodb_uri },
         { name = "SESSION_SECRET", value = var.session_secret },
         { name = "CLOUDFRONT_DOMAIN", value = var.cloudfront_domain },
         { name = "FRONTEND_URL", value = var.frontend_url }
@@ -268,7 +268,7 @@ resource "aws_ecs_task_definition" "user" {
       environment = [
         { name = "PORT", value = "5004" },
         { name = "NODE_ENV", value = "production" },
-        { name = "DATABASE_URL", value = var.database_url },
+        { name = "MONGODB_URI", value = var.mongodb_uri },
         { name = "SESSION_SECRET", value = var.session_secret },
         { name = "CLOUDFRONT_DOMAIN", value = var.cloudfront_domain },
         { name = "FRONTEND_URL", value = var.frontend_url },
@@ -317,7 +317,7 @@ resource "aws_ecs_task_definition" "delivery" {
       environment = [
         { name = "PORT", value = "5006" },
         { name = "NODE_ENV", value = "production" },
-        { name = "DATABASE_URL", value = var.database_url },
+        { name = "MONGODB_URI", value = var.mongodb_uri },
         { name = "SESSION_SECRET", value = var.session_secret },
         { name = "FRONTEND_URL", value = var.frontend_url }
       ]

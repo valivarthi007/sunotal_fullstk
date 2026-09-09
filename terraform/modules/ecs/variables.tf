@@ -84,9 +84,10 @@ variable "delivery_target_group_arn" {
   description = "ALB Target Group ARN for delivery service"
 }
 
-variable "database_url" {
+variable "mongodb_uri" {
   type        = string
-  description = "Database URL for backend services"
+  description = "MongoDB Connection URI for backend services"
+  default     = "mongodb://localhost:27017/sunotal"
 }
 
 variable "session_secret" {

@@ -70,20 +70,6 @@ module "security" {
   tags                = local.common_tags
 }
 
-module "database" {
-  source                = "./modules/database"
-  identifier            = "sunotal-postgres"
-  allocated_storage     = 20
-  max_allocated_storage = 100
-  instance_class        = var.db_instance_class
-  db_name               = var.db_name
-  db_username           = var.db_username
-  db_password           = var.db_password
-  subnet_ids            = [module.vpc.private_subnet_1_id, module.vpc.private_subnet_2_id]
-  db_security_group_id  = module.security.db_security_group_id
-  tags                  = local.common_tags
-}
-
 module "cdn" {
   source                = "./modules/cdn"
   aws_region            = var.aws_region
@@ -122,7 +108,7 @@ module "ecs" {
   user_target_group_arn       = module.cdn.user_target_group_arn
   delivery_target_group_arn   = module.cdn.delivery_target_group_arn
 
-  database_url      = "postgresql://${var.db_username}:${var.db_password}@${module.database.db_instance_address}:5432/${var.db_name}?sslmode=require&uselibpqcompat=true"
+  mongodb_uri       = "mongodb://localhost:27017/sunotal"
   cloudfront_domain = module.cdn.cloudfront_domain_name
 
   s3_bucket_name = var.s3_bucket_name

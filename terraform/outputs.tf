@@ -48,15 +48,7 @@ output "alb_dns_name" {
   value       = module.cdn.alb_dns_name
 }
 
-output "db_endpoint" {
-  description = "Connection endpoint address for the RDS PostgreSQL database"
-  value       = module.database.db_instance_address
-}
 
-output "db_port" {
-  description = "Port number of the RDS PostgreSQL database"
-  value       = 5432
-}
 
 output "cloudfront_domain_name" {
   description = "Domain name of the CloudFront distribution for S3 assets"
