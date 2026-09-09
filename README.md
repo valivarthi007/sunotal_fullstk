@@ -162,6 +162,7 @@ echo "Rider Token: ${RIDER_TOKEN:0:20}..."
 
 ## 📚 Exhaustive Documentation Hub
 
+- 📖 [User Manual & Application Workflows](docs/USER_MANUAL_AND_WORKFLOWS.md) — Step-by-step role-based manual, login guides, vendor quotation cycle, order timeline, and delivery dispatch workflows.
 - 🔌 [REST API Reference & Contracts](docs/API_REFERENCE.md) — Complete request/response specification for all 25+ endpoints.
 - 🏗️ [Architecture & Database Schema Specification](docs/ARCHITECTURE.md) — Database tables, foreign key constraints, SOLID strategy pattern design, and Leaflet vector map engine.
 - 🛠️ [DevOps & AWS Cloud Guide](docs/DEVOPS_AND_AWS_GUIDE.md) — AWS Route 53 subdomain configuration, App Runner, ECS Fargate, AWS RDS PostgreSQL, ECR Docker registry, and CI/CD pipelines.
