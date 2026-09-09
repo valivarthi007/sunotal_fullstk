@@ -33,6 +33,11 @@ function formatVendor(v: typeof vendorsTable.$inferSelect) {
     farmSize: v.farmSize,
     aadhar: v.aadhar,
     gstin: v.gstin,
+    bankName: v.bankName,
+    accountNumber: v.accountNumber,
+    ifscCode: v.ifscCode,
+    branchName: v.branchName,
+    accountHolderName: v.accountHolderName,
     status: v.status,
     notes: v.notes,
     createdAt: v.createdAt.toISOString(),
@@ -142,7 +147,7 @@ router.post("/vendors/quotations", requireAuth, async (req, res) => {
     return;
   }
 
-  const { category, produce, quantity, price } = req.body;
+  const { category, produce, quantity, price, unit } = req.body;
   if (!category || !produce || !quantity || !price) {
     res.status(400).json({ error: "Missing required produce quotation fields" });
     return;
@@ -160,6 +165,7 @@ router.post("/vendors/quotations", requireAuth, async (req, res) => {
       category,
       produce,
       quantity: Number(quantity),
+      unit: unit || "Quintal",
       price: Number(price),
       status: "pending",
       paymentStatus: "unpaid",
@@ -206,6 +212,46 @@ router.get("/vendors/invoices", requireAuth, async (req, res) => {
 
   const invoices = await db.select().from(invoicesTable).where(eq(invoicesTable.vendorId, vendor.id));
   res.json(invoices);
+});
+
+// PUT /api/vendors/bank-details - Vendor updates beneficiary bank details
+router.put("/vendors/bank-details", requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  if (user.role !== "vendor" && user.role !== "admin") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const { bankName, accountNumber, ifscCode, branchName, accountHolderName } = req.body;
+  if (!accountNumber || !ifscCode || !accountHolderName) {
+    res.status(400).json({ error: "Account Number, IFSC Code, and Account Holder Name are required." });
+    return;
+  }
+
+  try {
+    const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.userId, user.userId)).limit(1);
+    if (!vendor) {
+      res.status(404).json({ error: "Vendor profile not found" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(vendorsTable)
+      .set({
+        bankName: bankName || null,
+        accountNumber,
+        ifscCode,
+        branchName: branchName || null,
+        accountHolderName,
+      })
+      .where(eq(vendorsTable.id, vendor.id))
+      .returning();
+
+    res.json(formatVendor(updated));
+  } catch (error) {
+    console.error("Failed to update bank details:", error);
+    res.status(500).json({ error: "Failed to update bank details" });
+  }
 });
 
 // GET /api/vendors/invoices/:id/download - Stream invoice file to browser securely

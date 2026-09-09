@@ -17,4 +17,14 @@ export const productReviewsTable = pgTable("product_reviews", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const driverReviewsTable = pgTable("driver_reviews", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  userId: integer("user_id").references(() => usersTable.id, { onDelete: 'cascade' }),
+  rating: integer("rating").notNull(),
+  feedback: text("feedback"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export type ProductReview = typeof productReviewsTable.$inferSelect;
+export type DriverReview = typeof driverReviewsTable.$inferSelect;

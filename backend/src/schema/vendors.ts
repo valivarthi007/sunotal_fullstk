@@ -15,6 +15,11 @@ export const vendorsTable = pgTable("vendors", {
   farmSize: text("farm_size"),
   aadhar: text("aadhar"),
   gstin: text("gstin"),
+  bankName: text("bank_name"),
+  accountNumber: text("account_number"),
+  ifscCode: text("ifsc_code"),
+  branchName: text("branch_name"),
+  accountHolderName: text("account_holder_name"),
   status: text("status", { enum: ["pending", "approved", "rejected"] })
     .notNull()
     .default("pending"),
@@ -36,6 +41,7 @@ export const vendorQuotationsTable = pgTable("vendor_quotations", {
   category: text("category").notNull(),
   produce: text("produce").notNull(),
   quantity: integer("quantity").notNull().default(0),
+  unit: text("unit").notNull().default("Quintal"),
   price: real("price").notNull().default(0),
   status: text("status", { enum: ["pending", "accepted", "rejected"] })
     .notNull()

@@ -136,6 +136,32 @@ export async function initDatabase() {
 
       ALTER TABLE inventory ADD COLUMN IF NOT EXISTS warehouse_id INTEGER REFERENCES warehouses(id) ON DELETE SET NULL;
       ALTER TABLE inventory ADD COLUMN IF NOT EXISTS warehouse_name TEXT;
+
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS bank_name TEXT;
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS account_number TEXT;
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS ifsc_code TEXT;
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS branch_name TEXT;
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS account_holder_name TEXT;
+
+      ALTER TABLE vendor_quotations ADD COLUMN IF NOT EXISTS unit TEXT DEFAULT 'Quintal';
+
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id SERIAL PRIMARY KEY,
+        ticket_id TEXT NOT NULL UNIQUE,
+        role TEXT NOT NULL,
+        sender_name TEXT NOT NULL,
+        sender_email TEXT NOT NULL,
+        sender_phone TEXT,
+        category TEXT NOT NULL,
+        order_id TEXT,
+        subject TEXT NOT NULL,
+        description TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        resolution TEXT,
+        resolved_by TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
     `);
 
     // Seed default admin user ONLY (password: admin123 or admin)

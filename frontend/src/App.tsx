@@ -43,6 +43,7 @@ const DeliveryDashboard = lazy(() => import("@/pages/delivery/DeliveryDashboard"
 const DeliveryRegistration = lazy(() => import("@/pages/delivery/DeliveryRegistration"));
 const DeliveryLogin = lazy(() => import("@/pages/delivery/DeliveryLogin"));
 const DeliveryEarnings = lazy(() => import("@/pages/delivery/Earnings"));
+const SupportPortal = lazy(() => import("@/pages/support/SupportPortal"));
 
 import NotFound from "@/pages/not-found";
 import Redirect from "@/lib/redirect";

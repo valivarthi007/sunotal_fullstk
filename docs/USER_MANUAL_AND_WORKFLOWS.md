@@ -134,6 +134,41 @@ The system enforces subdomain domain isolation. Each role has a dedicated portal
    - Customer `/orders` page reactively updates in real-time.
 
 ### Step 4: Rider Earnings & Instant Day-Out UPI Payout
-1. Inspect rider dashboard earnings stats: Completed Deliveries, Total Kms Run, Base Pay (₹30/order), Distance Pay (₹10/km), and Customer Tips.
+1. Inspect rider dashboard earnings stats: Completed Deliveries, Total Kms Run, Base Pay (₹30/order), Distance Rate (₹10/km), and Customer Tips.
 2. Click **Request Day-Out Payout**. Enter UPI ID (e.g. `rider@upi`).
-3. Click **Withdraw Earnings** to receive instant direct bank transfer.
+3. Click **Request Day-Out Instant Payout to UPI** to receive instant direct bank transfer.
+4. Access **Earnings & Payment Support** to open ticket for payout inquiries.
+
+---
+
+## 🎧 6. Support Portal Microservice & Helpdesk (`support-sunotal.automateuniverse.space`)
+
+### Overview & Subdomain Architecture
+The **Sunotal Support Microservice** (`backend/services/support-service`) powers ticket routing and resolution across all platform roles at `https://support-sunotal.automateuniverse.space`.
+
+| Stakeholder Role | Portal Access | Allowed Support Categories | Scope & Handling |
+|---|---|---|---|
+| **Consumer / Customer** | `sunotal.automateuniverse.space` | `product`, `payment`, `packaging`, `delivery` | Order grievances, item quality, refund requests, delivery delays |
+| **Farmer / Vendor** | `vendor-sunotal.automateuniverse.space` | `payment` (only) | Quotation payout queries, bank settlement delays, invoice receipts |
+| **Delivery Partner / Rider** | `delivery-sunotal.automateuniverse.space` | `payment` (only) | Day-out earnings payout queries, UPI transfer confirmation |
+
+### Support Agent Workflow
+1. Open `https://support-sunotal.automateuniverse.space` (or `/support` route).
+2. Filter tickets by **Stakeholder Channel** (*All*, *Users*, *Farmers*, *Riders*), **Category**, or **Status**.
+3. Inspect ticket details: Ticket Ref (`TKT-2026-XXXX`), Sender Name & Email, Role, Category, Subject, and Description.
+4. Click **Solve Ticket**.
+5. Enter resolution remarks (e.g. *Payment credit verified via Instant Payout Gateway*) and click **Mark Ticket as SOLVED**.
+6. System updates ticket status to `resolved` in Postgres database and notifies stakeholder.
+
+---
+
+## 🏛️ 7. Beneficiary Bank Details & Warehouse Hub Operations
+
+### Farmer Beneficiary Bank Profile Setup & Admin View
+1. **Farmer Portal**: Farmers can update their beneficiary bank details (*Account Holder Name*, *Bank Name*, *Bank Account No*, *IFSC Code*, *Branch Name*) under profile settings.
+2. **Admin Portal**: Admins can view submitted bank info directly on `/admin/vendors` by clicking the **Bank Info** button on any vendor card.
+
+### Dark Store Warehouse Hub Deletion
+1. Admins navigating to `/admin/warehouses` can delete obsolete fulfillment warehouses by clicking **Delete Hub**.
+2. Deletion API `DELETE /api/admin/warehouses/:id` verifies dependencies and removes hub from active delivery routing.
+

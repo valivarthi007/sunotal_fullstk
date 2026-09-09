@@ -194,6 +194,31 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
           </Button>
         </a>
       </div>
+
+      {/* 4-Stage Delivery Stage Timeline */}
+      <div className="p-5 bg-muted/30 border-t space-y-3">
+        <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <Clock className="w-4 h-4 text-emerald-600" /> Express Delivery Stages & Rider Movement
+        </h4>
+        <div className="grid grid-cols-4 gap-2 text-center text-[10px]">
+          <div className="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 font-bold space-y-1">
+            <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-600" />
+            <span>1. Order Confirmed</span>
+          </div>
+          <div className="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 font-bold space-y-1">
+            <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-600" />
+            <span>2. At Dark Store</span>
+          </div>
+          <div className="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 font-bold space-y-1">
+            <Truck className="w-4 h-4 mx-auto text-emerald-600 animate-pulse" />
+            <span>3. Out for Delivery</span>
+          </div>
+          <div className="p-2.5 rounded-2xl bg-muted text-muted-foreground border border-border font-semibold space-y-1">
+            <MapPin className="w-4 h-4 mx-auto text-muted-foreground" />
+            <span>4. Arrived at Door</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

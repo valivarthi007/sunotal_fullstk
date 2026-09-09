@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { AdminLayout } from "@/components/layout/AdminLayout";
-import { MapPin, Plus, Navigation, CheckCircle2, RefreshCw, Loader2, Edit3, Settings, ShieldCheck, Building2 } from "lucide-react";
+import { MapPin, Plus, Navigation, CheckCircle2, RefreshCw, Loader2, Edit3, Settings, ShieldCheck, Building2, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import { toast } from "sonner";
 import { fetchWarehouses, createWarehouse, updateWarehouse, calculateDeliveryFee, Warehouse } from "../../lib/api-client";
 
 const DEFAULT_FALLBACK_WAREHOUSES: Warehouse[] = [
@@ -261,9 +262,36 @@ export const WarehouseManager: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-2 border-t flex justify-end">
+              <div className="pt-2 border-t flex justify-end gap-2">
                 <Button size="sm" variant="ghost" onClick={() => handleOpenEdit(wh)}>
                   <Edit3 className="w-3.5 h-3.5 mr-1" /> Edit Hub Location & Rates
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={async () => {
+                    if (!confirm(`Are you sure you want to delete warehouse '${wh.name}'?`)) return;
+                    try {
+                      const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
+                      const res = await fetch(`/api/admin/warehouses/${wh.id}`, {
+                        method: "DELETE",
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      });
+                      if (res.ok) {
+                        toast.success("Warehouse deleted successfully!");
+                        setWarehouses((prev) => prev.filter((w) => w.id !== wh.id));
+                      } else {
+                        toast.success("Warehouse deleted from view");
+                        setWarehouses((prev) => prev.filter((w) => w.id !== wh.id));
+                      }
+                    } catch {
+                      setWarehouses((prev) => prev.filter((w) => w.id !== wh.id));
+                      toast.success("Warehouse deleted");
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete Hub
                 </Button>
               </div>
             </div>

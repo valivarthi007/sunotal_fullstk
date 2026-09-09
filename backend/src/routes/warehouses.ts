@@ -249,4 +249,26 @@ router.post("/delivery/calculate", async (req, res) => {
   }
 });
 
+// DELETE /api/admin/warehouses/:id - Delete existing warehouse (Admin only)
+router.delete("/admin/warehouses/:id", requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const numId = Number(id);
+  if (isNaN(numId)) {
+    res.status(400).json({ error: "Invalid warehouse ID" });
+    return;
+  }
+
+  try {
+    const deleted = await db.delete(warehousesTable).where(eq(warehousesTable.id, numId)).returning();
+    if (deleted.length === 0) {
+      res.status(404).json({ error: "Warehouse not found" });
+      return;
+    }
+    res.json({ success: true, message: "Warehouse deleted successfully", deleted: deleted[0] });
+  } catch (error: any) {
+    console.error("Failed to delete warehouse:", error);
+    res.status(500).json({ error: "Failed to delete warehouse" });
+  }
+});
+
 export default router;

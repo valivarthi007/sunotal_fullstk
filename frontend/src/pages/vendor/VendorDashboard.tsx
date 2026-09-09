@@ -158,14 +158,12 @@ export default function VendorDashboard() {
     return list;
   }, [productDefs, products, selectedCategory]);
 
-  // Automatically update unit options when category changes
+  // Set default unit only if unit field is empty
   useEffect(() => {
-    if (selectedCategory === "Dairy") {
-      form.setValue("unit", "Liters");
-    } else if (selectedCategory === "Grains" || selectedCategory === "Vegetables") {
-      form.setValue("unit", "Quintal");
-    } else if (selectedCategory === "Fruits") {
-      form.setValue("unit", "Kg");
+    if (!form.getValues("unit")) {
+      if (selectedCategory === "Dairy") form.setValue("unit", "Liters");
+      else if (selectedCategory === "Fruits") form.setValue("unit", "Kg");
+      else form.setValue("unit", "Quintal");
     }
   }, [selectedCategory, form]);
 
