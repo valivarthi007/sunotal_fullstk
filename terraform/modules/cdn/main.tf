@@ -216,8 +216,7 @@ resource "aws_lb_listener_rule" "auth_api" {
   condition {
     path_pattern {
       values = [
-        "/api/auth",
-        "/api/auth/*",
+        "/api/auth*",
         "/api/healthz"
       ]
     }
@@ -236,15 +235,11 @@ resource "aws_lb_listener_rule" "operations_api" {
   condition {
     path_pattern {
       values = [
-        "/api/operations",
-        "/api/operations/*",
-        "/api/admin/*",
-        "/api/orders",
-        "/api/orders/*",
-        "/api/warehouses",
-        "/api/warehouses/*",
-        "/api/quotations",
-        "/api/quotations/*"
+        "/api/operations*",
+        "/api/admin*",
+        "/api/orders*",
+        "/api/warehouses*",
+        "/api/quotations*"
       ]
     }
   }
@@ -262,12 +257,9 @@ resource "aws_lb_listener_rule" "inventory_api" {
   condition {
     path_pattern {
       values = [
-        "/api/inventory",
-        "/api/inventory/*",
-        "/api/products",
-        "/api/products/*",
-        "/api/categories",
-        "/api/categories/*"
+        "/api/inventory*",
+        "/api/products*",
+        "/api/categories*"
       ]
     }
   }
@@ -285,10 +277,8 @@ resource "aws_lb_listener_rule" "user_api" {
   condition {
     path_pattern {
       values = [
-        "/api/users",
-        "/api/users/*",
-        "/api/profile",
-        "/api/profile/*"
+        "/api/users*",
+        "/api/profile*"
       ]
     }
   }
@@ -306,10 +296,8 @@ resource "aws_lb_listener_rule" "delivery_api" {
   condition {
     path_pattern {
       values = [
-        "/api/delivery",
-        "/api/delivery/*",
-        "/api/driver",
-        "/api/driver/*"
+        "/api/delivery*",
+        "/api/driver*"
       ]
     }
   }
@@ -327,8 +315,7 @@ resource "aws_lb_listener_rule" "support_api" {
   condition {
     path_pattern {
       values = [
-        "/api/support",
-        "/api/support/*"
+        "/api/support*"
       ]
     }
   }
