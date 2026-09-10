@@ -79,15 +79,20 @@ jobs:
       - name: Deploy Infrastructure with Terraform
         env:
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
-          COMPUTE_TARGET: ${{ inputs.compute_target || 'ecs' }}
         run: |
+          COMPUTE_TARGET="${{ inputs.compute_target }}"
+          if [ -z "$COMPUTE_TARGET" ]; then
+            COMPUTE_TARGET="ecs"
+          fi
+          echo "Using compute_target=$COMPUTE_TARGET"
+
           mkdir -p ~/.ssh
           echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
           tr -d '\r' < ~/.ssh/id_rsa > ~/.ssh/id_rsa.clean
           mv ~/.ssh/id_rsa.clean ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          PUB_KEY=$(ssh-keygen -y -f ~/.ssh/id_rsa)
-          echo "::add-mask::$PUB_KEY"
+          PUB_KEY=$(ssh-keygen -y -f ~/.ssh/id_rsa 2>/dev/null || echo "")
+          if [ -n "$PUB_KEY" ]; then echo "::add-mask::$PUB_KEY"; fi
           
           cd terraform
           terraform init -upgrade
