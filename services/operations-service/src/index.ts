@@ -298,26 +298,230 @@ app.get("/api/products", async (req: any, res: any) => {
   try {
     if (mongoose.connection.readyState === 1) {
       const filter = req.query.all === "true" ? {} : { active: true };
-      const products = await Product.find(filter);
+      const products = await Product.find(filter).sort({ createdAt: -1 });
       if (products) return res.json(products);
     }
   } catch {
     // Fallback
   }
-  return res.json([]);
+  return res.json(inMemoryProducts);
 });
+
+// POST /api/products
+app.post("/api/products", async (req: any, res: any) => {
+  try {
+    const { name, category, unit, price, originalPrice, image, badge, organic, active, description } = req.body;
+    if (!name || !category || price === undefined) {
+      return res.status(400).json({ error: "Name, category, and price are required" });
+    }
+
+    const pPrice = Number(price);
+    const pOrigPrice = originalPrice !== undefined ? Number(originalPrice) : pPrice;
+    const discount = pOrigPrice > pPrice ? Math.round(((pOrigPrice - pPrice) / pOrigPrice) * 100) : 0;
+
+    let product: any = null;
+    if (mongoose.connection.readyState === 1) {
+      const count = await Product.countDocuments();
+      product = await Product.create({
+        id: count + 1,
+        name,
+        category,
+        unit: unit || "1 kg",
+        price: pPrice,
+        originalPrice: pOrigPrice,
+        discountPercentage: discount,
+        image: image || "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=600&q=80",
+        badge: badge || null,
+        organic: Boolean(organic),
+        active: active !== undefined ? Boolean(active) : true,
+        description: description || null,
+      });
+    }
+
+    if (!product) {
+      product = {
+        id: inMemoryProducts.length + 1,
+        name,
+        category,
+        unit: unit || "1 kg",
+        price: pPrice,
+        originalPrice: pOrigPrice,
+        discountPercentage: discount,
+        image: image || "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=600&q=80",
+        badge: badge || null,
+        organic: Boolean(organic),
+        active: active !== undefined ? Boolean(active) : true,
+        description: description || null,
+        createdAt: new Date().toISOString(),
+      };
+      inMemoryProducts.push(product);
+    }
+    return res.status(201).json(product);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Failed to create product" });
+  }
+});
+
+// PUT & PATCH /api/products/:id
+const handleUpdateProduct = async (req: any, res: any) => {
+  const targetId = Number(req.params.id);
+  const updateData = req.body || {};
+  const payload = updateData.data || updateData;
+
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const updated = await Product.findOneAndUpdate(
+        { id: targetId },
+        { $set: payload },
+        { new: true }
+      );
+      if (updated) return res.json(updated);
+    }
+  } catch {
+    // Fallback
+  }
+
+  let prod = inMemoryProducts.find((p) => p.id === targetId);
+  if (prod) {
+    Object.assign(prod, payload);
+    return res.json(prod);
+  }
+  return res.status(404).json({ error: "Product not found" });
+};
+
+app.put("/api/products/:id", handleUpdateProduct);
+app.patch("/api/products/:id", handleUpdateProduct);
+
+// DELETE /api/products/:id
+app.delete("/api/products/:id", async (req: any, res: any) => {
+  const targetId = Number(req.params.id);
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await Product.deleteOne({ id: targetId });
+      return res.json({ success: true, message: "Product deleted" });
+    }
+  } catch {
+    // Fallback
+  }
+
+  const idx = inMemoryProducts.findIndex((p) => p.id === targetId);
+  if (idx !== -1) inMemoryProducts.splice(idx, 1);
+  return res.json({ success: true, message: "Product deleted" });
+});
+
+const inMemoryVendors: any[] = [];
 
 // GET /api/vendors
 app.get("/api/vendors", async (_req, res) => {
   try {
     if (mongoose.connection.readyState === 1) {
-      const vendors = await Vendor.find();
+      const vendors = await Vendor.find().sort({ createdAt: -1 });
       if (vendors && vendors.length > 0) return res.json(vendors);
     }
   } catch {
     // Fallback
   }
-  return res.json([]);
+  return res.json(inMemoryVendors);
+});
+
+// POST /api/vendors
+app.post("/api/vendors", async (req: any, res: any) => {
+  try {
+    const { firstName, lastName, phone, location, produce, email, bankName, accountNumber, ifscCode, branchName, accountHolderName } = req.body;
+    if (!firstName || !phone) {
+      return res.status(400).json({ error: "First name and phone are required" });
+    }
+
+    let vendor: any = null;
+    if (mongoose.connection.readyState === 1) {
+      const count = await Vendor.countDocuments();
+      vendor = await Vendor.create({
+        id: count + 1,
+        firstName,
+        lastName: lastName || "",
+        phone,
+        location: location || "",
+        produce: produce || "",
+        email: email || null,
+        status: "pending",
+        bankName: bankName || null,
+        accountNumber: accountNumber || null,
+        ifscCode: ifscCode || null,
+        branchName: branchName || null,
+        accountHolderName: accountHolderName || null,
+      });
+    }
+
+    if (!vendor) {
+      vendor = {
+        id: inMemoryVendors.length + 1,
+        firstName,
+        lastName: lastName || "",
+        phone,
+        location: location || "",
+        produce: produce || "",
+        email: email || null,
+        status: "pending",
+        bankName: bankName || null,
+        accountNumber: accountNumber || null,
+        ifscCode: ifscCode || null,
+        branchName: branchName || null,
+        accountHolderName: accountHolderName || null,
+        createdAt: new Date().toISOString(),
+      };
+      inMemoryVendors.push(vendor);
+    }
+    return res.status(201).json(vendor);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Failed to create vendor" });
+  }
+});
+
+// PUT & PATCH /api/vendors/:id
+const handleUpdateVendor = async (req: any, res: any) => {
+  const targetId = Number(req.params.id);
+  const updateData = req.body || {};
+  const payload = updateData.data || updateData;
+
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const updated = await Vendor.findOneAndUpdate(
+        { id: targetId },
+        { $set: payload },
+        { new: true }
+      );
+      if (updated) return res.json(updated);
+    }
+  } catch {
+    // Fallback
+  }
+
+  let vendor = inMemoryVendors.find((v) => v.id === targetId);
+  if (vendor) {
+    Object.assign(vendor, payload);
+    return res.json(vendor);
+  }
+  return res.status(404).json({ error: "Vendor not found" });
+};
+
+app.put("/api/vendors/:id", handleUpdateVendor);
+app.patch("/api/vendors/:id", handleUpdateVendor);
+
+// DELETE /api/vendors/:id
+app.delete("/api/vendors/:id", async (req: any, res: any) => {
+  const targetId = Number(req.params.id);
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await Vendor.deleteOne({ id: targetId });
+      return res.json({ success: true, message: "Vendor deleted" });
+    }
+  } catch {
+    // Fallback
+  }
+
+  const idx = inMemoryVendors.findIndex((v) => v.id === targetId);
+  if (idx !== -1) inMemoryVendors.splice(idx, 1);
+  return res.json({ success: true, message: "Vendor deleted" });
 });
 
 // Warehouses endpoints
