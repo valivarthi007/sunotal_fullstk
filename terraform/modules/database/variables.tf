@@ -22,6 +22,12 @@ variable "instance_class" {
   default     = "db.t4g.micro"
 }
 
+variable "docdb_instance_class" {
+  type        = string
+  description = "AWS DocumentDB instance class"
+  default     = "db.t3.medium"
+}
+
 variable "db_name" {
   type        = string
   description = "Database name"
@@ -55,10 +61,4 @@ variable "tags" {
   type        = map(string)
   description = "Tags for database resources"
   default     = {}
-}
-
-variable "docdb_instance_class" {
-  type        = string
-  description = "AWS DocumentDB instance class"
-  default     = "db.t3.medium"
 }
