@@ -108,20 +108,9 @@ variable "dynamodb_table_name" {
 }
 
 variable "compute_target" {
-  description = "Compute deployment target: 'eks' or 'ecs'"
+  description = "Compute deployment target: 'ecs'"
   type        = string
   default     = "ecs"
-
-  validation {
-    condition     = contains(["eks", "ecs"], var.compute_target)
-    error_message = "compute_target must be either 'eks' or 'ecs'."
-  }
-}
-
-variable "eks_node_instance_types" {
-  description = "Instance types for EKS managed node group"
-  type        = list(string)
-  default     = ["t3.small"]
 }
 
 

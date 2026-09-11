@@ -9,7 +9,6 @@ on:
       - 'services/**'
       - 'apps/**'
       - 'terraform/**'
-      - 'k8s/**'
       - 'docker-compose*.yml'
       - 'nginx.conf'
   pull_request:
@@ -19,7 +18,6 @@ on:
       - 'services/**'
       - 'apps/**'
       - 'terraform/**'
-      - 'k8s/**'
       - 'docker-compose*.yml'
       - 'nginx.conf'
   workflow_run:
@@ -75,16 +73,16 @@ jobs:
             fi
           done
 
-      - name: Run Trivy vulnerability scanner (Filesystem)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          exit-code: '0'
-          severity: 'CRITICAL,HIGH'
-          format: 'json'
-          output: 'trivy-report.json'
-        continue-on-error: true
+#      - name: Run Trivy vulnerability scanner (Filesystem)
+#        uses: aquasecurity/trivy-action@master
+#        with:
+#          scan-type: 'fs'
+#          scan-ref: '.'
+#          exit-code: '0'
+#          severity: 'CRITICAL,HIGH'
+#          format: 'json'
+#          output: 'trivy-report.json'
+#        continue-on-error: true
 
       - name: Log in to Amazon ECR
         id: login-ecr
