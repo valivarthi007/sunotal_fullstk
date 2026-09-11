@@ -126,6 +126,8 @@ module "ecs" {
   s3_bucket_name = var.s3_bucket_name
   s3_policy_arn  = module.iam.policy_arn
   frontend_url   = "https://sunotal.automateuniverse.space"
+  admin_email    = var.admin_email
+  admin_password = var.admin_password
 
   depends_on = [module.cdn, module.database]
 }

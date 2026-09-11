@@ -19,6 +19,6 @@ output "docdb_endpoint" {
 }
 
 output "docdb_connection_string" {
-  value       = "mongodb://${var.db_username}:${var.db_password}@${aws_docdb_cluster.docdb.endpoint}:${aws_docdb_cluster.docdb.port}/sunotal?tls=true&tlsAllowInvalidCertificates=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false"
+  value       = "mongodb://${var.db_username}:${var.db_password}@${aws_docdb_cluster.docdb.endpoint}:${aws_docdb_cluster.docdb.port}/sunotal?tls=true&tlsAllowInvalidCertificates=true&directConnection=true&retryWrites=false"
   description = "MongoDB connection string for AWS DocumentDB"
 }

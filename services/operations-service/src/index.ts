@@ -10,12 +10,15 @@ const PORT = Number(process.env.PORT ?? 5002);
 const MONGODB_URI = process.env.MONGODB_URI || process.env.DATABASE_URL || "mongodb://127.0.0.1:27017/sunotal";
 const JWT_SECRET = process.env.JWT_SECRET || "sunotal-jwt-secret";
 
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || process.env.ADMIN_USR || "admin@sunotal.com").trim().toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || process.env.ADMIN_PWD || "admin123";
+
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 const ProductSchema = new mongoose.Schema(
   {
-    id: { type: Number, unique: true },
+    id: { type: Number, unique: true, required: true },
     name: { type: String, required: true },
     category: { type: String, required: true },
     unit: { type: String, required: true },
@@ -33,7 +36,7 @@ const ProductSchema = new mongoose.Schema(
 
 const VendorSchema = new mongoose.Schema(
   {
-    id: { type: Number, unique: true },
+    id: { type: Number, unique: true, required: true },
     userId: { type: Number },
     firstName: { type: String },
     lastName: { type: String },
@@ -53,7 +56,7 @@ const VendorSchema = new mongoose.Schema(
 
 const WarehouseSchema = new mongoose.Schema(
   {
-    id: { type: Number, unique: true },
+    id: { type: Number, unique: true, required: true },
     name: { type: String, required: true },
     address: { type: String, required: true },
     city: { type: String, required: true },
@@ -70,11 +73,11 @@ const WarehouseSchema = new mongoose.Schema(
 
 const UserSchema = new mongoose.Schema(
   {
-    id: { type: Number },
-    name: { type: String },
-    email: { type: String },
+    id: { type: Number, unique: true, required: true },
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true, lowercase: true },
     passwordHash: { type: String },
-    role: { type: String },
+    role: { type: String, default: "user" },
     active: { type: Boolean, default: true },
     phone: { type: String },
     city: { type: String },
@@ -84,7 +87,7 @@ const UserSchema = new mongoose.Schema(
 
 const CategorySchema = new mongoose.Schema(
   {
-    id: { type: Number, unique: true },
+    id: { type: Number, unique: true, required: true },
     name: { type: String, required: true, unique: true },
     icon: { type: String, default: "📦" },
   },
@@ -93,7 +96,7 @@ const CategorySchema = new mongoose.Schema(
 
 const QuotationSchema = new mongoose.Schema(
   {
-    id: { type: Number, unique: true },
+    id: { type: Number, unique: true, required: true },
     vendorName: { type: String, required: true },
     cropName: { type: String, required: true },
     quantity: { type: Number, required: true },
@@ -111,13 +114,17 @@ const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
 const Category: any = mongoose.models.Category || mongoose.model("Category", CategorySchema);
 const Quotation: any = mongoose.models.Quotation || mongoose.model("Quotation", QuotationSchema);
 
-const defaultCategories = [
-  { id: 1, name: "Vegetables", icon: "🥦" },
-  { id: 2, name: "Fruits", icon: "🍎" },
-  { id: 3, name: "Dairy", icon: "🥛" },
-  { id: 4, name: "Dry Fruits", icon: "🥜" },
-  { id: 5, name: "Grains", icon: "🌾" },
-];
+async function getNextId(Model: any): Promise<number> {
+  try {
+    const highest = await Model.findOne({}, { id: 1 }).sort({ id: -1 }).exec();
+    if (highest && typeof highest.id === "number" && !isNaN(highest.id)) {
+      return highest.id + 1;
+    }
+  } catch {
+    // Ignored
+  }
+  return 1;
+}
 
 // GET /api/admin/stats
 app.get("/api/admin/stats", async (_req, res) => {
@@ -221,9 +228,9 @@ app.post("/api/vendors/quotations", async (req: any, res: any) => {
   }
 
   try {
-    const count = await Quotation.countDocuments();
+    const nextId = await getNextId(Quotation);
     const newQuote = await Quotation.create({
-      id: count + 1,
+      id: nextId,
       vendorName: vendorName || "Local Farm Vendor",
       cropName,
       quantity: Number(quantity),
@@ -233,14 +240,10 @@ app.post("/api/vendors/quotations", async (req: any, res: any) => {
     });
     return res.status(201).json(newQuote);
   } catch (err: any) {
+    console.error("Error creating quotation:", err);
     return res.status(500).json({ error: "Failed to create quotation" });
   }
 });
-
-const DEFAULT_ADMIN_USERS: Record<string, { id: number; name: string; password: string; role: string; phone?: string; city?: string }> = {
-  "admin@sunotal.com": { id: 1, name: "Admin User", password: "admin123", role: "admin", phone: "+91 98765 00001", city: "Hyderabad" },
-  "support@sunotal.com": { id: 5, name: "Support Lead", password: "support123", role: "admin", phone: "+91 98765 00005", city: "Mumbai" },
-};
 
 // POST /api/admin/login
 app.post("/api/admin/login", async (req: any, res: any) => {
@@ -251,28 +254,29 @@ app.post("/api/admin/login", async (req: any, res: any) => {
 
   const cleanEmail = email.trim().toLowerCase();
   try {
-    let user: any = null;
-    try {
-      user = await User.findOne({ email: cleanEmail }).exec();
-    } catch {
-      // Ignored
-    }
+    let user: any = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
 
-    const defaultAcc = DEFAULT_ADMIN_USERS[cleanEmail];
-    if (!user && defaultAcc) {
-      const passwordHash = await bcrypt.hash(defaultAcc.password, 10);
+    if (!user && cleanEmail === ADMIN_EMAIL) {
+      const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+      const adminId = await getNextId(User);
       user = {
-        id: defaultAcc.id,
-        name: defaultAcc.name,
-        email: cleanEmail,
+        id: adminId,
+        name: "Admin User",
+        email: ADMIN_EMAIL,
         passwordHash,
-        role: defaultAcc.role,
+        role: "admin",
         active: true,
-        phone: defaultAcc.phone || "+91 98765 00001",
-        city: defaultAcc.city || "Hyderabad",
+        phone: "+91 98765 00001",
+        city: "Hyderabad",
       };
-      if (mongoose.connection.readyState === 1) {
-        User.updateOne({ email: cleanEmail }, { $setOnInsert: user }, { upsert: true }).exec().catch(() => {});
+      try {
+        await User.findOneAndUpdate(
+          { email: ADMIN_EMAIL },
+          { $setOnInsert: user },
+          { upsert: true }
+        ).exec();
+      } catch {
+        // Ignored
       }
     }
 
@@ -280,15 +284,17 @@ app.post("/api/admin/login", async (req: any, res: any) => {
       return res.status(401).json({ error: "Invalid admin credentials" });
     }
 
-    const isDefaultMatch = defaultAcc && defaultAcc.password === password;
-    const isBcryptMatch = user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false;
-    if (!isDefaultMatch && !isBcryptMatch) {
+    const isMatch = (cleanEmail === ADMIN_EMAIL && password === ADMIN_PASSWORD) ||
+      (user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false);
+
+    if (!isMatch) {
       return res.status(401).json({ error: "Invalid admin credentials" });
     }
 
     const token = jwt.sign({ userId: user.id, email: user.email, role: user.role || "admin" }, JWT_SECRET, { expiresIn: "7d" });
     return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role || "admin" } });
   } catch (err: any) {
+    console.error("Admin login error:", err);
     return res.status(500).json({ error: "Authentication error" });
   }
 });
@@ -296,109 +302,94 @@ app.post("/api/admin/login", async (req: any, res: any) => {
 // GET /api/categories
 app.get("/api/categories", async (_req, res) => {
   try {
-    const categories = await Category.find().sort({ id: 1 });
-    if (categories && categories.length > 0) return res.json(categories);
-    return res.json(defaultCategories);
+    const categories = await Category.find().sort({ id: 1 }).exec().catch(() => []);
+    return res.json(categories || []);
   } catch (err: any) {
-    return res.json(defaultCategories);
+    return res.json([]);
   }
 });
 
-// POST /api/categories
 app.post("/api/categories", async (req: any, res: any) => {
+  const { name, icon } = req.body;
+  if (!name) return res.status(400).json({ error: "Category name is required" });
   try {
-    const { name, icon } = req.body;
-    if (!name) return res.status(400).json({ error: "Category name is required" });
-    const count = await Category.countDocuments();
-    const cat = await Category.create({ id: count + 1, name, icon: icon || "📦" });
+    const nextId = await getNextId(Category);
+    const cat = await Category.create({ id: nextId, name, icon: icon || "📦" });
     return res.status(201).json(cat);
   } catch (err: any) {
-    return res.status(400).json({ error: err.message || "Failed to create category" });
-  }
-});
-
-// DELETE /api/categories/:id
-app.delete("/api/categories/:id", async (req: any, res: any) => {
-  try {
-    const id = Number(req.params.id);
-    await Category.deleteOne({ id });
-    return res.json({ success: true });
-  } catch (err: any) {
-    return res.status(400).json({ error: err.message || "Failed to delete category" });
+    return res.status(500).json({ error: "Failed to create category" });
   }
 });
 
 // GET /api/products
 app.get("/api/products", async (req: any, res: any) => {
   try {
-    const filter = req.query.all === "true" ? {} : { active: true };
-    const products = await Product.find(filter).sort({ createdAt: -1 });
+    const { category, search } = req.query;
+    const filter: any = {};
+    if (category) filter.category = category;
+    if (search) filter.name = { $regex: search, $options: "i" };
+
+    const products = await Product.find(filter).sort({ createdAt: -1 }).exec().catch(() => []);
     return res.json(products || []);
   } catch (err: any) {
-    return res.status(500).json({ error: "Failed to fetch products" });
+    return res.json([]);
   }
 });
 
-// POST /api/products
+app.get("/api/products/:id", async (req: any, res: any) => {
+  try {
+    const id = Number(req.params.id);
+    const prod = await Product.findOne({ id }).exec();
+    if (!prod) return res.status(404).json({ error: "Product not found" });
+    return res.json(prod);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to fetch product" });
+  }
+});
+
 app.post("/api/products", async (req: any, res: any) => {
   try {
-    const { name, category, unit, price, originalPrice, image, badge, organic, active, description } = req.body;
-    if (!name || !category || price === undefined) {
-      return res.status(400).json({ error: "Name, category, and price are required" });
+    const { name, category, unit, price, originalPrice, discountPercentage, image, badge, organic, active, description } = req.body;
+    if (!name || !category || !unit || price === undefined) {
+      return res.status(400).json({ error: "Name, category, unit, and price are required" });
     }
-
-    const pPrice = Number(price);
-    const pOrigPrice = originalPrice !== undefined ? Number(originalPrice) : pPrice;
-    const discount = pOrigPrice > pPrice ? Math.round(((pOrigPrice - pPrice) / pOrigPrice) * 100) : 0;
-
-    const count = await Product.countDocuments();
-    const product = await Product.create({
-      id: count + 1,
+    const nextId = await getNextId(Product);
+    const prod = await Product.create({
+      id: nextId,
       name,
       category,
-      unit: unit || "1 kg",
-      price: pPrice,
-      originalPrice: pOrigPrice,
-      discountPercentage: discount,
-      image: image || "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=600&q=80",
+      unit,
+      price: Number(price),
+      originalPrice: Number(originalPrice || price),
+      discountPercentage: Number(discountPercentage || 0),
+      image: image || "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&q=80",
       badge: badge || null,
       organic: Boolean(organic),
       active: active !== undefined ? Boolean(active) : true,
-      description: description || null,
+      description: description || "",
     });
-    return res.status(201).json(product);
+    return res.status(201).json(prod);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Failed to create product" });
   }
 });
 
-// PUT & PATCH /api/products/:id
-const handleUpdateProduct = async (req: any, res: any) => {
-  const targetId = Number(req.params.id);
-  const updateData = req.body || {};
-  const payload = updateData.data || updateData;
-
+app.put("/api/products/:id", async (req: any, res: any) => {
   try {
-    const updated = await Product.findOneAndUpdate(
-      { id: targetId },
-      { $set: payload },
-      { new: true }
-    );
-    if (!updated) return res.status(404).json({ error: "Product not found" });
-    return res.json(updated);
+    const id = Number(req.params.id);
+    const updateData = req.body;
+    const prod = await Product.findOneAndUpdate({ id }, { $set: updateData }, { new: true }).exec();
+    if (!prod) return res.status(404).json({ error: "Product not found" });
+    return res.json(prod);
   } catch (err: any) {
     return res.status(500).json({ error: "Failed to update product" });
   }
-};
+});
 
-app.put("/api/products/:id", handleUpdateProduct);
-app.patch("/api/products/:id", handleUpdateProduct);
-
-// DELETE /api/products/:id
 app.delete("/api/products/:id", async (req: any, res: any) => {
-  const targetId = Number(req.params.id);
   try {
-    const result = await Product.deleteOne({ id: targetId });
+    const id = Number(req.params.id);
+    const result = await Product.deleteOne({ id }).exec();
     if (result.deletedCount === 0) return res.status(404).json({ error: "Product not found" });
     return res.json({ success: true, message: "Product deleted" });
   } catch (err: any) {
@@ -406,34 +397,43 @@ app.delete("/api/products/:id", async (req: any, res: any) => {
   }
 });
 
-// GET /api/vendors
+// GET & POST /api/vendors
 app.get("/api/vendors", async (_req, res) => {
   try {
-    const vendors = await Vendor.find().sort({ createdAt: -1 });
+    const vendors = await Vendor.find().sort({ createdAt: -1 }).exec().catch(() => []);
     return res.json(vendors || []);
   } catch (err: any) {
-    return res.status(500).json({ error: "Failed to fetch vendors" });
+    return res.json([]);
   }
 });
 
-// POST /api/vendors
+app.get("/api/vendors/:id", async (req: any, res: any) => {
+  try {
+    const id = Number(req.params.id);
+    const vendor = await Vendor.findOne({ id }).exec();
+    if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+    return res.json(vendor);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to fetch vendor" });
+  }
+});
+
 app.post("/api/vendors", async (req: any, res: any) => {
   try {
     const { firstName, lastName, phone, location, produce, email, bankName, accountNumber, ifscCode, branchName, accountHolderName } = req.body;
-    if (!firstName || !phone) {
-      return res.status(400).json({ error: "First name and phone are required" });
+    if (!firstName || !phone || !email) {
+      return res.status(400).json({ error: "First name, phone, and email are required" });
     }
-
-    const count = await Vendor.countDocuments();
+    const nextId = await getNextId(Vendor);
     const vendor = await Vendor.create({
-      id: count + 1,
+      id: nextId,
       firstName,
       lastName: lastName || "",
       phone,
       location: location || "",
       produce: produce || "",
-      email: email || null,
-      status: "pending",
+      email: email.trim().toLowerCase(),
+      status: "approved",
       bankName: bankName || null,
       accountNumber: accountNumber || null,
       ifscCode: ifscCode || null,
@@ -446,33 +446,22 @@ app.post("/api/vendors", async (req: any, res: any) => {
   }
 });
 
-// PUT & PATCH /api/vendors/:id
-const handleUpdateVendor = async (req: any, res: any) => {
-  const targetId = Number(req.params.id);
-  const updateData = req.body || {};
-  const payload = updateData.data || updateData;
-
+app.put("/api/vendors/:id", async (req: any, res: any) => {
   try {
-    const updated = await Vendor.findOneAndUpdate(
-      { id: targetId },
-      { $set: payload },
-      { new: true }
-    );
-    if (!updated) return res.status(404).json({ error: "Vendor not found" });
-    return res.json(updated);
+    const id = Number(req.params.id);
+    const updateData = req.body;
+    const vendor = await Vendor.findOneAndUpdate({ id }, { $set: updateData }, { new: true }).exec();
+    if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+    return res.json(vendor);
   } catch (err: any) {
     return res.status(500).json({ error: "Failed to update vendor" });
   }
-};
+});
 
-app.put("/api/vendors/:id", handleUpdateVendor);
-app.patch("/api/vendors/:id", handleUpdateVendor);
-
-// DELETE /api/vendors/:id
 app.delete("/api/vendors/:id", async (req: any, res: any) => {
-  const targetId = Number(req.params.id);
   try {
-    const result = await Vendor.deleteOne({ id: targetId });
+    const id = Number(req.params.id);
+    const result = await Vendor.deleteOne({ id }).exec();
     if (result.deletedCount === 0) return res.status(404).json({ error: "Vendor not found" });
     return res.json({ success: true, message: "Vendor deleted" });
   } catch (err: any) {
@@ -480,22 +469,22 @@ app.delete("/api/vendors/:id", async (req: any, res: any) => {
   }
 });
 
-// Warehouses endpoints
+// GET & POST /api/warehouses
 app.get("/api/warehouses", async (_req, res) => {
   try {
-    const warehouses = await Warehouse.find({ isActive: true });
+    const warehouses = await Warehouse.find().sort({ createdAt: -1 }).exec().catch(() => []);
     return res.json(warehouses || []);
   } catch (err: any) {
-    return res.status(500).json({ error: "Failed to fetch warehouses" });
+    return res.json([]);
   }
 });
 
 app.get("/api/admin/warehouses", async (_req, res) => {
   try {
-    const warehouses = await Warehouse.find().sort({ createdAt: -1 });
+    const warehouses = await Warehouse.find().sort({ createdAt: -1 }).exec().catch(() => []);
     return res.json(warehouses || []);
   } catch (err: any) {
-    return res.status(500).json({ error: "Failed to fetch warehouses" });
+    return res.json([]);
   }
 });
 
@@ -505,9 +494,9 @@ app.post("/api/admin/warehouses", async (req: any, res: any) => {
     if (!name || !address || !city) {
       return res.status(400).json({ error: "Name, address, and city are required" });
     }
-    const count = await Warehouse.countDocuments();
+    const nextId = await getNextId(Warehouse);
     const warehouse = await Warehouse.create({
-      id: count + 1,
+      id: nextId,
       name,
       address,
       city,
@@ -527,13 +516,9 @@ app.post("/api/admin/warehouses", async (req: any, res: any) => {
 
 app.put("/api/admin/warehouses/:id", async (req: any, res: any) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
     const updateData = req.body;
-    const dbW = await Warehouse.findOneAndUpdate(
-      { id: Number(id) },
-      { $set: updateData },
-      { new: true }
-    );
+    const dbW = await Warehouse.findOneAndUpdate({ id }, { $set: updateData }, { new: true }).exec();
     if (!dbW) return res.status(404).json({ error: "Warehouse not found" });
     return res.json(dbW);
   } catch (err: any) {
@@ -543,8 +528,8 @@ app.put("/api/admin/warehouses/:id", async (req: any, res: any) => {
 
 app.delete("/api/admin/warehouses/:id", async (req: any, res: any) => {
   try {
-    const { id } = req.params;
-    const result = await Warehouse.deleteOne({ id: Number(id) });
+    const id = Number(req.params.id);
+    const result = await Warehouse.deleteOne({ id }).exec();
     if (result.deletedCount === 0) return res.status(404).json({ error: "Warehouse not found" });
     return res.json({ success: true, message: "Warehouse deleted" });
   } catch (err: any) {
@@ -555,7 +540,13 @@ app.delete("/api/admin/warehouses/:id", async (req: any, res: any) => {
 app.get("/", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
 
-mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(() => {
+const isDocDB = MONGODB_URI.includes("docdb.amazonaws.com");
+mongoose.connect(MONGODB_URI, {
+  tlsAllowInvalidCertificates: true,
+  serverSelectionTimeoutMS: 5000,
+  connectTimeoutMS: 5000,
+  ...(isDocDB ? { directConnection: true } : {})
+}).then(() => {
   console.log("⚡ [operations-service] Connected to MongoDB / AWS DocumentDB");
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [operations-service] Running on port ${PORT}`));
 }).catch((err) => {

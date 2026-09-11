@@ -125,4 +125,17 @@ variable "docdb_instance_class" {
   default     = "db.t3.medium"
 }
 
+variable "admin_email" {
+  description = "Default Admin Email injected at runtime"
+  type        = string
+  default     = "admin@sunotal.com"
+}
+
+variable "admin_password" {
+  description = "Default Admin Password injected at runtime"
+  type        = string
+  sensitive   = true
+  default     = "admin123"
+}
+
 

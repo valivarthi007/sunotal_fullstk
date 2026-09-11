@@ -119,7 +119,19 @@ variable "s3_bucket_name" {
 
 variable "s3_policy_arn" {
   type        = string
-  description = "ARN of the S3 access policy to attach to the ECS Task Role"
+  description = "IAM Policy ARN for S3 access"
+}
+
+variable "admin_email" {
+  type        = string
+  description = "Default Admin Email injected at runtime"
+  default     = "admin@sunotal.com"
+}
+
+variable "admin_password" {
+  type        = string
+  description = "Default Admin Password injected at runtime"
+  default     = "admin123"
 }
 
 variable "frontend_url" {

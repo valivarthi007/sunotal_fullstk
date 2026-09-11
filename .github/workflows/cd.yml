@@ -93,7 +93,9 @@ jobs:
           if [ "$STATUS" != "200" ]; then echo "❌ Healthz test failed"; exit 1; fi
 
           # Test 3: Admin Login & JWT Token
-          LOGIN_RES=$(curl -s -L -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" -d '{"email":"admin@sunotal.com","password":"admin123"}' || echo "")
+          ADMIN_EMAIL="${ADMIN_USR:-${ADMIN_EMAIL:-admin@sunotal.com}}"
+          ADMIN_PASS="${ADMIN_PWD:-${ADMIN_PASSWORD:-admin123}}"
+          LOGIN_RES=$(curl -s -L -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASS\"}" || echo "")
           TOKEN=$(echo "$LOGIN_RES" | grep -o '"token":"[^"]*' | cut -d'"' -f4 || echo "")
           if [ -n "$TOKEN" ]; then
             echo "Test 3 [Admin Login API]: HTTP 200 (Token obtained successfully)"

@@ -128,7 +128,11 @@ resource "aws_ecs_task_definition" "auth" {
         { name = "MONGODB_URI", value = var.mongodb_uri },
         { name = "SESSION_SECRET", value = var.session_secret },
         { name = "CLOUDFRONT_DOMAIN", value = var.cloudfront_domain },
-        { name = "FRONTEND_URL", value = var.frontend_url }
+        { name = "FRONTEND_URL", value = var.frontend_url },
+        { name = "ADMIN_EMAIL", value = var.admin_email },
+        { name = "ADMIN_PASSWORD", value = var.admin_password },
+        { name = "ADMIN_USR", value = var.admin_email },
+        { name = "ADMIN_PWD", value = var.admin_password }
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -177,7 +181,11 @@ resource "aws_ecs_task_definition" "operations" {
         { name = "CLOUDFRONT_DOMAIN", value = var.cloudfront_domain },
         { name = "FRONTEND_URL", value = var.frontend_url },
         { name = "S3_BUCKET_NAME", value = var.s3_bucket_name },
-        { name = "AWS_REGION", value = var.aws_region }
+        { name = "AWS_REGION", value = var.aws_region },
+        { name = "ADMIN_EMAIL", value = var.admin_email },
+        { name = "ADMIN_PASSWORD", value = var.admin_password },
+        { name = "ADMIN_USR", value = var.admin_email },
+        { name = "ADMIN_PWD", value = var.admin_password }
       ]
       logConfiguration = {
         logDriver = "awslogs"

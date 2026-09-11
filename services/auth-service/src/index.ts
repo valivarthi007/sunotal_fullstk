@@ -10,12 +10,15 @@ const PORT = Number(process.env.PORT ?? 5001);
 const MONGODB_URI = process.env.MONGODB_URI || process.env.DATABASE_URL || "mongodb://127.0.0.1:27017/sunotal";
 const JWT_SECRET = process.env.JWT_SECRET || "sunotal-jwt-secret";
 
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || process.env.ADMIN_USR || "admin@sunotal.com").trim().toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || process.env.ADMIN_PWD || "admin123";
+
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 const UserSchema = new mongoose.Schema(
   {
-    id: { type: Number, unique: true },
+    id: { type: Number, unique: true, required: true },
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     passwordHash: { type: String, required: true },
@@ -29,13 +32,17 @@ const UserSchema = new mongoose.Schema(
 
 const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
 
-const DEFAULT_USERS: Record<string, { id: number; name: string; password: string; role: string; phone?: string; city?: string }> = {
-  "admin@sunotal.com": { id: 1, name: "Admin User", password: "admin123", role: "admin", phone: "+91 98765 00001", city: "Hyderabad" },
-  "user@sunotal.com": { id: 2, name: "Demo Customer", password: "user123", role: "user", phone: "+91 98765 00002", city: "Bangalore" },
-  "vendor@sunotal.com": { id: 3, name: "Green Farms Vendor", password: "vendor123", role: "vendor", phone: "+91 98765 00003", city: "Pune" },
-  "delivery@sunotal.com": { id: 4, name: "Express Rider", password: "delivery123", role: "delivery", phone: "+91 98765 00004", city: "Hyderabad" },
-  "support@sunotal.com": { id: 5, name: "Support Lead", password: "support123", role: "admin", phone: "+91 98765 00005", city: "Mumbai" },
-};
+async function getNextId(Model: any): Promise<number> {
+  try {
+    const highest = await Model.findOne({}, { id: 1 }).sort({ id: -1 }).exec();
+    if (highest && typeof highest.id === "number" && !isNaN(highest.id)) {
+      return highest.id + 1;
+    }
+  } catch {
+    // Ignored
+  }
+  return 1;
+}
 
 async function findUserByEmail(email: string) {
   if (!email) return null;
@@ -47,23 +54,30 @@ async function findUserByEmail(email: string) {
     console.error("DB findUserByEmail error:", err.message);
   }
 
-  const defaultAcc = DEFAULT_USERS[cleanEmail];
-  if (defaultAcc) {
-    const passwordHash = await bcrypt.hash(defaultAcc.password, 10);
-    const userObj = {
-      id: defaultAcc.id,
-      name: defaultAcc.name,
-      email: cleanEmail,
+  // Fallback ONLY for initial Admin bootstrap using env secret, upserted into MongoDB
+  if (cleanEmail === ADMIN_EMAIL) {
+    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+    const adminId = await getNextId(User);
+    const adminObj = {
+      id: adminId,
+      name: "Admin User",
+      email: ADMIN_EMAIL,
       passwordHash,
-      role: defaultAcc.role,
+      role: "admin",
       active: true,
-      phone: defaultAcc.phone || "+91 98765 00000",
-      city: defaultAcc.city || "Hyderabad",
+      phone: "+91 98765 00001",
+      city: "Hyderabad",
     };
-    if (mongoose.connection.readyState === 1) {
-      User.updateOne({ email: cleanEmail }, { $setOnInsert: userObj }, { upsert: true }).exec().catch(() => {});
+    try {
+      const created = await User.findOneAndUpdate(
+        { email: ADMIN_EMAIL },
+        { $setOnInsert: adminObj },
+        { upsert: true, new: true }
+      ).exec();
+      return created || adminObj;
+    } catch {
+      return adminObj;
     }
-    return userObj;
   }
 
   return null;
@@ -84,9 +98,9 @@ app.post("/api/auth/register", async (req: any, res: any) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const count = (await User.countDocuments().exec().catch(() => 0)) || 0;
+    const nextId = await getNextId(User);
     const user = await User.create({
-      id: count + 1,
+      id: nextId,
       name,
       email: cleanEmail,
       passwordHash,
@@ -118,10 +132,10 @@ app.post("/api/auth/login", async (req: any, res: any) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    const defaultAcc = DEFAULT_USERS[cleanEmail];
-    const isDefaultMatch = defaultAcc && defaultAcc.password === password;
-    const isBcryptMatch = user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false;
-    if (!isDefaultMatch && !isBcryptMatch) {
+    const isMatch = (cleanEmail === ADMIN_EMAIL && password === ADMIN_PASSWORD) || 
+      (user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false);
+
+    if (!isMatch) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
@@ -147,10 +161,10 @@ app.post("/api/admin/login", async (req: any, res: any) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    const defaultAcc = DEFAULT_USERS[cleanEmail];
-    const isDefaultMatch = defaultAcc && defaultAcc.password === password;
-    const isBcryptMatch = user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false;
-    if (!isDefaultMatch && !isBcryptMatch) {
+    const isMatch = (cleanEmail === ADMIN_EMAIL && password === ADMIN_PASSWORD) || 
+      (user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false);
+
+    if (!isMatch) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 

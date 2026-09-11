@@ -12,7 +12,7 @@ app.use(express.json());
 
 const InventorySchema = new mongoose.Schema(
   {
-    id: { type: Number, unique: true },
+    id: { type: Number, unique: true, required: true },
     productId: { type: Number, required: true },
     vendorId: { type: Number },
     warehouseId: { type: Number },
@@ -26,26 +26,26 @@ const InventorySchema = new mongoose.Schema(
 
 const Inventory: any = mongoose.models.Inventory || mongoose.model("Inventory", InventorySchema);
 
-const defaultCategories = [
-  { id: 1, name: "Vegetables", icon: "🥦" },
-  { id: 2, name: "Fruits", icon: "🍎" },
-  { id: 3, name: "Dairy", icon: "🥛" },
-  { id: 4, name: "Dry Fruits", icon: "🥜" },
-  { id: 5, name: "Grains", icon: "🌾" },
-];
-
-app.get("/api/categories", (_req, res) => res.json(defaultCategories));
-app.get("/api/products", (_req, res) => res.json([]));
-app.get("/api/vendors", (_req, res) => res.json([]));
+async function getNextId(Model: any): Promise<number> {
+  try {
+    const highest = await Model.findOne({}, { id: 1 }).sort({ id: -1 }).exec();
+    if (highest && typeof highest.id === "number" && !isNaN(highest.id)) {
+      return highest.id + 1;
+    }
+  } catch {
+    // Ignored
+  }
+  return 1;
+}
 
 // GET /api/inventory
 app.get("/api/inventory", async (_req, res) => {
   try {
-    const items = await Inventory.find().sort({ createdAt: -1 });
+    const items = await Inventory.find().sort({ createdAt: -1 }).exec().catch(() => []);
     return res.json(items || []);
   } catch (err: any) {
     console.error("Error fetching inventory:", err);
-    return res.status(500).json({ error: "Failed to fetch inventory" });
+    return res.json([]);
   }
 });
 
@@ -53,7 +53,7 @@ app.get("/api/inventory", async (_req, res) => {
 app.get("/api/inventory/:id", async (req: any, res: any) => {
   const targetId = Number(req.params.id);
   try {
-    const item = await Inventory.findOne({ id: targetId });
+    const item = await Inventory.findOne({ id: targetId }).exec();
     if (!item) return res.status(404).json({ error: "Inventory item not found" });
     return res.json(item);
   } catch (err: any) {
@@ -72,9 +72,9 @@ app.post("/api/inventory", async (req: any, res: any) => {
   const itemStatus = status || (qty > 0 ? "in_stock" : "out_of_stock");
 
   try {
-    const count = await Inventory.countDocuments();
+    const nextId = await getNextId(Inventory);
     const newInventory = await Inventory.create({
-      id: count + 1,
+      id: nextId,
       productId: Number(productId),
       vendorId: vendorId ? Number(vendorId) : null,
       warehouseId: warehouseId ? Number(warehouseId) : null,
@@ -112,7 +112,7 @@ const handleUpdateInventory = async (req: any, res: any) => {
       { id: targetId },
       { $set: updateFields },
       { new: true }
-    );
+    ).exec();
     if (!updated) return res.status(404).json({ error: "Inventory item not found" });
     return res.json(updated);
   } catch (err: any) {
@@ -127,7 +127,7 @@ app.patch("/api/inventory/:id", handleUpdateInventory);
 app.delete("/api/inventory/:id", async (req: any, res: any) => {
   const targetId = Number(req.params.id);
   try {
-    const result = await Inventory.deleteOne({ id: targetId });
+    const result = await Inventory.deleteOne({ id: targetId }).exec();
     if (result.deletedCount === 0) return res.status(404).json({ error: "Inventory item not found" });
     return res.json({ success: true, message: "Inventory item deleted" });
   } catch (err: any) {
@@ -145,10 +145,10 @@ app.post("/api/inventory/deduct", async (req: any, res: any) => {
       const prodId = Number(item.productId);
       const reqQty = Number(item.quantity) || 1;
       if (!isNaN(prodId)) {
-        const rec: any = await Inventory.findOne({ productId: prodId });
+        const rec: any = await Inventory.findOne({ productId: prodId }).exec();
         if (rec) {
           const newQty = Math.max(0, rec.quantity - reqQty);
-          await Inventory.updateOne({ id: rec.id }, { $set: { quantity: newQty, status: newQty === 0 ? "out_of_stock" : "in_stock" } });
+          await Inventory.updateOne({ id: rec.id }, { $set: { quantity: newQty, status: newQty === 0 ? "out_of_stock" : "in_stock" } }).exec();
         }
       }
     }
@@ -160,7 +160,13 @@ app.post("/api/inventory/deduct", async (req: any, res: any) => {
 
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "inventory-service" }));
 
-mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(() => {
+const isDocDB = MONGODB_URI.includes("docdb.amazonaws.com");
+mongoose.connect(MONGODB_URI, {
+  tlsAllowInvalidCertificates: true,
+  serverSelectionTimeoutMS: 5000,
+  connectTimeoutMS: 5000,
+  ...(isDocDB ? { directConnection: true } : {})
+}).then(() => {
   console.log("⚡ [inventory-service] Connected to MongoDB / AWS DocumentDB");
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [inventory-service] Running on port ${PORT}`));
 }).catch((err) => {

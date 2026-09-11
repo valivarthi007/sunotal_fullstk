@@ -13,7 +13,7 @@ app.use(express.json());
 
 const UserSchema = new mongoose.Schema(
   {
-    id: { type: Number, unique: true },
+    id: { type: Number, unique: true, required: true },
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     passwordHash: { type: String },
@@ -26,6 +26,18 @@ const UserSchema = new mongoose.Schema(
 );
 
 const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
+
+async function getNextId(Model: any): Promise<number> {
+  try {
+    const highest = await Model.findOne({}, { id: 1 }).sort({ id: -1 }).exec();
+    if (highest && typeof highest.id === "number" && !isNaN(highest.id)) {
+      return highest.id + 1;
+    }
+  } catch {
+    // Ignored
+  }
+  return 1;
+}
 
 // GET /api/users
 app.get("/api/users", async (req: any, res: any) => {
@@ -51,7 +63,7 @@ app.get("/api/users", async (req: any, res: any) => {
 app.get("/api/users/:id", async (req: any, res: any) => {
   const targetId = Number(req.params.id);
   try {
-    const user = await User.findOne({ id: targetId }, "-passwordHash");
+    const user = await User.findOne({ id: targetId }, "-passwordHash").exec();
     if (!user) return res.status(404).json({ error: "User not found" });
     return res.json(user);
   } catch (err: any) {
@@ -68,15 +80,15 @@ app.post("/api/users", async (req: any, res: any) => {
 
   const cleanEmail = email.trim().toLowerCase();
   try {
-    const existing = await User.findOne({ email: cleanEmail });
+    const existing = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
     if (existing) {
       return res.status(409).json({ error: "Email already exists" });
     }
 
     const passwordHash = await bcrypt.hash(password || "user123", 10);
-    const count = await User.countDocuments();
+    const nextId = await getNextId(User);
     const newUser = await User.create({
-      id: count + 1,
+      id: nextId,
       name,
       email: cleanEmail,
       passwordHash,
@@ -113,7 +125,7 @@ const handleUpdateUser = async (req: any, res: any) => {
       { id: targetId },
       { $set: updateFields },
       { new: true, select: "-passwordHash" }
-    );
+    ).exec();
     if (!updated) return res.status(404).json({ error: "User not found" });
     return res.json(updated);
   } catch (err: any) {
@@ -136,7 +148,7 @@ const handleUserStatus = async (req: any, res: any) => {
       { id: targetId },
       { $set: { active: newActive } },
       { new: true, select: "-passwordHash" }
-    );
+    ).exec();
     if (!updated) return res.status(404).json({ error: "User not found" });
     return res.json(updated);
   } catch (err: any) {
@@ -151,7 +163,7 @@ app.patch("/api/users/:id/status", handleUserStatus);
 app.delete("/api/users/:id", async (req: any, res: any) => {
   const targetId = Number(req.params.id);
   try {
-    const result = await User.deleteOne({ id: targetId });
+    const result = await User.deleteOne({ id: targetId }).exec();
     if (result.deletedCount === 0) return res.status(404).json({ error: "User not found" });
     return res.json({ success: true, message: "User deleted successfully" });
   } catch (err: any) {
@@ -161,7 +173,13 @@ app.delete("/api/users/:id", async (req: any, res: any) => {
 
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "user-service" }));
 
-mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(() => {
+const isDocDB = MONGODB_URI.includes("docdb.amazonaws.com");
+mongoose.connect(MONGODB_URI, {
+  tlsAllowInvalidCertificates: true,
+  serverSelectionTimeoutMS: 5000,
+  connectTimeoutMS: 5000,
+  ...(isDocDB ? { directConnection: true } : {})
+}).then(() => {
   console.log("⚡ [user-service] Connected to MongoDB / AWS DocumentDB");
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [user-service] Running on port ${PORT}`));
 }).catch((err) => {
