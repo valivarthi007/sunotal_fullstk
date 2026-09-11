@@ -48,11 +48,23 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
+  if (!dateVal) return fallback;
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+};
+
 export default function InventoryAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: inventory, isLoading } = useListInventory({}, { retry: false, throwOnError: false });
+  const { data: rawInventory, isLoading } = useListInventory({}, { retry: false, throwOnError: false });
+  const inventory = Array.isArray(rawInventory) ? rawInventory : (Array.isArray((rawInventory as any)?.inventory) ? (rawInventory as any).inventory : []);
   const updateInventory = useUpdateInventory();
   const deleteInventory = useDeleteInventory();
 
@@ -218,7 +230,7 @@ export default function InventoryAdmin() {
                         {item.status.replace('_', ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">{format(new Date(item.updatedAt), 'MMM d, yyyy HH:mm')}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{safeFormatDate(item.updatedAt || item.createdAt, 'MMM d, yyyy HH:mm')}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
                         <Button 

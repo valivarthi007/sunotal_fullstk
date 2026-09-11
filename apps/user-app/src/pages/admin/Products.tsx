@@ -71,14 +71,18 @@ export default function ProductsAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: products, isLoading } = useListProducts({ all: true });
+  const { data: rawProducts, isLoading } = useListProducts({ all: true });
+  const products = Array.isArray(rawProducts) ? rawProducts : (Array.isArray((rawProducts as any)?.products) ? (rawProducts as any).products : []);
 
-  const { data: categories = [] } = useListCategories();
+  const { data: rawCategories = [] } = useListCategories();
+  const categories = Array.isArray(rawCategories) ? rawCategories : [];
   const createCategory = useCreateCategory();
   const deleteCategory = useDeleteCategory();
   
-  const { data: inventory = [] } = useListInventory({}, { retry: false, throwOnError: false });
-  const { data: productDefs = [] } = useListProductDefinitions();
+  const { data: rawInventory = [] } = useListInventory({}, { retry: false, throwOnError: false });
+  const inventory = Array.isArray(rawInventory) ? rawInventory : [];
+  const { data: rawProductDefs = [] } = useListProductDefinitions();
+  const productDefs = Array.isArray(rawProductDefs) ? rawProductDefs : [];
   const createProductDef = useCreateProductDefinition();
   const deleteProductDef = useDeleteProductDefinition();
   

@@ -35,9 +35,13 @@ import { cn } from "@/lib/utils";
 
 const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
   if (!dateVal) return fallback;
-  const d = new Date(dateVal);
-  if (isNaN(d.getTime())) return fallback;
-  return format(d, formatStr);
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
 };
 
 export default function QuotationsAdmin() {
@@ -52,7 +56,8 @@ export default function QuotationsAdmin() {
   const [selectedProductId, setSelectedProductId] = useState<string>("auto");
   const [accepting, setAccepting] = useState(false);
 
-  const { data: products } = useListProducts();
+  const { data: rawProducts } = useListProducts();
+  const products = Array.isArray(rawProducts) ? rawProducts : (Array.isArray((rawProducts as any)?.products) ? (rawProducts as any).products : []);
 
   const fetchQuotations = async () => {
     setLoading(true);
@@ -68,8 +73,9 @@ export default function QuotationsAdmin() {
       });
       if (res.ok) {
         const data = await res.json();
-        setQuotations(data.reverse());
+        setQuotations(Array.isArray(data) ? data.reverse() : []);
       } else {
+        setQuotations([]);
         if (res.status === 401 || res.status === 403) {
           toast.error("Admin session expired or unauthorized. Please login again.");
           localStorage.removeItem("sunotal_admin_token");

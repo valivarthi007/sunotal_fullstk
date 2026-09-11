@@ -54,18 +54,23 @@ type FormValues = z.infer<typeof formSchema>;
 
 const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
   if (!dateVal) return fallback;
-  const d = new Date(dateVal);
-  if (isNaN(d.getTime())) return fallback;
-  return format(d, formatStr);
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
 };
 
 export default function UsersAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: users, isLoading } = useListUsers( 
+  const { data: rawUsers, isLoading } = useListUsers( 
     search.length > 2 ? { search } : undefined 
   );
+  const users = Array.isArray(rawUsers) ? rawUsers : (Array.isArray((rawUsers as any)?.users) ? (rawUsers as any).users : []);
   
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();

@@ -164,6 +164,18 @@ function DomainRestrictionNotice({ portalName, targetDomain }: { portalName: str
   );
 }
 
+function AdminRouteGuard() {
+  const token = typeof window !== "undefined"
+    ? localStorage.getItem("sunotal_admin_token")
+    : null;
+
+  if (!token) {
+    return <AdminLogin />;
+  }
+
+  return <Dashboard />;
+}
+
 function VendorRouteGuard() {
   const token = typeof window !== "undefined"
     ? localStorage.getItem("sunotal_vendor_token") || localStorage.getItem("sunotal_token")
@@ -204,7 +216,7 @@ function SubdomainRouter() {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <Switch>
-          <Route path="/" component={AdminLogin} />
+          <Route path="/" component={AdminRouteGuard} />
           <Route path="/admin/login" component={AdminLogin} />
           <Route path="/admin/dashboard" component={Dashboard} />
           <Route path="/admin/products" component={ProductsAdmin} />
@@ -217,7 +229,7 @@ function SubdomainRouter() {
           <Route path="/admin/vendors" component={VendorsAdmin} />
           <Route path="/admin/quotations" component={QuotationsAdmin} />
           <Route path="/admin/users" component={UsersAdmin} />
-          <Route component={AdminLogin} />
+          <Route component={AdminRouteGuard} />
         </Switch>
       </Suspense>
     );

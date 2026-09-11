@@ -52,13 +52,25 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
+  if (!dateVal) return fallback;
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+};
+
 export default function UsersAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: users, isLoading } = useListUsers( 
+  const { data: rawUsers, isLoading } = useListUsers( 
     search.length > 2 ? { search } : undefined 
   );
+  const users = Array.isArray(rawUsers) ? rawUsers : (Array.isArray((rawUsers as any)?.users) ? (rawUsers as any).users : []);
   
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
@@ -246,7 +258,7 @@ export default function UsersAdmin() {
                         {user.active ? "Active" : "Suspended"}
                       </Badge>
                       <div className="text-[10px] text-muted-foreground mt-1">
-                        Since {format(new Date(user.createdAt), 'MMM yyyy')}
+                        Since {safeFormatDate(user.createdAt, 'MMM yyyy')}
                       </div>
                     </td>
                     <td className="px-6 py-4">

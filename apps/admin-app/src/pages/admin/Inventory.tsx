@@ -50,16 +50,21 @@ type FormValues = z.infer<typeof formSchema>;
 
 const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
   if (!dateVal) return fallback;
-  const d = new Date(dateVal);
-  if (isNaN(d.getTime())) return fallback;
-  return format(d, formatStr);
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
 };
 
 export default function InventoryAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: inventory, isLoading } = useListInventory({}, { retry: false, throwOnError: false });
+  const { data: rawInventory, isLoading } = useListInventory({}, { retry: false, throwOnError: false });
+  const inventory = Array.isArray(rawInventory) ? rawInventory : (Array.isArray((rawInventory as any)?.inventory) ? (rawInventory as any).inventory : []);
   const updateInventory = useUpdateInventory();
   const deleteInventory = useDeleteInventory();
 

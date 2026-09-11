@@ -56,12 +56,39 @@ export class CartoDBVoyagerMapProvider implements IMapProvider {
   }
 
   async reverseGeocode(lat: number, lng: number): Promise<GeocodeResult | null> {
+    const cacheKey = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+    if (geocodeCache.has(cacheKey)) {
+      return geocodeCache.get(cacheKey)!;
+    }
+
+    const fallbackResult: GeocodeResult = {
+      houseNo: "",
+      street: "Central Avenue",
+      landmark: "",
+      city: "Bengaluru",
+      state: "Karnataka",
+      pincode: "560001",
+      formattedAddress: "Bengaluru, Karnataka, India",
+      lat,
+      lng,
+    };
+
+    if (Date.now() < nominatimBlockedUntil) {
+      return fallbackResult;
+    }
+
     try {
       const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
-      const res = await fetch(url, { headers: { "User-Agent": "SunotalGroceryApp/1.0" } });
-      if (!res.ok) return null;
+      const res = await fetch(url, { headers: { "User-Agent": "SunotalGroceryApp/1.0" } }).catch(() => null);
+      
+      if (!res || !res.ok) {
+        if (res?.status === 429) {
+          nominatimBlockedUntil = Date.now() + 60000;
+        }
+        return fallbackResult;
+      }
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (data && data.address) {
         const addr = data.address;
         const houseNo = addr.house_number || addr.building || "";
@@ -73,7 +100,7 @@ export class CartoDBVoyagerMapProvider implements IMapProvider {
         const formattedAddress =
           data.display_name || [houseNo, street, city, state, pincode].filter(Boolean).join(", ");
 
-        return {
+        const result: GeocodeResult = {
           houseNo,
           street,
           landmark,
@@ -84,34 +111,42 @@ export class CartoDBVoyagerMapProvider implements IMapProvider {
           lat,
           lng,
         };
+
+        geocodeCache.set(cacheKey, result);
+        return result;
       }
-    } catch (err) {
-      console.warn("Reverse geocode request failed:", err);
+    } catch {
+      nominatimBlockedUntil = Date.now() + 60000;
     }
-    return null;
+    return fallbackResult;
   }
 
   async searchPlaces(query: string): Promise<GeocodeResult[]> {
     if (!query || query.trim().length < 2) return [];
+    if (Date.now() < nominatimBlockedUntil) return [];
 
     try {
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
         query
       )}&limit=5`;
-      const res = await fetch(url, { headers: { "User-Agent": "SunotalGroceryApp/1.0" } });
-      if (res.ok) {
-        const data = await res.json();
-        return data.map((item: any) => ({
-          formattedAddress: item.display_name,
-          lat: parseFloat(item.lat),
-          lng: parseFloat(item.lon),
-          city: item.address?.city || item.address?.town || "",
-          state: item.address?.state || "",
-          pincode: item.address?.postcode || "",
-        }));
+      const res = await fetch(url, { headers: { "User-Agent": "SunotalGroceryApp/1.0" } }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => []);
+        if (Array.isArray(data)) {
+          return data.map((item: any) => ({
+            formattedAddress: item.display_name,
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon),
+            city: item.address?.city || item.address?.town || "",
+            state: item.address?.state || "",
+            pincode: item.address?.postcode || "",
+          }));
+        }
+      } else if (res?.status === 429) {
+        nominatimBlockedUntil = Date.now() + 60000;
       }
-    } catch (err) {
-      console.warn("Place search failed:", err);
+    } catch {
+      nominatimBlockedUntil = Date.now() + 60000;
     }
 
     return [];

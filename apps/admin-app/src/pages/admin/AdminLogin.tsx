@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,13 @@ const formSchema = z.object({
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const adminLogin = useAdminLogin();
+
+  useEffect(() => {
+    const token = localStorage.getItem("sunotal_admin_token");
+    if (token) {
+      setLocation("/admin/dashboard");
+    }
+  }, [setLocation]);
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

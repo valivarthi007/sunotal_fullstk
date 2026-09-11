@@ -33,6 +33,17 @@ import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
+const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
+  if (!dateVal) return fallback;
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+};
+
 export default function QuotationsAdmin() {
   const [, setLocation] = useLocation();
   const [quotations, setQuotations] = useState<any[]>([]);
@@ -45,7 +56,8 @@ export default function QuotationsAdmin() {
   const [selectedProductId, setSelectedProductId] = useState<string>("auto");
   const [accepting, setAccepting] = useState(false);
 
-  const { data: products } = useListProducts();
+  const { data: rawProducts } = useListProducts();
+  const products = Array.isArray(rawProducts) ? rawProducts : (Array.isArray((rawProducts as any)?.products) ? (rawProducts as any).products : []);
 
   const fetchQuotations = async () => {
     setLoading(true);
@@ -61,8 +73,9 @@ export default function QuotationsAdmin() {
       });
       if (res.ok) {
         const data = await res.json();
-        setQuotations(data.reverse());
+        setQuotations(Array.isArray(data) ? data.reverse() : []);
       } else {
+        setQuotations([]);
         if (res.status === 401 || res.status === 403) {
           toast.error("Admin session expired or unauthorized. Please login again.");
           localStorage.removeItem("sunotal_admin_token");
@@ -163,13 +176,13 @@ export default function QuotationsAdmin() {
     }
   };
 
-  const filteredQuotes = quotations.filter((q) => {
-    const matchesTab = activeTab === "All" || q.status === activeTab.toLowerCase();
+  const filteredQuotes = (Array.isArray(quotations) ? quotations : []).filter((q) => {
+    const matchesTab = activeTab === "All" || (q.status || "").toLowerCase() === activeTab.toLowerCase();
     const searchLower = search.toLowerCase();
     const matchesSearch = 
-      q.name.toLowerCase().includes(searchLower) ||
-      q.produce.toLowerCase().includes(searchLower) ||
-      q.address.toLowerCase().includes(searchLower);
+      (q.name || q.vendorName || "").toLowerCase().includes(searchLower) ||
+      (q.produce || q.cropName || "").toLowerCase().includes(searchLower) ||
+      (q.address || "").toLowerCase().includes(searchLower);
     return matchesTab && matchesSearch;
   });
 
@@ -306,7 +319,7 @@ export default function QuotationsAdmin() {
                           {q.status.toUpperCase()}
                         </Badge>
                         <div className="text-[10px] text-muted-foreground mt-1">
-                          Offered: {format(new Date(q.createdAt), 'MMM d')}
+                          Offered: {safeFormatDate(q.createdAt, 'MMM d')}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center">

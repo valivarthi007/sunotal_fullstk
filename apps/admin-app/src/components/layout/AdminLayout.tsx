@@ -51,8 +51,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     localStorage.removeItem("sunotal_admin_token");
+    localStorage.removeItem("sunotal_token");
+    localStorage.removeItem("sunotal_vendor_token");
+    localStorage.removeItem("sunotal_delivery_token");
     queryClient.clear();
-    setLocation("/admin/login");
+    window.location.href = "/admin/login";
   };
 
   return (

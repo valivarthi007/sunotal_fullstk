@@ -82,11 +82,28 @@ const UserSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const CategorySchema = new mongoose.Schema(
+  {
+    id: { type: Number, unique: true },
+    name: { type: String, required: true, unique: true },
+    icon: { type: String, default: "📦" },
+  },
+  { timestamps: true }
+);
+
 const Product: any = mongoose.models.Product || mongoose.model("Product", ProductSchema);
 const Vendor: any = mongoose.models.Vendor || mongoose.model("Vendor", VendorSchema);
 const Warehouse: any = mongoose.models.Warehouse || mongoose.model("Warehouse", WarehouseSchema);
 const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
+const Category: any = mongoose.models.Category || mongoose.model("Category", CategorySchema);
 
+const defaultCategories = [
+  { id: 1, name: "Vegetables", icon: "🥦" },
+  { id: 2, name: "Fruits", icon: "🍎" },
+  { id: 3, name: "Dairy", icon: "🥛" },
+  { id: 4, name: "Dry Fruits", icon: "🥜" },
+  { id: 5, name: "Grains", icon: "🌾" },
+];
 
 mongoose.set("bufferCommands", false);
 
@@ -231,6 +248,49 @@ app.post("/api/admin/login", async (req: any, res: any) => {
   }
 
   return res.status(401).json({ error: "Invalid admin credentials" });
+});
+
+// GET /api/categories
+app.get("/api/categories", async (_req, res) => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const categories = await Category.find().sort({ id: 1 });
+      if (categories && categories.length > 0) return res.json(categories);
+    }
+  } catch {
+    // Fallback
+  }
+  return res.json(defaultCategories);
+});
+
+// POST /api/categories
+app.post("/api/categories", async (req: any, res: any) => {
+  try {
+    const { name, icon } = req.body;
+    if (!name) return res.status(400).json({ error: "Category name is required" });
+    if (mongoose.connection.readyState === 1) {
+      const count = await Category.countDocuments();
+      const cat = await Category.create({ id: count + 1, name, icon: icon || "📦" });
+      return res.status(201).json(cat);
+    }
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || "Failed to create category" });
+  }
+  return res.status(201).json({ id: Date.now(), name: req.body.name, icon: req.body.icon || "📦" });
+});
+
+// DELETE /api/categories/:id
+app.delete("/api/categories/:id", async (req: any, res: any) => {
+  try {
+    const id = Number(req.params.id);
+    if (mongoose.connection.readyState === 1) {
+      await Category.deleteOne({ id });
+      return res.json({ success: true });
+    }
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || "Failed to delete category" });
+  }
+  return res.json({ success: true });
 });
 
 // GET /api/products

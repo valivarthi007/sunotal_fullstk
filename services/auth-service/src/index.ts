@@ -154,18 +154,7 @@ app.get("/api/auth/me", async (req: any, res: any) => {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : null;
     if (!token) {
-      // Default to admin user fallback if no token present for seamless portal loading
-      const adminUser = await findUserByEmail("admin@sunotal.com");
-      return res.json({
-        id: 1,
-        name: adminUser?.name || "Admin User",
-        email: "admin@sunotal.com",
-        role: "admin",
-        active: true,
-        phone: "+91 98765 00001",
-        city: "Hyderabad",
-        user: { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin" }
-      });
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
     const decoded: any = jwt.verify(token, JWT_SECRET);
@@ -184,17 +173,7 @@ app.get("/api/auth/me", async (req: any, res: any) => {
       user: { id: user.id, name: user.name, email: user.email, role: user.role }
     });
   } catch (err: any) {
-    // Return fallback admin user object instead of 500 error on token mismatch
-    return res.json({
-      id: 1,
-      name: "Admin User",
-      email: "admin@sunotal.com",
-      role: "admin",
-      active: true,
-      phone: "+91 98765 00001",
-      city: "Hyderabad",
-      user: { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin" }
-    });
+    return res.status(401).json({ error: "Invalid or expired token" });
   }
 });
 
@@ -204,9 +183,6 @@ async function seedDefaultUsers() {
   try {
     const seedAccounts = [
       { id: 1, name: "Admin User", email: "admin@sunotal.com", pass: "admin123", role: "admin", phone: "+91 98765 00001", city: "Hyderabad" },
-      { id: 2, name: "Sunotal Customer", email: "user@sunotal.com", pass: "user123", role: "user", phone: "+91 98765 00002", city: "Bengaluru" },
-      { id: 3, name: "Farm Vendor", email: "vendor@sunotal.com", pass: "vendor123", role: "vendor", phone: "+91 98765 00003", city: "Mysuru" },
-      { id: 4, name: "Delivery Rider", email: "rider@sunotal.com", pass: "rider123", role: "delivery", phone: "+91 98765 00004", city: "Bengaluru" },
     ];
 
     for (const acc of seedAccounts) {

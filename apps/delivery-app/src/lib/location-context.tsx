@@ -173,36 +173,38 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             "User-Agent": "SunotalCorporateECommerce/1.0",
           },
         }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const addr = data.address || {};
-        const city =
-          addr.city ||
-          addr.town ||
-          addr.suburb ||
-          addr.village ||
-          addr.county ||
-          addr.state_district ||
-          "Detected Location";
-        const state = addr.state || "";
-        const country = addr.country || "India";
-        const pincode = addr.postcode || "";
+      ).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data) {
+          const addr = data.address || {};
+          const city =
+            addr.city ||
+            addr.town ||
+            addr.suburb ||
+            addr.village ||
+            addr.county ||
+            addr.state_district ||
+            "Detected Location";
+          const state = addr.state || "";
+          const country = addr.country || "India";
+          const pincode = addr.postcode || "";
 
-        return {
-          city,
-          state,
-          country,
-          pincode,
-          formattedAddress: `${city}${state ? ", " + state : ""}`,
-          isDetected: true,
-          latitude: lat,
-          longitude: lon,
-          source: "geolocation",
-        };
+          return {
+            city,
+            state,
+            country,
+            pincode,
+            formattedAddress: data.display_name || `${city}, ${state}`,
+            isDetected: true,
+            latitude: lat,
+            longitude: lon,
+            source: "nominatim",
+          };
+        }
       }
-    } catch (err) {
-      console.warn("Reverse geocode failed, using coordinates", err);
+    } catch {
+      // Fall through to local fallback
     }
 
     return {

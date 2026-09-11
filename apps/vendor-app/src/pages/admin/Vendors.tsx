@@ -66,18 +66,29 @@ const inventorySchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
-type InventoryValues = z.infer<typeof inventorySchema>;
+const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
+  if (!dateVal) return fallback;
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+};
 
 export default function VendorsAdmin() {
   const [activeTab, setActiveTab] = useState<string>("All");
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: vendors, isLoading } = useListVendors({
+  const { data: rawVendors, isLoading } = useListVendors({
     status: activeTab !== "All" ? activeTab.toLowerCase() : undefined,
     search: search.length > 2 ? search : undefined,
   });
-  const { data: products } = useListProducts();
+  const vendors = Array.isArray(rawVendors) ? rawVendors : (Array.isArray((rawVendors as any)?.vendors) ? (rawVendors as any).vendors : []);
+  const { data: rawProducts } = useListProducts();
+  const products = Array.isArray(rawProducts) ? rawProducts : (Array.isArray((rawProducts as any)?.products) ? (rawProducts as any).products : []);
   
   const updateVendor = useUpdateVendor();
   const deleteVendor = useDeleteVendor();
@@ -348,7 +359,7 @@ export default function VendorsAdmin() {
                         {vendor.status.charAt(0).toUpperCase() + vendor.status.slice(1)}
                       </Badge>
                       <div className="text-[10px] text-muted-foreground mt-1">
-                        Applied: {format(new Date(vendor.createdAt), 'MMM d')}
+                        Applied: {safeFormatDate(vendor.createdAt, 'MMM d')}
                       </div>
                     </td>
                     <td className="px-6 py-4">

@@ -164,6 +164,18 @@ function DomainRestrictionNotice({ portalName, targetDomain }: { portalName: str
   );
 }
 
+function AdminRouteGuard() {
+  const token = typeof window !== "undefined"
+    ? localStorage.getItem("sunotal_admin_token")
+    : null;
+
+  if (!token) {
+    return <AdminLogin />;
+  }
+
+  return <Dashboard />;
+}
+
 function VendorRouteGuard() {
   const token = typeof window !== "undefined"
     ? localStorage.getItem("sunotal_vendor_token") || localStorage.getItem("sunotal_token")
