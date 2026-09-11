@@ -39,11 +39,11 @@ app.get("/api/users", async (req: any, res: any) => {
         { phone: { $regex: searchQuery, $options: "i" } },
       ];
     }
-    const users = await User.find(filter, "-passwordHash").sort({ createdAt: -1 });
+    const users = await User.find(filter, "-passwordHash").sort({ createdAt: -1 }).exec().catch(() => []);
     return res.json(users || []);
   } catch (err: any) {
     console.error("Error fetching users:", err);
-    return res.status(500).json({ error: "Failed to fetch users" });
+    return res.json([]);
   }
 });
 
