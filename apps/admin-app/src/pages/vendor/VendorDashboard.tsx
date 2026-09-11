@@ -106,7 +106,6 @@ export default function VendorDashboard() {
           if (Array.isArray(data)) setInvoices(data);
         })
         .catch(() => setInvoices([]));
-    }
   }, [user]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
