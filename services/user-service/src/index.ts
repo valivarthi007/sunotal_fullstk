@@ -29,9 +29,6 @@ const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
 
 const inMemoryUsers: any[] = [
   { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin", active: true, phone: "+91 98765 00001", city: "Hyderabad" },
-  { id: 2, name: "Sunotal Customer", email: "user@sunotal.com", role: "user", active: true, phone: "+91 98765 00002", city: "Bengaluru" },
-  { id: 3, name: "Farm Vendor", email: "vendor@sunotal.com", role: "vendor", active: true, phone: "+91 98765 00003", city: "Mysuru" },
-  { id: 4, name: "Delivery Rider", email: "rider@sunotal.com", role: "delivery", active: true, phone: "+91 98765 00004", city: "Bengaluru" },
 ];
 
 app.get("/api/users", async (_req, res) => {

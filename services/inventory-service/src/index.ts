@@ -27,10 +27,7 @@ const InventorySchema = new mongoose.Schema(
 const Inventory: any = mongoose.models.Inventory || mongoose.model("Inventory", InventorySchema);
 
 
-const inMemoryInventory: any[] = [
-  { id: 1, productId: 1, vendorId: 1, warehouseId: 1, warehouseName: "HSR Layout Store", quantity: 150, status: "in_stock" },
-  { id: 2, productId: 2, vendorId: 2, warehouseId: 1, warehouseName: "HSR Layout Store", quantity: 80, status: "in_stock" },
-];
+const inMemoryInventory: any[] = [];
 
 app.get("/api/inventory", async (_req, res) => {
   try {

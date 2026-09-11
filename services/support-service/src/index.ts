@@ -32,22 +32,7 @@ const SupportTicketSchema = new mongoose.Schema(
 const SupportTicket: any = mongoose.models.SupportTicket || mongoose.model("SupportTicket", SupportTicketSchema);
 
 
-const inMemoryTickets: any[] = [
-  {
-    id: 101,
-    ticketId: "TKT-2026-1001",
-    role: "user",
-    senderName: "Rahul Sharma",
-    senderEmail: "user@sunotal.com",
-    senderPhone: "+91 98765 00002",
-    category: "Delivery Delayed",
-    orderId: "ORD-2026-901",
-    subject: "Order not delivered on time",
-    description: "My order was supposed to arrive 20 mins ago.",
-    status: "open",
-    createdAt: new Date().toISOString(),
-  },
-];
+const inMemoryTickets: any[] = [];
 
 // GET /api/support/tickets
 app.get("/api/support/tickets", async (req: any, res: any) => {

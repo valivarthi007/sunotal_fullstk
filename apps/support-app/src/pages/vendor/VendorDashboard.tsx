@@ -531,26 +531,7 @@ export default function VendorDashboard() {
                                   );
                                 })
                               ) : (
-                                <>
-                                  <SelectItem value="Bengaluru Central Fulfillment Hub (Bengaluru)">
-                                    🏢 Bengaluru Central Hub — Indiranagar, Bengaluru
-                                  </SelectItem>
-                                  <SelectItem value="Vijayawada Logistics Center (Vijayawada)">
-                                    🏢 Vijayawada Logistics Center — Bhavani Puram, Vijayawada
-                                  </SelectItem>
-                                  <SelectItem value="Hyderabad Express Hub (Hyderabad)">
-                                    🏢 Hyderabad Express Hub — HITEC City, Hyderabad
-                                  </SelectItem>
-                                  <SelectItem value="HSR Layout Dark Store #104 (Bengaluru)">
-                                    🏢 HSR Layout Dark Store #104 — HSR Layout, Bengaluru
-                                  </SelectItem>
-                                  <SelectItem value="Indiranagar Dark Store #108 (Bengaluru)">
-                                    🏢 Indiranagar Dark Store #108 — Indiranagar, Bengaluru
-                                  </SelectItem>
-                                  <SelectItem value="Whitefield Dark Store #102 (Bengaluru)">
-                                    🏢 Whitefield Dark Store #102 — Whitefield, Bengaluru
-                                  </SelectItem>
-                                </>
+                                <SelectItem value="none" disabled>No active dark stores created in DB. Please create a warehouse in Admin Panel first.</SelectItem>
                               )}
                             </SelectContent>
                           </Select>

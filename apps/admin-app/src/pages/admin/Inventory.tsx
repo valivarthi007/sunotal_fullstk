@@ -48,6 +48,13 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
+  if (!dateVal) return fallback;
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return fallback;
+  return format(d, formatStr);
+};
+
 export default function InventoryAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
@@ -218,7 +225,7 @@ export default function InventoryAdmin() {
                         {item.status.replace('_', ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">{format(new Date(item.updatedAt), 'MMM d, yyyy HH:mm')}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{safeFormatDate(item.updatedAt || item.createdAt, 'MMM d, yyyy HH:mm')}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
                         <Button 

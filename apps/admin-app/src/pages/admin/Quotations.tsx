@@ -33,6 +33,13 @@ import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
+const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
+  if (!dateVal) return fallback;
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return fallback;
+  return format(d, formatStr);
+};
+
 export default function QuotationsAdmin() {
   const [, setLocation] = useLocation();
   const [quotations, setQuotations] = useState<any[]>([]);
@@ -163,13 +170,13 @@ export default function QuotationsAdmin() {
     }
   };
 
-  const filteredQuotes = quotations.filter((q) => {
-    const matchesTab = activeTab === "All" || q.status === activeTab.toLowerCase();
+  const filteredQuotes = (Array.isArray(quotations) ? quotations : []).filter((q) => {
+    const matchesTab = activeTab === "All" || (q.status || "").toLowerCase() === activeTab.toLowerCase();
     const searchLower = search.toLowerCase();
     const matchesSearch = 
-      q.name.toLowerCase().includes(searchLower) ||
-      q.produce.toLowerCase().includes(searchLower) ||
-      q.address.toLowerCase().includes(searchLower);
+      (q.name || q.vendorName || "").toLowerCase().includes(searchLower) ||
+      (q.produce || q.cropName || "").toLowerCase().includes(searchLower) ||
+      (q.address || "").toLowerCase().includes(searchLower);
     return matchesTab && matchesSearch;
   });
 
@@ -306,7 +313,7 @@ export default function QuotationsAdmin() {
                           {q.status.toUpperCase()}
                         </Badge>
                         <div className="text-[10px] text-muted-foreground mt-1">
-                          Offered: {format(new Date(q.createdAt), 'MMM d')}
+                          Offered: {safeFormatDate(q.createdAt, 'MMM d')}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center">

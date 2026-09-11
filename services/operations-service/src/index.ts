@@ -91,100 +91,22 @@ const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
 mongoose.set("bufferCommands", false);
 
 const inMemoryStats = {
-  totalOrders: 1284,
-  totalRevenue: 485900,
-  activeVendors: 42,
-  activeDarkStores: 8,
-  deliverySuccessRate: 99.4,
-  totalProducts: 48,
-  totalVendors: 12,
-  totalUsers: 156,
-  categoryBreakdown: [
-    { category: "Vegetables", count: 18 },
-    { category: "Fruits", count: 14 },
-    { category: "Leafy Greens", count: 10 },
-    { category: "Dairy & Eggs", count: 6 },
-  ],
-  recentUsers: [
-    { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin" },
-    { id: 2, name: "Sunotal Customer", email: "user@sunotal.com", role: "user" },
-    { id: 3, name: "Farm Vendor", email: "vendor@sunotal.com", role: "vendor" },
-  ],
-  recentVendors: [
-    { id: 1, firstName: "Ramesh", lastName: "Kumar", location: "Mysuru", produce: "Organic Tomatoes", createdAt: new Date().toISOString(), status: "approved" },
-    { id: 2, firstName: "Suresh", lastName: "Patel", location: "Mandya", produce: "Fresh Spinach", createdAt: new Date().toISOString(), status: "pending" },
-  ],
+  totalOrders: 0,
+  totalRevenue: 0,
+  activeVendors: 0,
+  activeDarkStores: 0,
+  deliverySuccessRate: 0,
+  totalProducts: 0,
+  totalVendors: 0,
+  totalUsers: 0,
+  categoryBreakdown: [],
+  recentUsers: [],
+  recentVendors: [],
 };
 
-const inMemoryQuotations = [
-  {
-    id: 1,
-    vendorName: "Ramesh Kumar",
-    cropName: "Organic Tomatoes",
-    quantity: 500,
-    price: 24,
-    status: "accepted",
-    paymentStatus: "paid",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    vendorName: "Suresh Patel",
-    cropName: "Fresh Spinach",
-    quantity: 300,
-    price: 18,
-    status: "pending",
-    paymentStatus: "processing",
-    createdAt: new Date().toISOString(),
-  },
-];
-
-const inMemoryProducts = [
-  {
-    id: 1,
-    name: "Fresh Organic Tomatoes",
-    category: "Vegetables",
-    unit: "1 kg",
-    price: 32,
-    originalPrice: 40,
-    discountPercentage: 20,
-    image: "https://d24f4if64xotls.cloudfront.net/tomatoes.jpg",
-    badge: "Fresh",
-    organic: true,
-    active: true,
-    description: "Farm-fresh organic red tomatoes sourced directly from verified local growers.",
-  },
-  {
-    id: 2,
-    name: "Farm Fresh Spinach",
-    category: "Leafy Greens",
-    unit: "250 g",
-    price: 18,
-    originalPrice: 25,
-    discountPercentage: 28,
-    image: "https://d24f4if64xotls.cloudfront.net/spinach.jpg",
-    badge: "Organic",
-    organic: true,
-    active: true,
-    description: "Nutrient-rich, pesticide-free fresh green spinach leaves.",
-  },
-];
-
-const inMemoryWarehouses = [
-  {
-    id: 1,
-    name: "Sunotal Dark Store Hub 1 - HSR Layout",
-    address: "Sector 1, HSR Layout",
-    city: "Bengaluru",
-    latitude: 12.9121,
-    longitude: 77.6446,
-    freeDeliveryRadiusKm: 30,
-    maxServiceRadiusKm: 70,
-    baseDeliveryFee: 50,
-    perKmRate: 8,
-    isActive: true,
-  },
-];
+const inMemoryQuotations: any[] = [];
+const inMemoryProducts: any[] = [];
+const inMemoryWarehouses: any[] = [];
 
 const QuotationSchema = new mongoose.Schema(
   {
@@ -312,16 +234,17 @@ app.post("/api/admin/login", async (req: any, res: any) => {
 });
 
 // GET /api/products
-app.get("/api/products", async (_req, res) => {
+app.get("/api/products", async (req: any, res: any) => {
   try {
     if (mongoose.connection.readyState === 1) {
-      const products = await Product.find({ active: true });
-      if (products && products.length > 0) return res.json(products);
+      const filter = req.query.all === "true" ? {} : { active: true };
+      const products = await Product.find(filter);
+      if (products) return res.json(products);
     }
   } catch {
     // Fallback
   }
-  return res.json(inMemoryProducts);
+  return res.json([]);
 });
 
 // GET /api/vendors
@@ -342,24 +265,24 @@ app.get("/api/warehouses", async (_req, res) => {
   try {
     if (mongoose.connection.readyState === 1) {
       const warehouses = await Warehouse.find({ isActive: true });
-      if (warehouses && warehouses.length > 0) return res.json(warehouses);
+      if (warehouses) return res.json(warehouses);
     }
   } catch {
     // Fallback
   }
-  return res.json(inMemoryWarehouses);
+  return res.json([]);
 });
 
 app.get("/api/admin/warehouses", async (_req, res) => {
   try {
     if (mongoose.connection.readyState === 1) {
       const warehouses = await Warehouse.find().sort({ createdAt: -1 });
-      if (warehouses && warehouses.length > 0) return res.json(warehouses);
+      if (warehouses) return res.json(warehouses);
     }
   } catch {
     // Fallback
   }
-  return res.json(inMemoryWarehouses);
+  return res.json([]);
 });
 
 app.post("/api/admin/warehouses", async (req: any, res: any) => {
@@ -523,15 +446,13 @@ app.put("/api/admin/quotations/:id", (req: any, res: any) => {
   return res.status(200).json({ id: Number(id), status: req.body.status || "accepted", paymentStatus: "paid" });
 });
 
-const inMemoryOrders: any[] = [
-  { id: 101, customerName: "Rahul Sharma", total: 450, status: "delivered", itemsCount: 4, createdAt: new Date().toISOString() },
-  { id: 102, customerName: "Priya Singh", total: 280, status: "out_for_delivery", itemsCount: 2, createdAt: new Date().toISOString() }
-];
+const inMemoryOrders: any[] = [];
 
 app.get("/api/orders", (_req, res) => res.json(inMemoryOrders));
 
 app.get("/api/orders/:id", (req: any, res: any) => {
-  const order = inMemoryOrders.find((o) => o.id === Number(req.params.id)) || inMemoryOrders[0];
+  const order = inMemoryOrders.find((o) => o.id === Number(req.params.id));
+  if (!order) return res.status(404).json({ error: "Order not found" });
   return res.json(order);
 });
 

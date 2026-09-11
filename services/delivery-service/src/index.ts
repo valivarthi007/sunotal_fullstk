@@ -71,8 +71,8 @@ app.post("/api/delivery/login", async (req: any, res: any) => {
   }
 
   if (!user) {
-    if ((cleanEmail === "rider@sunotal.com" || cleanEmail === "admin@sunotal.com") && (password === "rider123" || password === "admin123")) {
-      user = { id: 4, name: "Delivery Rider", email: cleanEmail, role: "delivery", active: true };
+    if (cleanEmail === "admin@sunotal.com" && password === "admin123") {
+      user = { id: 1, name: "Admin User", email: cleanEmail, role: "admin", active: true };
     }
   } else {
     const valid = await bcrypt.compare(password, user.passwordHash);
@@ -92,7 +92,7 @@ app.post("/api/delivery/login", async (req: any, res: any) => {
 // POST /api/delivery/register
 app.post("/api/delivery/register", async (req: any, res: any) => {
   const { name, email, password, phone, city } = req.body;
-  const user = { id: Date.now(), name: name || "Delivery Rider", email: email || "rider@sunotal.com", role: "delivery", active: true, phone, city };
+  const user = { id: Date.now(), name: name || "Delivery Rider", email: email || "", role: "delivery", active: true, phone, city };
   const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
   return res.status(201).json({ token, user });
 });
@@ -123,30 +123,15 @@ app.get("/api/delivery/orders/active", async (_req: any, res: any) => {
   } catch {
     // Fallback
   }
-  return res.json([
-    {
-      id: "ORD-2026-901",
-      numericId: 1,
-      customerName: "Rahul Sharma",
-      phone: "+91 98765 11111",
-      address: "Flat 402, Green Acres, HSR Layout, Bengaluru",
-      city: "Bengaluru",
-      totalAmount: 450,
-      paymentMethod: "UPI",
-      paymentStatus: "paid",
-      status: "out_for_delivery",
-      createdAt: new Date().toISOString(),
-      items: [{ name: "Organic Tomatoes", quantity: 2 }, { name: "Fresh Spinach", quantity: 1 }],
-    }
-  ]);
+  return res.json([]);
 });
 
 // GET /api/delivery/stats
 app.get("/api/delivery/stats", async (_req, res) => {
-  let completedCount = 12;
+  let completedCount = 0;
   try {
     if (mongoose.connection.readyState === 1) {
-      completedCount = await Order.countDocuments({ status: "delivered" }) || 12;
+      completedCount = await Order.countDocuments({ status: "delivered" }) || 0;
     }
   } catch {
     // Fallback
@@ -168,7 +153,7 @@ app.get("/api/delivery/stats", async (_req, res) => {
     totalDistancePay,
     totalTips,
     totalPayout,
-    payoutStatus: "Ready for Payout",
+    payoutStatus: completedCount > 0 ? "Ready for Payout" : "No Payouts Pending",
     lastPayoutDate: new Date().toISOString(),
   });
 });

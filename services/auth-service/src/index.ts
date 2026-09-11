@@ -34,9 +34,6 @@ mongoose.set("bufferCommands", false);
 
 const inMemoryUsers: any[] = [
   { id: 1, name: "Admin User", email: "admin@sunotal.com", pass: "admin123", role: "admin", phone: "+91 98765 00001", city: "Hyderabad" },
-  { id: 2, name: "Sunotal Customer", email: "user@sunotal.com", pass: "user123", role: "user", phone: "+91 98765 00002", city: "Bengaluru" },
-  { id: 3, name: "Farm Vendor", email: "vendor@sunotal.com", pass: "vendor123", role: "vendor", phone: "+91 98765 00003", city: "Mysuru" },
-  { id: 4, name: "Delivery Rider", email: "rider@sunotal.com", pass: "rider123", role: "delivery", phone: "+91 98765 00004", city: "Bengaluru" },
 ];
 
 async function findUserByEmail(email: string) {

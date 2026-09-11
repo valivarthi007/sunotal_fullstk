@@ -119,14 +119,8 @@ export const WarehouseManager: React.FC = () => {
       const res = await calculateDeliveryFee({ city: testCity });
       setCalcResult(res);
     } catch (err: any) {
-      setCalcResult({
-        warehouseName: `${testCity} Central Hub`,
-        warehouseCity: testCity,
-        distanceKm: 12.4,
-        freeRadiusKm: 25.0,
-        isFree: true,
-        deliveryFee: 0,
-      });
+      setCalcResult(null);
+      toast.error("Could not calculate delivery fee: no active warehouses found in DB for this city");
     } finally {
       setCalcLoading(false);
     }
