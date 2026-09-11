@@ -171,8 +171,6 @@ app.post("/api/delivery/payout", async (req, res) => {
   });
 });
 
-mongoose.set("bufferCommands", false);
-
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "delivery-service" }));
 
 mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(() => {

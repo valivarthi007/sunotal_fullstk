@@ -123,8 +123,6 @@ app.put("/api/support/tickets/:id/resolve", async (req: any, res: any) => {
   return res.json(ticket);
 });
 
-mongoose.set("bufferCommands", false);
-
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "support-service" }));
 
 mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(() => {

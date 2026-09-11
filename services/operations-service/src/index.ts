@@ -91,60 +91,6 @@ const CategorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const Product: any = mongoose.models.Product || mongoose.model("Product", ProductSchema);
-const Vendor: any = mongoose.models.Vendor || mongoose.model("Vendor", VendorSchema);
-const Warehouse: any = mongoose.models.Warehouse || mongoose.model("Warehouse", WarehouseSchema);
-const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
-const Category: any = mongoose.models.Category || mongoose.model("Category", CategorySchema);
-
-const defaultCategories = [
-  { id: 1, name: "Vegetables", icon: "🥦" },
-  { id: 2, name: "Fruits", icon: "🍎" },
-  { id: 3, name: "Dairy", icon: "🥛" },
-  { id: 4, name: "Dry Fruits", icon: "🥜" },
-  { id: 5, name: "Grains", icon: "🌾" },
-];
-
-mongoose.set("bufferCommands", false);
-
-const inMemoryUsers: any[] = [
-  { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin", active: true, phone: "+91 98765 00001", city: "Hyderabad" },
-];
-const inMemoryVendors: any[] = [];
-const inMemoryQuotations: any[] = [];
-const inMemoryProducts: any[] = [];
-const inMemoryWarehouses: any[] = [];
-
-async function seedDefaultUsers() {
-  try {
-    const seedAccounts = [
-      { id: 1, name: "Admin User", email: "admin@sunotal.com", pass: "admin123", role: "admin", phone: "+91 98765 00001", city: "Hyderabad" },
-    ];
-
-    for (const acc of seedAccounts) {
-      const existing = await User.findOne({ email: acc.email });
-      const passwordHash = await bcrypt.hash(acc.pass, 10);
-      if (!existing) {
-        await User.create({
-          id: acc.id,
-          name: acc.name,
-          email: acc.email,
-          passwordHash,
-          role: acc.role,
-          active: true,
-          phone: acc.phone,
-          city: acc.city,
-        });
-        console.log(`🌱 [operations-service] Seeded user: ${acc.email} (${acc.role})`);
-      } else {
-        await User.updateOne({ email: acc.email }, { $set: { passwordHash, role: acc.role, active: true } });
-      }
-    }
-  } catch (err: any) {
-    console.warn("⚠️ [operations-service] User seed warning:", err.message);
-  }
-}
-
 const QuotationSchema = new mongoose.Schema(
   {
     id: { type: Number, unique: true },
@@ -158,36 +104,34 @@ const QuotationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const Product: any = mongoose.models.Product || mongoose.model("Product", ProductSchema);
+const Vendor: any = mongoose.models.Vendor || mongoose.model("Vendor", VendorSchema);
+const Warehouse: any = mongoose.models.Warehouse || mongoose.model("Warehouse", WarehouseSchema);
+const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
+const Category: any = mongoose.models.Category || mongoose.model("Category", CategorySchema);
 const Quotation: any = mongoose.models.Quotation || mongoose.model("Quotation", QuotationSchema);
+
+const defaultCategories = [
+  { id: 1, name: "Vegetables", icon: "🥦" },
+  { id: 2, name: "Fruits", icon: "🍎" },
+  { id: 3, name: "Dairy", icon: "🥛" },
+  { id: 4, name: "Dry Fruits", icon: "🥜" },
+  { id: 5, name: "Grains", icon: "🌾" },
+];
 
 // GET /api/admin/stats
 app.get("/api/admin/stats", async (_req, res) => {
   try {
-    const dbConnected = mongoose.connection.readyState === 1;
-
-    let users: any[] = [];
-    let vendors: any[] = [];
-    let products: any[] = [];
-    let warehouses: any[] = [];
-
-    if (dbConnected) {
-      [users, vendors, products, warehouses] = await Promise.all([
-        User.find().select("-passwordHash").sort({ createdAt: -1 }),
-        Vendor.find().sort({ createdAt: -1 }),
-        Product.find().sort({ createdAt: -1 }),
-        Warehouse.find(),
-      ]);
-    } else {
-      users = inMemoryUsers;
-      vendors = inMemoryVendors;
-      products = inMemoryProducts;
-      warehouses = inMemoryWarehouses;
-    }
-
-    const totalUsersCount = users.length > 0 ? users.length : Math.max(1, inMemoryUsers.length);
-    const totalProductsCount = products.length;
-    const totalVendorsCount = vendors.length;
-    const activeVendorsCount = vendors.filter((v: any) => v.status === "approved" || v.status === "active").length;
+    const [totalUsers, totalVendors, totalProducts, totalDarkStores, activeVendors, users, vendors, products] = await Promise.all([
+      User.countDocuments(),
+      Vendor.countDocuments(),
+      Product.countDocuments(),
+      Warehouse.countDocuments(),
+      Vendor.countDocuments({ status: { $in: ["approved", "active"] } }),
+      User.find().select("-passwordHash").sort({ createdAt: -1 }).limit(5),
+      Vendor.find().sort({ createdAt: -1 }).limit(5),
+      Product.find().sort({ createdAt: -1 }),
+    ]);
 
     const categoryMap: Record<string, number> = {};
     for (const p of products) {
@@ -199,63 +143,46 @@ app.get("/api/admin/stats", async (_req, res) => {
     return res.json({
       totalOrders: 0,
       totalRevenue: 0,
-      totalProducts: totalProductsCount,
-      totalVendors: totalVendorsCount,
-      totalUsers: totalUsersCount,
-      activeVendors: activeVendorsCount,
-      activeDarkStores: warehouses.length,
+      totalProducts,
+      totalVendors,
+      totalUsers,
+      activeVendors,
+      activeDarkStores: totalDarkStores,
       deliverySuccessRate: 100,
       categoryBreakdown,
-      recentUsers: users.slice(0, 5).map((u: any) => ({
-        id: u.id || 1,
-        name: u.name || "User",
-        email: u.email || "",
+      recentUsers: users.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
         role: u.role || "user",
         city: u.city || "",
+        createdAt: u.createdAt,
       })),
-      recentVendors: vendors.slice(0, 5),
+      recentVendors: vendors,
     });
   } catch (err: any) {
-    console.error("Error in /api/admin/stats:", err);
-    return res.json({
-      totalOrders: 0,
-      totalRevenue: 0,
-      totalProducts: 0,
-      totalVendors: 0,
-      totalUsers: Math.max(1, inMemoryUsers.length),
-      activeVendors: 0,
-      activeDarkStores: 0,
-      deliverySuccessRate: 100,
-      categoryBreakdown: [],
-      recentUsers: inMemoryUsers.slice(0, 5),
-      recentVendors: [],
-    });
+    console.error("Error fetching admin stats:", err);
+    return res.status(500).json({ error: "Failed to fetch dashboard stats" });
   }
 });
 
 // GET & POST /api/admin/quotations
 app.get("/api/admin/quotations", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const quotes = await Quotation.find().sort({ createdAt: -1 });
-      if (quotes && quotes.length > 0) return res.json(quotes);
-    }
-  } catch {
-    // Fallback
+    const quotes = await Quotation.find().sort({ createdAt: -1 });
+    return res.json(quotes || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to fetch quotations" });
   }
-  return res.json(inMemoryQuotations);
 });
 
 app.get("/api/vendors/quotations", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const quotes = await Quotation.find().sort({ createdAt: -1 });
-      if (quotes && quotes.length > 0) return res.json(quotes);
-    }
-  } catch {
-    // Fallback
+    const quotes = await Quotation.find().sort({ createdAt: -1 });
+    return res.json(quotes || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to fetch vendor quotations" });
   }
-  return res.json(inMemoryQuotations);
 });
 
 app.post("/api/vendors/quotations", async (req: any, res: any) => {
@@ -264,28 +191,21 @@ app.post("/api/vendors/quotations", async (req: any, res: any) => {
     return res.status(400).json({ error: "Missing required quotation fields" });
   }
 
-  const newQuote = {
-    id: inMemoryQuotations.length + 1,
-    vendorName: vendorName || "Local Farm Vendor",
-    cropName,
-    quantity: Number(quantity),
-    price: Number(price),
-    status: "pending",
-    paymentStatus: "processing",
-    createdAt: new Date().toISOString(),
-  };
-
-  inMemoryQuotations.unshift(newQuote);
-
-  if (mongoose.connection.readyState === 1) {
-    try {
-      await Quotation.create(newQuote);
-    } catch {
-      // Ignored
-    }
+  try {
+    const count = await Quotation.countDocuments();
+    const newQuote = await Quotation.create({
+      id: count + 1,
+      vendorName: vendorName || "Local Farm Vendor",
+      cropName,
+      quantity: Number(quantity),
+      price: Number(price),
+      status: "pending",
+      paymentStatus: "processing",
+    });
+    return res.status(201).json(newQuote);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to create quotation" });
   }
-
-  return res.status(201).json(newQuote);
 });
 
 // POST /api/admin/login
@@ -296,40 +216,30 @@ app.post("/api/admin/login", async (req: any, res: any) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  if (cleanEmail === "admin@sunotal.com" && password === "admin123") {
-    const token = jwt.sign({ userId: 1, email: cleanEmail, role: "admin" }, JWT_SECRET, { expiresIn: "7d" });
-    return res.json({ token, user: { id: 1, name: "Admin User", email: cleanEmail, role: "admin" } });
-  }
-
-  if (mongoose.connection.readyState === 1) {
-    try {
-      const user: any = await User.findOne({ email: cleanEmail });
-      if (user && user.role === "admin") {
-        const isMatch = await bcrypt.compare(password, user.passwordHash);
-        if (isMatch) {
-          const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-          return res.json({ token, user });
-        }
+  try {
+    const user: any = await User.findOne({ email: cleanEmail });
+    if (user && user.role === "admin") {
+      const isMatch = await bcrypt.compare(password, user.passwordHash);
+      if (isMatch) {
+        const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
+        return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
       }
-    } catch {
-      // Fallback
     }
+    return res.status(401).json({ error: "Invalid admin credentials" });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Authentication error" });
   }
-
-  return res.status(401).json({ error: "Invalid admin credentials" });
 });
 
 // GET /api/categories
 app.get("/api/categories", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const categories = await Category.find().sort({ id: 1 });
-      if (categories && categories.length > 0) return res.json(categories);
-    }
-  } catch {
-    // Fallback
+    const categories = await Category.find().sort({ id: 1 });
+    if (categories && categories.length > 0) return res.json(categories);
+    return res.json(defaultCategories);
+  } catch (err: any) {
+    return res.json(defaultCategories);
   }
-  return res.json(defaultCategories);
 });
 
 // POST /api/categories
@@ -337,43 +247,34 @@ app.post("/api/categories", async (req: any, res: any) => {
   try {
     const { name, icon } = req.body;
     if (!name) return res.status(400).json({ error: "Category name is required" });
-    if (mongoose.connection.readyState === 1) {
-      const count = await Category.countDocuments();
-      const cat = await Category.create({ id: count + 1, name, icon: icon || "📦" });
-      return res.status(201).json(cat);
-    }
+    const count = await Category.countDocuments();
+    const cat = await Category.create({ id: count + 1, name, icon: icon || "📦" });
+    return res.status(201).json(cat);
   } catch (err: any) {
     return res.status(400).json({ error: err.message || "Failed to create category" });
   }
-  return res.status(201).json({ id: Date.now(), name: req.body.name, icon: req.body.icon || "📦" });
 });
 
 // DELETE /api/categories/:id
 app.delete("/api/categories/:id", async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
-    if (mongoose.connection.readyState === 1) {
-      await Category.deleteOne({ id });
-      return res.json({ success: true });
-    }
+    await Category.deleteOne({ id });
+    return res.json({ success: true });
   } catch (err: any) {
     return res.status(400).json({ error: err.message || "Failed to delete category" });
   }
-  return res.json({ success: true });
 });
 
 // GET /api/products
 app.get("/api/products", async (req: any, res: any) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const filter = req.query.all === "true" ? {} : { active: true };
-      const products = await Product.find(filter).sort({ createdAt: -1 });
-      if (products) return res.json(products);
-    }
-  } catch {
-    // Fallback
+    const filter = req.query.all === "true" ? {} : { active: true };
+    const products = await Product.find(filter).sort({ createdAt: -1 });
+    return res.json(products || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to fetch products" });
   }
-  return res.json(inMemoryProducts);
 });
 
 // POST /api/products
@@ -388,43 +289,21 @@ app.post("/api/products", async (req: any, res: any) => {
     const pOrigPrice = originalPrice !== undefined ? Number(originalPrice) : pPrice;
     const discount = pOrigPrice > pPrice ? Math.round(((pOrigPrice - pPrice) / pOrigPrice) * 100) : 0;
 
-    let product: any = null;
-    if (mongoose.connection.readyState === 1) {
-      const count = await Product.countDocuments();
-      product = await Product.create({
-        id: count + 1,
-        name,
-        category,
-        unit: unit || "1 kg",
-        price: pPrice,
-        originalPrice: pOrigPrice,
-        discountPercentage: discount,
-        image: image || "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=600&q=80",
-        badge: badge || null,
-        organic: Boolean(organic),
-        active: active !== undefined ? Boolean(active) : true,
-        description: description || null,
-      });
-    }
-
-    if (!product) {
-      product = {
-        id: inMemoryProducts.length + 1,
-        name,
-        category,
-        unit: unit || "1 kg",
-        price: pPrice,
-        originalPrice: pOrigPrice,
-        discountPercentage: discount,
-        image: image || "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=600&q=80",
-        badge: badge || null,
-        organic: Boolean(organic),
-        active: active !== undefined ? Boolean(active) : true,
-        description: description || null,
-        createdAt: new Date().toISOString(),
-      };
-      inMemoryProducts.push(product);
-    }
+    const count = await Product.countDocuments();
+    const product = await Product.create({
+      id: count + 1,
+      name,
+      category,
+      unit: unit || "1 kg",
+      price: pPrice,
+      originalPrice: pOrigPrice,
+      discountPercentage: discount,
+      image: image || "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=600&q=80",
+      badge: badge || null,
+      organic: Boolean(organic),
+      active: active !== undefined ? Boolean(active) : true,
+      description: description || null,
+    });
     return res.status(201).json(product);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Failed to create product" });
@@ -438,24 +317,16 @@ const handleUpdateProduct = async (req: any, res: any) => {
   const payload = updateData.data || updateData;
 
   try {
-    if (mongoose.connection.readyState === 1) {
-      const updated = await Product.findOneAndUpdate(
-        { id: targetId },
-        { $set: payload },
-        { new: true }
-      );
-      if (updated) return res.json(updated);
-    }
-  } catch {
-    // Fallback
+    const updated = await Product.findOneAndUpdate(
+      { id: targetId },
+      { $set: payload },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: "Product not found" });
+    return res.json(updated);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to update product" });
   }
-
-  let prod = inMemoryProducts.find((p) => p.id === targetId);
-  if (prod) {
-    Object.assign(prod, payload);
-    return res.json(prod);
-  }
-  return res.status(404).json({ error: "Product not found" });
 };
 
 app.put("/api/products/:id", handleUpdateProduct);
@@ -465,30 +336,22 @@ app.patch("/api/products/:id", handleUpdateProduct);
 app.delete("/api/products/:id", async (req: any, res: any) => {
   const targetId = Number(req.params.id);
   try {
-    if (mongoose.connection.readyState === 1) {
-      await Product.deleteOne({ id: targetId });
-      return res.json({ success: true, message: "Product deleted" });
-    }
-  } catch {
-    // Fallback
+    const result = await Product.deleteOne({ id: targetId });
+    if (result.deletedCount === 0) return res.status(404).json({ error: "Product not found" });
+    return res.json({ success: true, message: "Product deleted" });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to delete product" });
   }
-
-  const idx = inMemoryProducts.findIndex((p) => p.id === targetId);
-  if (idx !== -1) inMemoryProducts.splice(idx, 1);
-  return res.json({ success: true, message: "Product deleted" });
 });
 
 // GET /api/vendors
 app.get("/api/vendors", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const vendors = await Vendor.find().sort({ createdAt: -1 });
-      if (vendors && vendors.length > 0) return res.json(vendors);
-    }
-  } catch {
-    // Fallback
+    const vendors = await Vendor.find().sort({ createdAt: -1 });
+    return res.json(vendors || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to fetch vendors" });
   }
-  return res.json(inMemoryVendors);
 });
 
 // POST /api/vendors
@@ -499,45 +362,22 @@ app.post("/api/vendors", async (req: any, res: any) => {
       return res.status(400).json({ error: "First name and phone are required" });
     }
 
-    let vendor: any = null;
-    if (mongoose.connection.readyState === 1) {
-      const count = await Vendor.countDocuments();
-      vendor = await Vendor.create({
-        id: count + 1,
-        firstName,
-        lastName: lastName || "",
-        phone,
-        location: location || "",
-        produce: produce || "",
-        email: email || null,
-        status: "pending",
-        bankName: bankName || null,
-        accountNumber: accountNumber || null,
-        ifscCode: ifscCode || null,
-        branchName: branchName || null,
-        accountHolderName: accountHolderName || null,
-      });
-    }
-
-    if (!vendor) {
-      vendor = {
-        id: inMemoryVendors.length + 1,
-        firstName,
-        lastName: lastName || "",
-        phone,
-        location: location || "",
-        produce: produce || "",
-        email: email || null,
-        status: "pending",
-        bankName: bankName || null,
-        accountNumber: accountNumber || null,
-        ifscCode: ifscCode || null,
-        branchName: branchName || null,
-        accountHolderName: accountHolderName || null,
-        createdAt: new Date().toISOString(),
-      };
-      inMemoryVendors.push(vendor);
-    }
+    const count = await Vendor.countDocuments();
+    const vendor = await Vendor.create({
+      id: count + 1,
+      firstName,
+      lastName: lastName || "",
+      phone,
+      location: location || "",
+      produce: produce || "",
+      email: email || null,
+      status: "pending",
+      bankName: bankName || null,
+      accountNumber: accountNumber || null,
+      ifscCode: ifscCode || null,
+      branchName: branchName || null,
+      accountHolderName: accountHolderName || null,
+    });
     return res.status(201).json(vendor);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Failed to create vendor" });
@@ -551,24 +391,16 @@ const handleUpdateVendor = async (req: any, res: any) => {
   const payload = updateData.data || updateData;
 
   try {
-    if (mongoose.connection.readyState === 1) {
-      const updated = await Vendor.findOneAndUpdate(
-        { id: targetId },
-        { $set: payload },
-        { new: true }
-      );
-      if (updated) return res.json(updated);
-    }
-  } catch {
-    // Fallback
+    const updated = await Vendor.findOneAndUpdate(
+      { id: targetId },
+      { $set: payload },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: "Vendor not found" });
+    return res.json(updated);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to update vendor" });
   }
-
-  let vendor = inMemoryVendors.find((v) => v.id === targetId);
-  if (vendor) {
-    Object.assign(vendor, payload);
-    return res.json(vendor);
-  }
-  return res.status(404).json({ error: "Vendor not found" });
 };
 
 app.put("/api/vendors/:id", handleUpdateVendor);
@@ -578,42 +410,31 @@ app.patch("/api/vendors/:id", handleUpdateVendor);
 app.delete("/api/vendors/:id", async (req: any, res: any) => {
   const targetId = Number(req.params.id);
   try {
-    if (mongoose.connection.readyState === 1) {
-      await Vendor.deleteOne({ id: targetId });
-      return res.json({ success: true, message: "Vendor deleted" });
-    }
-  } catch {
-    // Fallback
+    const result = await Vendor.deleteOne({ id: targetId });
+    if (result.deletedCount === 0) return res.status(404).json({ error: "Vendor not found" });
+    return res.json({ success: true, message: "Vendor deleted" });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to delete vendor" });
   }
-
-  const idx = inMemoryVendors.findIndex((v) => v.id === targetId);
-  if (idx !== -1) inMemoryVendors.splice(idx, 1);
-  return res.json({ success: true, message: "Vendor deleted" });
 });
 
 // Warehouses endpoints
 app.get("/api/warehouses", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const warehouses = await Warehouse.find({ isActive: true });
-      if (warehouses) return res.json(warehouses);
-    }
-  } catch {
-    // Fallback
+    const warehouses = await Warehouse.find({ isActive: true });
+    return res.json(warehouses || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to fetch warehouses" });
   }
-  return res.json([]);
 });
 
 app.get("/api/admin/warehouses", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const warehouses = await Warehouse.find().sort({ createdAt: -1 });
-      if (warehouses) return res.json(warehouses);
-    }
-  } catch {
-    // Fallback
+    const warehouses = await Warehouse.find().sort({ createdAt: -1 });
+    return res.json(warehouses || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to fetch warehouses" });
   }
-  return res.json([]);
 });
 
 app.post("/api/admin/warehouses", async (req: any, res: any) => {
@@ -622,8 +443,9 @@ app.post("/api/admin/warehouses", async (req: any, res: any) => {
     if (!name || !address || !city) {
       return res.status(400).json({ error: "Name, address, and city are required" });
     }
-    const warehouse = {
-      id: inMemoryWarehouses.length + 1,
+    const count = await Warehouse.countDocuments();
+    const warehouse = await Warehouse.create({
+      id: count + 1,
       name,
       address,
       city,
@@ -634,13 +456,9 @@ app.post("/api/admin/warehouses", async (req: any, res: any) => {
       baseDeliveryFee: Number(baseDeliveryFee || 50),
       perKmRate: Number(perKmRate || 8),
       isActive: true,
-    };
-    inMemoryWarehouses.push(warehouse);
-    if (mongoose.connection.readyState === 1) {
-      await Warehouse.create(warehouse);
-    }
+    });
     return res.status(201).json(warehouse);
-  } catch {
+  } catch (err: any) {
     return res.status(500).json({ error: "Failed to create warehouse" });
   }
 });
@@ -649,21 +467,14 @@ app.put("/api/admin/warehouses/:id", async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
-    let warehouse = inMemoryWarehouses.find((w) => w.id === Number(id));
-    if (warehouse) {
-      Object.assign(warehouse, updateData);
-    }
-    if (mongoose.connection.readyState === 1) {
-      const dbW = await Warehouse.findOneAndUpdate(
-        { id: Number(id) },
-        { $set: updateData },
-        { new: true }
-      );
-      if (dbW) warehouse = dbW;
-    }
-    if (!warehouse) return res.status(404).json({ error: "Warehouse not found" });
-    return res.json(warehouse);
-  } catch {
+    const dbW = await Warehouse.findOneAndUpdate(
+      { id: Number(id) },
+      { $set: updateData },
+      { new: true }
+    );
+    if (!dbW) return res.status(404).json({ error: "Warehouse not found" });
+    return res.json(dbW);
+  } catch (err: any) {
     return res.status(500).json({ error: "Failed to update warehouse" });
   }
 });
@@ -671,141 +482,18 @@ app.put("/api/admin/warehouses/:id", async (req: any, res: any) => {
 app.delete("/api/admin/warehouses/:id", async (req: any, res: any) => {
   try {
     const { id } = req.params;
-    const idx = inMemoryWarehouses.findIndex((w) => w.id === Number(id));
-    if (idx !== -1) inMemoryWarehouses.splice(idx, 1);
-    if (mongoose.connection.readyState === 1) {
-      await Warehouse.deleteOne({ id: Number(id) });
-    }
+    const result = await Warehouse.deleteOne({ id: Number(id) });
+    if (result.deletedCount === 0) return res.status(404).json({ error: "Warehouse not found" });
     return res.json({ success: true, message: "Warehouse deleted" });
-  } catch {
+  } catch (err: any) {
     return res.status(500).json({ error: "Failed to delete warehouse" });
   }
 });
 
-app.post("/api/admin/warehouses/calc-fee", async (req: any, res: any) => {
-  try {
-    const { city, userLat, userLng } = req.body;
-    let warehouses = inMemoryWarehouses;
-    if (mongoose.connection.readyState === 1) {
-      const dbW = await Warehouse.find({ isActive: true });
-      if (dbW && dbW.length > 0) warehouses = dbW;
-    }
-    
-    let matched = warehouses.find((w: any) => w.city.toLowerCase() === String(city || "").toLowerCase());
-    if (!matched && warehouses.length > 0) matched = warehouses[0];
-    
-    if (!matched) {
-      return res.json({
-        serviceable: false,
-        deliveryFee: 0,
-        warehouseName: "",
-        distanceKm: 0,
-        freeDelivery: false,
-        message: "No active warehouse configured for location",
-      });
-    }
-
-    let distanceKm = 5;
-    if (userLat && userLng && matched.latitude && matched.longitude) {
-      const rad = Math.PI / 180;
-      const dLat = (userLat - matched.latitude) * rad;
-      const dLng = (userLng - matched.longitude) * rad;
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(matched.latitude * rad) * Math.cos(userLat * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-      distanceKm = Math.round(6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-    }
-
-    const freeRadius = matched.freeDeliveryRadiusKm || 30;
-    const maxRadius = matched.maxServiceRadiusKm || 70;
-    const baseFee = matched.baseDeliveryFee || 50;
-    const perKm = matched.perKmRate || 8;
-
-    if (distanceKm > maxRadius) {
-      return res.json({ serviceable: false, message: `Location beyond max service radius of ${maxRadius}km` });
-    }
-
-    const isFree = distanceKm <= freeRadius;
-    const deliveryFee = isFree ? 0 : Math.round(baseFee + (distanceKm - freeRadius) * perKm);
-
-    return res.json({
-      serviceable: true,
-      deliveryFee,
-      warehouseName: matched.name,
-      distanceKm,
-      freeDelivery: isFree,
-    });
-  } catch {
-    return res.status(500).json({ error: "Failed to calculate delivery fee" });
-  }
-});
-
-app.get("/api/vendors/invoices", (_req, res) => res.json([
-  { id: 1, invoiceNumber: "INV-2026-001", vendorName: "Ramesh Kumar", amount: 12000, date: "2026-09-08", status: "paid" },
-  { id: 2, invoiceNumber: "INV-2026-002", vendorName: "Suresh Patel", amount: 5400, date: "2026-09-09", status: "pending" }
-]));
-
-app.post("/api/vendors/register", (req: any, res: any) => {
-  return res.status(201).json({ success: true, message: "Vendor registered successfully", vendor: req.body });
-});
-
-app.get("/api/admin/observability", (_req, res) => res.json({
-  cpuUsage: 14.2,
-  memoryUsage: 38.6,
-  activeConnections: 124,
-  latencyMs: 18,
-  errorRate: 0.01,
-  services: [
-    { name: "auth-service", status: "healthy", uptime: "99.99%" },
-    { name: "operations-service", status: "healthy", uptime: "99.98%" },
-    { name: "inventory-service", status: "healthy", uptime: "100%" },
-    { name: "delivery-service", status: "healthy", uptime: "99.95%" },
-    { name: "support-service", status: "healthy", uptime: "100%" }
-  ]
-}));
-
-app.get("/api/admin/ledger", (_req, res) => res.json([
-  { id: 1, transactionId: "TXN-88491", type: "credit", amount: 485900, description: "Daily Sales Settlement", createdAt: new Date().toISOString() },
-  { id: 2, transactionId: "TXN-88492", type: "debit", amount: 17400, description: "Farmer Payout - Ramesh Kumar", createdAt: new Date().toISOString() }
-]));
-
-app.put("/api/admin/quotations/:id", (req: any, res: any) => {
-  const { id } = req.params;
-  const quote = inMemoryQuotations.find((q) => q.id === Number(id));
-  if (quote) {
-    Object.assign(quote, req.body);
-    return res.json(quote);
-  }
-  return res.status(200).json({ id: Number(id), status: req.body.status || "accepted", paymentStatus: "paid" });
-});
-
-const inMemoryOrders: any[] = [];
-
-app.get("/api/orders", (_req, res) => res.json(inMemoryOrders));
-
-app.get("/api/orders/:id", (req: any, res: any) => {
-  const order = inMemoryOrders.find((o) => o.id === Number(req.params.id));
-  if (!order) return res.status(404).json({ error: "Order not found" });
-  return res.json(order);
-});
-
-app.post("/api/orders/checkout", (req: any, res: any) => {
-  const newOrder = { id: inMemoryOrders.length + 101, ...req.body, status: "placed", createdAt: new Date().toISOString() };
-  inMemoryOrders.unshift(newOrder);
-  return res.status(201).json({ success: true, message: "Order placed successfully", order: newOrder });
-});
-
-app.post("/api/orders/:id/cancel", (_req: any, res: any) => {
-  return res.json({ success: true, message: "Order cancelled" });
-});
-
-app.put("/api/orders/:id/status", (_req: any, res: any) => {
-  return res.json({ success: true, message: "Status updated" });
-});
-
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
 
-mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(async () => {
+mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(() => {
   console.log("⚡ [operations-service] Connected to MongoDB / AWS DocumentDB");
-  await seedDefaultUsers();
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [operations-service] Running on port ${PORT}`));
 }).catch((err) => {
   console.warn("⚠️ [operations-service] MongoDB connection warning:", err.message);

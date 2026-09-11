@@ -29,28 +29,9 @@ const UserSchema = new mongoose.Schema(
 
 const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
 
-
-mongoose.set("bufferCommands", false);
-
-const inMemoryUsers: any[] = [
-  { id: 1, name: "Admin User", email: "admin@sunotal.com", pass: "admin123", role: "admin", phone: "+91 98765 00001", city: "Hyderabad" },
-];
-
 async function findUserByEmail(email: string) {
-  if (mongoose.connection.readyState === 1) {
-    try {
-      const dbUser = await User.findOne({ email }).exec();
-      if (dbUser) return dbUser;
-    } catch {
-      // Fall through to in-memory store
-    }
-  }
-  const found = inMemoryUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (!found) return null;
-  if (!found.passwordHash) {
-    found.passwordHash = await bcrypt.hash(found.pass || "admin123", 10);
-  }
-  return found;
+  if (!email) return null;
+  return await User.findOne({ email: email.trim().toLowerCase() }).exec();
 }
 
 // POST /api/auth/register
@@ -61,34 +42,16 @@ app.post("/api/auth/register", async (req: any, res: any) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const existing = await findUserByEmail(cleanEmail);
-  if (existing) {
-    return res.status(409).json({ error: "Email already registered" });
-  }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  let user: any = null;
-  if (mongoose.connection.readyState === 1) {
-    try {
-      const count = await User.countDocuments();
-      user = await User.create({
-        id: count + 1,
-        name,
-        email: cleanEmail,
-        passwordHash,
-        role: "user",
-        active: true,
-        phone: phone || null,
-        city: city || null,
-      });
-    } catch {
-      // Fall through
+  try {
+    const existing = await findUserByEmail(cleanEmail);
+    if (existing) {
+      return res.status(409).json({ error: "Email already registered" });
     }
-  }
 
-  if (!user) {
-    user = {
-      id: inMemoryUsers.length + 1,
+    const passwordHash = await bcrypt.hash(password, 10);
+    const count = await User.countDocuments();
+    const user = await User.create({
+      id: count + 1,
       name,
       email: cleanEmail,
       passwordHash,
@@ -96,12 +59,14 @@ app.post("/api/auth/register", async (req: any, res: any) => {
       active: true,
       phone: phone || null,
       city: city || null,
-    };
-    inMemoryUsers.push(user);
-  }
+    });
 
-  const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-  return res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
+    return res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  } catch (err: any) {
+    console.error("Error in registration:", err);
+    return res.status(500).json({ error: err.message || "Failed to register user" });
+  }
 });
 
 // POST /api/auth/login
@@ -112,18 +77,23 @@ app.post("/api/auth/login", async (req: any, res: any) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const user = await findUserByEmail(cleanEmail);
-  if (!user) {
-    return res.status(401).json({ error: "Invalid email or password" });
-  }
+  try {
+    const user = await findUserByEmail(cleanEmail);
+    if (!user) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
 
-  const isMatch = await bcrypt.compare(password, user.passwordHash);
-  if (!isMatch) {
-    return res.status(401).json({ error: "Invalid email or password" });
-  }
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
 
-  const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-  return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
+    return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  } catch (err: any) {
+    console.error("Error in login:", err);
+    return res.status(500).json({ error: "Authentication failed" });
+  }
 });
 
 // POST /api/admin/login
@@ -134,18 +104,23 @@ app.post("/api/admin/login", async (req: any, res: any) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const user = await findUserByEmail(cleanEmail);
-  if (!user) {
-    return res.status(401).json({ error: "Invalid email or password" });
-  }
+  try {
+    const user = await findUserByEmail(cleanEmail);
+    if (!user) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
 
-  const isMatch = await bcrypt.compare(password, user.passwordHash);
-  if (!isMatch) {
-    return res.status(401).json({ error: "Invalid email or password" });
-  }
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
 
-  const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-  return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
+    return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  } catch (err: any) {
+    console.error("Error in admin login:", err);
+    return res.status(500).json({ error: "Authentication failed" });
+  }
 });
 
 // GET /api/auth/me
@@ -179,39 +154,8 @@ app.get("/api/auth/me", async (req: any, res: any) => {
 
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "auth-service" }));
 
-async function seedDefaultUsers() {
-  try {
-    const seedAccounts = [
-      { id: 1, name: "Admin User", email: "admin@sunotal.com", pass: "admin123", role: "admin", phone: "+91 98765 00001", city: "Hyderabad" },
-    ];
-
-    for (const acc of seedAccounts) {
-      const existing = await User.findOne({ email: acc.email });
-      const passwordHash = await bcrypt.hash(acc.pass, 10);
-      if (!existing) {
-        await User.create({
-          id: acc.id,
-          name: acc.name,
-          email: acc.email,
-          passwordHash,
-          role: acc.role,
-          active: true,
-          phone: acc.phone,
-          city: acc.city,
-        });
-        console.log(`🌱 Seeded user: ${acc.email} (${acc.role})`);
-      } else {
-        await User.updateOne({ email: acc.email }, { $set: { passwordHash, role: acc.role, active: true } });
-      }
-    }
-  } catch (err: any) {
-    console.warn("⚠️ User seed warning:", err.message);
-  }
-}
-
-mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(async () => {
+mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(() => {
   console.log("⚡ [auth-service] Connected to MongoDB / AWS DocumentDB");
-  await seedDefaultUsers();
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`✅ [auth-service] Running on port ${PORT}`);
   });
@@ -219,4 +163,3 @@ mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelecti
   console.warn("⚠️ [auth-service] MongoDB connection warning:", err.message);
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [auth-service] Running on port ${PORT}`));
 });
-
