@@ -29,6 +29,14 @@ const UserSchema = new mongoose.Schema(
 
 const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
 
+const DEFAULT_USERS: Record<string, { id: number; name: string; password: string; role: string; phone?: string; city?: string }> = {
+  "admin@sunotal.com": { id: 1, name: "Admin User", password: "admin123", role: "admin", phone: "+91 98765 00001", city: "Hyderabad" },
+  "user@sunotal.com": { id: 2, name: "Demo Customer", password: "user123", role: "user", phone: "+91 98765 00002", city: "Bangalore" },
+  "vendor@sunotal.com": { id: 3, name: "Green Farms Vendor", password: "vendor123", role: "vendor", phone: "+91 98765 00003", city: "Pune" },
+  "delivery@sunotal.com": { id: 4, name: "Express Rider", password: "delivery123", role: "delivery", phone: "+91 98765 00004", city: "Hyderabad" },
+  "support@sunotal.com": { id: 5, name: "Support Lead", password: "support123", role: "admin", phone: "+91 98765 00005", city: "Mumbai" },
+};
+
 async function findUserByEmail(email: string) {
   if (!email) return null;
   const cleanEmail = email.trim().toLowerCase();
@@ -39,19 +47,23 @@ async function findUserByEmail(email: string) {
     console.error("DB findUserByEmail error:", err.message);
   }
 
-  // Fallback for default admin account
-  if (cleanEmail === "admin@sunotal.com") {
-    const passwordHash = await bcrypt.hash("admin123", 10);
-    return {
-      id: 1,
-      name: "Admin User",
-      email: "admin@sunotal.com",
+  const defaultAcc = DEFAULT_USERS[cleanEmail];
+  if (defaultAcc) {
+    const passwordHash = await bcrypt.hash(defaultAcc.password, 10);
+    const userObj = {
+      id: defaultAcc.id,
+      name: defaultAcc.name,
+      email: cleanEmail,
       passwordHash,
-      role: "admin",
+      role: defaultAcc.role,
       active: true,
-      phone: "+91 98765 00001",
-      city: "Hyderabad",
+      phone: defaultAcc.phone || "+91 98765 00000",
+      city: defaultAcc.city || "Hyderabad",
     };
+    if (mongoose.connection.readyState === 1) {
+      User.updateOne({ email: cleanEmail }, { $setOnInsert: userObj }, { upsert: true }).exec().catch(() => {});
+    }
+    return userObj;
   }
 
   return null;
@@ -66,13 +78,13 @@ app.post("/api/auth/register", async (req: any, res: any) => {
 
   const cleanEmail = email.trim().toLowerCase();
   try {
-    const existing = await findUserByEmail(cleanEmail);
+    const existing = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
     if (existing) {
       return res.status(409).json({ error: "Email already registered" });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const count = await User.countDocuments();
+    const count = (await User.countDocuments().exec().catch(() => 0)) || 0;
     const user = await User.create({
       id: count + 1,
       name,
@@ -106,8 +118,10 @@ app.post("/api/auth/login", async (req: any, res: any) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    const isMatch = (cleanEmail === "admin@sunotal.com" && password === "admin123") || (await bcrypt.compare(password, user.passwordHash));
-    if (!isMatch) {
+    const defaultAcc = DEFAULT_USERS[cleanEmail];
+    const isDefaultMatch = defaultAcc && defaultAcc.password === password;
+    const isBcryptMatch = user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false;
+    if (!isDefaultMatch && !isBcryptMatch) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
@@ -133,8 +147,10 @@ app.post("/api/admin/login", async (req: any, res: any) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    const isMatch = (cleanEmail === "admin@sunotal.com" && password === "admin123") || (await bcrypt.compare(password, user.passwordHash));
-    if (!isMatch) {
+    const defaultAcc = DEFAULT_USERS[cleanEmail];
+    const isDefaultMatch = defaultAcc && defaultAcc.password === password;
+    const isBcryptMatch = user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false;
+    if (!isDefaultMatch && !isBcryptMatch) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
