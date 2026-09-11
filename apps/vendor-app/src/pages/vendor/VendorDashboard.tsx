@@ -81,32 +81,31 @@ export default function VendorDashboard() {
   }, []);
 
   useEffect(() => {
-      const userName = user?.name || user?.email || "Vendor";
-      setVendorProfile({
-        firstName: userName.split(" ")[0] || "Vendor",
-        lastName: userName.split(" ").slice(1).join(" ") || "",
-        phone: user?.phone || "N/A",
-        location: user?.city || "Direct Sourcing Mandal",
-        status: user?.active ? "approved" : "pending",
-      });
+    const userName = user?.name || user?.email || "Vendor";
+    setVendorProfile({
+      firstName: userName.split(" ")[0] || "Vendor",
+      lastName: userName.split(" ").slice(1).join(" ") || "",
+      phone: user?.phone || "N/A",
+      location: user?.city || "Direct Sourcing Mandal",
+      status: user?.active ? "approved" : "pending",
+    });
 
-      const token = localStorage.getItem("sunotal_vendor_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
-      const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+    const token = localStorage.getItem("sunotal_vendor_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
+    const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 
-      fetch("/api/vendors/quotations", { headers })
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data) => {
-          if (Array.isArray(data)) setQuotations(data);
-        })
-        .catch(() => setQuotations([]));
+    fetch("/api/vendors/quotations", { headers })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) setQuotations(data);
+      })
+      .catch(() => setQuotations([]));
 
-      fetch("/api/vendors/invoices", { headers })
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data) => {
-          if (Array.isArray(data)) setInvoices(data);
-        })
-        .catch(() => setInvoices([]));
-    }
+    fetch("/api/vendors/invoices", { headers })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) setInvoices(data);
+      })
+      .catch(() => setInvoices([]));
   }, [user]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);

@@ -7,12 +7,14 @@ on:
       - main
     paths:
       - 'terraform/**'
+      - '.github/workflows/infra.yml'
       - 'docker-compose*.yml'
   pull_request:
     branches:
       - main
     paths:
       - 'terraform/**'
+      - '.github/workflows/infra.yml'
       - 'docker-compose*.yml'
 
 env:
