@@ -106,6 +106,8 @@ export default function UsersAdmin() {
         onSuccess: () => {
           toast.success("User updated successfully");
           queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+          queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+          queryClient.invalidateQueries({ queryKey: ['adminStats'] });
           setOpen(false);
         },
         onError: () => toast.error("Failed to update user")
@@ -118,6 +120,8 @@ export default function UsersAdmin() {
       onSuccess: () => {
         toast.success("User deleted");
         queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+        queryClient.invalidateQueries({ queryKey: ['adminStats'] });
       },
       onError: () => toast.error("Failed to delete user")
     });
@@ -128,6 +132,8 @@ export default function UsersAdmin() {
       onSuccess: () => {
         toast.success(`User ${!currentStatus ? 'activated' : 'suspended'}`);
         queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+        queryClient.invalidateQueries({ queryKey: ['adminStats'] });
       },
       onError: () => toast.error("Failed to update status")
     });

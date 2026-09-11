@@ -144,9 +144,25 @@ resource "aws_security_group" "db" {
   }
 
   ingress {
-    description = "PostgreSQL from VPC (EKS Pods / Internal)"
+    description     = "PostgreSQL from VPC (EKS Pods / Internal)"
     from_port   = 5432
     to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["10.10.0.0/16"]
+  }
+
+  ingress {
+    description     = "DocumentDB MongoDB from ECS Fargate"
+    from_port       = 27017
+    to_port         = 27017
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs.id]
+  }
+
+  ingress {
+    description = "DocumentDB MongoDB from VPC"
+    from_port   = 27017
+    to_port     = 27017
     protocol    = "tcp"
     cidr_blocks = ["10.10.0.0/16"]
   }

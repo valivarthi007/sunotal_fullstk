@@ -127,6 +127,8 @@ export default function VendorsAdmin() {
         onSuccess: () => {
           toast.success("Vendor updated successfully");
           queryClient.invalidateQueries({ queryKey: getListVendorsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+          queryClient.invalidateQueries({ queryKey: ['adminStats'] });
           setOpen(false);
         },
         onError: () => toast.error("Failed to update vendor")
@@ -139,6 +141,7 @@ export default function VendorsAdmin() {
       createInventory.mutate({ ...values, vendorId: inventoryVendorId }, {
         onSuccess: () => {
           toast.success("Added to inventory!");
+          queryClient.invalidateQueries({ queryKey: ['adminStats'] });
           setInventoryOpen(false);
         },
         onError: () => toast.error("Failed to add inventory")
@@ -151,6 +154,8 @@ export default function VendorsAdmin() {
       onSuccess: () => {
         toast.success("Vendor deleted");
         queryClient.invalidateQueries({ queryKey: getListVendorsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+        queryClient.invalidateQueries({ queryKey: ['adminStats'] });
       },
       onError: () => toast.error("Failed to delete vendor")
     });
@@ -159,8 +164,10 @@ export default function VendorsAdmin() {
   const handleQuickStatus = (id: number, status: VendorUpdateStatus) => {
     updateVendor.mutate({ id, data: { status } }, {
       onSuccess: () => {
-        toast.success(`Vendor marked as ${status}`);
+        toast.success(`Vendor ${status}`);
         queryClient.invalidateQueries({ queryKey: getListVendorsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+        queryClient.invalidateQueries({ queryKey: ['adminStats'] });
       },
       onError: () => toast.error("Failed to update status")
     });

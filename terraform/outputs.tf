@@ -104,3 +104,14 @@ output "test_server_public_ip" {
   description = "Public IP address of the Test Server"
   value       = module.test_server.test_server_public_ip
 }
+
+output "docdb_endpoint" {
+  description = "AWS Managed DocumentDB Cluster Endpoint"
+  value       = module.database.docdb_endpoint
+}
+
+output "docdb_connection_string" {
+  description = "AWS Managed DocumentDB Connection String"
+  value       = module.database.docdb_connection_string
+  sensitive   = true
+}

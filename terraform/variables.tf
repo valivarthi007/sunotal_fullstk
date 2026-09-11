@@ -113,4 +113,10 @@ variable "compute_target" {
   default     = "ecs"
 }
 
+variable "mongodb_uri" {
+  description = "Optional override MongoDB URI for AWS Managed DocumentDB / MongoDB Atlas"
+  type        = string
+  default     = ""
+}
+
 

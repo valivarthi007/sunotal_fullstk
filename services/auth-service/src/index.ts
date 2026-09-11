@@ -209,8 +209,8 @@ async function seedDefaultUsers() {
   }
 }
 
-mongoose.connect(MONGODB_URI, { tlsInsecure: true, serverSelectionTimeoutMS: 3000 }).then(async () => {
-  console.log("⚡ [auth-service] Connected to MongoDB");
+mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(async () => {
+  console.log("⚡ [auth-service] Connected to MongoDB / AWS DocumentDB");
   await seedDefaultUsers();
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`✅ [auth-service] Running on port ${PORT}`);

@@ -175,8 +175,8 @@ mongoose.set("bufferCommands", false);
 
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "delivery-service" }));
 
-mongoose.connect(MONGODB_URI, { tlsInsecure: true, serverSelectionTimeoutMS: 3000 }).then(() => {
-  console.log("⚡ [delivery-service] Connected to MongoDB");
+mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(() => {
+  console.log("⚡ [delivery-service] Connected to MongoDB / AWS DocumentDB");
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [delivery-service] Running on port ${PORT}`));
 }).catch((err) => {
   console.warn("⚠️ [delivery-service] MongoDB connection warning:", err.message);

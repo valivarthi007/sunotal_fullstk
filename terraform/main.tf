@@ -80,6 +80,16 @@ module "cdn" {
   tags                  = local.common_tags
 }
 
+module "database" {
+  source               = "./modules/database"
+  subnet_ids           = [module.vpc.private_subnet_1_id, module.vpc.private_subnet_2_id]
+  db_security_group_id = module.security.db_security_group_id
+  db_username          = var.db_username
+  db_password          = var.db_password
+  db_name              = var.db_name
+  tags                 = local.common_tags
+}
+
 module "ecr" {
   source = "./modules/ecr"
   tags   = local.common_tags
@@ -109,14 +119,14 @@ module "ecs" {
   delivery_target_group_arn   = module.cdn.delivery_target_group_arn
   support_target_group_arn    = module.cdn.support_target_group_arn
 
-  mongodb_uri       = "mongodb://localhost:27017/sunotal"
+  mongodb_uri       = var.mongodb_uri != "" ? var.mongodb_uri : module.database.docdb_connection_string
   cloudfront_domain = module.cdn.cloudfront_domain_name
 
   s3_bucket_name = var.s3_bucket_name
   s3_policy_arn  = module.iam.policy_arn
   frontend_url   = "https://sunotal.automateuniverse.space"
 
-  depends_on = [module.cdn]
+  depends_on = [module.cdn, module.database]
 }
 
 module "sonarqube" {
