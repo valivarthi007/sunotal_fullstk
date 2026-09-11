@@ -28,7 +28,20 @@ const Inventory: any = mongoose.models.Inventory || mongoose.model("Inventory", 
 
 mongoose.set("bufferCommands", false);
 
+const defaultCategories = [
+  { id: 1, name: "Vegetables", icon: "🥦" },
+  { id: 2, name: "Fruits", icon: "🍎" },
+  { id: 3, name: "Dairy", icon: "🥛" },
+  { id: 4, name: "Dry Fruits", icon: "🥜" },
+  { id: 5, name: "Grains", icon: "🌾" },
+];
+
 const inMemoryInventory: any[] = [];
+
+// Fallback handlers if ALB forwards products/categories/vendors to inventory-service
+app.get("/api/categories", (_req, res) => res.json(defaultCategories));
+app.get("/api/products", (_req, res) => res.json([]));
+app.get("/api/vendors", (_req, res) => res.json([]));
 
 // GET /api/inventory
 app.get("/api/inventory", async (_req, res) => {

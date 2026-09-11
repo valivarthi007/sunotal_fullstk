@@ -257,7 +257,12 @@ resource "aws_lb_listener_rule" "operations_api" {
         "/api/admin*",
         "/api/orders*",
         "/api/warehouses*",
-        "/api/quotations*"
+        "/api/quotations*",
+        "/api/products*",
+        "/api/vendors*",
+        "/api/categories*",
+        "/api/banners*",
+        "/api/product-definitions*"
       ]
     }
   }
