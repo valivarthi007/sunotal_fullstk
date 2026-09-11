@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 
 export const app = express();
 const PORT = Number(process.env.PORT ?? 5004);
@@ -216,10 +217,41 @@ app.delete("/api/users/:id", async (req: any, res: any) => {
   return res.json({ success: true, message: "User deleted successfully" });
 });
 
+async function seedDefaultUsers() {
+  try {
+    const seedAccounts = [
+      { id: 1, name: "Admin User", email: "admin@sunotal.com", pass: "admin123", role: "admin", phone: "+91 98765 00001", city: "Hyderabad" },
+    ];
+
+    for (const acc of seedAccounts) {
+      const existing = await User.findOne({ email: acc.email });
+      const passwordHash = await bcrypt.hash(acc.pass, 10);
+      if (!existing) {
+        await User.create({
+          id: acc.id,
+          name: acc.name,
+          email: acc.email,
+          passwordHash,
+          role: acc.role,
+          active: true,
+          phone: acc.phone,
+          city: acc.city,
+        });
+        console.log(`🌱 [user-service] Seeded user: ${acc.email} (${acc.role})`);
+      } else {
+        await User.updateOne({ email: acc.email }, { $set: { passwordHash, role: acc.role, active: true } });
+      }
+    }
+  } catch (err: any) {
+    console.warn("⚠️ [user-service] User seed warning:", err.message);
+  }
+}
+
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "user-service" }));
 
-mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(() => {
+mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(async () => {
   console.log("⚡ [user-service] Connected to MongoDB / AWS DocumentDB");
+  await seedDefaultUsers();
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [user-service] Running on port ${PORT}`));
 }).catch((err) => {
   console.warn("⚠️ [user-service] MongoDB connection warning:", err.message);

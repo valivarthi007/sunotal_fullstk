@@ -107,23 +107,43 @@ const defaultCategories = [
 
 mongoose.set("bufferCommands", false);
 
-const inMemoryStats = {
-  totalOrders: 0,
-  totalRevenue: 0,
-  activeVendors: 0,
-  activeDarkStores: 0,
-  deliverySuccessRate: 0,
-  totalProducts: 0,
-  totalVendors: 0,
-  totalUsers: 0,
-  categoryBreakdown: [],
-  recentUsers: [],
-  recentVendors: [],
-};
-
+const inMemoryUsers: any[] = [
+  { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin", active: true, phone: "+91 98765 00001", city: "Hyderabad" },
+];
+const inMemoryVendors: any[] = [];
 const inMemoryQuotations: any[] = [];
 const inMemoryProducts: any[] = [];
 const inMemoryWarehouses: any[] = [];
+
+async function seedDefaultUsers() {
+  try {
+    const seedAccounts = [
+      { id: 1, name: "Admin User", email: "admin@sunotal.com", pass: "admin123", role: "admin", phone: "+91 98765 00001", city: "Hyderabad" },
+    ];
+
+    for (const acc of seedAccounts) {
+      const existing = await User.findOne({ email: acc.email });
+      const passwordHash = await bcrypt.hash(acc.pass, 10);
+      if (!existing) {
+        await User.create({
+          id: acc.id,
+          name: acc.name,
+          email: acc.email,
+          passwordHash,
+          role: acc.role,
+          active: true,
+          phone: acc.phone,
+          city: acc.city,
+        });
+        console.log(`🌱 [operations-service] Seeded user: ${acc.email} (${acc.role})`);
+      } else {
+        await User.updateOne({ email: acc.email }, { $set: { passwordHash, role: acc.role, active: true } });
+      }
+    }
+  } catch (err: any) {
+    console.warn("⚠️ [operations-service] User seed warning:", err.message);
+  }
+}
 
 const QuotationSchema = new mongoose.Schema(
   {
@@ -143,25 +163,74 @@ const Quotation: any = mongoose.models.Quotation || mongoose.model("Quotation", 
 // GET /api/admin/stats
 app.get("/api/admin/stats", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const orderCount = await Product.countDocuments();
-      const productCount = await Product.countDocuments();
-      const vendorCount = await Vendor.countDocuments();
-      const userCount = await User.countDocuments();
-      return res.json({
-        ...inMemoryStats,
-        totalOrders: 1284 + orderCount,
-        totalProducts: productCount || 48,
-        totalVendors: vendorCount || 12,
-        totalUsers: userCount || 156,
-        activeVendors: vendorCount || 42,
-        activeDarkStores: await Warehouse.countDocuments() || 8,
-      });
+    const dbConnected = mongoose.connection.readyState === 1;
+
+    let users: any[] = [];
+    let vendors: any[] = [];
+    let products: any[] = [];
+    let warehouses: any[] = [];
+
+    if (dbConnected) {
+      [users, vendors, products, warehouses] = await Promise.all([
+        User.find().select("-passwordHash").sort({ createdAt: -1 }),
+        Vendor.find().sort({ createdAt: -1 }),
+        Product.find().sort({ createdAt: -1 }),
+        Warehouse.find(),
+      ]);
+    } else {
+      users = inMemoryUsers;
+      vendors = inMemoryVendors;
+      products = inMemoryProducts;
+      warehouses = inMemoryWarehouses;
     }
-  } catch {
-    // Fallback
+
+    const totalUsersCount = users.length > 0 ? users.length : Math.max(1, inMemoryUsers.length);
+    const totalProductsCount = products.length;
+    const totalVendorsCount = vendors.length;
+    const activeVendorsCount = vendors.filter((v: any) => v.status === "approved" || v.status === "active").length;
+
+    const categoryMap: Record<string, number> = {};
+    for (const p of products) {
+      const cat = p.category || "Other";
+      categoryMap[cat] = (categoryMap[cat] || 0) + 1;
+    }
+    const categoryBreakdown = Object.entries(categoryMap).map(([category, count]) => ({ category, count }));
+
+    return res.json({
+      totalOrders: 0,
+      totalRevenue: 0,
+      totalProducts: totalProductsCount,
+      totalVendors: totalVendorsCount,
+      totalUsers: totalUsersCount,
+      activeVendors: activeVendorsCount,
+      activeDarkStores: warehouses.length,
+      deliverySuccessRate: 100,
+      categoryBreakdown,
+      recentUsers: users.slice(0, 5).map((u: any) => ({
+        id: u.id || 1,
+        name: u.name || "User",
+        email: u.email || "",
+        role: u.role || "user",
+        city: u.city || "",
+      })),
+      recentVendors: vendors.slice(0, 5),
+    });
+  } catch (err: any) {
+    console.error("Error in /api/admin/stats:", err);
+    return res.json({
+      totalOrders: 0,
+      totalRevenue: 0,
+      totalProducts: 0,
+      totalVendors: 0,
+      totalUsers: Math.max(1, inMemoryUsers.length),
+      activeVendors: 0,
+      activeDarkStores: 0,
+      deliverySuccessRate: 100,
+      categoryBreakdown: [],
+      recentUsers: inMemoryUsers.slice(0, 5),
+      recentVendors: [],
+    });
   }
-  return res.json(inMemoryStats);
 });
 
 // GET & POST /api/admin/quotations
@@ -408,8 +477,6 @@ app.delete("/api/products/:id", async (req: any, res: any) => {
   if (idx !== -1) inMemoryProducts.splice(idx, 1);
   return res.json({ success: true, message: "Product deleted" });
 });
-
-const inMemoryVendors: any[] = [];
 
 // GET /api/vendors
 app.get("/api/vendors", async (_req, res) => {
@@ -736,8 +803,9 @@ app.put("/api/orders/:id/status", (_req: any, res: any) => {
 
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
 
-mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(() => {
+mongoose.connect(MONGODB_URI, { tlsAllowInvalidCertificates: true, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000 }).then(async () => {
   console.log("⚡ [operations-service] Connected to MongoDB / AWS DocumentDB");
+  await seedDefaultUsers();
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [operations-service] Running on port ${PORT}`));
 }).catch((err) => {
   console.warn("⚠️ [operations-service] MongoDB connection warning:", err.message);
