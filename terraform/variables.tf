@@ -119,4 +119,10 @@ variable "mongodb_uri" {
   default     = ""
 }
 
+variable "docdb_instance_class" {
+  description = "AWS DocumentDB Instance Class"
+  type        = string
+  default     = "db.t3.medium"
+}
+
 

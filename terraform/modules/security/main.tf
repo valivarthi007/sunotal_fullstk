@@ -144,7 +144,7 @@ resource "aws_security_group" "db" {
   }
 
   ingress {
-    description     = "PostgreSQL from VPC (EKS Pods / Internal)"
+    description = "PostgreSQL from VPC (EKS Pods / Internal)"
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"

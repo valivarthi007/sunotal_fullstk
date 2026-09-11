@@ -87,6 +87,7 @@ module "database" {
   db_username          = var.db_username
   db_password          = var.db_password
   db_name              = var.db_name
+  docdb_instance_class = var.docdb_instance_class
   tags                 = local.common_tags
 }
 

@@ -38,14 +38,14 @@ resource "aws_docdb_subnet_group" "main" {
 }
 
 resource "aws_docdb_cluster" "docdb" {
-  cluster_identifier      = "sunotal-docdb-cluster"
-  engine                  = "docdb"
-  master_username         = var.db_username
-  master_password         = var.db_password
-  db_subnet_group_name    = aws_docdb_subnet_group.main.name
-  vpc_security_group_ids  = [var.db_security_group_id]
-  skip_final_snapshot     = true
-  deletion_protection     = false
+  cluster_identifier     = "sunotal-docdb-cluster"
+  engine                 = "docdb"
+  master_username        = var.db_username
+  master_password        = var.db_password
+  db_subnet_group_name   = aws_docdb_subnet_group.main.name
+  vpc_security_group_ids = [var.db_security_group_id]
+  skip_final_snapshot    = true
+  deletion_protection    = false
 
   tags = merge(var.tags, {
     Name = "sunotal-docdb-cluster"
@@ -54,11 +54,11 @@ resource "aws_docdb_cluster" "docdb" {
 
 resource "aws_docdb_cluster_instance" "docdb_instances" {
   count              = 1
-  identifier         = "sunotal-docdb-instance-1"
+  identifier         = "sunotal-docdb-instance-${count.index + 1}"
   cluster_identifier = aws_docdb_cluster.docdb.id
   instance_class     = var.docdb_instance_class
 
   tags = merge(var.tags, {
-    Name = "sunotal-docdb-instance-1"
+    Name = "sunotal-docdb-instance-${count.index + 1}"
   })
 }
