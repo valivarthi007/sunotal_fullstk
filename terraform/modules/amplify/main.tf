@@ -26,7 +26,7 @@ resource "aws_amplify_app" "sunotal" {
   # Custom Rewrite Rules for API Reverse Proxy and SPA routing
   custom_rule {
     source = "/api/<*>"
-    target = "https://api.automateuniverse.space/api/<*>"
+    target = "/index.html"
     status = "200"
   }
 
