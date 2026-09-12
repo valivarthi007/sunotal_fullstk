@@ -31,6 +31,21 @@ export default function Dashboard() {
         </div>
       ) : stats ? (
         <>
+          <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
+                <Bike className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-emerald-950 dark:text-emerald-200">Delivery Fleet & Rider Payout Sub-Application</h3>
+                <p className="text-xs text-emerald-700 dark:text-emerald-400">Review completed delivery rider runs, distance rates (₹30 + ₹10/km), and approve dynamic payouts to riders.</p>
+              </div>
+            </div>
+            <Link href="/admin/rider-payouts" className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shrink-0 shadow-md flex items-center justify-center">
+              Manage Rider Payouts →
+            </Link>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <StatCard 
               title="Total Products" 

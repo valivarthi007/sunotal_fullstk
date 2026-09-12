@@ -192,6 +192,49 @@ export default function DeliveryDashboard() {
     };
   }, [acceptedOrder, pendingOrders, currentAlertOrder, userLoc]);
 
+function geocodeAddress(addressStr: string = "", cityStr: string = "", fallbackLat?: number, fallbackLng?: number): { lat: number; lng: number } {
+  const text = `${addressStr} ${cityStr}`.toLowerCase();
+
+  if (typeof fallbackLat === "number" && typeof fallbackLng === "number" && fallbackLat !== 0 && fallbackLng !== 0) {
+    const isGenericBlr = Math.abs(fallbackLat - 12.9716) < 0.1 || Math.abs(fallbackLat - 12.9250) < 0.1 || Math.abs(fallbackLat - 12.9021) < 0.1;
+    const isVijayawada = text.includes("vijayawada") || text.includes("nainavaram") || text.includes("bhavani") || text.includes("benz") || text.includes("guntur");
+    const isHyderabad = text.includes("hyderabad") || text.includes("gachibowli") || text.includes("secunderabad");
+    const isChennai = text.includes("chennai") || text.includes("t-nagar");
+
+    if (!isGenericBlr && !isVijayawada && !isHyderabad && !isChennai) {
+      return { lat: fallbackLat, lng: fallbackLng };
+    }
+  }
+
+  if (text.includes("nainavaram")) return { lat: 16.5385, lng: 80.5920 };
+  if (text.includes("bhavani") || text.includes("bhavanipuram")) return { lat: 16.5320, lng: 80.5980 };
+  if (text.includes("benz circle") || text.includes("benzcircle")) return { lat: 16.5062, lng: 80.6480 };
+  if (text.includes("one town") || text.includes("kr market") || text.includes("onetown")) return { lat: 16.5165, lng: 80.6150 };
+  if (text.includes("autonagar") || text.includes("patamata")) return { lat: 16.4950, lng: 80.6650 };
+  if (text.includes("vijayawada") || text.includes("ntr district") || text.includes("bezawada") || text.includes("ap 520")) return { lat: 16.5062, lng: 80.6480 };
+  if (text.includes("guntur")) return { lat: 16.3067, lng: 80.4365 };
+  if (text.includes("vizag") || text.includes("visakhapatnam")) return { lat: 17.6868, lng: 83.2185 };
+
+  if (text.includes("gachibowli") || text.includes("hitech")) return { lat: 17.4401, lng: 78.3489 };
+  if (text.includes("banjara")) return { lat: 17.4156, lng: 78.4347 };
+  if (text.includes("hyderabad") || text.includes("secunderabad")) return { lat: 17.3850, lng: 78.4867 };
+
+  if (text.includes("t-nagar") || text.includes("tnagar")) return { lat: 13.0418, lng: 80.2341 };
+  if (text.includes("chennai") || text.includes("madras")) return { lat: 13.0827, lng: 80.2707 };
+
+  if (text.includes("hsr")) return { lat: 12.9121, lng: 77.6446 };
+  if (text.includes("indiranagar")) return { lat: 12.9784, lng: 77.6408 };
+  if (text.includes("koramangala")) return { lat: 12.9352, lng: 77.6245 };
+  if (text.includes("whitefield")) return { lat: 12.9698, lng: 77.7500 };
+  if (text.includes("bengaluru") || text.includes("bangalore")) return { lat: 12.9716, lng: 77.5946 };
+
+  if (typeof fallbackLat === "number" && typeof fallbackLng === "number" && fallbackLat !== 0 && fallbackLng !== 0) {
+    return { lat: fallbackLat, lng: fallbackLng };
+  }
+
+  return { lat: 16.5062, lng: 80.6480 };
+}
+
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [currentAlertOrder, setCurrentAlertOrder] = useState<any | null>(null);
 
@@ -206,31 +249,32 @@ export default function DeliveryDashboard() {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
             realOrders = data.map((o: any) => {
-              const defaultHubLat = 12.9250;
-              const defaultHubLng = 77.6320;
+              const custAddr = o.address || "Default Address, Nainavaram, Vijayawada";
+              const custCity = o.city || "Vijayawada";
+              const whName = o.warehouseName || "Vijayawada Bhavanipuram Central Warehouse";
+              const whAddr = o.warehouseAddress || "Bhavani Puram, Vijayawada";
               const payAmt = Number(o.pay || o.totalAmount || o.finalAmount || 280);
-              const whLat = Number(o.warehouseLat) || defaultHubLat;
-              const whLng = Number(o.warehouseLng) || defaultHubLng;
-              const latVal = Number(o.lat) || (whLat - 0.012);
-              const lngVal = Number(o.lng) || (whLng + 0.015);
+
+              const whCoords = geocodeAddress(whAddr, custCity, Number(o.warehouseLat), Number(o.warehouseLng));
+              const userCoords = geocodeAddress(custAddr, custCity, Number(o.lat), Number(o.lng));
 
               return {
                 id: o.id || o.orderNumber || "ORD-2026-104",
                 numericId: o.numericId || o.id,
                 customerName: o.customerName || "Customer Order",
-                address: o.address || "HSR Layout Phase 1, Bengaluru",
-                city: o.city || "Bengaluru",
+                address: custAddr,
+                city: custCity,
                 items: Array.isArray(o.items) ? o.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Produce"} (${i.quantity || 1})`) : [],
                 distanceKm: 3.2,
                 pay: payAmt,
                 totalAmount: payAmt,
                 status: o.status || "placed",
-                lat: latVal,
-                lng: lngVal,
-                warehouseName: o.warehouseName || "Central Sourcing Dark Store Hub #104",
-                warehouseAddress: o.warehouseAddress || "HSR Layout Phase 1, Bengaluru",
-                warehouseLat: whLat,
-                warehouseLng: whLng,
+                lat: userCoords.lat,
+                lng: userCoords.lng,
+                warehouseName: whName,
+                warehouseAddress: whAddr,
+                warehouseLat: whCoords.lat,
+                warehouseLng: whCoords.lng,
               };
             });
           }
@@ -249,8 +293,12 @@ export default function DeliveryDashboard() {
             for (const uo of activeUserOrders) {
               const orderIdStr = String(uo.id || uo.orderNumber || uo.orderId);
               const payAmt = Number(uo.pay || uo.totalAmount || uo.finalAmount || uo.finalPayable || 280);
-              const addrStr = uo.address || (uo.deliveryAddress?.addressLine1 ? `${uo.deliveryAddress.addressLine1}${uo.city ? `, ${uo.city}` : ""}` : "HSR Layout Phase 1, Bengaluru");
+              const addrStr = uo.address || (uo.deliveryAddress?.addressLine1 ? `${uo.deliveryAddress.addressLine1}${uo.city ? `, ${uo.city}` : ""}` : "Default Address, Nainavaram, Vijayawada");
               const nameStr = uo.customerName || uo.name || uo.deliveryAddress?.name || "Customer Order";
+              const cityStr = uo.city || "Vijayawada";
+
+              const whCoords = geocodeAddress("Bhavani Puram Warehouse", cityStr, Number(uo.warehouseLat), Number(uo.warehouseLng));
+              const userCoords = geocodeAddress(addrStr, cityStr, Number(uo.lat), Number(uo.lng));
 
               if (!realOrders.some((ro) => String(ro.id) === orderIdStr)) {
                 realOrders.unshift({
@@ -258,18 +306,18 @@ export default function DeliveryDashboard() {
                   numericId: uo.id || uo.numericId,
                   customerName: nameStr,
                   address: addrStr,
-                  city: uo.city || "Bengaluru",
+                  city: cityStr,
                   items: Array.isArray(uo.items) ? uo.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Produce"} (${i.quantity || 1})`) : [],
                   distanceKm: 3.2,
                   pay: payAmt,
                   totalAmount: payAmt,
                   status: uo.status || "placed",
-                  lat: Number(uo.lat) || 12.9128,
-                  lng: Number(uo.lng) || 77.6468,
-                  warehouseName: uo.warehouseName || "Central Sourcing Dark Store Hub #104",
-                  warehouseAddress: uo.warehouseAddress || "HSR Layout Phase 1, Bengaluru",
-                  warehouseLat: Number(uo.warehouseLat) || 12.9250,
-                  warehouseLng: Number(uo.warehouseLng) || 77.6320,
+                  lat: userCoords.lat,
+                  lng: userCoords.lng,
+                  warehouseName: uo.warehouseName || "Vijayawada Bhavanipuram Central Warehouse",
+                  warehouseAddress: uo.warehouseAddress || "Bhavani Puram, Vijayawada",
+                  warehouseLat: whCoords.lat,
+                  warehouseLng: whCoords.lng,
                 });
               }
             }

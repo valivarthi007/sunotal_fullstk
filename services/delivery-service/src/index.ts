@@ -172,6 +172,90 @@ app.post("/api/delivery/register", async (req: any, res: any) => {
   }
 });
 
+function geocodeAddress(addressStr: string = "", cityStr: string = "", fallbackLat?: number, fallbackLng?: number): { lat: number; lng: number } {
+  const text = `${addressStr} ${cityStr}`.toLowerCase();
+
+  // If valid non-default GPS coordinates are already provided, return them
+  if (typeof fallbackLat === "number" && typeof fallbackLng === "number" && fallbackLat !== 0 && fallbackLng !== 0) {
+    const isGenericBlr = Math.abs(fallbackLat - 12.9716) < 0.1 || Math.abs(fallbackLat - 12.9250) < 0.1 || Math.abs(fallbackLat - 12.9021) < 0.1;
+    const isVijayawada = text.includes("vijayawada") || text.includes("nainavaram") || text.includes("bhavani") || text.includes("benz") || text.includes("guntur");
+    const isHyderabad = text.includes("hyderabad") || text.includes("gachibowli") || text.includes("secunderabad");
+    const isChennai = text.includes("chennai") || text.includes("t-nagar");
+
+    if (!isGenericBlr && !isVijayawada && !isHyderabad && !isChennai) {
+      return { lat: fallbackLat, lng: fallbackLng };
+    }
+  }
+
+  // 1. Vijayawada & Suburbs (Nainavaram, Bhavanipuram, Benz Circle, Autonagar, One Town, Guntur)
+  if (text.includes("nainavaram")) {
+    return { lat: 16.5385, lng: 80.5920 };
+  }
+  if (text.includes("bhavani") || text.includes("bhavanipuram")) {
+    return { lat: 16.5320, lng: 80.5980 };
+  }
+  if (text.includes("benz circle") || text.includes("benzcircle")) {
+    return { lat: 16.5062, lng: 80.6480 };
+  }
+  if (text.includes("one town") || text.includes("kr market") || text.includes("onetown")) {
+    return { lat: 16.5165, lng: 80.6150 };
+  }
+  if (text.includes("autonagar") || text.includes("patamata")) {
+    return { lat: 16.4950, lng: 80.6650 };
+  }
+  if (text.includes("vijayawada") || text.includes("ntr district") || text.includes("bezawada") || text.includes("ap 520")) {
+    return { lat: 16.5062, lng: 80.6480 };
+  }
+  if (text.includes("guntur")) {
+    return { lat: 16.3067, lng: 80.4365 };
+  }
+  if (text.includes("vizag") || text.includes("visakhapatnam")) {
+    return { lat: 17.6868, lng: 83.2185 };
+  }
+
+  // 2. Hyderabad & Suburbs
+  if (text.includes("gachibowli") || text.includes("hitech")) {
+    return { lat: 17.4401, lng: 78.3489 };
+  }
+  if (text.includes("banjara")) {
+    return { lat: 17.4156, lng: 78.4347 };
+  }
+  if (text.includes("hyderabad") || text.includes("secunderabad")) {
+    return { lat: 17.3850, lng: 78.4867 };
+  }
+
+  // 3. Chennai & Suburbs
+  if (text.includes("t-nagar") || text.includes("tnagar")) {
+    return { lat: 13.0418, lng: 80.2341 };
+  }
+  if (text.includes("chennai") || text.includes("madras")) {
+    return { lat: 13.0827, lng: 80.2707 };
+  }
+
+  // 4. Bengaluru & Suburbs
+  if (text.includes("hsr")) {
+    return { lat: 12.9121, lng: 77.6446 };
+  }
+  if (text.includes("indiranagar")) {
+    return { lat: 12.9784, lng: 77.6408 };
+  }
+  if (text.includes("koramangala")) {
+    return { lat: 12.9352, lng: 77.6245 };
+  }
+  if (text.includes("whitefield")) {
+    return { lat: 12.9698, lng: 77.7500 };
+  }
+  if (text.includes("bengaluru") || text.includes("bangalore")) {
+    return { lat: 12.9716, lng: 77.5946 };
+  }
+
+  if (typeof fallbackLat === "number" && typeof fallbackLng === "number" && fallbackLat !== 0 && fallbackLng !== 0) {
+    return { lat: fallbackLat, lng: fallbackLng };
+  }
+
+  return { lat: 16.5062, lng: 80.6480 };
+}
+
 // GET /api/delivery/orders/active
 app.get("/api/delivery/orders/active", async (_req: any, res: any) => {
   try {
@@ -179,23 +263,29 @@ app.get("/api/delivery/orders/active", async (_req: any, res: any) => {
     const activeWarehouse = await Warehouse.findOne({ isActive: true }).sort({ createdAt: -1 }).exec().catch(() => null)
       || await Warehouse.findOne().sort({ createdAt: -1 }).exec().catch(() => null);
 
-    const warehouseLat = activeWarehouse?.latitude ? Number(activeWarehouse.latitude) : 12.9250;
-    const warehouseLng = activeWarehouse?.longitude ? Number(activeWarehouse.longitude) : 77.6320;
-    const warehouseName = activeWarehouse?.name || "Central Sourcing Dark Store Hub #104";
+    const whCoords = geocodeAddress(
+      `${activeWarehouse?.name || ""} ${activeWarehouse?.address || ""}`,
+      activeWarehouse?.city || "",
+      activeWarehouse?.latitude ? Number(activeWarehouse.latitude) : undefined,
+      activeWarehouse?.longitude ? Number(activeWarehouse.longitude) : undefined
+    );
+
+    const warehouseLat = whCoords.lat;
+    const warehouseLng = whCoords.lng;
+    const warehouseName = activeWarehouse?.name || "Vijayawada Bhavanipuram Central Warehouse";
     const warehouseAddress = activeWarehouse?.address
       ? `${activeWarehouse.address}${activeWarehouse.city ? `, ${activeWarehouse.city}` : ""}`
-      : "HSR Layout Phase 1, Bengaluru";
+      : "Bhavani Puram, Vijayawada";
 
     const orders = await Order.find().sort({ createdAt: -1 }).limit(20).exec().catch(() => []);
     if (orders && orders.length > 0) {
       const formatted = orders.map((o: any) => {
-        const custAddress = o.address ? `${o.address}${o.city ? `, ${o.city}` : ""}` : "HSR Layout Phase 1, Bengaluru";
+        const custAddress = o.address ? `${o.address}${o.city ? `, ${o.city}` : ""}` : "Default Address, Nainavaram, Vijayawada";
         const custName = o.customerName || "Customer Order";
         const totalAmt = Number(o.totalAmount || o.finalAmount || 280);
 
         // Ensure valid lat/lng relative to user ordering address location
-        const lat = Number(o.lat) || (warehouseLat - 0.012);
-        const lng = Number(o.lng) || (warehouseLng + 0.015);
+        const userCoords = geocodeAddress(custAddress, o.city || "", Number(o.lat), Number(o.lng));
 
         return {
           id: o.orderId || `ORD-2026-${o.id}`,
@@ -203,14 +293,14 @@ app.get("/api/delivery/orders/active", async (_req: any, res: any) => {
           customerName: custName,
           phone: o.phone || "+91 98765 43210",
           address: custAddress,
-          city: o.city || "Bengaluru",
+          city: o.city || "Vijayawada",
           totalAmount: totalAmt,
           pay: totalAmt,
           paymentMethod: o.paymentMethod || "COD",
           paymentStatus: o.paymentStatus || "pending",
           status: o.status || "placed",
-          lat,
-          lng,
+          lat: userCoords.lat,
+          lng: userCoords.lng,
           warehouseName,
           warehouseAddress,
           warehouseLat,

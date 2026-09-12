@@ -1052,6 +1052,90 @@ app.get("/api/orders", async (req: any, res: any) => {
   }
 });
 
+function geocodeAddress(addressStr: string = "", cityStr: string = "", fallbackLat?: number, fallbackLng?: number): { lat: number; lng: number } {
+  const text = `${addressStr} ${cityStr}`.toLowerCase();
+
+  // If valid non-default GPS coordinates are already provided, return them
+  if (typeof fallbackLat === "number" && typeof fallbackLng === "number" && fallbackLat !== 0 && fallbackLng !== 0) {
+    const isGenericBlr = Math.abs(fallbackLat - 12.9716) < 0.1 || Math.abs(fallbackLat - 12.9250) < 0.1 || Math.abs(fallbackLat - 12.9021) < 0.1;
+    const isVijayawada = text.includes("vijayawada") || text.includes("nainavaram") || text.includes("bhavani") || text.includes("benz") || text.includes("guntur");
+    const isHyderabad = text.includes("hyderabad") || text.includes("gachibowli") || text.includes("secunderabad");
+    const isChennai = text.includes("chennai") || text.includes("t-nagar");
+
+    if (!isGenericBlr && !isVijayawada && !isHyderabad && !isChennai) {
+      return { lat: fallbackLat, lng: fallbackLng };
+    }
+  }
+
+  // 1. Vijayawada & Suburbs (Nainavaram, Bhavanipuram, Benz Circle, Autonagar, One Town, Guntur)
+  if (text.includes("nainavaram")) {
+    return { lat: 16.5385, lng: 80.5920 };
+  }
+  if (text.includes("bhavani") || text.includes("bhavanipuram")) {
+    return { lat: 16.5320, lng: 80.5980 };
+  }
+  if (text.includes("benz circle") || text.includes("benzcircle")) {
+    return { lat: 16.5062, lng: 80.6480 };
+  }
+  if (text.includes("one town") || text.includes("kr market") || text.includes("onetown")) {
+    return { lat: 16.5165, lng: 80.6150 };
+  }
+  if (text.includes("autonagar") || text.includes("patamata")) {
+    return { lat: 16.4950, lng: 80.6650 };
+  }
+  if (text.includes("vijayawada") || text.includes("ntr district") || text.includes("bezawada") || text.includes("ap 520")) {
+    return { lat: 16.5062, lng: 80.6480 };
+  }
+  if (text.includes("guntur")) {
+    return { lat: 16.3067, lng: 80.4365 };
+  }
+  if (text.includes("vizag") || text.includes("visakhapatnam")) {
+    return { lat: 17.6868, lng: 83.2185 };
+  }
+
+  // 2. Hyderabad & Suburbs
+  if (text.includes("gachibowli") || text.includes("hitech")) {
+    return { lat: 17.4401, lng: 78.3489 };
+  }
+  if (text.includes("banjara")) {
+    return { lat: 17.4156, lng: 78.4347 };
+  }
+  if (text.includes("hyderabad") || text.includes("secunderabad")) {
+    return { lat: 17.3850, lng: 78.4867 };
+  }
+
+  // 3. Chennai & Suburbs
+  if (text.includes("t-nagar") || text.includes("tnagar")) {
+    return { lat: 13.0418, lng: 80.2341 };
+  }
+  if (text.includes("chennai") || text.includes("madras")) {
+    return { lat: 13.0827, lng: 80.2707 };
+  }
+
+  // 4. Bengaluru & Suburbs
+  if (text.includes("hsr")) {
+    return { lat: 12.9121, lng: 77.6446 };
+  }
+  if (text.includes("indiranagar")) {
+    return { lat: 12.9784, lng: 77.6408 };
+  }
+  if (text.includes("koramangala")) {
+    return { lat: 12.9352, lng: 77.6245 };
+  }
+  if (text.includes("whitefield")) {
+    return { lat: 12.9698, lng: 77.7500 };
+  }
+  if (text.includes("bengaluru") || text.includes("bangalore")) {
+    return { lat: 12.9716, lng: 77.5946 };
+  }
+
+  if (typeof fallbackLat === "number" && typeof fallbackLng === "number" && fallbackLat !== 0 && fallbackLng !== 0) {
+    return { lat: fallbackLat, lng: fallbackLng };
+  }
+
+  return { lat: 16.5062, lng: 80.6480 };
+}
+
 const handleCheckoutOrder = async (req: any, res: any) => {
   try {
     const { items, totalAmount, finalAmount, finalPayable, customerName, customerEmail, phone, address, shippingAddress, city, paymentMethod, userId, lat, lng } = req.body;
@@ -1060,6 +1144,9 @@ const handleCheckoutOrder = async (req: any, res: any) => {
     const custAddr = shippingAddress || address || "HSR Layout Phase 1, Bengaluru";
     const custName = customerName || req.user?.name || "Ananya Roy";
     const totalAmt = Number(totalAmount || finalAmount || finalPayable || 280);
+    const orderCity = city || "Bengaluru";
+
+    const coords = geocodeAddress(custAddr, orderCity, Number(lat), Number(lng));
 
     const newOrder = await Order.create({
       id: nextId,
@@ -1072,11 +1159,11 @@ const handleCheckoutOrder = async (req: any, res: any) => {
       totalAmount: totalAmt,
       status: "placed",
       address: custAddr,
-      city: city || "Bengaluru",
+      city: orderCity,
       paymentMethod: paymentMethod || "COD",
       paymentStatus: paymentMethod === "COD" ? "pending" : "paid",
-      lat: Number(lat || 12.9021),
-      lng: Number(lng || 77.6561),
+      lat: coords.lat,
+      lng: coords.lng,
       stockDeducted: true,
     });
 
@@ -1352,14 +1439,15 @@ app.post("/api/admin/warehouses", async (req: any, res: any) => {
     if (!name || !address || !city) {
       return res.status(400).json({ error: "Name, address, and city are required" });
     }
+    const coords = geocodeAddress(`${name} ${address}`, city, Number(latitude), Number(longitude));
     const nextId = await getNextId(Warehouse);
     const warehouse = await Warehouse.create({
       id: nextId,
       name,
       address,
       city,
-      latitude: Number(latitude || 0),
-      longitude: Number(longitude || 0),
+      latitude: coords.lat,
+      longitude: coords.lng,
       freeDeliveryRadiusKm: Number(freeDeliveryRadiusKm || 30),
       maxServiceRadiusKm: Number(maxServiceRadiusKm || 70),
       baseDeliveryFee: Number(baseDeliveryFee || 50),
@@ -1376,6 +1464,11 @@ app.put("/api/admin/warehouses/:id", async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
     const updateData = req.body;
+    if (updateData.address || updateData.city || updateData.name) {
+      const coords = geocodeAddress(`${updateData.name || ""} ${updateData.address || ""}`, updateData.city || "", Number(updateData.latitude), Number(updateData.longitude));
+      updateData.latitude = coords.lat;
+      updateData.longitude = coords.lng;
+    }
     const dbW = await Warehouse.findOneAndUpdate({ id }, { $set: updateData }, { new: true }).exec();
     if (!dbW) return res.status(404).json({ error: "Warehouse not found" });
     return res.json(dbW);

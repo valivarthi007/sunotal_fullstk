@@ -612,12 +612,27 @@ export default function Checkout() {
                     </div>
                   </div>
 
+                  {totalPrice < 250 && (
+                    <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 rounded-2xl text-xs font-semibold space-y-1">
+                      <div className="font-bold flex items-center gap-1.5">
+                        <span>⚠️ Minimum Order Value Required (₹250)</span>
+                      </div>
+                      <p className="text-[11px] font-normal">
+                        Your items subtotal is ₹{totalPrice.toFixed(0)}. Please add ₹{(250 - totalPrice).toFixed(0)} more items to your cart to proceed with checkout.
+                      </p>
+                    </div>
+                  )}
+
                   <Button
                     type="submit"
-                    disabled={isSubmitting}
-                    className="w-full h-13 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base shadow-lg shadow-emerald-600/20"
+                    disabled={isSubmitting || totalPrice < 250}
+                    className={`w-full h-13 rounded-2xl font-bold text-base shadow-lg transition-all ${
+                      totalPrice < 250
+                        ? "bg-muted text-muted-foreground cursor-not-allowed border"
+                        : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                    }`}
                   >
-                    Confirm & Place Order ({fmt(finalPayable)})
+                    {totalPrice < 250 ? `Add ₹${(250 - totalPrice).toFixed(0)} More to Checkout` : `Confirm & Place Order (${fmt(finalPayable)})`}
                   </Button>
                 </div>
               </div>
