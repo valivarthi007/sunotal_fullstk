@@ -1,14 +1,9 @@
-output "lightsail_static_ip" {
-  description = "Static Public IP of the Lightsail host"
-  value       = module.lightsail.static_ip
+output "amplify_app_id" {
+  description = "AWS Amplify Application ID"
+  value       = module.amplify.app_id
 }
 
-output "lightsail_instance_name" {
-  description = "Lightsail instance name"
-  value       = module.lightsail.instance_name
-}
-
-output "lightsail_arn" {
-  description = "Lightsail instance ARN"
-  value       = module.lightsail.arn
+output "amplify_default_domain" {
+  description = "AWS Amplify Default Domain Name"
+  value       = module.amplify.default_domain
 }

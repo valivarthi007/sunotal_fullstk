@@ -1,0 +1,22 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "Installing dependencies for Sunotal Grocery SPAs..."
+        - npm install
+    build:
+      commands:
+        - echo "Building client applications..."
+        - cd apps/user-app && npm run build && cd ../..
+        - cd apps/vendor-app && npm run build && cd ../..
+        - cd apps/admin-app && npm run build && cd ../..
+        - cd apps/delivery-app && npm run build && cd ../..
+        - cd apps/support-app && npm run build && cd ../..
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*

@@ -8,21 +8,21 @@ on:
     paths:
       - 'terraform/**'
       - '.github/workflows/infra.yml'
-      - 'docker-compose*.yml'
+      - 'amplify.yml'
   pull_request:
     branches:
       - main
     paths:
       - 'terraform/**'
       - '.github/workflows/infra.yml'
-      - 'docker-compose*.yml'
+      - 'amplify.yml'
 
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
 jobs:
   validate_and_deploy:
-    name: Provision Lightsail Infrastructure via Terraform
+    name: Provision AWS Amplify PaaS Infrastructure via Terraform
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -41,14 +41,8 @@ jobs:
           terraform_version: "1.9.3"
 
       - name: Validate & Apply Terraform
-        env:
-          RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
         run: |
-          mkdir -p ~/.ssh
-          echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          
           cd terraform
           terraform init -upgrade
-          terraform plan -var="key_name=jcs_raju_laptop"
-          terraform apply -auto-approve -var="key_name=jcs_raju_laptop"
+          terraform plan
+          terraform apply -auto-approve

@@ -16,7 +16,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy Application to Lightsail Host
+    name: Deploy Application to AWS Amplify
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     steps:
@@ -31,21 +31,13 @@ jobs:
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
         continue-on-error: true
 
-      - name: Deploy to Remote Host via SSH
-        env:
-          RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
-          HOST_IP: "sunotal.automateuniverse.space"
+      - name: Trigger AWS Amplify Deployment Job
         run: |
-          mkdir -p ~/.ssh
-          echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          
-          ssh -o StrictHostKeyChecking=no ubuntu@$HOST_IP "
-            cd /home/ubuntu/sunotal_fullstk || git clone https://github.com/valivarthi007/sunotal_fullstk.git /home/ubuntu/sunotal_fullstk
-            cd /home/ubuntu/sunotal_fullstk
-            git pull origin main
-            docker compose -f docker-compose.prod.yml up -d --build
-          " || echo "SSH connection skipped if host pending initialization"
+          APP_ID=$(aws amplify list-apps --query "apps[?name=='sunotal-grocery-app'].appId" --output text 2>/dev/null || echo "")
+          if [ -n "$APP_ID" ]; then
+            echo "Triggering build job for Amplify App ID: $APP_ID..."
+            aws amplify start-job --app-id "$APP_ID" --branch-name main --job-type RELEASE || echo "Amplify deployment triggered via Git push"
+          fi
         continue-on-error: true
 
       - name: Post-Deployment Automated Test Suite
@@ -57,7 +49,7 @@ jobs:
           for i in {1..24}; do
             STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 5 "$BASE/" || echo 000)
             if [ "$STATUS" = "200" ]; then
-              echo "✅ Host is healthy and returning HTTP 200!"
+              echo "✅ AWS Amplify CDN is healthy and returning HTTP 200!"
               break
             fi
             echo "Warming up deployment... Attempt $i/24 (HTTP $STATUS)"
@@ -106,5 +98,5 @@ jobs:
           echo "Test 7 [Support Tickets API]: HTTP $SUPPORT_STATUS"
           if [ "$SUPPORT_STATUS" != "200" ]; then echo "❌ Support API test failed"; exit 1; fi
 
-          echo "🎉 All 7 Post-Deployment Tests Passed Successfully! Sunotal Grocery on Lightsail is live."
+          echo "🎉 All 7 Post-Deployment Tests Passed Successfully! Sunotal Grocery on AWS Amplify is live."
         continue-on-error: false
