@@ -10,10 +10,21 @@ resource "aws_amplify_app" "sunotal" {
       phases:
         preBuild:
           commands:
-            - npm ci
+            - echo "Installing dependencies for Sunotal SPAs..."
+            - cd apps/user-app && npm install && cd ../..
+            - cd apps/vendor-app && npm install && cd ../..
+            - cd apps/admin-app && npm install && cd ../..
+            - cd apps/delivery-app && npm install && cd ../..
+            - cd apps/support-app && npm install && cd ../..
         build:
           commands:
-            - npm run build
+            - echo "Building client applications and packaging dist..."
+            - mkdir -p dist
+            - cd apps/user-app && npm run build && cd ../.. && cp -r apps/user-app/dist/* dist/
+            - cd apps/vendor-app && npm run build && cd ../.. && mkdir -p dist/vendor-app && cp -r apps/vendor-app/dist/* dist/vendor-app/
+            - cd apps/admin-app && npm run build && cd ../.. && mkdir -p dist/admin-app && cp -r apps/admin-app/dist/* dist/admin-app/
+            - cd apps/delivery-app && npm run build && cd ../.. && mkdir -p dist/delivery-app && cp -r apps/delivery-app/dist/* dist/delivery-app/
+            - cd apps/support-app && npm run build && cd ../.. && mkdir -p dist/support-app && cp -r apps/support-app/dist/* dist/support-app/
       artifacts:
         baseDirectory: dist
         files:
@@ -21,6 +32,7 @@ resource "aws_amplify_app" "sunotal" {
       cache:
         paths:
           - node_modules/**/*
+          - apps/*/node_modules/**/*
   EOF
 
   # Custom Rewrite Rules for API Reverse Proxy and SPA routing
