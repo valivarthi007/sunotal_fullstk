@@ -188,11 +188,22 @@ app.get("/api/delivery/orders/active", async (_req: any, res: any) => {
 // GET /api/delivery/stats
 app.get("/api/delivery/stats", async (_req, res) => {
   let completedCount = 0;
+  let latestPayout: any = null;
+  let totalPaidInADay = 0;
+
   try {
     completedCount = (await Order.countDocuments({ status: "delivered" }).exec().catch(() => 0)) || 0;
+    const payouts = await RiderPayout.find().sort({ updatedAt: -1 }).exec().catch(() => []);
+    if (payouts && payouts.length > 0) {
+      latestPayout = payouts[0];
+      totalPaidInADay = payouts
+        .filter((p: any) => p.status === "paid")
+        .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+    }
   } catch {
     // Fallback
   }
+
   const basePayPerOrder = 30;
   const distanceRatePerKm = 10;
   const totalKmsRun = completedCount * 3.5;
@@ -200,6 +211,10 @@ app.get("/api/delivery/stats", async (_req, res) => {
   const totalDistancePay = Math.round(totalKmsRun * distanceRatePerKm);
   const totalTips = completedCount * 15;
   const totalPayout = totalBasePay + totalDistancePay + totalTips;
+
+  const currentPayoutStatus = latestPayout?.status
+    ? latestPayout.status === "paid" ? "PAID & SETTLED TO UPI" : "Payout Request Pending Admin Approval"
+    : completedCount > 0 ? "Ready for Payout Request" : "No Payouts Pending";
 
   return res.json({
     completedDeliveries: completedCount,
@@ -210,8 +225,11 @@ app.get("/api/delivery/stats", async (_req, res) => {
     totalDistancePay,
     totalTips,
     totalPayout,
-    payoutStatus: completedCount > 0 ? "Ready for Payout" : "No Payouts Pending",
-    lastPayoutDate: new Date().toISOString(),
+    overallPaidInADay: totalPaidInADay > 0 ? totalPaidInADay : (latestPayout?.status === "paid" ? latestPayout.amount : 0),
+    payoutStatus: currentPayoutStatus,
+    paymentStatus: latestPayout?.status || "pending",
+    latestPayout,
+    lastPayoutDate: latestPayout?.updatedAt || new Date().toISOString(),
   });
 });
 

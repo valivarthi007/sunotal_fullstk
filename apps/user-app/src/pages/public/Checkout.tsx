@@ -140,6 +140,11 @@ export default function Checkout() {
       return;
     }
 
+    if (subtotal < 250) {
+      toast.error(`Minimum order value is ₹250. Please add ₹${(250 - subtotal).toFixed(0)} more to proceed.`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const checkoutItems = items.map((i) => ({

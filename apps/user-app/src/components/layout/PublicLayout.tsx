@@ -411,14 +411,25 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   <span>Total</span>
                   <span className="text-primary">{fmt(totalPrice)}</span>
                 </div>
+                {totalPrice < 250 && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between font-semibold">
+                    <span>Minimum order value is ₹250</span>
+                    <span>Add ₹{(250 - totalPrice).toFixed(0)} more</span>
+                  </div>
+                )}
                 <Button
+                  disabled={totalPrice < 250}
                   className="w-full h-12 text-base font-bold rounded-xl shadow-md shadow-primary/20"
                   onClick={() => {
+                    if (totalPrice < 250) {
+                      toast.error(`Minimum order value is ₹250. Please add ₹${(250 - totalPrice).toFixed(0)} more to proceed.`);
+                      return;
+                    }
                     if (!user) { closeCart(); setLocation("/login"); }
                     else { closeCart(); setLocation("/checkout"); }
                   }}
                 >
-                  {user ? "Proceed to Checkout" : "Login to Checkout"}
+                  {totalPrice < 250 ? `Add ₹${(250 - totalPrice).toFixed(0)} More to Checkout` : (user ? "Proceed to Checkout" : "Login to Checkout")}
                 </Button>
                 <button
                   onClick={clearCart}

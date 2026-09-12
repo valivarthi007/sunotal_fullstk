@@ -1135,6 +1135,33 @@ const handleUpdateOrderStatus = async (req: any, res: any) => {
 
     const updated = await Order.findOneAndUpdate(query, { $set: { status } }, { new: true }).exec();
     if (!updated) return res.status(404).json({ error: "Order not found" });
+
+    // Confirm inventory stock deduction when order is delivered (if not already deducted)
+    if ((status === "delivered" || status === "out_for_delivery") && !updated.stockDeducted && Array.isArray(updated.items)) {
+      for (const item of updated.items) {
+        if (item) {
+          const itemProdId = item.productId || item.id;
+          const orderQty = Number(item.quantity || 1);
+          const invQuery = itemProdId
+            ? { $or: [{ productId: Number(itemProdId) }, { productName: { $regex: new RegExp(`^${item.name || ""}$`, "i") } }] }
+            : { productName: { $regex: new RegExp(`^${item.name || ""}$`, "i") } };
+
+          const invItem = await Inventory.findOne(invQuery).exec().catch(() => null);
+          if (invItem) {
+            const currentQty = Number(invItem.quantity || 0);
+            const updatedQty = Math.max(0, currentQty - orderQty);
+            const updatedStatus = updatedQty === 0 ? "out_of_stock" : updatedQty < 10 ? "low_stock" : "in_stock";
+
+            await Inventory.updateOne(
+              { id: invItem.id },
+              { $set: { quantity: updatedQty, status: updatedStatus } }
+            ).exec().catch((e: any) => console.warn("Delivery stock deduction notice:", e.message));
+          }
+        }
+      }
+      await Order.updateOne({ _id: updated._id }, { $set: { stockDeducted: true } }).exec().catch(() => null);
+    }
+
     return res.json(updated);
   } catch {
     return res.status(500).json({ error: "Failed to update order status" });
@@ -1179,16 +1206,45 @@ app.post("/api/orders/:id/cancel", async (req: any, res: any) => {
 });
 
 app.get("/api/orders/:id/track", async (req: any, res: any) => {
-  const target = req.params.id;
-  return res.json({
-    orderId: target,
-    status: "dispatched",
-    estimatedDeliveryMinutes: 15,
-    driverName: "Express Rider",
-    driverPhone: "+91 98765 43210",
-    lat: 17.385044,
-    lng: 78.486671,
-  });
+  try {
+    const target = req.params.id;
+    const query = isNaN(Number(target)) ? { orderId: target } : { $or: [{ orderId: target }, { id: Number(target) }] };
+    const order = await Order.findOne(query).exec().catch(() => null);
+
+    const status = order?.status || "out_for_delivery";
+    const isDelivered = status === "delivered";
+
+    return res.json({
+      orderId: target,
+      orderNumber: order?.orderId || `ORD-2026-${target}`,
+      status,
+      etaMinutes: isDelivered ? 0 : 11,
+      darkStore: "Central Sourcing Dark Store Hub #104",
+      warehouseLocation: {
+        name: "Central Sourcing Dark Store Hub #104",
+        address: "HSR Layout Phase 1, Bengaluru",
+        lat: 12.9141,
+        lng: 77.6411
+      },
+      deliveryAddress: order?.address ? `${order.address}${order.city ? `, ${order.city}` : ""}` : "Customer Doorstep Address",
+      driver: {
+        name: order?.driverName || "Express Rider Ramesh",
+        phone: "+91 98765 43210",
+        rating: "4.9 ★",
+        vehicleNo: "EV-BIKE-KA05-882",
+        photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      },
+      items: order?.items || [],
+      timeline: [
+        { step: "Order Placed & Confirmed", time: "Just Now", completed: true },
+        { step: "Packed at Central Dark Store", time: "2 mins ago", completed: status !== "placed" },
+        { step: "Out for Express Delivery", time: "En Route", completed: status === "out_for_delivery" || status === "delivered", active: status === "out_for_delivery" },
+        { step: "Delivered at Doorstep", time: isDelivered ? "Delivered" : "Est. 10 mins", completed: isDelivered, active: isDelivered },
+      ],
+    });
+  } catch {
+    return res.json({ status: "out_for_delivery", etaMinutes: 11 });
+  }
 });
 
 app.post("/api/orders/:id/rate", async (req: any, res: any) => {
