@@ -1,117 +1,14 @@
-output "compute_target" {
-  description = "Active compute deployment target (eks or ecs)"
-  value       = var.compute_target
+output "lightsail_static_ip" {
+  description = "Static Public IP of the Lightsail host"
+  value       = module.lightsail.static_ip
 }
 
-output "ecs_cluster_name" {
-  description = "ECS Cluster Name"
-  value       = module.ecs.cluster_name
+output "lightsail_instance_name" {
+  description = "Lightsail instance name"
+  value       = module.lightsail.instance_name
 }
 
-output "ecs_frontend_service" {
-  description = "Frontend ECS Service Name"
-  value       = module.ecs.frontend_service_name
-}
-
-output "ecs_auth_service" {
-  description = "Auth ECS Service Name"
-  value       = module.ecs.auth_service_name
-}
-
-output "ecs_operations_service" {
-  description = "Operations ECS Service Name"
-  value       = module.ecs.operations_service_name
-}
-
-output "ecs_inventory_service" {
-  description = "Inventory ECS Service Name"
-  value       = module.ecs.inventory_service_name
-}
-
-output "ecs_user_service" {
-  description = "User ECS Service Name"
-  value       = module.ecs.user_service_name
-}
-
-output "alb_dns_name" {
-  description = "Public DNS Endpoint of the Application Load Balancer"
-  value       = module.cdn.alb_dns_name
-}
-
-
-
-output "cloudfront_domain_name" {
-  description = "Domain name of the CloudFront distribution for S3 assets"
-  value       = module.cdn.cloudfront_domain_name
-}
-
-output "cloudfront_distribution_id" {
-  description = "ID of the CloudFront distribution"
-  value       = module.cdn.cloudfront_distribution_id
-}
-
-output "ecr_frontend_url" {
-  description = "ECR Repository URL for frontend"
-  value       = module.ecr.frontend_repository_url
-}
-
-output "ecr_auth_url" {
-  description = "ECR Repository URL for auth service"
-  value       = module.ecr.auth_repository_url
-}
-
-output "ecr_operations_url" {
-  description = "ECR Repository URL for operations service"
-  value       = module.ecr.operations_repository_url
-}
-
-output "ecr_inventory_url" {
-  description = "ECR Repository URL for inventory service"
-  value       = module.ecr.inventory_repository_url
-}
-
-output "ecr_user_url" {
-  description = "ECR Repository URL for user service"
-  value       = module.ecr.user_repository_url
-}
-
-output "ecr_delivery_url" {
-  description = "ECR Repository URL for delivery service"
-  value       = module.ecr.delivery_repository_url
-}
-
-output "sqs_queue_arn" {
-  description = "ARN of AWS SQS order events queue"
-  value       = module.sqs_sns.sqs_queue_arn
-}
-
-output "sns_topic_arn" {
-  description = "ARN of AWS SNS delivery notifications topic"
-  value       = module.sqs_sns.sns_topic_arn
-}
-
-output "github_oidc_role_arn" {
-  description = "IAM Role ARN that GitHub Actions can assume via OIDC"
-  value       = module.iam.github_actions_role_arn
-}
-
-# output "sonarqube_public_ip" {
-#   description = "Public IP address of the SonarQube server"
-#   value       = module.sonarqube.sonarqube_public_ip
-# }
-
-output "test_server_public_ip" {
-  description = "Public IP address of the Test Server"
-  value       = module.test_server.test_server_public_ip
-}
-
-output "docdb_endpoint" {
-  description = "AWS Managed DocumentDB Cluster Endpoint"
-  value       = module.database.docdb_endpoint
-}
-
-output "docdb_connection_string" {
-  description = "AWS Managed DocumentDB Connection String"
-  value       = module.database.docdb_connection_string
-  sensitive   = true
+output "lightsail_arn" {
+  description = "Lightsail instance ARN"
+  value       = module.lightsail.arn
 }

@@ -22,7 +22,7 @@ env:
 
 jobs:
   validate_and_deploy:
-    name: Provision Infrastructure
+    name: Provision Lightsail Infrastructure via Terraform
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -40,23 +40,13 @@ jobs:
         with:
           terraform_version: "1.9.3"
 
-      - name: Validate Terraform Files
-        run: |
-          cd terraform
-          terraform init -backend=false -upgrade
-          terraform validate
-
-      - name: Deploy Infrastructure with Terraform
+      - name: Validate & Apply Terraform
         env:
           RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
         run: |
           mkdir -p ~/.ssh
           echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
-          tr -d '\r' < ~/.ssh/id_rsa > ~/.ssh/id_rsa.clean
-          mv ~/.ssh/id_rsa.clean ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          PUB_KEY=$(ssh-keygen -y -f ~/.ssh/id_rsa 2>/dev/null || echo "")
-          if [ -n "$PUB_KEY" ]; then echo "::add-mask::$PUB_KEY"; fi
           
           cd terraform
           terraform init -upgrade

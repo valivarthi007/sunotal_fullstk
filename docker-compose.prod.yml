@@ -1,137 +1,49 @@
 version: '3.8'
 
 services:
-  gateway:
-    image: nginx:1.25-alpine
-    container_name: sunotal-gateway
-    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    container_name: sunotal-redis
+    restart: always
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  backend:
+    build:
+      context: ./services/unified-backend
+      dockerfile: Dockerfile
+    image: ${ECR_REGISTRY:-sunotal}/sunotal-backend:${IMAGE_TAG:-latest}
+    container_name: sunotal-backend
+    restart: always
+    network_mode: "host"
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://127.0.0.1:27017/sunotal
+      - REDIS_HOST=127.0.0.1
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-sunotal-secret-jwt-key}
+    depends_on:
+      - redis
+
+  frontend:
+    build:
+      context: ./apps/unified-frontend
+      dockerfile: Dockerfile
+    image: ${ECR_REGISTRY:-sunotal}/sunotal-frontend:${IMAGE_TAG:-latest}
+    container_name: sunotal-frontend
+    restart: always
+    network_mode: "host"
     ports:
       - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - "443:443"
     depends_on:
-      - user-app
-      - admin-app
-      - vendor-app
-      - delivery-app
-      - support-app
-      - auth-service
-      - operations-service
-      - inventory-service
-      - user-service
-      - delivery-service
-      - support-service
+      - backend
 
-  auth-service:
-    image: ${ECR_REGISTRY}/sunotal-auth:${IMAGE_TAG}
-    container_name: sunotal-auth
-    restart: unless-stopped
-    expose:
-      - "5001"
-    environment:
-      - PORT=5001
-      - NODE_ENV=production
-      - MONGODB_URI=${MONGODB_URI}
-      - REDIS_HOST=${REDIS_HOST}
-      - SESSION_SECRET=${SESSION_SECRET}
-
-  operations-service:
-    image: ${ECR_REGISTRY}/sunotal-operations:${IMAGE_TAG}
-    container_name: sunotal-operations
-    restart: unless-stopped
-    expose:
-      - "5002"
-    environment:
-      - PORT=5002
-      - NODE_ENV=production
-      - MONGODB_URI=${MONGODB_URI}
-      - REDIS_HOST=${REDIS_HOST}
-      - SESSION_SECRET=${SESSION_SECRET}
-
-  inventory-service:
-    image: ${ECR_REGISTRY}/sunotal-inventory:${IMAGE_TAG}
-    container_name: sunotal-inventory
-    restart: unless-stopped
-    expose:
-      - "5003"
-    environment:
-      - PORT=5003
-      - NODE_ENV=production
-      - MONGODB_URI=${MONGODB_URI}
-      - REDIS_HOST=${REDIS_HOST}
-      - SESSION_SECRET=${SESSION_SECRET}
-
-  user-service:
-    image: ${ECR_REGISTRY}/sunotal-user:${IMAGE_TAG}
-    container_name: sunotal-user
-    restart: unless-stopped
-    expose:
-      - "5004"
-    environment:
-      - PORT=5004
-      - NODE_ENV=production
-      - MONGODB_URI=${MONGODB_URI}
-      - REDIS_HOST=${REDIS_HOST}
-      - SESSION_SECRET=${SESSION_SECRET}
-
-  delivery-service:
-    image: ${ECR_REGISTRY}/sunotal-delivery:${IMAGE_TAG}
-    container_name: sunotal-delivery
-    restart: unless-stopped
-    expose:
-      - "5006"
-    environment:
-      - PORT=5006
-      - NODE_ENV=production
-      - MONGODB_URI=${MONGODB_URI}
-      - REDIS_HOST=${REDIS_HOST}
-      - SESSION_SECRET=${SESSION_SECRET}
-
-  support-service:
-    image: ${ECR_REGISTRY}/sunotal-support:${IMAGE_TAG}
-    container_name: sunotal-support
-    restart: unless-stopped
-    expose:
-      - "5007"
-    environment:
-      - PORT=5007
-      - NODE_ENV=production
-      - MONGODB_URI=${MONGODB_URI}
-      - REDIS_HOST=${REDIS_HOST}
-      - SESSION_SECRET=${SESSION_SECRET}
-
-  user-app:
-    image: ${ECR_REGISTRY}/sunotal-user-app:${IMAGE_TAG}
-    container_name: sunotal-user-app
-    restart: unless-stopped
-    expose:
-      - "80"
-
-  admin-app:
-    image: ${ECR_REGISTRY}/sunotal-admin-app:${IMAGE_TAG}
-    container_name: sunotal-admin-app
-    restart: unless-stopped
-    expose:
-      - "80"
-
-  vendor-app:
-    image: ${ECR_REGISTRY}/sunotal-vendor-app:${IMAGE_TAG}
-    container_name: sunotal-vendor-app
-    restart: unless-stopped
-    expose:
-      - "80"
-
-  delivery-app:
-    image: ${ECR_REGISTRY}/sunotal-delivery-app:${IMAGE_TAG}
-    container_name: sunotal-delivery-app
-    restart: unless-stopped
-    expose:
-      - "80"
-
-  support-app:
-    image: ${ECR_REGISTRY}/sunotal-support-app:${IMAGE_TAG}
-    container_name: sunotal-support-app
-    restart: unless-stopped
-    expose:
-      - "80"
-
+volumes:
+  redis-data:

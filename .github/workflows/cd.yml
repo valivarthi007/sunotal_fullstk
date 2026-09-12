@@ -16,7 +16,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy Application
+    name: Deploy Application to Lightsail Host
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     steps:
@@ -31,38 +31,21 @@ jobs:
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
         continue-on-error: true
 
-      - name: Deploy to AWS ECS Fargate
+      - name: Deploy to Remote Host via SSH
+        env:
+          RAW_PEM_KEY: "${{ secrets.EC2_SSH_KEY }}"
+          HOST_IP: "sunotal.automateuniverse.space"
         run: |
-          echo "Checking if ECS cluster 'sunotal-cluster' exists..."
-          CLUSTER_STATE=$(aws ecs describe-clusters --clusters sunotal-cluster --query "clusters[0].status" --output text 2>/dev/null || echo "MISSING")
-
-          if [ "$CLUSTER_STATE" != "ACTIVE" ]; then
-            echo "❌ Error: ECS Cluster 'sunotal-cluster' is $CLUSTER_STATE."
-            echo "👉 You MUST run the 'Infrastructure Automation' workflow (infra.yml) first to provision the ECS cluster, database, target groups, and task definitions via Terraform."
-            exit 1
-          fi
-
-          echo "Fetching active ECS service names in cluster..."
-          ACTIVE_SERVICES=$(aws ecs list-services --cluster sunotal-cluster --query "serviceArns[*]" --output text 2>/dev/null | tr '\t' '\n' | xargs -n1 basename 2>/dev/null || echo "")
-
-          if [ -z "$ACTIVE_SERVICES" ]; then
-            echo "⚠️ No active ECS services found in cluster sunotal-cluster."
-            echo "👉 Please run the 'Infrastructure Automation' workflow (infra.yml) to provision the ECS cluster and services via Terraform."
-          else
-            echo "Updating existing ECS Services..."
-            for svc in $ACTIVE_SERVICES; do
-              echo "Updating service: $svc"
-              aws ecs update-service --cluster sunotal-cluster --service "$svc" --force-new-deployment || true
-            done
-
-            echo "Waiting for services to reach stable state (in batches of max 8)..."
-            echo "$ACTIVE_SERVICES" | xargs -n 8 | while read -r batch; do
-              if [ -n "$batch" ]; then
-                echo "Waiting for batch: $batch"
-                aws ecs wait services-stable --cluster sunotal-cluster --services $batch || true
-              fi
-            done
-          fi
+          mkdir -p ~/.ssh
+          echo "$RAW_PEM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          ssh -o StrictHostKeyChecking=no ubuntu@$HOST_IP "
+            cd /home/ubuntu/sunotal_fullstk || git clone https://github.com/valivarthi007/sunotal_fullstk.git /home/ubuntu/sunotal_fullstk
+            cd /home/ubuntu/sunotal_fullstk
+            git pull origin main
+            docker compose -f docker-compose.prod.yml up -d --build
+          " || echo "SSH connection skipped if host pending initialization"
         continue-on-error: true
 
       - name: Post-Deployment Automated Test Suite
@@ -70,15 +53,14 @@ jobs:
           BASE="https://sunotal.automateuniverse.space"
           echo "🧪 Running Post-Deployment Test Suite against $BASE..."
 
-          # Warm-up / Target Group Health Check Readiness Loop
-          echo "⏳ Waiting for ALB targets to register and return HTTP 200 (up to 120s)..."
+          # Warm-up readiness loop
           for i in {1..24}; do
             STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 5 "$BASE/" || echo 000)
             if [ "$STATUS" = "200" ]; then
-              echo "✅ Target group is healthy and returning HTTP 200!"
+              echo "✅ Host is healthy and returning HTTP 200!"
               break
             fi
-            echo "Warming up container deployment... Attempt $i/24 (HTTP $STATUS)"
+            echo "Warming up deployment... Attempt $i/24 (HTTP $STATUS)"
             sleep 5
           done
 
@@ -88,13 +70,13 @@ jobs:
           if [ "$STATUS" != "200" ]; then echo "❌ Customer storefront test failed"; exit 1; fi
 
           # Test 2: Auth Service Healthz
-          STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 15 --retry 5 --retry-delay 5 "$BASE/api/healthz" || echo 000)
+          STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 15 "$BASE/api/healthz" || echo 000)
           echo "Test 2 [Auth Service Healthz]: HTTP $STATUS"
           if [ "$STATUS" != "200" ]; then echo "❌ Healthz test failed"; exit 1; fi
 
           # Test 3: Admin Login & JWT Token
-          ADMIN_EMAIL="${ADMIN_USR:-${ADMIN_EMAIL:-admin@sunotal.com}}"
-          ADMIN_PASS="${ADMIN_PWD:-${ADMIN_PASSWORD:-admin123}}"
+          ADMIN_EMAIL="admin@sunotal.com"
+          ADMIN_PASS="admin123"
           LOGIN_RES=$(curl -s -L -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASS\"}" || echo "")
           TOKEN=$(echo "$LOGIN_RES" | grep -o '"token":"[^"]*' | cut -d'"' -f4 || echo "")
           if [ -n "$TOKEN" ]; then
@@ -124,5 +106,5 @@ jobs:
           echo "Test 7 [Support Tickets API]: HTTP $SUPPORT_STATUS"
           if [ "$SUPPORT_STATUS" != "200" ]; then echo "❌ Support API test failed"; exit 1; fi
 
-          echo "🎉 All 7 Post-Deployment Tests Passed Successfully! Microservices deployment is live and error-free."
+          echo "🎉 All 7 Post-Deployment Tests Passed Successfully! Sunotal Grocery on Lightsail is live."
         continue-on-error: false
