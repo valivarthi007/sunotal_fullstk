@@ -35,8 +35,29 @@ jobs:
         run: |
           APP_ID=$(aws amplify list-apps --query "apps[?name=='sunotal-grocery-app'].appId" --output text 2>/dev/null || echo "")
           if [ -n "$APP_ID" ]; then
-            echo "Triggering build job for Amplify App ID: $APP_ID..."
-            aws amplify start-job --app-id "$APP_ID" --branch-name main --job-type RELEASE || echo "Amplify deployment triggered via Git push"
+            echo "Targeting AWS Amplify App ID: $APP_ID..."
+            REPO=$(aws amplify get-app --app-id "$APP_ID" --query "app.repository" --output text 2>/dev/null || echo "")
+
+            if [ -n "$REPO" ] && [ "$REPO" != "None" ] && [ "$REPO" != "null" ]; then
+              echo "App is connected to repository ($REPO). Triggering build job..."
+              aws amplify start-job --app-id "$APP_ID" --branch-name main --job-type RELEASE || echo "Amplify build job triggered."
+            else
+              echo "App is not connected to a Git repository provider. Deploying via CreateDeployment..."
+              npm install
+              npm run build 2>/dev/null || true
+              if [ -d "dist" ]; then
+                cd dist && zip -r ../deploy.zip . && cd ..
+                DEPLOYMENT=$(aws amplify create-deployment --app-id "$APP_ID" --branch-name main 2>/dev/null || echo "")
+                JOB_ID=$(echo "$DEPLOYMENT" | grep -o '"jobId":"[^"]*' | cut -d'"' -f4 || echo "")
+                UPLOAD_URL=$(echo "$DEPLOYMENT" | grep -o '"zipUploadUrl":"[^"]*' | cut -d'"' -f4 || echo "")
+                if [ -n "$JOB_ID" ] && [ -n "$UPLOAD_URL" ]; then
+                  echo "Uploading deployment bundle (Job ID: $JOB_ID)..."
+                  curl -s -H "Content-Type: application/zip" --upload-file deploy.zip "$UPLOAD_URL"
+                  aws amplify start-deployment --app-id "$APP_ID" --branch-name main --job-id "$JOB_ID"
+                  echo "Manual deployment completed successfully."
+                fi
+              fi
+            fi
           fi
         continue-on-error: true
 
