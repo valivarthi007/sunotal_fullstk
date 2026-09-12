@@ -460,14 +460,19 @@ app.patch("/api/admin/quotations/:id/status", handleQuotationStatus);
 
 const handleGenerateInvoice = async (req: any, res: any) => {
   const id = Number(req.params.id);
-  const q = await Quotation.findOne({ id }).exec().catch(() => null);
+  const q = await Quotation.findOneAndUpdate(
+    { id },
+    { $set: { invoiceGenerated: true, invoiceNumber: `INV-2026-${id}` } },
+    { new: true }
+  ).exec().catch(() => null);
+
   const totalAmount = Number(q?.quantity || 10) * Number(q?.price || 500);
   const gst = Math.round(totalAmount * 0.05);
   const finalTotal = totalAmount + gst;
 
   return res.json({
     success: true,
-    invoiceNumber: `INV-2026-${id}`,
+    invoiceNumber: q?.invoiceNumber || `INV-2026-${id}`,
     quotationId: id,
     vendorName: q?.vendorName || q?.name || "Local Farmer",
     cropName: q?.produce || q?.cropName || "Produce",
@@ -483,6 +488,174 @@ const handleGenerateInvoice = async (req: any, res: any) => {
 
 app.get("/api/admin/quotations/:id/invoice", handleGenerateInvoice);
 app.post("/api/admin/quotations/:id/invoice", handleGenerateInvoice);
+
+// GET /api/vendors/invoices
+app.get("/api/vendors/invoices", async (_req: any, res: any) => {
+  try {
+    const quotes = await Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    // Include accepted, approved, paid, or invoice generated quotations
+    const eligibleQuotes = (quotes || []).filter((q: any) =>
+      q.status === "accepted" || q.status === "approved" || q.paymentStatus === "paid" || q.invoiceGenerated
+    );
+
+    const list = eligibleQuotes.length > 0 ? eligibleQuotes : (quotes || []);
+
+    const invoices = list.map((q: any) => {
+      const subtotal = Number(q.quantity || 10) * Number(q.price || 500);
+      const gst = Math.round(subtotal * 0.05);
+      const total = subtotal + gst;
+      return {
+        id: q.id,
+        quotationId: q.id,
+        invoiceNumber: q.invoiceNumber || `INV-2026-${q.id}`,
+        vendorName: q.vendorName || q.name || "Farmer Vendor",
+        cropName: q.produce || q.cropName || "Produce",
+        quantity: q.quantity,
+        unit: q.unit || "Quintal",
+        price: q.price,
+        subtotal,
+        gst,
+        amount: total,
+        total,
+        paymentStatus: q.paymentStatus || "paid",
+        status: q.paymentStatus || "paid",
+        createdAt: q.updatedAt || q.createdAt || new Date().toISOString(),
+      };
+    });
+
+    return res.json(invoices);
+  } catch (err: any) {
+    console.error("Error fetching vendor invoices:", err);
+    return res.status(500).json({ error: "Failed to fetch invoices" });
+  }
+});
+
+// GET /api/vendors/invoices/:id/download
+app.get("/api/vendors/invoices/:id/download", async (req: any, res: any) => {
+  try {
+    const id = Number(req.params.id);
+    const q = await Quotation.findOne({ id }).exec().catch(() => null);
+
+    const invoiceNum = q?.invoiceNumber || `INV-2026-${id}`;
+    const vendorName = q?.vendorName || q?.name || "Farmer Vendor";
+    const produce = q?.produce || q?.cropName || "Organic Crop Produce";
+    const qty = Number(q?.quantity || 10);
+    const unit = q?.unit || "Quintal";
+    const price = Number(q?.price || 500);
+    const subtotal = qty * price;
+    const gst = Math.round(subtotal * 0.05);
+    const grandTotal = subtotal + gst;
+    const dateStr = q?.createdAt ? new Date(q.createdAt).toLocaleDateString("en-IN", { dateStyle: "full" }) : new Date().toLocaleDateString("en-IN", { dateStyle: "full" });
+    const location = q?.address || q?.location || "Direct Sourcing Center";
+    const statusStr = (q?.paymentStatus || "paid").toUpperCase();
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tax Invoice ${invoiceNum} - Sunotal Mandi</title>
+  <style>
+    body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+    .invoice-card { max-width: 800px; margin: 0 auto; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #334155; padding-bottom: 20px; margin-bottom: 24px; }
+    .logo { font-size: 24px; font-weight: 900; color: #10b981; letter-spacing: -0.5px; }
+    .logo span { color: #f59e0b; }
+    .badge { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; font-family: monospace; text-transform: uppercase; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+    .info-block h4 { font-size: 11px; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin: 0 0 6px 0; }
+    .info-block p { font-size: 14px; margin: 2px 0; color: #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    th { background: #0f172a; text-align: left; padding: 12px 16px; font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 700; border-bottom: 1px solid #334155; }
+    td { padding: 14px 16px; font-size: 13px; border-bottom: 1px solid #334155; color: #cbd5e1; }
+    .total-row { font-weight: 800; font-size: 15px; color: #10b981; }
+    .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; pt-4; border-top: 1px solid #334155; }
+    .btn { background: #10b981; color: #0f172a; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-secondary { background: #334155; color: #f8fafc; }
+    @media print {
+      body { background: #fff; color: #000; padding: 0; }
+      .invoice-card { border: none; box-shadow: none; padding: 0; background: #fff; color: #000; }
+      .header { border-bottom-color: #000; }
+      td, th { color: #000 !important; border-bottom-color: #ccc !important; }
+      th { background: #f1f5f9 !important; }
+      .actions { display: none; }
+      .badge { border-color: #000; color: #000; }
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice-card">
+    <div class="header">
+      <div>
+        <div class="logo">SUNOTAL <span>MANDI</span></div>
+        <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Direct Farm Sourcing & Settlement Invoice</div>
+      </div>
+      <div style="text-align: right;">
+        <span class="badge">${statusStr}</span>
+        <div style="font-size: 14px; font-family: monospace; font-weight: 700; color: #f59e0b; margin-top: 8px;">${invoiceNum}</div>
+      </div>
+    </div>
+
+    <div class="info-grid">
+      <div class="info-block">
+        <h4>Billed From (Mandi Sourcing Operator)</h4>
+        <p><strong>Sunotal Agritech Dark Store Operations</strong></p>
+        <p>GSTIN: 29AABCU9639R1ZM (Karnataka)</p>
+        <p>HSR Layout Central Dark Store Hub #104</p>
+        <p>Bengaluru, KA - 560102</p>
+      </div>
+      <div class="info-block">
+        <h4>Billed To (Farmer / Produce Vendor)</h4>
+        <p><strong>${vendorName}</strong></p>
+        <p>Location: ${location}</p>
+        <p>Quotation Ref: #${id}</p>
+        <p>Date: ${dateStr}</p>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Item / Crop Produce</th>
+          <th>Quantity</th>
+          <th>Rate / Unit</th>
+          <th>Subtotal</th>
+          <th>GST (5%)</th>
+          <th style="text-align: right;">Amount Payable</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>${produce}</strong><br/><span style="font-size: 11px; color: #94a3b8;">${q?.qualityGrade || 'Grade A Quality Passed'}</span></td>
+          <td>${qty} ${unit}</td>
+          <td>₹${price.toLocaleString('en-IN')}</td>
+          <td>₹${subtotal.toLocaleString('en-IN')}</td>
+          <td>₹${gst.toLocaleString('en-IN')}</td>
+          <td style="text-align: right;" class="total-row">₹${grandTotal.toLocaleString('en-IN')}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 20px;">
+      <div style="font-size: 12px; font-weight: 700; color: #10b981; margin-bottom: 4px;">Direct Bank Account Transfer & QC Settlement</div>
+      <div style="font-size: 11px; color: #94a3b8;">Payment status: <strong>${statusStr}</strong>. Funds transferred via Mandi Direct Bank Clearing. Thank you for your partnership!</div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="window.print()">🖨️ Print / Save PDF</button>
+      <a class="btn" href="javascript:history.back()">← Back to Vendor Portal</a>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    res.setHeader("Content-Type", "text/html");
+    return res.send(html);
+  } catch (err: any) {
+    console.error("Error generating invoice download HTML:", err);
+    return res.status(500).send("<h1>Error generating invoice</h1>");
+  }
+});
 
 const handlePayout = async (req: any, res: any) => {
   const id = Number(req.params.id);
