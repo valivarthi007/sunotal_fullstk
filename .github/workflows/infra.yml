@@ -41,8 +41,10 @@ jobs:
           terraform_version: "1.9.3"
 
       - name: Validate & Apply Terraform
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           cd terraform
           terraform init -upgrade
-          terraform plan
-          terraform apply -auto-approve
+          terraform plan -var="github_access_token=${GH_TOKEN}"
+          terraform apply -auto-approve -var="github_access_token=${GH_TOKEN}"

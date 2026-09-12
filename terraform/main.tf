@@ -32,9 +32,10 @@ locals {
 
 # AWS Amplify Module (Zero Operational Overhead Web & Subdomain PaaS)
 module "amplify" {
-  source       = "./modules/amplify"
-  app_name     = "sunotal-grocery-app"
-  domain_name  = "automateuniverse.space"
-  repository   = "https://github.com/valivarthi007/sunotal_fullstk"
-  tags         = local.common_tags
+  source              = "./modules/amplify"
+  app_name            = "sunotal-grocery-app"
+  domain_name         = "automateuniverse.space"
+  repository          = "https://github.com/valivarthi007/sunotal_fullstk"
+  github_access_token = var.github_access_token
+  tags                = local.common_tags
 }

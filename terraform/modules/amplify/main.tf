@@ -1,6 +1,6 @@
 resource "aws_amplify_app" "sunotal" {
   name       = var.app_name
-  repository = var.repository
+  repository = var.github_access_token != "" ? var.repository : null
 
   access_token = var.github_access_token != "" ? var.github_access_token : null
 

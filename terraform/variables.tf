@@ -4,95 +4,23 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "github_access_token" {
+  description = "Optional GitHub Personal Access Token for AWS Amplify App repository integration"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "instance_type" {
   description = "EC2 instance size"
   type        = string
   default     = "t3.small"
 }
 
-variable "ami_id" {
-  description = "AMI ID for EC2 instances"
-  type        = string
-  default     = "ami-09afda054f620959a"
-}
-
 variable "key_name" {
   description = "Existing EC2 key pair name for SSH access"
   type        = string
   default     = "jcs_raju_laptop"
-}
-
-variable "public_key" {
-  description = "Public SSH key to automatically create a key pair"
-  type        = string
-  default     = ""
-}
-
-variable "vpc_cidr" {
-  description = "CIDR block for the VPC"
-  type        = string
-  default     = "10.10.0.0/16"
-}
-
-variable "public_subnet_1_cidr" {
-  description = "CIDR block for public subnet 1 (AZ a)"
-  type        = string
-  default     = "10.10.1.0/24"
-}
-
-variable "public_subnet_2_cidr" {
-  description = "CIDR block for public subnet 2 (AZ b)"
-  type        = string
-  default     = "10.10.2.0/24"
-}
-
-variable "private_subnet_1_cidr" {
-  description = "CIDR block for private subnet 1 (AZ a)"
-  type        = string
-  default     = "10.10.10.0/24"
-}
-
-variable "private_subnet_2_cidr" {
-  description = "CIDR block for private subnet 2 (AZ b)"
-  type        = string
-  default     = "10.10.20.0/24"
-}
-
-variable "bastion_instance_type" {
-  description = "EC2 instance size for the Bastion Host"
-  type        = string
-  default     = "t3.micro"
-}
-
-variable "db_instance_class" {
-  description = "RDS Database Instance Class"
-  type        = string
-  default     = "db.t3.micro"
-}
-
-variable "db_name" {
-  description = "PostgreSQL Database Name"
-  type        = string
-  default     = "sunotal"
-}
-
-variable "db_username" {
-  description = "PostgreSQL Database Admin Username"
-  type        = string
-  default     = "sunotal"
-}
-
-variable "db_password" {
-  description = "PostgreSQL Database Admin Password"
-  type        = string
-  sensitive   = true
-  default     = "sunotalpass123"
-}
-
-variable "allowed_cidr_blocks" {
-  description = "CIDR ranges allowed to access the instance"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
 }
 
 variable "s3_bucket_name" {
@@ -106,36 +34,3 @@ variable "dynamodb_table_name" {
   type        = string
   default     = "sunotal-terraform-locks"
 }
-
-variable "compute_target" {
-  description = "Compute deployment target: 'ecs'"
-  type        = string
-  default     = "ecs"
-}
-
-variable "mongodb_uri" {
-  description = "Optional override MongoDB URI for AWS Managed DocumentDB / MongoDB Atlas"
-  type        = string
-  default     = ""
-}
-
-variable "docdb_instance_class" {
-  description = "AWS DocumentDB Instance Class"
-  type        = string
-  default     = "db.t3.medium"
-}
-
-variable "admin_email" {
-  description = "Default Admin Email injected at runtime"
-  type        = string
-  default     = "admin@sunotal.com"
-}
-
-variable "admin_password" {
-  description = "Default Admin Password injected at runtime"
-  type        = string
-  sensitive   = true
-  default     = "admin123"
-}
-
-
