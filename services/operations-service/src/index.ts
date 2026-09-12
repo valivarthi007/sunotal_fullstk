@@ -978,7 +978,28 @@ app.post("/api/orders/:id/cancel", async (req: any, res: any) => {
 
     const updated = await Order.findOneAndUpdate(query, { $set: { status: "cancelled" } }, { new: true }).exec();
     if (!updated) return res.status(404).json({ error: "Order not found" });
-    return res.json({ success: true, message: "Order cancelled", order: updated });
+
+    // Restore inventory stock upon order cancellation
+    if (Array.isArray(updated.items) && updated.items.length > 0) {
+      for (const item of updated.items) {
+        if (item) {
+          const itemProdId = item.productId || item.id;
+          const restoreQty = Number(item.quantity || 1);
+          const invQuery = itemProdId
+            ? { $or: [{ productId: Number(itemProdId) }, { productName: { $regex: new RegExp(`^${item.name || ""}$`, "i") } }] }
+            : { productName: { $regex: new RegExp(`^${item.name || ""}$`, "i") } };
+
+          const invItem = await Inventory.findOne(invQuery).exec().catch(() => null);
+          if (invItem) {
+            const newQty = Number(invItem.quantity || 0) + restoreQty;
+            const newStatus = newQty === 0 ? "out_of_stock" : newQty < 10 ? "low_stock" : "in_stock";
+            await Inventory.updateOne({ id: invItem.id }, { $set: { quantity: newQty, status: newStatus } }).exec().catch(() => null);
+          }
+        }
+      }
+    }
+
+    return res.json({ success: true, message: "Order cancelled and inventory stock restored", order: updated });
   } catch {
     return res.status(500).json({ error: "Failed to cancel order" });
   }
