@@ -269,26 +269,26 @@ export default function LiveOrderTrack() {
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Delivery Partner</h3>
               <div className="flex items-center gap-4">
                 <img
-                  src={data.driver.photo}
-                  alt={data.driver.name}
+                  src={data?.driver?.photo || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"}
+                  alt={data?.driver?.name || "Delivery Partner"}
                   className="w-14 h-14 rounded-2xl object-cover border-2 border-emerald-500/40"
                 />
                 <div>
-                  <h4 className="text-base font-bold text-white">{data.driver.name}</h4>
+                  <h4 className="text-base font-bold text-white">{data?.driver?.name || "Delivery Partner"}</h4>
                   <div className="flex items-center gap-2 mt-0.5">
                     <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px]">
-                      {data.driver.rating}
+                      {data?.driver?.rating || "4.9 ★"}
                     </Badge>
-                    <span className="text-xs font-mono text-slate-400">{data.driver.vehicleNo}</span>
+                    <span className="text-xs font-mono text-slate-400">{data?.driver?.vehicleNo || "EV Delivery"}</span>
                   </div>
                 </div>
               </div>
 
               <a
-                href={`tel:${data.driver.phone}`}
+                href={`tel:${data?.driver?.phone || "#"}`}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl py-3 text-xs flex items-center justify-center gap-2 shadow-md transition-colors"
               >
-                <PhoneCall className="w-4 h-4" /> Call Partner ({data.driver.name.split(" ")[0]})
+                <PhoneCall className="w-4 h-4" /> Call Partner ({(data?.driver?.name || "Partner").split(" ")[0]})
               </a>
             </Card>
 

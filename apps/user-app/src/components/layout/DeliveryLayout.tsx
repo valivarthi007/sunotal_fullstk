@@ -53,7 +53,7 @@ export function DeliveryLayout({ children, user }: DeliveryLayoutProps) {
             {user && (
               <div className="hidden md:flex items-center gap-2 text-xs bg-accent/50 px-3 py-1.5 rounded-full border border-border">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span className="font-bold text-secondary">{user.name}</span>
+                <span className="font-bold text-secondary">{user?.name || "Rider"}</span>
                 <span className="text-muted-foreground">({user.email || user.phone})</span>
               </div>
             )}

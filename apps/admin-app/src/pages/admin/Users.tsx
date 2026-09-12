@@ -233,10 +233,10 @@ export default function UsersAdmin() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0 border border-primary/20">
-                          {user.name.charAt(0).toUpperCase()}
+                          {(user?.name || user?.email || "U").charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-semibold text-foreground text-base leading-tight">{user.name}</p>
+                          <p className="font-semibold text-foreground text-base leading-tight">{user?.name || user?.email || "User"}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">{user.email}</p>
                         </div>
                       </div>

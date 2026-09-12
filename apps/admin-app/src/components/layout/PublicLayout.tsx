@@ -184,7 +184,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   className="hidden sm:flex gap-2 rounded-full px-3 font-medium"
                   onClick={() => setLocation('/profile')}
                 >
-                  Hi, {user.name.split(" ")[0]}
+                  Hi, {(user?.name || user?.email || "User").split(" ")[0]}
                 </Button>
                 <Button
                   variant="ghost"
@@ -254,11 +254,11 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               {user ? (
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg">
-                    {user.name.charAt(0)}
+                    {(user?.name || user?.email || "U").charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium">{user.name}</p>
-                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                    <p className="font-medium">{user?.name || user?.email || "User"}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email || ""}</p>
                   </div>
                   <Button
                     size="sm"

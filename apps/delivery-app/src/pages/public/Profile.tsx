@@ -257,11 +257,11 @@ export default function Profile() {
         <div className="bg-gradient-to-r from-secondary via-secondary/95 to-secondary/90 text-secondary-foreground rounded-3xl p-6 sm:p-8 mb-8 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4 sm:gap-6">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-2xl sm:text-3xl shadow-lg shadow-primary/20 shrink-0">
-              {user.name.charAt(0)}
+              {(user?.name || user?.email || "U").charAt(0).toUpperCase()}
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">{user.name}</h1>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">{user?.name || user?.email || "User Profile"}</h1>
                 <span className="px-3 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-bold border border-primary/30">
                   Verified Member
                 </span>

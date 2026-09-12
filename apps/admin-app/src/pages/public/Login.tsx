@@ -31,7 +31,7 @@ export default function Login() {
         onSuccess: (data) => {
           localStorage.setItem("sunotal_token", data.token);
           queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-          toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
+          toast.success(`Welcome back, ${(data?.user?.name || "User").split(" ")[0]}!`);
           setLocation("/");
         },
         onError: (error: any) => {

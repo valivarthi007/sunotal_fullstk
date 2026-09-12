@@ -98,10 +98,10 @@ export default function Dashboard() {
                 {stats.recentUsers.length > 0 ? stats.recentUsers.map(user => (
                   <div key={user.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 transition-colors border border-transparent hover:border-border">
                     <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">
-                      {user.name.charAt(0)}
+                      {(user?.name || user?.email || "U").charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm truncate">{user.name}</p>
+                      <p className="font-semibold text-sm truncate">{user?.name || user?.email || "User"}</p>
                       <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     </div>
                     <Badge variant="outline" className={user.role === 'admin' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200'}>
