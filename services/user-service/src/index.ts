@@ -181,7 +181,7 @@ mongoose.connect(MONGODB_URI, {
   connectTimeoutMS: 5000,
   socketTimeoutMS: 10000,
   family: 4,
-  ...(isDocDB ? { directConnection: true } : {})
+  ...(isDocDB ? { directConnection: true, authMechanism: "SCRAM-SHA-1", authSource: "admin" } : {})
 }).then(() => {
   console.log("⚡ [user-service] Connected to MongoDB / AWS DocumentDB");
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [user-service] Running on port ${PORT}`));

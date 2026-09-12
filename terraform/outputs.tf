@@ -95,10 +95,10 @@ output "github_oidc_role_arn" {
   value       = module.iam.github_actions_role_arn
 }
 
-output "sonarqube_public_ip" {
-  description = "Public IP address of the SonarQube server"
-  value       = module.sonarqube.sonarqube_public_ip
-}
+# output "sonarqube_public_ip" {
+#   description = "Public IP address of the SonarQube server"
+#   value       = module.sonarqube.sonarqube_public_ip
+# }
 
 output "test_server_public_ip" {
   description = "Public IP address of the Test Server"
