@@ -8,22 +8,14 @@ resource "aws_amplify_app" "sunotal" {
     version: 1
     frontend:
       phases:
-        preBuild:
-          commands:
-            - echo "Installing dependencies for Sunotal SPAs..."
-            - npm install --prefix apps/user-app
-            - npm install --prefix apps/vendor-app
-            - npm install --prefix apps/admin-app
-            - npm install --prefix apps/delivery-app
-            - npm install --prefix apps/support-app
         build:
           commands:
             - echo "Building client applications..."
-            - npm run build --prefix apps/user-app
-            - npm run build --prefix apps/vendor-app
-            - npm run build --prefix apps/admin-app
-            - npm run build --prefix apps/delivery-app
-            - npm run build --prefix apps/support-app
+            - (cd apps/user-app && npm install && npm run build)
+            - (cd apps/vendor-app && npm install && npm run build)
+            - (cd apps/admin-app && npm install && npm run build)
+            - (cd apps/delivery-app && npm install && npm run build)
+            - (cd apps/support-app && npm install && npm run build)
             - mkdir -p apps/user-app/dist/vendor-app && cp -r apps/vendor-app/dist/* apps/user-app/dist/vendor-app/
             - mkdir -p apps/user-app/dist/admin-app && cp -r apps/admin-app/dist/* apps/user-app/dist/admin-app/
             - mkdir -p apps/user-app/dist/delivery-app && cp -r apps/delivery-app/dist/* apps/user-app/dist/delivery-app/
@@ -34,7 +26,6 @@ resource "aws_amplify_app" "sunotal" {
           - '**/*'
       cache:
         paths:
-          - node_modules/**/*
           - apps/*/node_modules/**/*
   EOF
 
