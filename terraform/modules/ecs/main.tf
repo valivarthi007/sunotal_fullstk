@@ -96,9 +96,7 @@ resource "aws_ecs_task_definition" "frontend" {
 
   tags = var.tags
 
-  lifecycle {
-    ignore_changes = [container_definitions]
-  }
+
 }
 
 # Auth Service Task Definition
@@ -147,9 +145,7 @@ resource "aws_ecs_task_definition" "auth" {
 
   tags = var.tags
 
-  lifecycle {
-    ignore_changes = [container_definitions]
-  }
+
 }
 
 # Operations Service Task Definition
@@ -200,9 +196,7 @@ resource "aws_ecs_task_definition" "operations" {
 
   tags = var.tags
 
-  lifecycle {
-    ignore_changes = [container_definitions]
-  }
+
 }
 
 # Inventory Service Task Definition
@@ -247,9 +241,7 @@ resource "aws_ecs_task_definition" "inventory" {
 
   tags = var.tags
 
-  lifecycle {
-    ignore_changes = [container_definitions]
-  }
+
 }
 
 # User Service Task Definition
@@ -296,9 +288,7 @@ resource "aws_ecs_task_definition" "user" {
 
   tags = var.tags
 
-  lifecycle {
-    ignore_changes = [container_definitions]
-  }
+
 }
 
 # Delivery Service Task Definition
@@ -342,9 +332,7 @@ resource "aws_ecs_task_definition" "delivery" {
 
   tags = var.tags
 
-  lifecycle {
-    ignore_changes = [container_definitions]
-  }
+
 }
 
 # Frontend Service
@@ -544,9 +532,7 @@ resource "aws_ecs_task_definition" "support" {
 
   tags = var.tags
 
-  lifecycle {
-    ignore_changes = [container_definitions]
-  }
+
 }
 
 # Support Service

@@ -162,9 +162,12 @@ app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "invent
 
 const isDocDB = MONGODB_URI.includes("docdb.amazonaws.com");
 mongoose.connect(MONGODB_URI, {
+  tls: true,
   tlsAllowInvalidCertificates: true,
   serverSelectionTimeoutMS: 5000,
   connectTimeoutMS: 5000,
+  socketTimeoutMS: 10000,
+  family: 4,
   ...(isDocDB ? { directConnection: true } : {})
 }).then(() => {
   console.log("⚡ [inventory-service] Connected to MongoDB / AWS DocumentDB");

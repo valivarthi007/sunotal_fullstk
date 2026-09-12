@@ -135,21 +135,19 @@ app.get("/api/admin/stats", async (_req, res) => {
     let vendors: any[] = [];
     let products: any[] = [];
 
-    if (mongoose.connection.readyState === 1) {
-      try {
-        [totalUsers, totalVendors, totalProducts, totalDarkStores, activeVendors, users, vendors, products] = await Promise.all([
-          User.countDocuments().exec().catch(() => 0),
-          Vendor.countDocuments().exec().catch(() => 0),
-          Product.countDocuments().exec().catch(() => 0),
-          Warehouse.countDocuments().exec().catch(() => 0),
-          Vendor.countDocuments({ status: { $in: ["approved", "active"] } }).exec().catch(() => 0),
-          User.find().select("-passwordHash").sort({ createdAt: -1 }).limit(5).exec().catch(() => []),
-          Vendor.find().sort({ createdAt: -1 }).limit(5).exec().catch(() => []),
-          Product.find().sort({ createdAt: -1 }).exec().catch(() => []),
-        ]);
-      } catch {
-        // Ignored
-      }
+    try {
+      [totalUsers, totalVendors, totalProducts, totalDarkStores, activeVendors, users, vendors, products] = await Promise.all([
+        User.countDocuments().exec().catch(() => 0),
+        Vendor.countDocuments().exec().catch(() => 0),
+        Product.countDocuments().exec().catch(() => 0),
+        Warehouse.countDocuments().exec().catch(() => 0),
+        Vendor.countDocuments({ status: { $in: ["approved", "active"] } }).exec().catch(() => 0),
+        User.find().select("-passwordHash").sort({ createdAt: -1 }).limit(5).exec().catch(() => []),
+        Vendor.find().sort({ createdAt: -1 }).limit(5).exec().catch(() => []),
+        Product.find().sort({ createdAt: -1 }).exec().catch(() => []),
+      ]);
+    } catch {
+      // Ignored
     }
 
     const categoryMap: Record<string, number> = {};
@@ -204,10 +202,8 @@ app.get("/api/admin/stats", async (_req, res) => {
 // GET & POST /api/admin/quotations
 app.get("/api/admin/quotations", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const quotes = await Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []);
-      return res.json(quotes || []);
-    }
+    const quotes = await Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    return res.json(quotes || []);
   } catch {
     // Ignored
   }
@@ -216,10 +212,8 @@ app.get("/api/admin/quotations", async (_req, res) => {
 
 app.get("/api/vendors/quotations", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const quotes = await Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []);
-      return res.json(quotes || []);
-    }
+    const quotes = await Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    return res.json(quotes || []);
   } catch {
     // Ignored
   }
@@ -266,10 +260,7 @@ app.post("/api/admin/login", async (req: any, res: any) => {
   }
 
   try {
-    let user: any = null;
-    if (mongoose.connection.readyState === 1) {
-      user = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
-    }
+    const user: any = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
 
     if (user && user.passwordHash) {
       const isMatch = await bcrypt.compare(password, user.passwordHash).catch(() => false);
@@ -288,10 +279,8 @@ app.post("/api/admin/login", async (req: any, res: any) => {
 // GET /api/categories
 app.get("/api/categories", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const categories = await Category.find().sort({ id: 1 }).exec().catch(() => []);
-      if (categories && categories.length > 0) return res.json(categories);
-    }
+    const categories = await Category.find().sort({ id: 1 }).exec().catch(() => []);
+    if (categories && categories.length > 0) return res.json(categories);
   } catch {
     // Ignored
   }
@@ -313,15 +302,13 @@ app.post("/api/categories", async (req: any, res: any) => {
 // GET /api/products
 app.get("/api/products", async (req: any, res: any) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const { category, search } = req.query;
-      const filter: any = {};
-      if (category) filter.category = category;
-      if (search) filter.name = { $regex: search, $options: "i" };
+    const { category, search } = req.query;
+    const filter: any = {};
+    if (category) filter.category = category;
+    if (search) filter.name = { $regex: search, $options: "i" };
 
-      const products = await Product.find(filter).sort({ createdAt: -1 }).exec().catch(() => []);
-      return res.json(products || []);
-    }
+    const products = await Product.find(filter).sort({ createdAt: -1 }).exec().catch(() => []);
+    return res.json(products || []);
   } catch {
     // Ignored
   }
@@ -392,10 +379,8 @@ app.delete("/api/products/:id", async (req: any, res: any) => {
 // GET & POST /api/vendors
 app.get("/api/vendors", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const vendors = await Vendor.find().sort({ createdAt: -1 }).exec().catch(() => []);
-      return res.json(vendors || []);
-    }
+    const vendors = await Vendor.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    return res.json(vendors || []);
   } catch {
     // Ignored
   }
@@ -467,10 +452,8 @@ app.delete("/api/vendors/:id", async (req: any, res: any) => {
 // GET & POST /api/warehouses
 app.get("/api/warehouses", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const warehouses = await Warehouse.find().sort({ createdAt: -1 }).exec().catch(() => []);
-      return res.json(warehouses || []);
-    }
+    const warehouses = await Warehouse.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    return res.json(warehouses || []);
   } catch {
     // Ignored
   }
@@ -479,10 +462,8 @@ app.get("/api/warehouses", async (_req, res) => {
 
 app.get("/api/admin/warehouses", async (_req, res) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const warehouses = await Warehouse.find().sort({ createdAt: -1 }).exec().catch(() => []);
-      return res.json(warehouses || []);
-    }
+    const warehouses = await Warehouse.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    return res.json(warehouses || []);
   } catch {
     // Ignored
   }

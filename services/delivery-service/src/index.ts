@@ -82,10 +82,7 @@ app.post("/api/delivery/login", async (req: any, res: any) => {
   }
 
   try {
-    let user: any = null;
-    if (mongoose.connection.readyState === 1) {
-      user = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
-    }
+    const user: any = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
 
     if (user && user.passwordHash) {
       const isMatch = await bcrypt.compare(password, user.passwordHash).catch(() => false);
@@ -109,15 +106,14 @@ app.post("/api/delivery/register", async (req: any, res: any) => {
   }
   const cleanEmail = email.trim().toLowerCase();
   try {
-    if (mongoose.connection.readyState === 1) {
-      const existing = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
-      if (existing) {
-        return res.status(409).json({ error: "Email already registered" });
-      }
+    const existing = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
+    if (existing) {
+      return res.status(409).json({ error: "Email already registered" });
     }
+
     const passwordHash = await bcrypt.hash(password || "delivery123", 10);
     const nextId = await getNextId(User);
-    let user: any = {
+    const user: any = await User.create({
       id: nextId,
       name,
       email: cleanEmail,
@@ -126,11 +122,7 @@ app.post("/api/delivery/register", async (req: any, res: any) => {
       active: true,
       phone: phone || null,
       city: city || null,
-    };
-    if (mongoose.connection.readyState === 1) {
-      const created = await User.create(user).catch(() => null);
-      if (created) user = created;
-    }
+    });
     const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
     return res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (err: any) {
@@ -141,25 +133,23 @@ app.post("/api/delivery/register", async (req: any, res: any) => {
 // GET /api/delivery/orders/active
 app.get("/api/delivery/orders/active", async (_req: any, res: any) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const orders = await Order.find().sort({ createdAt: -1 }).limit(20).exec().catch(() => []);
-      if (orders && orders.length > 0) {
-        const formatted = orders.map((o: any) => ({
-          id: o.orderId,
-          numericId: o.id,
-          customerName: o.customerName || "",
-          phone: o.phone || "",
-          address: o.address ? `${o.address}${o.city ? `, ${o.city}` : ""}` : "",
-          city: o.city || "",
-          totalAmount: Number(o.totalAmount || 0),
-          paymentMethod: o.paymentMethod || "",
-          paymentStatus: o.paymentStatus || "",
-          status: o.status || "",
-          createdAt: o.createdAt,
-          items: o.items || [],
-        }));
-        return res.json(formatted);
-      }
+    const orders = await Order.find().sort({ createdAt: -1 }).limit(20).exec().catch(() => []);
+    if (orders && orders.length > 0) {
+      const formatted = orders.map((o: any) => ({
+        id: o.orderId,
+        numericId: o.id,
+        customerName: o.customerName || "",
+        phone: o.phone || "",
+        address: o.address ? `${o.address}${o.city ? `, ${o.city}` : ""}` : "",
+        city: o.city || "",
+        totalAmount: Number(o.totalAmount || 0),
+        paymentMethod: o.paymentMethod || "",
+        paymentStatus: o.paymentStatus || "",
+        status: o.status || "",
+        createdAt: o.createdAt,
+        items: o.items || [],
+      }));
+      return res.json(formatted);
     }
   } catch {
     // Fallback
@@ -171,9 +161,7 @@ app.get("/api/delivery/orders/active", async (_req: any, res: any) => {
 app.get("/api/delivery/stats", async (_req, res) => {
   let completedCount = 0;
   try {
-    if (mongoose.connection.readyState === 1) {
-      completedCount = (await Order.countDocuments({ status: "delivered" }).exec().catch(() => 0)) || 0;
-    }
+    completedCount = (await Order.countDocuments({ status: "delivered" }).exec().catch(() => 0)) || 0;
   } catch {
     // Fallback
   }

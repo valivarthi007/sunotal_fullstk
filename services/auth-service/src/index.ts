@@ -57,12 +57,10 @@ async function findUserByEmail(email: string) {
   }
 
   try {
-    if (mongoose.connection.readyState === 1) {
-      const dbUser = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
-      if (dbUser) return dbUser;
-    }
-  } catch {
-    // Ignored
+    const dbUser = await User.findOne({ email: cleanEmail }).exec();
+    if (dbUser) return dbUser;
+  } catch (err: any) {
+    console.error("DB findUserByEmail error:", err.message);
   }
 
   return null;
@@ -77,16 +75,14 @@ app.post("/api/auth/register", async (req: any, res: any) => {
 
   const cleanEmail = email.trim().toLowerCase();
   try {
-    if (mongoose.connection.readyState === 1) {
-      const existing = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
-      if (existing) {
-        return res.status(409).json({ error: "Email already registered" });
-      }
+    const existing = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
+    if (existing) {
+      return res.status(409).json({ error: "Email already registered" });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const nextId = await getNextId(User);
-    let user: any = {
+    const user = await User.create({
       id: nextId,
       name,
       email: cleanEmail,
@@ -95,12 +91,7 @@ app.post("/api/auth/register", async (req: any, res: any) => {
       active: true,
       phone: phone || null,
       city: city || null,
-    };
-
-    if (mongoose.connection.readyState === 1) {
-      const created = await User.create(user).catch(() => null);
-      if (created) user = created;
-    }
+    });
 
     const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
     return res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
@@ -224,8 +215,8 @@ const isDocDB = MONGODB_URI.includes("docdb.amazonaws.com");
 mongoose.connect(MONGODB_URI, {
   tls: true,
   tlsAllowInvalidCertificates: true,
-  serverSelectionTimeoutMS: 3000,
-  connectTimeoutMS: 3000,
+  serverSelectionTimeoutMS: 5000,
+  connectTimeoutMS: 5000,
   socketTimeoutMS: 10000,
   family: 4,
   ...(isDocDB ? { directConnection: true } : {})
