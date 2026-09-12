@@ -1,8 +1,8 @@
 resource "aws_amplify_app" "sunotal" {
   name       = var.app_name
-  repository = var.github_access_token != "" ? var.repository : null
+  repository = try(length(var.github_access_token) > 5, false) ? var.repository : null
 
-  access_token = var.github_access_token != "" ? var.github_access_token : null
+  access_token = try(length(var.github_access_token) > 5, false) ? var.github_access_token : null
 
   build_spec = <<-EOF
     version: 1

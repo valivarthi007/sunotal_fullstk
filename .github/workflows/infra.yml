@@ -42,9 +42,14 @@ jobs:
 
       - name: Validate & Apply Terraform
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           cd terraform
           terraform init -upgrade
-          terraform plan -var="github_access_token=${GH_TOKEN}"
-          terraform apply -auto-approve -var="github_access_token=${GH_TOKEN}"
+          if [ -n "$GH_TOKEN" ]; then
+            terraform plan -var="github_access_token=${GH_TOKEN}"
+            terraform apply -auto-approve -var="github_access_token=${GH_TOKEN}"
+          else
+            terraform plan
+            terraform apply -auto-approve
+          fi
