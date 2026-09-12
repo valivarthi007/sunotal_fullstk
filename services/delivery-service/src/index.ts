@@ -163,20 +163,40 @@ app.get("/api/delivery/orders/active", async (_req: any, res: any) => {
   try {
     const orders = await Order.find().sort({ createdAt: -1 }).limit(20).exec().catch(() => []);
     if (orders && orders.length > 0) {
-      const formatted = orders.map((o: any) => ({
-        id: o.orderId,
-        numericId: o.id,
-        customerName: o.customerName || "",
-        phone: o.phone || "",
-        address: o.address ? `${o.address}${o.city ? `, ${o.city}` : ""}` : "",
-        city: o.city || "",
-        totalAmount: Number(o.totalAmount || 0),
-        paymentMethod: o.paymentMethod || "",
-        paymentStatus: o.paymentStatus || "",
-        status: o.status || "",
-        createdAt: o.createdAt,
-        items: o.items || [],
-      }));
+      const formatted = orders.map((o: any) => {
+        const defaultHubLat = 12.9250;
+        const defaultHubLng = 77.6320;
+
+        const custAddress = o.address ? `${o.address}${o.city ? `, ${o.city}` : ""}` : "HSR Layout Phase 1, Bengaluru";
+        const custName = o.customerName || "Customer Order";
+        const totalAmt = Number(o.totalAmount || o.finalAmount || 280);
+
+        // Ensure valid lat/lng relative to Dark Store Hub catchment area
+        const lat = Number(o.lat) || (defaultHubLat - 0.012);
+        const lng = Number(o.lng) || (defaultHubLng + 0.015);
+
+        return {
+          id: o.orderId || `ORD-2026-${o.id}`,
+          numericId: o.id,
+          customerName: custName,
+          phone: o.phone || "+91 98765 43210",
+          address: custAddress,
+          city: o.city || "Bengaluru",
+          totalAmount: totalAmt,
+          pay: totalAmt,
+          paymentMethod: o.paymentMethod || "COD",
+          paymentStatus: o.paymentStatus || "pending",
+          status: o.status || "placed",
+          lat,
+          lng,
+          warehouseName: "Central Sourcing Dark Store Hub #104",
+          warehouseAddress: "HSR Layout Phase 1, Bengaluru",
+          warehouseLat: defaultHubLat,
+          warehouseLng: defaultHubLng,
+          createdAt: o.createdAt,
+          items: Array.isArray(o.items) ? o.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Produce Item"} (${i.quantity || 1})`) : [],
+        };
+      });
       return res.json(formatted);
     }
   } catch {

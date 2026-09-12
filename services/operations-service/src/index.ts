@@ -1054,24 +1054,30 @@ app.get("/api/orders", async (req: any, res: any) => {
 
 const handleCheckoutOrder = async (req: any, res: any) => {
   try {
-    const { items, totalAmount, customerName, customerEmail, phone, address, city, paymentMethod, userId } = req.body;
+    const { items, totalAmount, finalAmount, finalPayable, customerName, customerEmail, phone, address, shippingAddress, city, paymentMethod, userId, lat, lng } = req.body;
     const nextId = await getNextId(Order);
     const orderId = `ORD-2026-${Math.floor(10000 + Math.random() * 90000)}`;
+    const custAddr = shippingAddress || address || "HSR Layout Phase 1, Bengaluru";
+    const custName = customerName || req.user?.name || "Ananya Roy";
+    const totalAmt = Number(totalAmount || finalAmount || finalPayable || 280);
 
     const newOrder = await Order.create({
       id: nextId,
       orderId,
       userId: userId ? Number(userId) : 1,
-      customerName: customerName || "Customer",
-      customerEmail: customerEmail || "customer@example.com",
+      customerName: custName,
+      customerEmail: customerEmail || req.user?.email || "customer@example.com",
       phone: phone || "9876543210",
       items: items || [],
-      totalAmount: Number(totalAmount || 0),
+      totalAmount: totalAmt,
       status: "placed",
-      address: address || "Default Address",
-      city: city || "Hyderabad",
+      address: custAddr,
+      city: city || "Bengaluru",
       paymentMethod: paymentMethod || "COD",
       paymentStatus: paymentMethod === "COD" ? "pending" : "paid",
+      lat: Number(lat || 12.9021),
+      lng: Number(lng || 77.6561),
+      stockDeducted: true,
     });
 
     // Automatic Inventory Deduction for Every Order Item
