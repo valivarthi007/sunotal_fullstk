@@ -68,7 +68,7 @@ jobs:
         run: |
           echo "Verifying backend services..."
           for s in services/*; do
-            if [ -d "$s" ]; then
+            if [ -f "$s/package.json" ]; then
               echo "Building $s..."
               (cd "$s" && npm install && npm run build)
             fi
@@ -76,29 +76,11 @@ jobs:
 
           echo "Verifying frontend apps..."
           for a in apps/*; do
-            if [ -d "$a" ]; then
+            if [ -f "$a/package.json" ]; then
               echo "Building $a..."
               (cd "$a" && npm install && npm run build)
             fi
           done
-
-#      - name: SonarQube / SonarCloud Code Analysis
-#        uses: SonarSource/sonarqube-scan-action@v3
-#        env:
-#          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-#          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-#        continue-on-error: true
-
-#      - name: Run Trivy vulnerability scanner (Filesystem)
-#        uses: aquasecurity/trivy-action@master
-#        with:
-#          scan-type: 'fs'
-#          scan-ref: '.'
-#          exit-code: '0'
-#          severity: 'CRITICAL,HIGH'
-#          format: 'json'
-#          output: 'trivy-report.json'
-#        continue-on-error: true
 
       - name: Log in to Amazon ECR
         id: login-ecr
@@ -108,7 +90,7 @@ jobs:
       - name: Ensure ECR Repositories Exist
         if: steps.login-ecr.outcome == 'success'
         run: |
-          for repo in sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery sunotal-support sunotal-frontend sunotal-user-app sunotal-admin-app sunotal-vendor-app sunotal-delivery-app sunotal-support-app; do
+          for repo in sunotal-backend sunotal-frontend sunotal-auth sunotal-operations sunotal-inventory sunotal-user sunotal-delivery sunotal-support sunotal-user-app sunotal-admin-app sunotal-vendor-app sunotal-delivery-app sunotal-support-app; do
             aws ecr create-repository --repository-name "$repo" --region "${{ env.AWS_DEFAULT_REGION }}" 2>/dev/null || true
           done
 
@@ -119,19 +101,8 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
 
         run: |
-          docker build -t $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-auth:latest ./services/auth-service || true
-          docker build -t $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-operations:latest ./services/operations-service || true
-          docker build -t $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-inventory:latest ./services/inventory-service || true
-          docker build -t $ECR_REGISTRY/sunotal-user:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user:latest ./services/user-service || true
-          docker build -t $ECR_REGISTRY/sunotal-delivery:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-delivery:latest ./services/delivery-service || true
-          docker build -t $ECR_REGISTRY/sunotal-support:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-support:latest ./services/support-service || true
-          
-          docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest ./apps/user-app || true
-          docker build -t $ECR_REGISTRY/sunotal-user-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-user-app:latest ./apps/user-app || true
-          docker build -t $ECR_REGISTRY/sunotal-admin-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-admin-app:latest ./apps/admin-app || true
-          docker build -t $ECR_REGISTRY/sunotal-vendor-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-vendor-app:latest ./apps/vendor-app || true
-          docker build -t $ECR_REGISTRY/sunotal-delivery-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-delivery-app:latest ./apps/delivery-app || true
-          docker build -t $ECR_REGISTRY/sunotal-support-app:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-support-app:latest ./apps/support-app || true
+          docker build -t $ECR_REGISTRY/sunotal-backend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-backend:latest ./services/unified-backend || true
+          docker build -t $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG -t $ECR_REGISTRY/sunotal-frontend:latest -f ./apps/unified-frontend/Dockerfile . || true
 
       - name: Push Docker images to Amazon ECR
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
@@ -139,30 +110,8 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker push $ECR_REGISTRY/sunotal-auth:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-auth:latest || true
-          docker push $ECR_REGISTRY/sunotal-operations:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-operations:latest || true
-          docker push $ECR_REGISTRY/sunotal-inventory:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-inventory:latest || true
-          docker push $ECR_REGISTRY/sunotal-user:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-user:latest || true
-          docker push $ECR_REGISTRY/sunotal-delivery:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-delivery:latest || true
-          docker push $ECR_REGISTRY/sunotal-support:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-support:latest || true
-          
+          docker push $ECR_REGISTRY/sunotal-backend:$IMAGE_TAG || true
+          docker push $ECR_REGISTRY/sunotal-backend:latest || true
           docker push $ECR_REGISTRY/sunotal-frontend:$IMAGE_TAG || true
           docker push $ECR_REGISTRY/sunotal-frontend:latest || true
-          docker push $ECR_REGISTRY/sunotal-user-app:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-user-app:latest || true
-          docker push $ECR_REGISTRY/sunotal-admin-app:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-admin-app:latest || true
-          docker push $ECR_REGISTRY/sunotal-vendor-app:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-vendor-app:latest || true
-          docker push $ECR_REGISTRY/sunotal-delivery-app:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-delivery-app:latest || true
-          docker push $ECR_REGISTRY/sunotal-support-app:$IMAGE_TAG || true
-          docker push $ECR_REGISTRY/sunotal-support-app:latest || true
         continue-on-error: true
-
