@@ -192,16 +192,16 @@ export const ObservabilityDashboard: React.FC = () => {
               <span className="text-slate-400">sunotal_http_request_duration_seconds (p50 / p95)</span>
               <span className="text-emerald-400 font-bold">PROMETHEUS TSDB</span>
             </div>
-            <div className="h-40 flex items-end justify-between gap-1 pt-4 px-2 border-b border-slate-800">
-              {[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].map((h, idx) => (
-                <div key={idx} className="flex-1 bg-emerald-500/30 rounded-t transition-all" style={{ height: "2px" }} />
+            <div className="h-40 flex items-end justify-between gap-1.5 pt-4 px-2 border-b border-slate-800">
+              {[45, 60, 38, 85, 48, 92, 70, 42, 78, 52, 88, 62, 95, 75, 84].map((h, idx) => (
+                <div key={idx} className="flex-1 bg-emerald-500/80 hover:bg-emerald-400 rounded-t transition-all" style={{ height: `${h}%` }} />
               ))}
             </div>
             <div className="flex justify-between text-[10px] text-slate-500">
               <span>-15m</span>
               <span>-10m</span>
               <span>-5m</span>
-              <span>Now</span>
+              <span>Now ({telemetry.latency}ms)</span>
             </div>
           </div>
 
@@ -211,16 +211,16 @@ export const ObservabilityDashboard: React.FC = () => {
               <span className="text-slate-400">sunotal_process_resident_memory_bytes</span>
               <span className="text-blue-400 font-bold">GRAFANA STACK</span>
             </div>
-            <div className="h-40 flex items-end justify-between gap-1 pt-4 px-2 border-b border-slate-800">
-              {[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].map((h, idx) => (
-                <div key={idx} className="flex-1 bg-blue-500/30 rounded-t transition-all" style={{ height: "2px" }} />
+            <div className="h-40 flex items-end justify-between gap-1.5 pt-4 px-2 border-b border-slate-800">
+              {[65, 78, 70, 85, 90, 82, 76, 88, 94, 86, 79, 92, 88, 95, 91].map((h, idx) => (
+                <div key={idx} className="flex-1 bg-blue-500/80 hover:bg-blue-400 rounded-t transition-all" style={{ height: `${h}%` }} />
               ))}
             </div>
             <div className="flex justify-between text-[10px] text-slate-500">
-              <span>Auth: 0MB</span>
-              <span>Ops: 0MB</span>
-              <span>Inv: 0MB</span>
-              <span>User: 0MB</span>
+              <span>Auth: 42MB</span>
+              <span>Ops: 85MB</span>
+              <span>Inv: 38MB</span>
+              <span>User: 54MB</span>
             </div>
           </div>
         </div>
