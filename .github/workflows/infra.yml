@@ -42,10 +42,11 @@ jobs:
 
       - name: Validate & Apply Terraform
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN_RAW: ${{ secrets.GH_PAT }}
         run: |
           cd terraform
           terraform init -upgrade
+          GH_TOKEN=$(echo "$GH_TOKEN_RAW" | xargs)
           if [ -n "$GH_TOKEN" ]; then
             APP_ID=$(aws amplify list-apps --query "apps[?name=='sunotal-grocery-app'].appId" --output text 2>/dev/null || echo "")
             if [ -n "$APP_ID" ]; then
