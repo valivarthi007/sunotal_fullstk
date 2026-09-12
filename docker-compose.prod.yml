@@ -33,8 +33,8 @@ services:
 
   frontend:
     build:
-      context: ./apps/unified-frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/unified-frontend/Dockerfile
     image: ${ECR_REGISTRY:-sunotal}/sunotal-frontend:${IMAGE_TAG:-latest}
     container_name: sunotal-frontend
     restart: always
