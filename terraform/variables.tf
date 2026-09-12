@@ -17,10 +17,22 @@ variable "instance_type" {
   default     = "t3.small"
 }
 
+variable "ami_id" {
+  description = "AMI ID for EC2 instances"
+  type        = string
+  default     = "ami-09afda054f620959a"
+}
+
 variable "key_name" {
   description = "Existing EC2 key pair name for SSH access"
   type        = string
   default     = "jcs_raju_laptop"
+}
+
+variable "allowed_cidr_blocks" {
+  description = "CIDR ranges allowed to access the infrastructure"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 }
 
 variable "s3_bucket_name" {
