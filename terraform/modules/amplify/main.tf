@@ -11,11 +11,11 @@ resource "aws_amplify_app" "sunotal" {
         build:
           commands:
             - echo "Building client applications..."
-            - (cd apps/user-app && npm install && npm run build)
-            - (cd apps/vendor-app && npm install && npm run build)
-            - (cd apps/admin-app && npm install && npm run build)
-            - (cd apps/delivery-app && npm install && npm run build)
-            - (cd apps/support-app && npm install && npm run build)
+            - (cd apps/user-app && npm install --include=dev && npm run build)
+            - (cd apps/vendor-app && npm install --include=dev && npm run build)
+            - (cd apps/admin-app && npm install --include=dev && npm run build)
+            - (cd apps/delivery-app && npm install --include=dev && npm run build)
+            - (cd apps/support-app && npm install --include=dev && npm run build)
             - mkdir -p apps/user-app/dist/vendor-app && cp -r apps/vendor-app/dist/* apps/user-app/dist/vendor-app/
             - mkdir -p apps/user-app/dist/admin-app && cp -r apps/admin-app/dist/* apps/user-app/dist/admin-app/
             - mkdir -p apps/user-app/dist/delivery-app && cp -r apps/delivery-app/dist/* apps/user-app/dist/delivery-app/
