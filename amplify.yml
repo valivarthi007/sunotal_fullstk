@@ -3,23 +3,26 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Installing dependencies for Sunotal Grocery SPAs..."
-        - cd apps/user-app && npm install && cd ../..
-        - cd apps/vendor-app && npm install && cd ../..
-        - cd apps/admin-app && npm install && cd ../..
-        - cd apps/delivery-app && npm install && cd ../..
-        - cd apps/support-app && npm install && cd ../..
+        - echo "Installing dependencies for Sunotal SPAs..."
+        - npm install --prefix apps/user-app
+        - npm install --prefix apps/vendor-app
+        - npm install --prefix apps/admin-app
+        - npm install --prefix apps/delivery-app
+        - npm install --prefix apps/support-app
     build:
       commands:
-        - echo "Building client applications and packaging dist..."
-        - mkdir -p dist
-        - cd apps/user-app && npm run build && cd ../.. && cp -r apps/user-app/dist/* dist/
-        - cd apps/vendor-app && npm run build && cd ../.. && mkdir -p dist/vendor-app && cp -r apps/vendor-app/dist/* dist/vendor-app/
-        - cd apps/admin-app && npm run build && cd ../.. && mkdir -p dist/admin-app && cp -r apps/admin-app/dist/* dist/admin-app/
-        - cd apps/delivery-app && npm run build && cd ../.. && mkdir -p dist/delivery-app && cp -r apps/delivery-app/dist/* dist/delivery-app/
-        - cd apps/support-app && npm run build && cd ../.. && mkdir -p dist/support-app && cp -r apps/support-app/dist/* dist/support-app/
+        - echo "Building client applications..."
+        - npm run build --prefix apps/user-app
+        - npm run build --prefix apps/vendor-app
+        - npm run build --prefix apps/admin-app
+        - npm run build --prefix apps/delivery-app
+        - npm run build --prefix apps/support-app
+        - mkdir -p apps/user-app/dist/vendor-app && cp -r apps/vendor-app/dist/* apps/user-app/dist/vendor-app/
+        - mkdir -p apps/user-app/dist/admin-app && cp -r apps/admin-app/dist/* apps/user-app/dist/admin-app/
+        - mkdir -p apps/user-app/dist/delivery-app && cp -r apps/delivery-app/dist/* apps/user-app/dist/delivery-app/
+        - mkdir -p apps/user-app/dist/support-app && cp -r apps/support-app/dist/* apps/user-app/dist/support-app/
   artifacts:
-    baseDirectory: dist
+    baseDirectory: apps/user-app/dist
     files:
       - '**/*'
   cache:
