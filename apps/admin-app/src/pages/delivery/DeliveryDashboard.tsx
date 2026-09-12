@@ -128,13 +128,15 @@ export default function DeliveryDashboard() {
 
         const activeOrd = acceptedOrder || currentAlertOrder || pendingOrders[0];
         
-        // Customer location (from order submitted during checkout or user location)
-        const custLat = Number(activeOrd?.lat) || Number(userLoc?.latitude) || 12.9141;
-        const custLng = Number(activeOrd?.lng) || Number(userLoc?.longitude) || 77.6411;
+        // Warehouse Hub location (Warehouse added in Admin login)
+        const hubLat = Number(activeOrd?.warehouseLat) || 12.9250;
+        const hubLng = Number(activeOrd?.warehouseLng) || 77.6320;
+        const whName = activeOrd?.warehouseName || "Central Sourcing Warehouse";
+        const whAddr = activeOrd?.warehouseAddress || "HSR Layout, Bengaluru";
 
-        // Warehouse Hub location (Central Sourcing Dark Store Hub #104)
-        const hubLat = 12.9250;
-        const hubLng = 77.6320;
+        // Customer location (from order submitted during user checkout)
+        const custLat = Number(activeOrd?.lat) || Number(userLoc?.latitude) || (hubLat - 0.012);
+        const custLng = Number(activeOrd?.lng) || Number(userLoc?.longitude) || (hubLng + 0.015);
         const midLat = Number(((hubLat + custLat) / 2).toFixed(4));
         const midLng = Number(((hubLng + custLng) / 2).toFixed(4));
 
@@ -148,7 +150,7 @@ export default function DeliveryDashboard() {
           maxZoom: 19,
         }).addTo(map);
 
-        // 1. Dark Store Warehouse Marker
+        // 1. Dark Store Warehouse Marker (Admin Warehouse)
         const darkStoreIcon = L.divIcon({
           className: "ds-marker",
           html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981;box-shadow:0 4px 6px -1px rgba(0,0,0,0.4)">HUB</div>',
@@ -156,9 +158,9 @@ export default function DeliveryDashboard() {
         });
         L.marker([hubLat, hubLng], { icon: darkStoreIcon })
           .addTo(map)
-          .bindPopup(`<b>Central Sourcing Dark Store Hub #104</b><br/>HSR Layout, Bengaluru`);
+          .bindPopup(`<b>${whName} (Admin Warehouse)</b><br/>${whAddr}`);
 
-        // 2. Customer Destination Marker (Location submitted while ordering)
+        // 2. Customer Destination Marker (User Order Address submitted during product ordering)
         const custIcon = L.divIcon({
           className: "cust-marker",
           html: '<div style="background:#059669;color:white;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 6px -1px rgba(0,0,0,0.4)">📍</div>',
@@ -166,9 +168,9 @@ export default function DeliveryDashboard() {
         });
         L.marker([custLat, custLng], { icon: custIcon })
           .addTo(map)
-          .bindPopup(`<b>User Delivery Location</b><br/>${activeOrd?.address || "Customer Doorstep Address"}`);
+          .bindPopup(`<b>${activeOrd?.customerName || "Customer Delivery Address"}</b><br/>${activeOrd?.address || "Customer Doorstep Address"}`);
 
-        // 3. Polyline Route from Dark Store Warehouse Hub to User Location
+        // 3. Polyline Route from Admin Warehouse to User Ordering Location
         L.polyline([[hubLat, hubLng], [midLat, midLng], [custLat, custLng]], {
           color: "#10b981",
           weight: 5,
@@ -207,8 +209,10 @@ export default function DeliveryDashboard() {
               const defaultHubLat = 12.9250;
               const defaultHubLng = 77.6320;
               const payAmt = Number(o.pay || o.totalAmount || o.finalAmount || 280);
-              const latVal = Number(o.lat) || (defaultHubLat - 0.012);
-              const lngVal = Number(o.lng) || (defaultHubLng + 0.015);
+              const whLat = Number(o.warehouseLat) || defaultHubLat;
+              const whLng = Number(o.warehouseLng) || defaultHubLng;
+              const latVal = Number(o.lat) || (whLat - 0.012);
+              const lngVal = Number(o.lng) || (whLng + 0.015);
 
               return {
                 id: o.id || o.orderNumber || "ORD-2026-104",
@@ -223,6 +227,10 @@ export default function DeliveryDashboard() {
                 status: o.status || "placed",
                 lat: latVal,
                 lng: lngVal,
+                warehouseName: o.warehouseName || "Central Sourcing Dark Store Hub #104",
+                warehouseAddress: o.warehouseAddress || "HSR Layout Phase 1, Bengaluru",
+                warehouseLat: whLat,
+                warehouseLng: whLng,
               };
             });
           }
@@ -258,6 +266,10 @@ export default function DeliveryDashboard() {
                   status: uo.status || "placed",
                   lat: Number(uo.lat) || 12.9128,
                   lng: Number(uo.lng) || 77.6468,
+                  warehouseName: uo.warehouseName || "Central Sourcing Dark Store Hub #104",
+                  warehouseAddress: uo.warehouseAddress || "HSR Layout Phase 1, Bengaluru",
+                  warehouseLat: Number(uo.warehouseLat) || 12.9250,
+                  warehouseLng: Number(uo.warehouseLng) || 77.6320,
                 });
               }
             }

@@ -69,9 +69,23 @@ const RiderPayoutSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const WarehouseSchema = new mongoose.Schema(
+  {
+    id: { type: Number, unique: true, required: true },
+    name: { type: String, required: true },
+    address: { type: String, required: true },
+    city: { type: String, required: true },
+    latitude: { type: Number, required: true },
+    longitude: { type: Number, required: true },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
+
 const Order: any = mongoose.models.Order || mongoose.model("Order", OrderSchema);
 const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
 const RiderPayout: any = mongoose.models.RiderPayout || mongoose.model("RiderPayout", RiderPayoutSchema);
+const Warehouse: any = mongoose.models.Warehouse || mongoose.model("Warehouse", WarehouseSchema);
 
 async function getNextId(Model: any): Promise<number> {
   try {
@@ -161,19 +175,27 @@ app.post("/api/delivery/register", async (req: any, res: any) => {
 // GET /api/delivery/orders/active
 app.get("/api/delivery/orders/active", async (_req: any, res: any) => {
   try {
+    // Query warehouse added in Admin login
+    const activeWarehouse = await Warehouse.findOne({ isActive: true }).sort({ createdAt: -1 }).exec().catch(() => null)
+      || await Warehouse.findOne().sort({ createdAt: -1 }).exec().catch(() => null);
+
+    const warehouseLat = activeWarehouse?.latitude ? Number(activeWarehouse.latitude) : 12.9250;
+    const warehouseLng = activeWarehouse?.longitude ? Number(activeWarehouse.longitude) : 77.6320;
+    const warehouseName = activeWarehouse?.name || "Central Sourcing Dark Store Hub #104";
+    const warehouseAddress = activeWarehouse?.address
+      ? `${activeWarehouse.address}${activeWarehouse.city ? `, ${activeWarehouse.city}` : ""}`
+      : "HSR Layout Phase 1, Bengaluru";
+
     const orders = await Order.find().sort({ createdAt: -1 }).limit(20).exec().catch(() => []);
     if (orders && orders.length > 0) {
       const formatted = orders.map((o: any) => {
-        const defaultHubLat = 12.9250;
-        const defaultHubLng = 77.6320;
-
         const custAddress = o.address ? `${o.address}${o.city ? `, ${o.city}` : ""}` : "HSR Layout Phase 1, Bengaluru";
         const custName = o.customerName || "Customer Order";
         const totalAmt = Number(o.totalAmount || o.finalAmount || 280);
 
-        // Ensure valid lat/lng relative to Dark Store Hub catchment area
-        const lat = Number(o.lat) || (defaultHubLat - 0.012);
-        const lng = Number(o.lng) || (defaultHubLng + 0.015);
+        // Ensure valid lat/lng relative to user ordering address location
+        const lat = Number(o.lat) || (warehouseLat - 0.012);
+        const lng = Number(o.lng) || (warehouseLng + 0.015);
 
         return {
           id: o.orderId || `ORD-2026-${o.id}`,
@@ -189,10 +211,10 @@ app.get("/api/delivery/orders/active", async (_req: any, res: any) => {
           status: o.status || "placed",
           lat,
           lng,
-          warehouseName: "Central Sourcing Dark Store Hub #104",
-          warehouseAddress: "HSR Layout Phase 1, Bengaluru",
-          warehouseLat: defaultHubLat,
-          warehouseLng: defaultHubLng,
+          warehouseName,
+          warehouseAddress,
+          warehouseLat,
+          warehouseLng,
           createdAt: o.createdAt,
           items: Array.isArray(o.items) ? o.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Produce Item"} (${i.quantity || 1})`) : [],
         };
