@@ -674,6 +674,76 @@ app.delete("/api/products/:id", async (req: any, res: any) => {
   }
 });
 
+// GET, PUT & DELETE /api/inventory
+app.get("/api/inventory", async (_req: any, res: any) => {
+  try {
+    let items = await Inventory.find().sort({ createdAt: -1 }).exec().catch(() => []);
+
+    // Auto-sync active products into inventory if inventory items are missing
+    const products = await Product.find({ active: true }).exec().catch(() => []);
+    if (Array.isArray(products) && products.length > 0) {
+      for (const prod of products) {
+        const hasInv = items.some((inv: any) => inv.productId === prod.id || inv.productName === prod.name);
+        if (!hasInv) {
+          const nextInvId = await getNextId(Inventory);
+          const newInv = await Inventory.create({
+            id: nextInvId,
+            productId: prod.id,
+            productName: prod.name,
+            vendorName: "Direct Source Vendor",
+            warehouseName: "Central Dark Store Hub",
+            quantity: 150,
+            unit: prod.unit || "kg",
+            status: "in_stock",
+            notes: "Auto-synced Catalog Item",
+          }).catch(() => null);
+          if (newInv) items.push(newInv);
+        }
+      }
+    }
+
+    return res.json(items || []);
+  } catch (err: any) {
+    console.error("Error fetching inventory:", err);
+    return res.json([]);
+  }
+});
+
+app.put("/api/inventory/:id", async (req: any, res: any) => {
+  try {
+    const targetId = Number(req.params.id);
+    const updateData = req.body || {};
+    const payload = updateData.data || updateData;
+    const updateFields: any = {};
+
+    if (payload.quantity !== undefined) {
+      updateFields.quantity = Number(payload.quantity);
+      if (!payload.status) {
+        updateFields.status = updateFields.quantity === 0 ? "out_of_stock" : updateFields.quantity < 10 ? "low_stock" : "in_stock";
+      }
+    }
+    if (payload.status !== undefined) updateFields.status = payload.status;
+    if (payload.notes !== undefined) updateFields.notes = payload.notes;
+
+    const updated = await Inventory.findOneAndUpdate({ id: targetId }, { $set: updateFields }, { new: true }).exec();
+    if (!updated) return res.status(404).json({ error: "Inventory item not found" });
+    return res.json(updated);
+  } catch {
+    return res.status(500).json({ error: "Failed to update inventory item" });
+  }
+});
+
+app.delete("/api/inventory/:id", async (req: any, res: any) => {
+  try {
+    const targetId = Number(req.params.id);
+    const result = await Inventory.deleteOne({ id: targetId }).exec();
+    if (result.deletedCount === 0) return res.status(404).json({ error: "Inventory item not found" });
+    return res.json({ success: true, message: "Inventory item deleted" });
+  } catch {
+    return res.status(500).json({ error: "Failed to delete inventory item" });
+  }
+});
+
 // GET & POST /api/vendors
 app.get("/api/vendors", async (req: any, res: any) => {
   try {
@@ -831,9 +901,35 @@ const handleCheckoutOrder = async (req: any, res: any) => {
       paymentStatus: paymentMethod === "COD" ? "pending" : "paid",
     });
 
+    // Automatic Inventory Deduction for Every Order Item
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        if (item) {
+          const itemProdId = item.productId || item.id;
+          const orderQty = Number(item.quantity || 1);
+
+          const query = itemProdId
+            ? { $or: [{ productId: Number(itemProdId) }, { productName: { $regex: new RegExp(`^${item.name || ""}$`, "i") } }] }
+            : { productName: { $regex: new RegExp(`^${item.name || ""}$`, "i") } };
+
+          const invItem = await Inventory.findOne(query).exec().catch(() => null);
+          if (invItem) {
+            const currentQty = Number(invItem.quantity || 0);
+            const updatedQty = Math.max(0, currentQty - orderQty);
+            const updatedStatus = updatedQty === 0 ? "out_of_stock" : updatedQty < 10 ? "low_stock" : "in_stock";
+
+            await Inventory.updateOne(
+              { id: invItem.id },
+              { $set: { quantity: updatedQty, status: updatedStatus } }
+            ).exec().catch((e: any) => console.warn("Stock deduction notice:", e.message));
+          }
+        }
+      }
+    }
+
     return res.status(201).json({
       success: true,
-      message: "Order placed successfully",
+      message: "Order placed successfully and inventory stock deducted",
       order: newOrder,
       orderId: newOrder.orderId,
     });

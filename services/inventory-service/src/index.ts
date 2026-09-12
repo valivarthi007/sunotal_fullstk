@@ -38,10 +38,48 @@ async function getNextId(Model: any): Promise<number> {
   return 1;
 }
 
+const ProductSchema = new mongoose.Schema(
+  {
+    id: { type: Number, unique: true, required: true },
+    name: { type: String, required: true },
+    category: { type: String, required: true },
+    unit: { type: String, required: true },
+    price: { type: Number, required: true },
+    active: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
+
+const Product: any = mongoose.models.Product || mongoose.model("Product", ProductSchema);
+
 // GET /api/inventory
 app.get("/api/inventory", async (_req, res) => {
   try {
-    const items = await Inventory.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    let items = await Inventory.find().sort({ createdAt: -1 }).exec().catch(() => []);
+
+    // Auto-sync products into inventory if inventory items are missing
+    const products = await Product.find({ active: true }).exec().catch(() => []);
+    if (Array.isArray(products) && products.length > 0) {
+      for (const prod of products) {
+        const hasInv = items.some((inv: any) => inv.productId === prod.id || inv.productName === prod.name);
+        if (!hasInv) {
+          const nextInvId = await getNextId(Inventory);
+          const newInv = await Inventory.create({
+            id: nextInvId,
+            productId: prod.id,
+            productName: prod.name,
+            vendorName: "Direct Source Vendor",
+            warehouseName: "Central Dark Store Hub",
+            quantity: 150,
+            unit: prod.unit || "kg",
+            status: "in_stock",
+            notes: "Auto-synced Catalog Item",
+          }).catch(() => null);
+          if (newInv) items.push(newInv);
+        }
+      }
+    }
+
     return res.json(items || []);
   } catch (err: any) {
     console.error("Error fetching inventory:", err);
