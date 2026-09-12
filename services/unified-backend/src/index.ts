@@ -40,7 +40,32 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 });
 
 app.get('/api/admin/stats', (req: Request, res: Response) => {
-  res.json({ success: true, activeOrders: 14, totalRevenue: 12840, onlineRiders: 8, activeDarkStores: 2 });
+  res.json({
+    success: true,
+    totalProducts: 48,
+    totalVendors: 12,
+    totalUsers: 156,
+    activeVendors: 10,
+    activeOrders: 14,
+    totalRevenue: 12840,
+    onlineRiders: 8,
+    activeDarkStores: 2,
+    categoryBreakdown: [
+      { category: 'Vegetables', count: 18 },
+      { category: 'Dairy', count: 12 },
+      { category: 'Fruits', count: 10 },
+      { category: 'Bakery', count: 8 }
+    ],
+    recentUsers: [
+      { id: 'USR-01', name: 'John Doe', email: 'john@example.com', role: 'customer' },
+      { id: 'USR-02', name: 'Farmer Ramesh', email: 'ramesh@farmer.com', role: 'vendor' },
+      { id: 'USR-03', name: 'Rider Vikram', email: 'vikram@rider.com', role: 'driver' }
+    ],
+    recentVendors: [
+      { id: 'VEND-01', firstName: 'Ramesh', lastName: 'Kumar', location: 'Indiranagar, Bangalore', produce: 'Organic Tomatoes', createdAt: new Date().toISOString(), status: 'approved' },
+      { id: 'VEND-02', firstName: 'Suresh', lastName: 'Patel', location: 'Koramangala, Bangalore', produce: 'Fresh Milk & Dairy', createdAt: new Date().toISOString(), status: 'approved' }
+    ]
+  });
 });
 
 app.get('/api/admin/quotations', (req: Request, res: Response) => {

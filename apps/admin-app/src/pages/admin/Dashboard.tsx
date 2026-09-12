@@ -78,7 +78,7 @@ export default function Dashboard() {
               <h3 className="text-lg font-bold mb-6">Product Catalog Breakdown</h3>
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.categoryBreakdown} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <BarChart data={stats?.categoryBreakdown || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                     <XAxis dataKey="category" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} dy={10} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
@@ -95,7 +95,7 @@ export default function Dashboard() {
             <div className="bg-card border border-border rounded-2xl shadow-sm p-6 overflow-hidden flex flex-col">
               <h3 className="text-lg font-bold mb-4">Recent Users</h3>
               <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-                {stats.recentUsers.length > 0 ? stats.recentUsers.map(user => (
+                {(stats?.recentUsers || []).length > 0 ? (stats?.recentUsers || []).map(user => (
                   <div key={user.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 transition-colors border border-transparent hover:border-border">
                     <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">
                       {(user?.name || user?.email || "U").charAt(0).toUpperCase()}
@@ -131,7 +131,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {stats.recentVendors.length > 0 ? stats.recentVendors.map(vendor => (
+                  {(stats?.recentVendors || []).length > 0 ? (stats?.recentVendors || []).map(vendor => (
                     <tr key={vendor.id} className="hover:bg-accent/30 transition-colors">
                       <td className="px-6 py-4 font-medium">{vendor.firstName} {vendor.lastName}</td>
                       <td className="px-6 py-4 text-muted-foreground">{vendor.location}</td>
