@@ -3,7 +3,7 @@ set -e
 
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 
-DOCDB_URI="mongodb://sunotal:sunotalpass123@sunotal-docdb-cluster.cluster-cs1gq0a2wtpu.us-east-1.docdb.amazonaws.com:27017/sunotal?tls=true&tlsAllowInvalidCertificates=true&directConnection=true&retryWrites=false"
+DOCDB_URI="mongodb://sunotal:sunotalpass123@sunotal-docdb-cluster.cluster-cs1gq0a2wtpu.us-east-1.docdb.amazonaws.com:27017/sunotal?tls=true&tlsAllowInvalidCertificates=true&directConnection=true&retryWrites=false&authMechanism=SCRAM-SHA-1&authSource=admin"
 
 echo "Updating ECS Task Definitions with AWS DocumentDB URI: $DOCDB_URI"
 
