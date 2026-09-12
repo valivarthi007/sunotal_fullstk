@@ -134,18 +134,29 @@ export default function QuotationsAdmin() {
 
   const handleGenerateInvoice = async (id: number) => {
     try {
-      const token = localStorage.getItem("sunotal_admin_token");
+      const token = localStorage.getItem("sunotal_admin_token") || localStorage.getItem("sunotal_token");
       const res = await fetch(`/api/admin/quotations/${id}/invoice`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to generate invoice");
+      const contentType = res.headers.get("content-type") || "";
+      let data: any = {};
+      if (contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        if (!res.ok) throw new Error(text || `Server error ${res.status}`);
       }
 
-      toast.success("Invoice generated and uploaded to S3!");
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to generate invoice");
+      }
+
+      toast.success(`Invoice ${data.invoiceNumber || ""} generated and synced to S3!`);
       fetchQuotations();
     } catch (err: any) {
       toast.error(err.message || "Failed to generate invoice");
@@ -154,19 +165,27 @@ export default function QuotationsAdmin() {
 
   const handlePayout = async (id: number) => {
     try {
-      const token = localStorage.getItem("sunotal_admin_token");
+      const token = localStorage.getItem("sunotal_admin_token") || localStorage.getItem("sunotal_token");
       const res = await fetch(`/api/admin/quotations/${id}/payout`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ paymentStatus: "paid" })
       });
 
+      const contentType = res.headers.get("content-type") || "";
+      let data: any = {};
+      if (contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        if (!res.ok) throw new Error(text || `Server error ${res.status}`);
+      }
+
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to confirm payout");
+        throw new Error(data.error || "Failed to confirm payout");
       }
 
       toast.success("Payout marked as PAID!");

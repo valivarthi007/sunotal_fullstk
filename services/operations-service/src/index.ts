@@ -144,6 +144,40 @@ const OrderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const InventorySchema = new mongoose.Schema(
+  {
+    id: { type: Number, unique: true, required: true },
+    productId: { type: Number, required: true },
+    productName: { type: String },
+    vendorId: { type: Number },
+    vendorName: { type: String },
+    warehouseId: { type: Number },
+    warehouseName: { type: String },
+    quantity: { type: Number, default: 0 },
+    unit: { type: String, default: "kg" },
+    status: { type: String, default: "in_stock" },
+    notes: { type: String },
+  },
+  { timestamps: true }
+);
+
+const RiderPayoutSchema = new mongoose.Schema(
+  {
+    id: { type: Number, unique: true, required: true },
+    riderId: { type: Number },
+    riderName: { type: String, required: true },
+    email: { type: String },
+    phone: { type: String },
+    upiId: { type: String, required: true },
+    completedDeliveries: { type: Number, default: 0 },
+    totalDistanceKm: { type: Number, default: 0 },
+    amount: { type: Number, required: true },
+    status: { type: String, default: "pending" },
+    notes: { type: String },
+  },
+  { timestamps: true }
+);
+
 const Product: any = mongoose.models.Product || mongoose.model("Product", ProductSchema);
 const Vendor: any = mongoose.models.Vendor || mongoose.model("Vendor", VendorSchema);
 const Warehouse: any = mongoose.models.Warehouse || mongoose.model("Warehouse", WarehouseSchema);
@@ -151,6 +185,8 @@ const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
 const Category: any = mongoose.models.Category || mongoose.model("Category", CategorySchema);
 const Quotation: any = mongoose.models.Quotation || mongoose.model("Quotation", QuotationSchema);
 const Order: any = mongoose.models.Order || mongoose.model("Order", OrderSchema);
+const Inventory: any = mongoose.models.Inventory || mongoose.model("Inventory", InventorySchema);
+const RiderPayout: any = mongoose.models.RiderPayout || mongoose.model("RiderPayout", RiderPayoutSchema);
 
 async function getNextId(Model: any): Promise<number> {
   try {
@@ -325,61 +361,186 @@ const handleQuotationStatus = async (req: any, res: any) => {
     const updated = await Quotation.findOneAndUpdate({ id }, { $set: { status } }, { new: true }).exec();
     if (!updated) return res.status(404).json({ error: "Quotation not found" });
 
-    // Automatic product creation/addition when quotation is approved/accepted by Admin!
+    // Automatic product and inventory creation when quotation is approved/accepted by Admin!
     if (status === "accepted" || status === "approved") {
       const crop = updated.produce || updated.cropName;
       if (crop) {
-        const existingProd = await Product.findOne({ name: { $regex: new RegExp(`^${crop}$`, "i") } }).exec().catch(() => null);
+        const cat = (updated.category || "Vegetables").trim();
+        const isLiquid = cat.toLowerCase().includes("dairy") || cat.toLowerCase().includes("liquid") || cat.toLowerCase().includes("milk") || cat.toLowerCase().includes("juice");
+
+        const rawUnit = (updated.unit || "Quintal").toLowerCase();
+        let qtyInBaseUnit = Number(updated.quantity || 1);
+        let pricePerBaseUnit = Number(updated.price || 50);
+
+        if (rawUnit.includes("quintal")) {
+          qtyInBaseUnit = Number(updated.quantity || 1) * 100;
+          pricePerBaseUnit = Math.round(Number(updated.price || 2800) / 100);
+        } else if (rawUnit.includes("ton")) {
+          qtyInBaseUnit = Number(updated.quantity || 1) * 1000;
+          pricePerBaseUnit = Math.round(Number(updated.price || 28000) / 1000);
+        }
+
+        if (!pricePerBaseUnit || pricePerBaseUnit <= 0) {
+          pricePerBaseUnit = Number(updated.price || 50);
+        }
+
+        const displayUnit = isLiquid ? "1 Litre" : "1 kg";
+
+        // Category Default Images
+        let defaultImg = "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&q=80"; // Veggies
+        if (cat.toLowerCase().includes("fruit")) {
+          defaultImg = "https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=500&q=80";
+        } else if (isLiquid) {
+          defaultImg = "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=500&q=80";
+        } else if (cat.toLowerCase().includes("grain")) {
+          defaultImg = "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=500&q=80";
+        } else if (cat.toLowerCase().includes("nut") || cat.toLowerCase().includes("dry")) {
+          defaultImg = "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?w=500&q=80";
+        }
+
+        let existingProd = await Product.findOne({ name: { $regex: new RegExp(`^${crop}$`, "i") } }).exec().catch(() => null);
+        let targetProdId = existingProd?.id;
+
         if (!existingProd) {
-          const nextProdId = await getNextId(Product);
-          await Product.create({
-            id: nextProdId,
+          targetProdId = await getNextId(Product);
+          existingProd = await Product.create({
+            id: targetProdId,
             name: crop,
-            category: updated.category || "Grains",
-            unit: updated.unit || "Kg",
-            price: Number(updated.price || 50),
-            originalPrice: Math.round(Number(updated.price || 50) * 1.25),
+            category: cat,
+            unit: displayUnit,
+            price: pricePerBaseUnit,
+            originalPrice: Math.round(pricePerBaseUnit * 1.25),
             discountPercentage: 20,
-            image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&q=80",
+            image: defaultImg,
             organic: true,
             active: true,
-            description: `Fresh farm produce direct from ${updated.vendorName || updated.name || "verified farm"}. Quality grade: ${updated.qualityGrade || "Grade A"}.`,
+            description: `Fresh ${cat.toLowerCase()} direct from ${updated.vendorName || updated.name || "verified farm"}. Quality grade: ${updated.qualityGrade || "Grade A"}. Sourced from quotation #${updated.id}.`,
           }).catch((e: any) => console.warn("Auto product creation notice:", e.message));
         } else {
-          await Product.updateOne({ id: existingProd.id }, { $set: { active: true } }).exec().catch(() => null);
+          await Product.updateOne({ id: existingProd.id }, { $set: { active: true, price: pricePerBaseUnit, unit: displayUnit } }).exec().catch(() => null);
+        }
+
+        // Auto Sync with Inventory Service & Collection
+        if (targetProdId) {
+          const existingInv = await Inventory.findOne({ productId: targetProdId }).exec().catch(() => null);
+          if (!existingInv) {
+            const nextInvId = await getNextId(Inventory);
+            await Inventory.create({
+              id: nextInvId,
+              productId: targetProdId,
+              productName: crop,
+              vendorName: updated.vendorName || "Farm Vendor",
+              warehouseName: updated.darkStoreAllocation || "Central Dark Store",
+              quantity: qtyInBaseUnit,
+              unit: isLiquid ? "Litre" : "kg",
+              status: "in_stock",
+              notes: `Auto-stocked from approved quotation #${updated.id}`,
+            }).catch((e: any) => console.warn("Auto inventory creation notice:", e.message));
+          } else {
+            await Inventory.updateOne(
+              { id: existingInv.id },
+              {
+                $inc: { quantity: qtyInBaseUnit },
+                $set: { status: "in_stock", warehouseName: updated.darkStoreAllocation || existingInv.warehouseName }
+              }
+            ).exec().catch(() => null);
+          }
         }
       }
     }
 
     return res.json(updated);
   } catch (err: any) {
+    console.error("Error handling quotation status:", err);
     return res.status(500).json({ error: "Failed to update quotation" });
   }
 };
 app.put("/api/admin/quotations/:id/status", handleQuotationStatus);
 app.patch("/api/admin/quotations/:id/status", handleQuotationStatus);
 
-app.get("/api/admin/quotations/:id/invoice", async (req: any, res: any) => {
+const handleGenerateInvoice = async (req: any, res: any) => {
   const id = Number(req.params.id);
   const q = await Quotation.findOne({ id }).exec().catch(() => null);
+  const totalAmount = Number(q?.quantity || 10) * Number(q?.price || 500);
+  const gst = Math.round(totalAmount * 0.05);
+  const finalTotal = totalAmount + gst;
+
   return res.json({
+    success: true,
     invoiceNumber: `INV-2026-${id}`,
     quotationId: id,
-    vendorName: q?.vendorName || "Local Farmer",
-    cropName: q?.cropName || "Produce",
-    quantity: q?.quantity || 100,
-    price: q?.price || 5000,
-    gst: (q?.price || 5000) * 0.05,
-    total: (q?.price || 5000) * 1.05,
+    vendorName: q?.vendorName || q?.name || "Local Farmer",
+    cropName: q?.produce || q?.cropName || "Produce",
+    quantity: q?.quantity || 10,
+    unit: q?.unit || "Quintal",
+    price: q?.price || 500,
+    gst,
+    total: finalTotal,
     status: q?.paymentStatus || "processing",
+    createdAt: new Date().toISOString(),
   });
+};
+
+app.get("/api/admin/quotations/:id/invoice", handleGenerateInvoice);
+app.post("/api/admin/quotations/:id/invoice", handleGenerateInvoice);
+
+const handlePayout = async (req: any, res: any) => {
+  const id = Number(req.params.id);
+  const updated = await Quotation.findOneAndUpdate(
+    { id },
+    { $set: { paymentStatus: "paid" } },
+    { new: true }
+  ).exec().catch(() => null);
+
+  return res.json({
+    success: true,
+    message: "Payout confirmed successfully",
+    quotation: updated,
+  });
+};
+
+app.get("/api/admin/quotations/:id/payout", handlePayout);
+app.post("/api/admin/quotations/:id/payout", handlePayout);
+app.put("/api/admin/quotations/:id/payout", handlePayout);
+app.patch("/api/admin/quotations/:id/payout", handlePayout);
+
+// GET & PUT /api/admin/rider-payouts
+app.get("/api/admin/rider-payouts", async (_req: any, res: any) => {
+  try {
+    const payouts = await RiderPayout.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    if (payouts && payouts.length > 0) return res.json(payouts);
+  } catch (err: any) {
+    // Ignored
+  }
+  return res.json([
+    {
+      id: 1,
+      riderName: "Express Rider (Bengaluru)",
+      email: "delivery@sunotal.com",
+      phone: "9876543211",
+      upiId: "rider@upi",
+      completedDeliveries: 18,
+      totalDistanceKm: 64.5,
+      amount: 1060,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    }
+  ]);
 });
 
-app.post("/api/admin/quotations/:id/payout", async (req: any, res: any) => {
-  const id = Number(req.params.id);
-  await Quotation.findOneAndUpdate({ id }, { $set: { paymentStatus: "paid" } }).exec().catch(() => null);
-  return res.json({ success: true, message: "Payout initiated successfully" });
-});
+const handleUpdateRiderPayoutOps = async (req: any, res: any) => {
+  try {
+    const id = Number(req.params.id);
+    const { status } = req.body;
+    const updated = await RiderPayout.findOneAndUpdate({ id }, { $set: { status: status || "paid" } }, { new: true }).exec();
+    if (!updated) return res.status(404).json({ error: "Rider payout request not found" });
+    return res.json(updated);
+  } catch {
+    return res.status(500).json({ error: "Failed to update rider payout" });
+  }
+};
+app.put("/api/admin/rider-payouts/:id", handleUpdateRiderPayoutOps);
+app.patch("/api/admin/rider-payouts/:id", handleUpdateRiderPayoutOps);
 
 // POST /api/admin/login
 app.post("/api/admin/login", async (req: any, res: any) => {

@@ -32,6 +32,7 @@ const UsersAdmin = lazy(() => import("@/pages/admin/Users"));
 const InventoryAdmin = lazy(() => import("@/pages/admin/Inventory"));
 const BannersAdmin = lazy(() => import("@/pages/admin/Banners"));
 const QuotationsAdmin = lazy(() => import("@/pages/admin/Quotations"));
+const RiderPayoutsAdmin = lazy(() => import("@/pages/admin/RiderPayouts").then((m) => ({ default: m.RiderPayoutsAdmin })));
 const WarehouseManager = lazy(() => import("@/pages/admin/WarehouseManager").then((m) => ({ default: m.WarehouseManager })));
 const ObservabilityDashboard = lazy(() => import("@/pages/admin/ObservabilityDashboard").then((m) => ({ default: m.ObservabilityDashboard })));
 const AdminLedger = lazy(() => import("@/pages/admin/Ledger").then((m) => ({ default: m.AdminLedger })));
@@ -228,6 +229,8 @@ function SubdomainRouter() {
           <Route path="/admin/inventory" component={InventoryAdmin} />
           <Route path="/admin/vendors" component={VendorsAdmin} />
           <Route path="/admin/quotations" component={QuotationsAdmin} />
+          <Route path="/admin/rider-payouts" component={RiderPayoutsAdmin} />
+          <Route path="/admin/riders" component={RiderPayoutsAdmin} />
           <Route path="/admin/users" component={UsersAdmin} />
           <Route component={AdminRouteGuard} />
         </Switch>
