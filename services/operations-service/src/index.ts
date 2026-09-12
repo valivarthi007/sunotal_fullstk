@@ -98,12 +98,23 @@ const CategorySchema = new mongoose.Schema(
 const QuotationSchema = new mongoose.Schema(
   {
     id: { type: Number, unique: true, required: true },
+    name: { type: String },
     vendorName: { type: String, required: true },
+    produce: { type: String },
     cropName: { type: String, required: true },
     quantity: { type: Number, required: true },
     price: { type: Number, required: true },
+    category: { type: String },
+    unit: { type: String },
+    qualityGrade: { type: String },
+    expectedHarvestDate: { type: String },
+    darkStoreAllocation: { type: String },
+    notes: { type: String },
+    phone: { type: String },
+    address: { type: String },
     status: { type: String, default: "pending" },
     paymentStatus: { type: String, default: "processing" },
+    productId: { type: Number },
   },
   { timestamps: true }
 );
@@ -254,26 +265,56 @@ app.get("/api/vendors/quotations", async (_req, res) => {
 });
 
 app.post("/api/vendors/quotations", async (req: any, res: any) => {
-  const { vendorName, cropName, quantity, price } = req.body;
-  if (!cropName || !quantity || !price) {
-    return res.status(400).json({ error: "Missing required quotation fields" });
-  }
-
   try {
+    const {
+      vendorName,
+      name,
+      cropName,
+      produce,
+      quantity,
+      price,
+      category,
+      unit,
+      qualityGrade,
+      expectedHarvestDate,
+      darkStoreAllocation,
+      notes,
+      phone,
+      address,
+      location,
+    } = req.body;
+
+    const produceName = produce || cropName;
+    const vName = vendorName || name || req.user?.name || "Local Farm Vendor";
+
+    if (!produceName || quantity === undefined || price === undefined) {
+      return res.status(400).json({ error: "Missing required quotation fields: produce name, quantity, and price are required" });
+    }
+
     const nextId = await getNextId(Quotation);
     const newQuote = await Quotation.create({
       id: nextId,
-      vendorName: vendorName || "Local Farm Vendor",
-      cropName,
+      name: vName,
+      vendorName: vName,
+      produce: produceName,
+      cropName: produceName,
       quantity: Number(quantity),
       price: Number(price),
+      category: category || "Grains",
+      unit: unit || "Quintal",
+      qualityGrade: qualityGrade || "Grade A (Organic / Premium)",
+      expectedHarvestDate: expectedHarvestDate || new Date().toISOString().split("T")[0],
+      darkStoreAllocation: darkStoreAllocation || "Central Store",
+      notes: notes || "",
+      phone: phone || req.user?.phone || "N/A",
+      address: address || location || req.user?.city || "Direct Sourcing Mandal",
       status: "pending",
       paymentStatus: "processing",
     });
     return res.status(201).json(newQuote);
   } catch (err: any) {
     console.error("Error creating quotation:", err);
-    return res.status(500).json({ error: "Failed to create quotation" });
+    return res.status(500).json({ error: err.message || "Failed to create quotation" });
   }
 });
 
@@ -283,8 +324,35 @@ const handleQuotationStatus = async (req: any, res: any) => {
     const { status } = req.body;
     const updated = await Quotation.findOneAndUpdate({ id }, { $set: { status } }, { new: true }).exec();
     if (!updated) return res.status(404).json({ error: "Quotation not found" });
+
+    // Automatic product creation/addition when quotation is approved/accepted by Admin!
+    if (status === "accepted" || status === "approved") {
+      const crop = updated.produce || updated.cropName;
+      if (crop) {
+        const existingProd = await Product.findOne({ name: { $regex: new RegExp(`^${crop}$`, "i") } }).exec().catch(() => null);
+        if (!existingProd) {
+          const nextProdId = await getNextId(Product);
+          await Product.create({
+            id: nextProdId,
+            name: crop,
+            category: updated.category || "Grains",
+            unit: updated.unit || "Kg",
+            price: Number(updated.price || 50),
+            originalPrice: Math.round(Number(updated.price || 50) * 1.25),
+            discountPercentage: 20,
+            image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&q=80",
+            organic: true,
+            active: true,
+            description: `Fresh farm produce direct from ${updated.vendorName || updated.name || "verified farm"}. Quality grade: ${updated.qualityGrade || "Grade A"}.`,
+          }).catch((e: any) => console.warn("Auto product creation notice:", e.message));
+        } else {
+          await Product.updateOne({ id: existingProd.id }, { $set: { active: true } }).exec().catch(() => null);
+        }
+      }
+    }
+
     return res.json(updated);
-  } catch {
+  } catch (err: any) {
     return res.status(500).json({ error: "Failed to update quotation" });
   }
 };
