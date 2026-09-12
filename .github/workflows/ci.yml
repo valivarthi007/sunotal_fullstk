@@ -82,6 +82,13 @@ jobs:
             fi
           done
 
+#      - name: SonarQube / SonarCloud Code Analysis
+#        uses: SonarSource/sonarqube-scan-action@v3
+#        env:
+#          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+#        continue-on-error: true
+
 #      - name: Run Trivy vulnerability scanner (Filesystem)
 #        uses: aquasecurity/trivy-action@master
 #        with:
