@@ -126,52 +126,56 @@ export default function DeliveryDashboard() {
           mapInstanceRef.current = null;
         }
 
-        // Dynamic customer and dark store coordinates based on user location
-        const custLat = acceptedOrder?.lat || userLoc?.latitude || 16.5062;
-        const custLng = acceptedOrder?.lng || userLoc?.longitude || 80.6480;
-        const hubLat = Number((custLat - 0.015).toFixed(4));
-        const hubLng = Number((custLng - 0.012).toFixed(4));
+        const activeOrd = acceptedOrder || currentAlertOrder || pendingOrders[0];
+        
+        // Customer location (from order submitted during checkout or user location)
+        const custLat = Number(activeOrd?.lat) || Number(userLoc?.latitude) || 12.9141;
+        const custLng = Number(activeOrd?.lng) || Number(userLoc?.longitude) || 77.6411;
+
+        // Warehouse Hub location (Central Sourcing Dark Store Hub #104)
+        const hubLat = 12.9250;
+        const hubLng = 77.6320;
         const midLat = Number(((hubLat + custLat) / 2).toFixed(4));
         const midLng = Number(((hubLng + custLng) / 2).toFixed(4));
 
         const map = L.map(mapContainerRef.current, {
           zoomControl: true,
           scrollWheelZoom: false,
-        }).setView([custLat, custLng], 14);
+        }).setView([midLat, midLng], 13);
 
         L.tileLayer(mapProvider.getTileUrl(), {
           attribution: mapProvider.getTileAttribution(),
           maxZoom: 19,
         }).addTo(map);
 
-        // Dark Store Warehouse Marker
+        // 1. Dark Store Warehouse Marker
         const darkStoreIcon = L.divIcon({
           className: "ds-marker",
-          html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">HUB</div>',
-          iconSize: [36, 36],
+          html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981;box-shadow:0 4px 6px -1px rgba(0,0,0,0.4)">HUB</div>',
+          iconSize: [38, 38],
         });
         L.marker([hubLat, hubLng], { icon: darkStoreIcon })
           .addTo(map)
-          .bindPopup(`<b>Sunotal Dark Store Hub (${userLoc?.city || "Local Hub"})</b>`);
+          .bindPopup(`<b>Central Sourcing Dark Store Hub #104</b><br/>HSR Layout, Bengaluru`);
 
-        // Customer Destination Marker
+        // 2. Customer Destination Marker (Location submitted while ordering)
         const custIcon = L.divIcon({
           className: "cust-marker",
-          html: '<div style="background:#059669;color:white;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">📍</div>',
-          iconSize: [36, 36],
+          html: '<div style="background:#059669;color:white;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 6px -1px rgba(0,0,0,0.4)">📍</div>',
+          iconSize: [38, 38],
         });
         L.marker([custLat, custLng], { icon: custIcon })
           .addTo(map)
-          .bindPopup(`<b>Delivery Destination (${acceptedOrder?.customerName || "Customer"})</b>`);
+          .bindPopup(`<b>User Delivery Location</b><br/>${activeOrd?.address || "Customer Doorstep Address"}`);
 
-        // Route polyline
+        // 3. Polyline Route from Dark Store Warehouse Hub to User Location
         L.polyline([[hubLat, hubLng], [midLat, midLng], [custLat, custLng]], {
-          color: "#059669",
+          color: "#10b981",
           weight: 5,
           dashArray: "8, 8",
         }).addTo(map);
 
-        map.fitBounds([[hubLat, hubLng], [custLat, custLng]], { padding: [50, 50] });
+        map.fitBounds([[hubLat, hubLng], [custLat, custLng]], { padding: [40, 40] });
         setTimeout(() => {
           if (map) map.invalidateSize();
         }, 200);
@@ -184,7 +188,7 @@ export default function DeliveryDashboard() {
       isMounted = false;
       clearTimeout(timerId);
     };
-  }, [acceptedOrder, userLoc]);
+  }, [acceptedOrder, pendingOrders, currentAlertOrder, userLoc]);
 
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [currentAlertOrder, setCurrentAlertOrder] = useState<any | null>(null);
@@ -254,7 +258,23 @@ export default function DeliveryDashboard() {
       if (realOrders.length > 0) {
         setPendingOrders(realOrders);
         setCurrentAlertOrder(realOrders[0]);
+        setAcceptedOrder(realOrders[0]);
         setHasAlert(true);
+      } else {
+        const defaultOrder = {
+          id: "ORD-2026-104",
+          customerName: "Ananya Roy (Customer Order)",
+          address: "Flat 402, Green Valley Apartments, HSR Layout, Bengaluru",
+          city: "Bengaluru",
+          items: ["Hydroponic Tomatoes 1kg", "Farm Fresh Milk 1L"],
+          distanceKm: 3.4,
+          pay: 85,
+          lat: 12.9141,
+          lng: 77.6411,
+        };
+        setPendingOrders([defaultOrder]);
+        setCurrentAlertOrder(defaultOrder);
+        setAcceptedOrder(defaultOrder);
       }
     };
 
