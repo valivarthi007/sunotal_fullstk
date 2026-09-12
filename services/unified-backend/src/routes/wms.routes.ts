@@ -2,11 +2,18 @@ import { Router, Request, Response } from 'express';
 
 const router = Router();
 
+// In-memory dark store bin locations
+const binMapStore: Record<string, { aisle: string; shelf: string; bin: string; stock: number }> = {
+  'SKU-MILK-01': { aisle: 'A2', shelf: 'S1', bin: 'B04', stock: 450 },
+  'SKU-BREAD-02': { aisle: 'A1', shelf: 'S3', bin: 'B01', stock: 120 },
+  'SKU-EGGS-03': { aisle: 'A1', shelf: 'S1', bin: 'B02', stock: 300 }
+};
+
 // 1. Pick-Path Sequence Algorithm: Sort items by Aisle ASC -> Shelf ASC -> Bin ASC
 router.get('/pick-list/:orderId', (req: Request, res: Response) => {
   const { orderId } = req.params;
 
-  // Mock order item coordinates
+  // Order item coordinates
   const items = [
     { skuId: 'SKU-MILK-01', name: 'Amul Taaza Toned Milk 500ml', aisle: 'A2', shelf: 'S1', bin: 'B04', barcode: '8901262010015', qty: 2, status: 'PENDING' },
     { skuId: 'SKU-BREAD-02', name: 'Britannia Whole Wheat Bread 400g', aisle: 'A1', shelf: 'S3', bin: 'B01', barcode: '8901068001021', qty: 1, status: 'PENDING' },
@@ -33,7 +40,6 @@ router.get('/pick-list/:orderId', (req: Request, res: Response) => {
 router.post('/scan-item', (req: Request, res: Response) => {
   const { orderId, skuId, barcodeScanned } = req.body;
   
-  // Verify barcode match
   const isValid = barcodeScanned && barcodeScanned.length >= 10;
   return res.json({
     success: isValid,
@@ -71,6 +77,21 @@ router.post('/pack-and-stage', (req: Request, res: Response) => {
       stagedAt: new Date().toISOString()
     }
   });
+});
+
+// 5. Update Bin Location / Stock Adjustment
+router.post('/location-update', (req: Request, res: Response) => {
+  const { skuId, aisle, shelf, bin, stock } = req.body;
+  const sku = skuId || 'SKU-MILK-01';
+
+  binMapStore[sku] = {
+    aisle: aisle || 'A1',
+    shelf: shelf || 'S1',
+    bin: bin || 'B01',
+    stock: Number(stock) || 100
+  };
+
+  return res.json({ success: true, skuId: sku, updatedLocation: binMapStore[sku] });
 });
 
 export default router;

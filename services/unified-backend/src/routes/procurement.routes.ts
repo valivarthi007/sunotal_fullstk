@@ -2,15 +2,27 @@ import { Router, Request, Response } from 'express';
 
 const router = Router();
 
-// In-memory / MongoDB Procurement Collection handler
-const quotationsStore: any[] = [];
+// In-memory Procurement Store
+const quotationsStore: any[] = [
+  {
+    id: 'QUOTE-101',
+    vendorId: 'VENDOR-001',
+    vendorName: 'Farmer Ramesh Kumar',
+    produceName: 'Organic Fresh Tomatoes',
+    quantityKg: 500,
+    expectedHarvestDate: new Date(Date.now() + 86400000 * 2).toISOString(),
+    pricePerKg: 35,
+    status: 'ACCEPTED',
+    submittedAt: new Date(Date.now() - 86400000).toISOString()
+  }
+];
 
 // 1. Submit Produce Harvest Quotation
 router.post('/quotations', (req: Request, res: Response) => {
   const { vendorId, produceName, quantityKg, expectedHarvestDate, pricePerKg } = req.body;
   
   const quotation = {
-    id: `QUOTE-${Date.now()}`,
+    id: `QUOTE-${Date.now().toString().slice(-6)}`,
     vendorId: vendorId || 'VENDOR-001',
     produceName: produceName || 'Organic Fresh Tomatoes',
     quantityKg: Number(quantityKg) || 500,
@@ -29,7 +41,20 @@ router.get('/quotations', (req: Request, res: Response) => {
   return res.json({ success: true, quotations: quotationsStore });
 });
 
-// 3. Batch Labeling & Expiry Generator (Lot ID & Expiry Date)
+// 3. Approve / Reject Quotation
+router.patch('/quotations/:id/status', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const quote = quotationsStore.find(q => q.id === id);
+  if (quote) {
+    quote.status = status || 'ACCEPTED';
+  }
+
+  return res.json({ success: true, message: `Quotation ${id} status updated to ${status || 'ACCEPTED'}`, quotation: quote });
+});
+
+// 4. Batch Labeling & Expiry Generator (Lot ID & Expiry Date)
 router.post('/batch-label', (req: Request, res: Response) => {
   const { skuId, produceName, harvestDate, shelfLifeDays } = req.body;
   const days = Number(shelfLifeDays) || 7;

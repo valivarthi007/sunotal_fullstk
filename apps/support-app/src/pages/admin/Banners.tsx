@@ -25,7 +25,8 @@ import { Plus, Trash2, ImageIcon, Upload, GalleryHorizontalEnd } from "lucide-re
 import { useState, useRef } from "react";
 
 export default function BannersAdmin() {
-  const { data: banners = [], isLoading } = useListBanners();
+  const { data: rawBanners, isLoading } = useListBanners();
+  const banners = Array.isArray(rawBanners) ? rawBanners : [];
   const createBanner = useCreateBanner();
   const deleteBanner = useDeleteBanner();
 

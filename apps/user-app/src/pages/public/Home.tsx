@@ -48,10 +48,11 @@ export default function Home() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { location: userLoc, setManualLocation } = useLocationState();
 
-  const { data: apiBanners = [] } = useListBanners();
+  const { data: rawBanners } = useListBanners();
+  const apiBanners = Array.isArray(rawBanners) ? rawBanners : [];
 
   const SLIDES = useMemo(() => {
-    if (apiBanners.length === 0) return FALLBACK_SLIDES;
+    if (!Array.isArray(apiBanners) || apiBanners.length === 0) return FALLBACK_SLIDES;
     const BG_COLORS = ["#0B2914", "#1A5C24", "#2A8C3F", "#154C21", "#0D3A18"];
     return apiBanners.map((b, i) => ({
       bg: BG_COLORS[i % BG_COLORS.length],
@@ -62,9 +63,10 @@ export default function Home() {
     }));
   }, [apiBanners]);
 
-  const { data: dbCategories = [] } = useListCategories();
+  const { data: rawCategories } = useListCategories();
+  const dbCategories = Array.isArray(rawCategories) ? rawCategories : [];
   const categoriesList = useMemo(() => {
-    if (!dbCategories || dbCategories.length === 0) return DEFAULT_CATEGORIES;
+    if (!Array.isArray(dbCategories) || dbCategories.length === 0) return DEFAULT_CATEGORIES;
     return dbCategories.map((c) => ({
       name: c.name,
       path: c.name === "Vegetables" ? "/vegetables" : c.name === "Fruits" ? "/fruits" : c.name === "Dairy" ? "/dairy" : c.name === "Dry Fruits" ? "/dry-fruits" : c.name === "Grains" ? "/grains" : `/products?category=${encodeURIComponent(c.name)}`,

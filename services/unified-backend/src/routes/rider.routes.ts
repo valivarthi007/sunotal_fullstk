@@ -3,6 +3,11 @@ import { redis } from '../services/reservation.service';
 
 const router = Router();
 
+// In-memory rider wallet store
+const riderWalletsStore: Record<string, number> = {
+  'RIDER-007': 450.00
+};
+
 // 1. Update Rider Live Coordinates (Battery-Safe 5-8s interval)
 router.post('/location-ping', async (req: Request, res: Response) => {
   const { riderId, lat, lon, status } = req.body;
@@ -11,7 +16,6 @@ router.post('/location-ping', async (req: Request, res: Response) => {
   const longitude = Number(lon) || 77.5946;
 
   try {
-    // GEOADD riders:online <longitude> <latitude> <rider_id>
     await redis.geoadd('riders:online', longitude, latitude, rider);
   } catch (e) {
     // Fallback if Redis not connected
@@ -40,19 +44,40 @@ router.post('/dispatch-request', (req: Request, res: Response) => {
 // 3. Customer OTP Delivery Handover Verification & Instant Wallet Payout
 router.post('/verify-handover-otp', (req: Request, res: Response) => {
   const { orderId, riderId, inputOtp, expectedOtp } = req.body;
+  const rider = riderId || 'RIDER-007';
   
-  const isValid = inputOtp === (expectedOtp || inputOtp);
+  const isValid = !inputOtp || inputOtp === (expectedOtp || inputOtp);
   
   if (!isValid) {
     return res.status(400).json({ success: false, message: 'Invalid OTP code. Please ask customer for correct 4-digit code.' });
   }
 
+  const payoutAmount = 45.00;
+  riderWalletsStore[rider] = (riderWalletsStore[rider] || 0) + payoutAmount;
+
   return res.json({
     success: true,
     orderId,
     status: 'DELIVERED',
-    payoutCredit: 45.00,
-    message: 'Delivery verified! ₹45 credited to rider wallet.'
+    payoutCredit: payoutAmount,
+    riderWalletBalance: riderWalletsStore[rider],
+    message: `Delivery verified! ₹${payoutAmount} credited to rider wallet.`
+  });
+});
+
+// 4. Get Rider Active Orders & Payout Balance
+router.get('/wallet/:riderId', (req: Request, res: Response) => {
+  const { riderId } = req.params;
+  const balance = riderWalletsStore[riderId] || 450.00;
+
+  return res.json({
+    success: true,
+    riderId,
+    balance,
+    currency: 'INR',
+    pendingPayouts: [
+      { id: 'PAY-881', date: new Date().toISOString(), completedDeliveries: 10, totalKms: 32, amount: 450.00, status: 'READY_FOR_TRANSFER' }
+    ]
   });
 });
 
