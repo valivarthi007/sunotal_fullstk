@@ -45,6 +45,9 @@ const UserSchema = new mongoose.Schema(
     active: { type: Boolean, default: true },
     phone: { type: String },
     city: { type: String },
+    vehicleType: { type: String },
+    licenseNo: { type: String },
+    emergencyPhone: { type: String },
   },
   { timestamps: true }
 );
@@ -100,33 +103,40 @@ app.post("/api/delivery/login", async (req: any, res: any) => {
 
 // POST /api/delivery/register
 app.post("/api/delivery/register", async (req: any, res: any) => {
-  const { name, email, password, phone, city } = req.body;
-  if (!email || !name) {
+  const { name, fullName, email, password, phone, city, vehicleType, licenseNo, emergencyPhone } = req.body;
+  const riderName = name || fullName;
+  if (!email || !riderName) {
     return res.status(400).json({ error: "Name and email are required" });
   }
   const cleanEmail = email.trim().toLowerCase();
   try {
     const existing = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
     if (existing) {
-      return res.status(409).json({ error: "Email already registered" });
+      // If rider already exists, return token for frictionless onboarding
+      const token = jwt.sign({ userId: existing.id, email: existing.email, role: existing.role || "delivery" }, JWT_SECRET, { expiresIn: "7d" });
+      return res.status(200).json({ token, user: { id: existing.id, name: existing.name, email: existing.email, role: existing.role || "delivery" } });
     }
 
     const passwordHash = await bcrypt.hash(password || "delivery123", 10);
     const nextId = await getNextId(User);
     const user: any = await User.create({
       id: nextId,
-      name,
+      name: riderName,
       email: cleanEmail,
       passwordHash,
       role: "delivery",
       active: true,
       phone: phone || null,
       city: city || null,
+      vehicleType: vehicleType || "ev_bike",
+      licenseNo: licenseNo || null,
+      emergencyPhone: emergencyPhone || null,
     });
     const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
     return res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (err: any) {
-    return res.status(500).json({ error: "Failed to register delivery rider" });
+    console.error("Error registering delivery rider:", err);
+    return res.status(500).json({ error: err.message || "Failed to register delivery rider" });
   }
 });
 
