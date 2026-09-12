@@ -61,16 +61,26 @@ resource "aws_amplify_domain_association" "sunotal" {
   app_id      = aws_amplify_app.sunotal.id
   domain_name = var.domain_name
 
-  # Customer Storefront (Main)
+  # Customer Storefront (Main & Root)
   sub_domain {
     branch_name = aws_amplify_branch.main.branch_name
     prefix      = "sunotal"
   }
 
-  # Vendor Portal
+  sub_domain {
+    branch_name = aws_amplify_branch.main.branch_name
+    prefix      = ""
+  }
+
+  # Vendor / Farmer Procurement Portal
   sub_domain {
     branch_name = aws_amplify_branch.main.branch_name
     prefix      = "vendor-sunotal"
+  }
+
+  sub_domain {
+    branch_name = aws_amplify_branch.main.branch_name
+    prefix      = "vendor"
   }
 
   # Admin / Dark Store Hub WMS
@@ -79,15 +89,35 @@ resource "aws_amplify_domain_association" "sunotal" {
     prefix      = "admin-sunotal"
   }
 
-  # Delivery / Rider Fulfillment
+  sub_domain {
+    branch_name = aws_amplify_branch.main.branch_name
+    prefix      = "admin"
+  }
+
+  # Delivery / Rider Fleet Fulfillment
   sub_domain {
     branch_name = aws_amplify_branch.main.branch_name
     prefix      = "delivery-sunotal"
+  }
+
+  sub_domain {
+    branch_name = aws_amplify_branch.main.branch_name
+    prefix      = "delivery"
+  }
+
+  sub_domain {
+    branch_name = aws_amplify_branch.main.branch_name
+    prefix      = "rider"
   }
 
   # Support Portal
   sub_domain {
     branch_name = aws_amplify_branch.main.branch_name
     prefix      = "support-sunotal"
+  }
+
+  sub_domain {
+    branch_name = aws_amplify_branch.main.branch_name
+    prefix      = "support"
   }
 }
