@@ -52,7 +52,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
     return () => { document.body.style.overflow = ""; };
   }, [isOpen, mobileMenuOpen]);
 
-  const { data: dbCategories = [] } = useListCategories();
+  const { data: rawDbCategories } = useListCategories();
+  const dbCategories = Array.isArray(rawDbCategories) ? rawDbCategories : [];
   const categoryNavLinks = useMemo(() => {
     const defaults = [
       { name: "Vegetables", path: "/vegetables" },
@@ -61,7 +62,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       { name: "Dry Fruits", path: "/dry-fruits" },
       { name: "Grains", path: "/grains" },
     ];
-    if (!dbCategories || dbCategories.length === 0) return defaults;
+    if (!Array.isArray(dbCategories) || dbCategories.length === 0) return defaults;
     return dbCategories.map((c) => ({
       name: c.name,
       path: c.name === "Vegetables" ? "/vegetables" : c.name === "Fruits" ? "/fruits" : c.name === "Dairy" ? "/dairy" : c.name === "Dry Fruits" ? "/dry-fruits" : c.name === "Grains" ? "/grains" : `/products?category=${encodeURIComponent(c.name)}`,

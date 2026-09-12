@@ -53,14 +53,17 @@ export default function ProductsPage({ initialCategory = "All" }: ProductsPagePr
   const [search, setSearch] = useState("");
   const currentCategory = initialCategory !== "All" ? initialCategory : pathToCategory(location.split("?")[0]);
 
-  const { data: dbCategories = [] } = useListCategories();
+  const { data: rawDbCategories } = useListCategories();
+  const dbCategories = Array.isArray(rawDbCategories) ? rawDbCategories : [];
   const categories = useMemo(() => {
     const list = ["All"];
     const set = new Set<string>();
-    for (const c of dbCategories) {
-      if (c.name && !set.has(c.name)) {
-        set.add(c.name);
-        list.push(c.name);
+    if (Array.isArray(dbCategories)) {
+      for (const c of dbCategories) {
+        if (c?.name && !set.has(c.name)) {
+          set.add(c.name);
+          list.push(c.name);
+        }
       }
     }
     return list;

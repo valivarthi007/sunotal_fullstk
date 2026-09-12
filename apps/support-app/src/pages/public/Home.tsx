@@ -62,9 +62,10 @@ export default function Home() {
     }));
   }, [apiBanners]);
 
-  const { data: dbCategories = [] } = useListCategories();
+  const { data: rawCategories } = useListCategories();
+  const dbCategories = Array.isArray(rawCategories) ? rawCategories : [];
   const categoriesList = useMemo(() => {
-    if (!dbCategories || dbCategories.length === 0) return DEFAULT_CATEGORIES;
+    if (!Array.isArray(dbCategories) || dbCategories.length === 0) return DEFAULT_CATEGORIES;
     return dbCategories.map((c) => ({
       name: c.name,
       path: c.name === "Vegetables" ? "/vegetables" : c.name === "Fruits" ? "/fruits" : c.name === "Dairy" ? "/dairy" : c.name === "Dry Fruits" ? "/dry-fruits" : c.name === "Grains" ? "/grains" : `/products?category=${encodeURIComponent(c.name)}`,
