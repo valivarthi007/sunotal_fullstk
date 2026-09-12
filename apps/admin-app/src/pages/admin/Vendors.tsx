@@ -1,4 +1,5 @@
 import { AdminLayout } from "@/components/layout/AdminLayout";
+import { Link } from "wouter";
 import { 
   useListVendors, 
   useUpdateVendor, 
@@ -38,7 +39,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { Search, Edit2, Trash2, CheckCircle2, XCircle, FileText, Store, PackagePlus, Landmark } from "lucide-react";
+import { Search, Edit2, Trash2, CheckCircle2, XCircle, FileText, Store, PackagePlus, Landmark, Bike } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -177,8 +178,20 @@ export default function VendorsAdmin() {
     <AdminLayout>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-sidebar-foreground tracking-tight">Vendors</h1>
-          <p className="text-muted-foreground mt-1">Manage farmer applications and approved suppliers.</p>
+          <h1 className="text-3xl font-bold text-sidebar-foreground tracking-tight">Vendors & Supplier Fleet</h1>
+          <p className="text-muted-foreground mt-1">Manage farmer applications, approved suppliers, and process vendor payouts.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link href="/admin/quotations">
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2">
+              <FileText className="w-4 h-4" /> Vendor Payouts & Invoices
+            </Button>
+          </Link>
+          <Link href="/admin/rider-payouts">
+            <Button variant="outline" className="font-bold gap-2 border-emerald-500/30 text-emerald-600 hover:bg-emerald-50">
+              <Bike className="w-4 h-4" /> Rider Fleet Payouts
+            </Button>
+          </Link>
         </div>
       </div>
 

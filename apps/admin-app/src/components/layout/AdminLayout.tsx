@@ -39,9 +39,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     { name: "Observability", path: "/admin/observability", icon: Activity },
     { name: "Banners", path: "/admin/banners", icon: GalleryHorizontalEnd },
     { name: "Inventory", path: "/admin/inventory", icon: ClipboardList },
-    { name: "Vendors", path: "/admin/vendors", icon: Store },
-    { name: "Quotations", path: "/admin/quotations", icon: FileText },
-    { name: "Rider Payouts", path: "/admin/rider-payouts", icon: Bike },
+    { name: "Vendors List", path: "/admin/vendors", icon: Store },
+    { name: "Vendor Payouts & Invoices", path: "/admin/quotations", icon: FileText },
+    { name: "Rider Fleet Payouts", path: "/admin/rider-payouts", icon: Bike },
     { name: "Users", path: "/admin/users", icon: Users },
   ];
 
