@@ -331,7 +331,7 @@ export default function VendorsAdmin() {
               {isLoading ? (
                 <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">Loading vendors...</td></tr>
               ) : vendors && vendors.length > 0 ? (
-                vendors.map((vendor) => (
+                vendors.map((vendor: any) => (
                   <tr key={vendor.id} className="hover:bg-accent/30 transition-colors group">
                     <td className="px-6 py-4">
                       <div>

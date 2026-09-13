@@ -98,10 +98,15 @@ export const ChatbotWidget: React.FC = () => {
         id: Date.now(),
         name: action.productName,
         price: action.price,
+        originalPrice: action.price,
+        discountPercentage: 0,
+        unit: '200g',
+        category: 'Dairy',
+        organic: false,
+        inStock: true,
+        rating: 4.8,
         image: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=300&auto=format&fit=crop&q=80',
-        weight: '200g',
-        category: 'Dairy'
-      });
+      } as any);
       const botConfirm: ChatMessage = {
         id: String(Date.now()),
         sender: 'bot',
