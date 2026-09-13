@@ -12,6 +12,13 @@ echo "===================================================="
 dnf update -y
 dnf install -y --allowerasing git docker htop
 
+# Create 2GB Swap file for low-memory t2.micro stability
+fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile || true
+echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
+
 # Enable & Start Docker Service
 systemctl enable docker
 systemctl start docker
