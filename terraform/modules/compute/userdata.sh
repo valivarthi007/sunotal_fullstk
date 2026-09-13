@@ -10,7 +10,7 @@ echo "===================================================="
 
 # 1. System Updates & Core Packages
 dnf update -y
-dnf install -y git docker htop curl
+dnf install -y --allowerasing git docker htop
 
 # Enable & Start Docker Service
 systemctl enable docker
