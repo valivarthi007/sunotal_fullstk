@@ -126,58 +126,52 @@ export default function DeliveryDashboard() {
           mapInstanceRef.current = null;
         }
 
-        const activeOrd = acceptedOrder || currentAlertOrder || pendingOrders[0];
-        
-        // Warehouse Hub location (Warehouse added in Admin login)
-        const hubLat = Number(activeOrd?.warehouseLat) || 12.9250;
-        const hubLng = Number(activeOrd?.warehouseLng) || 77.6320;
-        const whName = activeOrd?.warehouseName || "Central Sourcing Warehouse";
-        const whAddr = activeOrd?.warehouseAddress || "HSR Layout, Bengaluru";
-
-        // Customer location (from order submitted during user checkout)
-        const custLat = Number(activeOrd?.lat) || Number(userLoc?.latitude) || (hubLat - 0.012);
-        const custLng = Number(activeOrd?.lng) || Number(userLoc?.longitude) || (hubLng + 0.015);
+        // Dynamic customer and dark store coordinates based on user location
+        const custLat = acceptedOrder?.lat || userLoc?.latitude || 16.5062;
+        const custLng = acceptedOrder?.lng || userLoc?.longitude || 80.6480;
+        const hubLat = Number((custLat - 0.015).toFixed(4));
+        const hubLng = Number((custLng - 0.012).toFixed(4));
         const midLat = Number(((hubLat + custLat) / 2).toFixed(4));
         const midLng = Number(((hubLng + custLng) / 2).toFixed(4));
 
         const map = L.map(mapContainerRef.current, {
           zoomControl: true,
           scrollWheelZoom: false,
-        }).setView([midLat, midLng], 13);
+        }).setView([custLat, custLng], 14);
 
         L.tileLayer(mapProvider.getTileUrl(), {
           attribution: mapProvider.getTileAttribution(),
           maxZoom: 19,
         }).addTo(map);
 
-        // 1. Dark Store Warehouse Marker (Admin Warehouse)
+        // Dark Store Warehouse Marker
         const darkStoreIcon = L.divIcon({
           className: "ds-marker",
-          html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981;box-shadow:0 4px 6px -1px rgba(0,0,0,0.4)">HUB</div>',
-          iconSize: [38, 38],
+          html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">HUB</div>',
+          iconSize: [36, 36],
         });
         L.marker([hubLat, hubLng], { icon: darkStoreIcon })
           .addTo(map)
-          .bindPopup(`<b>${whName} (Admin Warehouse)</b><br/>${whAddr}`);
+          .bindPopup(`<b>Sunotal Dark Store Hub (${userLoc?.city || "Local Hub"})</b>`);
 
-        // 2. Customer Destination Marker (User Order Address submitted during product ordering)
+        // Customer Destination Marker
         const custIcon = L.divIcon({
           className: "cust-marker",
-          html: '<div style="background:#059669;color:white;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 6px -1px rgba(0,0,0,0.4)">📍</div>',
-          iconSize: [38, 38],
+          html: '<div style="background:#059669;color:white;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">📍</div>',
+          iconSize: [36, 36],
         });
         L.marker([custLat, custLng], { icon: custIcon })
           .addTo(map)
-          .bindPopup(`<b>${activeOrd?.customerName || "Customer Delivery Address"}</b><br/>${activeOrd?.address || "Customer Doorstep Address"}`);
+          .bindPopup(`<b>Delivery Destination (${acceptedOrder?.customerName || "Customer"})</b>`);
 
-        // 3. Polyline Route from Admin Warehouse to User Ordering Location
+        // Route polyline
         L.polyline([[hubLat, hubLng], [midLat, midLng], [custLat, custLng]], {
-          color: "#10b981",
+          color: "#059669",
           weight: 5,
           dashArray: "8, 8",
         }).addTo(map);
 
-        map.fitBounds([[hubLat, hubLng], [custLat, custLng]], { padding: [40, 40] });
+        map.fitBounds([[hubLat, hubLng], [custLat, custLng]], { padding: [50, 50] });
         setTimeout(() => {
           if (map) map.invalidateSize();
         }, 200);
@@ -190,7 +184,7 @@ export default function DeliveryDashboard() {
       isMounted = false;
       clearTimeout(timerId);
     };
-  }, [acceptedOrder, pendingOrders, currentAlertOrder, userLoc]);
+  }, [acceptedOrder, userLoc]);
 
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [currentAlertOrder, setCurrentAlertOrder] = useState<any | null>(null);
@@ -205,34 +199,20 @@ export default function DeliveryDashboard() {
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            realOrders = data.map((o: any) => {
-              const defaultHubLat = 12.9250;
-              const defaultHubLng = 77.6320;
-              const payAmt = Number(o.pay || o.totalAmount || o.finalAmount || 280);
-              const whLat = Number(o.warehouseLat) || defaultHubLat;
-              const whLng = Number(o.warehouseLng) || defaultHubLng;
-              const latVal = Number(o.lat) || (whLat - 0.012);
-              const lngVal = Number(o.lng) || (whLng + 0.015);
-
-              return {
-                id: o.id || o.orderNumber || "ORD-2026-104",
-                numericId: o.numericId || o.id,
-                customerName: o.customerName || "Customer Order",
-                address: o.address || "HSR Layout Phase 1, Bengaluru",
-                city: o.city || "Bengaluru",
-                items: Array.isArray(o.items) ? o.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Produce"} (${i.quantity || 1})`) : [],
-                distanceKm: 3.2,
-                pay: payAmt,
-                totalAmount: payAmt,
-                status: o.status || "placed",
-                lat: latVal,
-                lng: lngVal,
-                warehouseName: o.warehouseName || "Central Sourcing Dark Store Hub #104",
-                warehouseAddress: o.warehouseAddress || "HSR Layout Phase 1, Bengaluru",
-                warehouseLat: whLat,
-                warehouseLng: whLng,
-              };
-            });
+            realOrders = data.map((o: any) => ({
+              id: o.id || o.orderNumber,
+              numericId: o.numericId || o.id,
+              customerName: o.customerName || "",
+              address: o.address || "",
+              city: o.city || "",
+              items: Array.isArray(o.items) ? o.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || ""} (${i.quantity || 1})`) : [],
+              distanceKm: 0,
+              pay: Number(o.totalAmount || 0),
+              totalAmount: Number(o.totalAmount || 0),
+              status: o.status || "placed",
+              lat: Number(o.lat || 0),
+              lng: Number(o.lng || 0),
+            }));
           }
         }
       } catch (err) {
@@ -248,28 +228,20 @@ export default function DeliveryDashboard() {
             const activeUserOrders = userOrders.filter((o: any) => o.status !== "delivered" && o.status !== "cancelled");
             for (const uo of activeUserOrders) {
               const orderIdStr = String(uo.id || uo.orderNumber || uo.orderId);
-              const payAmt = Number(uo.pay || uo.totalAmount || uo.finalAmount || uo.finalPayable || 280);
-              const addrStr = uo.address || (uo.deliveryAddress?.addressLine1 ? `${uo.deliveryAddress.addressLine1}${uo.city ? `, ${uo.city}` : ""}` : "HSR Layout Phase 1, Bengaluru");
-              const nameStr = uo.customerName || uo.name || uo.deliveryAddress?.name || "Customer Order";
-
               if (!realOrders.some((ro) => String(ro.id) === orderIdStr)) {
                 realOrders.unshift({
                   id: orderIdStr,
                   numericId: uo.id || uo.numericId,
-                  customerName: nameStr,
-                  address: addrStr,
-                  city: uo.city || "Bengaluru",
-                  items: Array.isArray(uo.items) ? uo.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Produce"} (${i.quantity || 1})`) : [],
-                  distanceKm: 3.2,
-                  pay: payAmt,
-                  totalAmount: payAmt,
+                  customerName: uo.customerName || uo.name || uo.deliveryAddress?.name || "",
+                  address: uo.address || (uo.deliveryAddress?.addressLine1 ? `${uo.deliveryAddress.addressLine1}${uo.city ? `, ${uo.city}` : ""}` : ""),
+                  city: uo.city || "",
+                  items: Array.isArray(uo.items) ? uo.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || ""} (${i.quantity || 1})`) : [],
+                  distanceKm: 0,
+                  pay: Number(uo.totalAmount || uo.finalAmount || 0),
+                  totalAmount: Number(uo.totalAmount || uo.finalAmount || 0),
                   status: uo.status || "placed",
-                  lat: Number(uo.lat) || 12.9128,
-                  lng: Number(uo.lng) || 77.6468,
-                  warehouseName: uo.warehouseName || "Central Sourcing Dark Store Hub #104",
-                  warehouseAddress: uo.warehouseAddress || "HSR Layout Phase 1, Bengaluru",
-                  warehouseLat: Number(uo.warehouseLat) || 12.9250,
-                  warehouseLng: Number(uo.warehouseLng) || 77.6320,
+                  lat: Number(uo.lat || 0),
+                  lng: Number(uo.lng || 0),
                 });
               }
             }
@@ -282,23 +254,7 @@ export default function DeliveryDashboard() {
       if (realOrders.length > 0) {
         setPendingOrders(realOrders);
         setCurrentAlertOrder(realOrders[0]);
-        setAcceptedOrder(realOrders[0]);
         setHasAlert(true);
-      } else {
-        const defaultOrder = {
-          id: "ORD-2026-104",
-          customerName: "Ananya Roy (Customer Order)",
-          address: "Flat 402, Green Valley Apartments, HSR Layout, Bengaluru",
-          city: "Bengaluru",
-          items: ["Hydroponic Tomatoes 1kg", "Farm Fresh Milk 1L"],
-          distanceKm: 3.4,
-          pay: 85,
-          lat: 12.9141,
-          lng: 77.6411,
-        };
-        setPendingOrders([defaultOrder]);
-        setCurrentAlertOrder(defaultOrder);
-        setAcceptedOrder(defaultOrder);
       }
     };
 

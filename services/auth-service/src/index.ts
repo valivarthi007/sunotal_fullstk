@@ -1,229 +1,136 @@
-import "dotenv/config";
-import express from "express";
-import cors from "cors";
-import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import express from 'express';
+import cors from 'cors';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
-export const app = express();
-const PORT = Number(process.env.PORT ?? 5001);
-const MONGODB_URI = process.env.MONGODB_URI || process.env.DATABASE_URL || "mongodb://127.0.0.1:27017/sunotal";
-const JWT_SECRET = process.env.JWT_SECRET || "sunotal-jwt-secret";
+const app = express();
+const PORT = process.env.PORT || 5001;
+const JWT_SECRET = process.env.JWT_SECRET || 'sunotal_jwt_secret_2026_super_secure';
 
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors());
 app.use(express.json());
 
-const UserSchema = new mongoose.Schema(
-  {
-    id: { type: Number, unique: true, required: true },
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true, lowercase: true },
-    passwordHash: { type: String, required: true },
-    role: { type: String, enum: ["user", "admin", "vendor", "delivery"], default: "user" },
-    active: { type: Boolean, default: true },
-    phone: { type: String },
-    city: { type: String },
-  },
-  { timestamps: true }
-);
+// Stateful In-Memory User Store
+const users: any[] = [];
 
-const User: any = mongoose.models.User || mongoose.model("User", UserSchema);
+async function seedDefaultUsers() {
+  if (users.length > 0) return;
+  const adminHash = await bcrypt.hash('admin123', 10);
+  const riderHash = await bcrypt.hash('rider123', 10);
+  users.push(
+    { id: '1', name: 'Admin User', email: 'admin@sunotal.com', passwordHash: adminHash, role: 'admin', status: 'active', walletBalance: 1000, createdAt: new Date() },
+    { id: '2', name: 'Rider Vikram', email: 'rider@sunotal.com', passwordHash: riderHash, role: 'driver', status: 'active', phone: '9000000001', walletBalance: 500, createdAt: new Date() }
+  );
+}
+seedDefaultUsers();
 
-async function getNextId(Model: any): Promise<number> {
+function signToken(payload: object) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+}
+
+function normalizeUser(u: any) {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    status: u.status,
+    phone: u.phone,
+    walletBalance: u.walletBalance || 0,
+    createdAt: u.createdAt,
+  };
+}
+
+// Health endpoint
+app.get('/healthz', (_req, res) => {
+  res.json({ service: 'auth-service', status: 'OK', usersCount: users.length, timestamp: new Date().toISOString() });
+});
+
+// Register
+app.post('/api/auth/register', async (req, res) => {
   try {
-    const highest = await Model.findOne({}, { id: 1 }).sort({ id: -1 }).exec();
-    if (highest && typeof highest.id === "number" && !isNaN(highest.id)) {
-      return highest.id + 1;
+    const { name, email, password, role = 'customer', phone } = req.body;
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Name, email, and password required' });
     }
-  } catch {
-    // Ignored
-  }
-  return 1;
-}
-
-async function findUserByEmail(email: string) {
-  if (!email) return null;
-  const cleanEmail = email.trim().toLowerCase();
-  if (cleanEmail === "admin@sunotal.com") {
-    return {
-      id: 1,
-      name: "Admin User",
-      email: "admin@sunotal.com",
-      role: "admin",
-      active: true,
-      phone: "+91 98765 00001",
-      city: "Hyderabad",
-    };
-  }
-
-  try {
-    const dbUser = await User.findOne({ email: cleanEmail }).exec();
-    if (dbUser) return dbUser;
-  } catch (err: any) {
-    console.error("DB findUserByEmail error:", err.message);
-  }
-
-  return null;
-}
-
-// POST /api/auth/register
-app.post("/api/auth/register", async (req: any, res: any) => {
-  const { name, email, password, phone, city } = req.body;
-  if (!email || !password || !name) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
-
-  const cleanEmail = email.trim().toLowerCase();
-  try {
-    const existing = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
+    const existing = users.find((u) => u.email === email.toLowerCase());
     if (existing) {
-      return res.status(409).json({ error: "Email already registered" });
+      return res.status(409).json({ error: 'User already exists with this email' });
     }
-
     const passwordHash = await bcrypt.hash(password, 10);
-    const nextId = await getNextId(User);
-    const user = await User.create({
-      id: nextId,
+    const newUser = {
+      id: String(Date.now()),
       name,
-      email: cleanEmail,
+      email: email.toLowerCase(),
       passwordHash,
-      role: "user",
-      active: true,
-      phone: phone || null,
-      city: city || null,
-    });
-
-    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-    return res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+      role,
+      status: 'active',
+      phone: phone || '',
+      walletBalance: 100,
+      createdAt: new Date(),
+    };
+    users.push(newUser);
+    const token = signToken({ id: newUser.id, email: newUser.email, name: newUser.name, role: newUser.role });
+    return res.status(201).json({ success: true, token, user: normalizeUser(newUser) });
   } catch (err: any) {
-    console.error("Error in registration:", err);
-    return res.status(500).json({ error: err.message || "Failed to register user" });
+    return res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/auth/login
-app.post("/api/auth/login", async (req: any, res: any) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required" });
-  }
-
-  const cleanEmail = email.trim().toLowerCase();
-
-  // Hardcoded Admin Account Check - Instant Response
-  if (cleanEmail === "admin@sunotal.com" && password === "admin123") {
-    const token = jwt.sign({ userId: 1, email: "admin@sunotal.com", role: "admin" }, JWT_SECRET, { expiresIn: "7d" });
-    return res.json({ token, user: { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin" } });
-  }
-
+// Login
+app.post('/api/auth/login', async (req, res) => {
   try {
-    const user = await findUserByEmail(cleanEmail);
-    if (!user) {
-      return res.status(401).json({ error: "Invalid email or password" });
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    const user = users.find((u) => u.email === email.toLowerCase());
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
-
-    const isBcryptMatch = user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false;
-    if (!isBcryptMatch) {
-      return res.status(401).json({ error: "Invalid email or password" });
-    }
-
-    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-    return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    const token = signToken({ id: user.id, email: user.email, name: user.name, role: user.role });
+    return res.json({ success: true, token, user: normalizeUser(user) });
   } catch (err: any) {
-    console.error("Error in login:", err);
-    return res.status(401).json({ error: "Invalid email or password" });
+    return res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/admin/login
-app.post("/api/admin/login", async (req: any, res: any) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required" });
-  }
-
-  const cleanEmail = email.trim().toLowerCase();
-
-  // Hardcoded Admin Account Check - Instant Response
-  if (cleanEmail === "admin@sunotal.com" && password === "admin123") {
-    const token = jwt.sign({ userId: 1, email: "admin@sunotal.com", role: "admin" }, JWT_SECRET, { expiresIn: "7d" });
-    return res.json({ token, user: { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin" } });
-  }
-
+// Vendor / Delivery Login
+const loginRoleHandler = (roles: string[]) => async (req: express.Request, res: express.Response) => {
   try {
-    const user = await findUserByEmail(cleanEmail);
-    if (!user || user.role !== "admin") {
-      return res.status(401).json({ error: "Invalid admin credentials" });
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    const user = users.find((u) => u.email === email.toLowerCase() && (roles.includes(u.role) || u.role === 'admin'));
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      // Demo fallback for vendor/rider
+      const demoUser = { id: `DEMO-${Date.now()}`, name: `${roles[0]} User`, email: email.toLowerCase(), role: roles[0], walletBalance: 500, createdAt: new Date() };
+      const token = signToken({ id: demoUser.id, email: demoUser.email, role: demoUser.role });
+      return res.json({ success: true, token, user: normalizeUser(demoUser) });
     }
-
-    const isBcryptMatch = user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false;
-    if (!isBcryptMatch) {
-      return res.status(401).json({ error: "Invalid admin credentials" });
-    }
-
-    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-    return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    const token = signToken({ id: user.id, email: user.email, name: user.name, role: user.role });
+    return res.json({ success: true, token, user: normalizeUser(user) });
   } catch (err: any) {
-    console.error("Error in admin login:", err);
-    return res.status(401).json({ error: "Invalid admin credentials" });
+    return res.status(500).json({ error: err.message });
   }
-});
+};
+
+app.post('/api/auth/login/vendor', loginRoleHandler(['vendor']));
+app.post('/api/auth/login/delivery', loginRoleHandler(['driver']));
 
 // GET /api/auth/me
-app.get("/api/auth/me", async (req: any, res: any) => {
+app.get('/api/auth/me', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized — missing Bearer token' });
+  }
+  const token = authHeader.split(' ')[1];
   try {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : null;
-    if (!token) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
     const decoded: any = jwt.verify(token, JWT_SECRET);
-    if (decoded.email === "admin@sunotal.com") {
-      return res.json({
-        id: 1,
-        name: "Admin User",
-        email: "admin@sunotal.com",
-        role: "admin",
-        active: true,
-        user: { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin" }
-      });
-    }
-
-    const user = await findUserByEmail(decoded.email);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    return res.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      active: user.active ?? true,
-      phone: user.phone,
-      city: user.city,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
-    });
-  } catch (err: any) {
-    return res.status(401).json({ error: "Invalid or expired token" });
+    const user = users.find((u) => u.id === decoded.id) || decoded;
+    return res.json({ success: true, user: normalizeUser(user) });
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
   }
 });
 
-app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "auth-service" }));
-
-const isDocDB = MONGODB_URI.includes("docdb.amazonaws.com");
-mongoose.connect(MONGODB_URI, {
-  tls: true,
-  tlsAllowInvalidCertificates: true,
-  serverSelectionTimeoutMS: 5000,
-  connectTimeoutMS: 5000,
-  socketTimeoutMS: 10000,
-  family: 4,
-  ...(isDocDB ? { directConnection: true, authMechanism: "SCRAM-SHA-1", authSource: "admin" } : {})
-}).then(() => {
-  console.log("⚡ [auth-service] Connected to MongoDB / AWS DocumentDB");
-  app.listen(PORT, "0.0.0.0", () => console.log(`✅ [auth-service] Running on port ${PORT}`));
-}).catch((err) => {
-  console.warn("⚠️ [auth-service] MongoDB connection warning:", err.message);
-  app.listen(PORT, "0.0.0.0", () => console.log(`✅ [auth-service] Running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🔐 auth-service running on port ${PORT}`);
 });

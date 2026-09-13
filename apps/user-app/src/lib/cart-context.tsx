@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 import type { Product } from "@workspace/api-client-react";
 
 export interface CartItem {
@@ -21,9 +21,35 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+const CART_STORAGE_KEY = "sunotal_cart_items";
+
+function loadCartFromStorage(): CartItem[] {
+  try {
+    const stored = localStorage.getItem(CART_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCartToStorage(items: CartItem[]) {
+  try {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    // storage quota exceeded — silently fail
+  }
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
+  const [items, setItems] = useState<CartItem[]>(() => loadCartFromStorage());
   const [isOpen, setIsOpen] = useState(false);
+
+  // Persist to localStorage whenever cart changes
+  useEffect(() => {
+    saveCartToStorage(items);
+  }, [items]);
 
   const addItem = useCallback((product: Product) => {
     setItems((prev) => {
@@ -56,7 +82,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const clearCart = useCallback(() => setItems([]), []);
+  const clearCart = useCallback(() => {
+    setItems([]);
+    localStorage.removeItem(CART_STORAGE_KEY);
+  }, []);
+
   const openCart = useCallback(() => setIsOpen(true), []);
   const closeCart = useCallback(() => setIsOpen(false), []);
 

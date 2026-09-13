@@ -222,7 +222,7 @@ export default function UsersAdmin() {
               {isLoading ? (
                 <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">Loading users...</td></tr>
               ) : users && users.length > 0 ? (
-                users.map((user) => (
+                users.map((user: any) => (
                   <tr key={user.id} className="hover:bg-accent/30 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">

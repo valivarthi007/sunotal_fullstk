@@ -10,7 +10,7 @@ export interface UserLocation {
   isDetected: boolean;
   latitude?: number;
   longitude?: number;
-  source: 'geolocation' | 'ip' | 'manual';
+  source: 'geolocation' | 'ip' | 'manual' | 'nominatim';
 }
 
 interface LocationContextType {

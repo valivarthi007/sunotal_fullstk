@@ -358,6 +358,20 @@ export async function customFetch<T = unknown>(
     }
   }
 
+  // Auto-inject token from localStorage if no authTokenGetter is configured
+  if (!_authTokenGetter && !headers.has("authorization")) {
+    const token =
+      (typeof localStorage !== "undefined" &&
+        (localStorage.getItem("sunotal_token") ||
+          localStorage.getItem("sunotal_admin_token") ||
+          localStorage.getItem("sunotal_vendor_token") ||
+          localStorage.getItem("sunotal_delivery_token"))) ||
+      null;
+    if (token) {
+      headers.set("authorization", `Bearer ${token}`);
+    }
+  }
+
   const requestInfo = { method, url: resolveUrl(input) };
 
   const response = await fetch(input, { ...init, method, headers });
@@ -368,4 +382,31 @@ export async function customFetch<T = unknown>(
   }
 
   return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+}
+
+/**
+ * Normalizes a potentially-wrapped API list response into a plain array.
+ *
+ * Handles both:
+ *   - Plain arrays:  `[...]`
+ *   - Wrapped objects: `{ success: true, orders: [...] }`, `{ data: [...] }`, etc.
+ *
+ * Use this everywhere you call .map() / .filter() on API data to prevent
+ * `TypeError: X.map is not a function` crashes.
+ */
+export function normalizeApiArray<T = unknown>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === "object") {
+    const ARRAY_KEYS = [
+      "data", "items", "orders", "products", "vendors", "users",
+      "quotations", "tickets", "invoices", "banners", "categories",
+      "inventory", "warehouses", "transactions", "payouts", "slots",
+      "addresses", "results", "records",
+    ];
+    for (const key of ARRAY_KEYS) {
+      const val = (data as Record<string, unknown>)[key];
+      if (Array.isArray(val)) return val as T[];
+    }
+  }
+  return [];
 }

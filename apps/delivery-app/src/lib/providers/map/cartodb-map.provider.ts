@@ -1,6 +1,8 @@
 import { IMapProvider, GeocodeResult } from "./map-provider.interface";
 
 let scriptLoadingPromise: Promise<boolean> | null = null;
+const geocodeCache = new Map<string, GeocodeResult>();
+let nominatimBlockedUntil = 0;
 
 /**
  * CartoDBVoyagerMapProvider - High-DPI Crisp Vector-Style Tile Map Provider

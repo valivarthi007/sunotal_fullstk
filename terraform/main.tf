@@ -39,3 +39,14 @@ module "amplify" {
   github_access_token = var.github_access_token
   tags                = local.common_tags
 }
+
+# AWS EC2 Backend Compute Module (Free Tier t2.micro Node.js + MongoDB + Redis)
+module "compute" {
+  source        = "./modules/compute"
+  aws_region    = var.aws_region
+  ami_id        = var.ami_id
+  instance_type = var.instance_type
+  key_name      = var.key_name
+  tags          = local.common_tags
+}
+

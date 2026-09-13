@@ -13,7 +13,7 @@ console.log('🚀 Starting Sunotal Platform Health & Integration Tests');
 console.log(`Backend Target: ${BACKEND_URL}`);
 console.log('----------------------------------------------------\n');
 
-function makeRequest(path, method = 'GET', body = null) {
+function makeRequest(path, method = 'GET', body = null, customHeaders = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, BACKEND_URL);
     const options = {
@@ -23,6 +23,7 @@ function makeRequest(path, method = 'GET', body = null) {
       method: method,
       headers: {
         'Content-Type': 'application/json',
+        ...customHeaders,
       },
     };
 
@@ -48,6 +49,8 @@ function makeRequest(path, method = 'GET', body = null) {
   });
 }
 
+let adminToken = '';
+
 async function runTests() {
   let passed = 0;
   let failed = 0;
@@ -63,16 +66,23 @@ async function runTests() {
       name: '2. Admin Login',
       path: '/api/auth/login',
       method: 'POST',
-      body: { email: 'admin@sunotal.com', password: 'password123' },
-      check: (res) => res.status === 200 && res.body.success === true && !!res.body.token,
+      body: { email: 'admin@sunotal.com', password: 'admin123' },
+      check: (res) => {
+        if (res.status === 200 && res.body.success === true && !!res.body.token) {
+          adminToken = res.body.token;
+          return true;
+        }
+        return false;
+      },
     },
     {
       name: '3. Admin Stats Analytics',
       path: '/api/admin/stats',
       method: 'GET',
+      getHeaders: () => ({ Authorization: `Bearer ${adminToken}` }),
       check: (res) =>
         res.status === 200 &&
-        res.body.success === true &&
+        typeof res.body.totalProducts === 'number' &&
         Array.isArray(res.body.recentUsers) &&
         Array.isArray(res.body.recentVendors) &&
         Array.isArray(res.body.categoryBreakdown),
@@ -129,7 +139,8 @@ async function runTests() {
 
   for (const tc of testCases) {
     try {
-      const res = await makeRequest(tc.path, tc.method, tc.body);
+      const headers = tc.getHeaders ? tc.getHeaders() : {};
+      const res = await makeRequest(tc.path, tc.method, tc.body, headers);
       const isOk = tc.check(res);
       if (isOk) {
         console.log(` ✅ PASS: ${tc.name}`);

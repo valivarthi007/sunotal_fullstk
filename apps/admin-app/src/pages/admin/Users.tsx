@@ -106,8 +106,6 @@ export default function UsersAdmin() {
         onSuccess: () => {
           toast.success("User updated successfully");
           queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
-          queryClient.invalidateQueries({ queryKey: ['/api/users'] });
-          queryClient.invalidateQueries({ queryKey: ['adminStats'] });
           setOpen(false);
         },
         onError: () => toast.error("Failed to update user")
@@ -120,8 +118,6 @@ export default function UsersAdmin() {
       onSuccess: () => {
         toast.success("User deleted");
         queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
-        queryClient.invalidateQueries({ queryKey: ['/api/users'] });
-        queryClient.invalidateQueries({ queryKey: ['adminStats'] });
       },
       onError: () => toast.error("Failed to delete user")
     });
@@ -132,8 +128,6 @@ export default function UsersAdmin() {
       onSuccess: () => {
         toast.success(`User ${!currentStatus ? 'activated' : 'suspended'}`);
         queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
-        queryClient.invalidateQueries({ queryKey: ['/api/users'] });
-        queryClient.invalidateQueries({ queryKey: ['adminStats'] });
       },
       onError: () => toast.error("Failed to update status")
     });
@@ -228,7 +222,7 @@ export default function UsersAdmin() {
               {isLoading ? (
                 <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">Loading users...</td></tr>
               ) : users && users.length > 0 ? (
-                users.map((user) => (
+                users.map((user: any) => (
                   <tr key={user.id} className="hover:bg-accent/30 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">

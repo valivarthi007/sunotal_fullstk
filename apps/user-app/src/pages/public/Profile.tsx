@@ -131,7 +131,8 @@ export default function Profile() {
     try {
       const storedOrders = localStorage.getItem(STORAGE_ORDERS_KEY);
       if (storedOrders) {
-        setOrders(JSON.parse(storedOrders));
+        const parsed = JSON.parse(storedOrders);
+        setOrders(Array.isArray(parsed) ? parsed : []);
       } else {
         setOrders([]);
         localStorage.setItem(STORAGE_ORDERS_KEY, JSON.stringify([]));
@@ -140,12 +141,15 @@ export default function Profile() {
       // Load grievances
       const storedGrievances = localStorage.getItem(STORAGE_GRIEVANCES_KEY);
       if (storedGrievances) {
-        setGrievances(JSON.parse(storedGrievances));
+        const parsedG = JSON.parse(storedGrievances);
+        setGrievances(Array.isArray(parsedG) ? parsedG : []);
       } else {
         setGrievances([]);
       }
     } catch (e) {
       console.error(e);
+      setOrders([]);
+      setGrievances([]);
     }
   }, [user]);
 
@@ -243,11 +247,11 @@ export default function Profile() {
     );
   }
 
-  const filteredOrders = orders.filter(
+  const filteredOrders = (Array.isArray(orders) ? orders : []).filter(
     (o) =>
-      o.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.items.some((i) => i.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      String(o.id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(o.city || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (Array.isArray(o.items) ? o.items : []).some((i: any) => String(i.name || '').toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -412,14 +416,14 @@ export default function Profile() {
                       <div className="grid md:grid-cols-12 gap-4 items-center">
                         <div className="md:col-span-8 space-y-3">
                           <div className="flex flex-wrap gap-4">
-                            {order.items.map((item) => (
-                              <div key={item.id} className="flex items-center gap-3 bg-accent/30 p-2.5 rounded-2xl border border-border/60">
+                            {(Array.isArray(order.items) ? order.items : []).map((item: any) => (
+                              <div key={item.id || item.productId} className="flex items-center gap-3 bg-accent/30 p-2.5 rounded-2xl border border-border/60">
                                 {item.image && (
                                   <img src={item.image} alt={item.name} className="w-10 h-10 rounded-xl object-cover border shrink-0" />
                                 )}
                                 <div>
-                                  <p className="font-semibold text-xs text-secondary leading-tight line-clamp-1">{item.name}</p>
-                                  <p className="text-[11px] text-muted-foreground">{item.quantity} × {item.unit}</p>
+                                  <p className="font-semibold text-xs text-secondary leading-tight line-clamp-1">{item.name || item.productName}</p>
+                                  <p className="text-[11px] text-muted-foreground">{item.quantity} × {item.unit || 'pcs'}</p>
                                 </div>
                               </div>
                             ))}
@@ -463,7 +467,7 @@ export default function Profile() {
               </div>
             ) : (
               <div className="grid gap-4">
-                {grievances.map((ticket) => (
+                {(Array.isArray(grievances) ? grievances : []).map((ticket) => (
                   <div key={ticket.ticketId} className="bg-card border border-border shadow-sm rounded-3xl p-6 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
                       <div className="flex items-center gap-3">

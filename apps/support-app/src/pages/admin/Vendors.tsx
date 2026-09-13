@@ -66,6 +66,8 @@ const inventorySchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+type InventoryValues = z.infer<typeof inventorySchema>;
+
 const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
   if (!dateVal) return fallback;
   try {
@@ -188,7 +190,7 @@ export default function VendorsAdmin() {
                   <Select onValueChange={field.onChange} value={field.value ? String(field.value) : undefined}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger></FormControl>
                     <SelectContent>
-                      {products?.map(p => (
+                      {products?.map((p: any) => (
                         <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                       ))}
                     </SelectContent>

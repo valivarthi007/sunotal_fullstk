@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - AUTH_SERVICE_URL=http://auth-service:5001
+      - CATALOG_SERVICE_URL=http://catalog-service:5002
+      - ORDER_SERVICE_URL=http://order-service:5003
+      - DELIVERY_SERVICE_URL=http://delivery-service:5004
+      - VENDOR_SERVICE_URL=http://vendor-service:5005
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5006
+    depends_on:
+      - auth-service
+      - catalog-service
+      - order-service
+      - delivery-service
+      - vendor-service
+      - notification-service
+
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "5001:5001"
+    environment:
+      - PORT=5001
+      - JWT_SECRET=sunotal_jwt_secret_2026_super_secure
+
+  catalog-service:
+    build: ./catalog-service
+    ports:
+      - "5002:5002"
+    environment:
+      - PORT=5002
+
+  order-service:
+    build: ./order-service
+    ports:
+      - "5003:5003"
+    environment:
+      - PORT=5003
+
+  delivery-service:
+    build: ./delivery-service
+    ports:
+      - "5004:5004"
+    environment:
+      - PORT=5004
+
+  vendor-service:
+    build: ./vendor-service
+    ports:
+      - "5005:5005"
+    environment:
+      - PORT=5005
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "5006:5006"
+    environment:
+      - PORT=5006
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

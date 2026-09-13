@@ -482,7 +482,7 @@ export default function ProductsAdmin() {
                       <Select 
                         onValueChange={(val) => {
                           field.onChange(val);
-                          const selectedProd = draftProductsInInventory.find(p => String(p.id) === val);
+                          const selectedProd = draftProductsInInventory.find((p: any) => String(p.id) === val);
                           if (selectedProd) {
                             form.setValue("name", selectedProd.name);
                             form.setValue("category", selectedProd.category);
@@ -500,7 +500,7 @@ export default function ProductsAdmin() {
                         </FormControl>
                         <SelectContent>
                           {draftProductsInInventory.length > 0 ? (
-                            draftProductsInInventory.map((p) => {
+                            draftProductsInInventory.map((p: any) => {
                               const stockItem = productsWithStock.find((item: any) => item.productId === p.id);
                               const qty = stockItem ? stockItem.quantity : 0;
                               return (
@@ -705,7 +705,7 @@ export default function ProductsAdmin() {
               {isLoading ? (
                 <tr><td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">Loading products...</td></tr>
               ) : products && products.length > 0 ? (
-                products.map((product) => (
+                products.map((product: any) => (
                   <tr key={product.id} className="hover:bg-accent/30 transition-colors group">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-3">

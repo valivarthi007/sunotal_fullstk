@@ -126,58 +126,52 @@ export default function DeliveryDashboard() {
           mapInstanceRef.current = null;
         }
 
-        const activeOrd = acceptedOrder || currentAlertOrder || pendingOrders[0];
-        
-        // Warehouse Hub location (Warehouse added in Admin login)
-        const hubLat = Number(activeOrd?.warehouseLat) || 12.9250;
-        const hubLng = Number(activeOrd?.warehouseLng) || 77.6320;
-        const whName = activeOrd?.warehouseName || "Central Sourcing Warehouse";
-        const whAddr = activeOrd?.warehouseAddress || "HSR Layout, Bengaluru";
-
-        // Customer location (from order submitted during user checkout)
-        const custLat = Number(activeOrd?.lat) || Number(userLoc?.latitude) || (hubLat - 0.012);
-        const custLng = Number(activeOrd?.lng) || Number(userLoc?.longitude) || (hubLng + 0.015);
+        // Dynamic customer and dark store coordinates based on user location
+        const custLat = acceptedOrder?.lat || userLoc?.latitude || 16.5062;
+        const custLng = acceptedOrder?.lng || userLoc?.longitude || 80.6480;
+        const hubLat = Number((custLat - 0.015).toFixed(4));
+        const hubLng = Number((custLng - 0.012).toFixed(4));
         const midLat = Number(((hubLat + custLat) / 2).toFixed(4));
         const midLng = Number(((hubLng + custLng) / 2).toFixed(4));
 
         const map = L.map(mapContainerRef.current, {
           zoomControl: true,
           scrollWheelZoom: false,
-        }).setView([midLat, midLng], 13);
+        }).setView([custLat, custLng], 14);
 
         L.tileLayer(mapProvider.getTileUrl(), {
           attribution: mapProvider.getTileAttribution(),
           maxZoom: 19,
         }).addTo(map);
 
-        // 1. Dark Store Warehouse Marker (Admin Warehouse)
+        // Dark Store Warehouse Marker
         const darkStoreIcon = L.divIcon({
           className: "ds-marker",
-          html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981;box-shadow:0 4px 6px -1px rgba(0,0,0,0.4)">HUB</div>',
-          iconSize: [38, 38],
+          html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">HUB</div>',
+          iconSize: [36, 36],
         });
         L.marker([hubLat, hubLng], { icon: darkStoreIcon })
           .addTo(map)
-          .bindPopup(`<b>${whName} (Admin Warehouse)</b><br/>${whAddr}`);
+          .bindPopup(`<b>Sunotal Dark Store Hub (${userLoc?.city || "Local Hub"})</b>`);
 
-        // 2. Customer Destination Marker (User Order Address submitted during product ordering)
+        // Customer Destination Marker
         const custIcon = L.divIcon({
           className: "cust-marker",
-          html: '<div style="background:#059669;color:white;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 6px -1px rgba(0,0,0,0.4)">📍</div>',
-          iconSize: [38, 38],
+          html: '<div style="background:#059669;color:white;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">📍</div>',
+          iconSize: [36, 36],
         });
         L.marker([custLat, custLng], { icon: custIcon })
           .addTo(map)
-          .bindPopup(`<b>${activeOrd?.customerName || "Customer Delivery Address"}</b><br/>${activeOrd?.address || "Customer Doorstep Address"}`);
+          .bindPopup(`<b>Delivery Destination (${acceptedOrder?.customerName || "Customer"})</b>`);
 
-        // 3. Polyline Route from Admin Warehouse to User Ordering Location
+        // Route polyline
         L.polyline([[hubLat, hubLng], [midLat, midLng], [custLat, custLng]], {
-          color: "#10b981",
+          color: "#059669",
           weight: 5,
           dashArray: "8, 8",
         }).addTo(map);
 
-        map.fitBounds([[hubLat, hubLng], [custLat, custLng]], { padding: [40, 40] });
+        map.fitBounds([[hubLat, hubLng], [custLat, custLng]], { padding: [50, 50] });
         setTimeout(() => {
           if (map) map.invalidateSize();
         }, 200);
@@ -190,50 +184,7 @@ export default function DeliveryDashboard() {
       isMounted = false;
       clearTimeout(timerId);
     };
-  }, [acceptedOrder, pendingOrders, currentAlertOrder, userLoc]);
-
-function geocodeAddress(addressStr: string = "", cityStr: string = "", fallbackLat?: number, fallbackLng?: number): { lat: number; lng: number } {
-  const text = `${addressStr} ${cityStr}`.toLowerCase();
-
-  if (typeof fallbackLat === "number" && typeof fallbackLng === "number" && fallbackLat !== 0 && fallbackLng !== 0) {
-    const isGenericBlr = Math.abs(fallbackLat - 12.9716) < 0.1 || Math.abs(fallbackLat - 12.9250) < 0.1 || Math.abs(fallbackLat - 12.9021) < 0.1;
-    const isVijayawada = text.includes("vijayawada") || text.includes("nainavaram") || text.includes("bhavani") || text.includes("benz") || text.includes("guntur");
-    const isHyderabad = text.includes("hyderabad") || text.includes("gachibowli") || text.includes("secunderabad");
-    const isChennai = text.includes("chennai") || text.includes("t-nagar");
-
-    if (!isGenericBlr && !isVijayawada && !isHyderabad && !isChennai) {
-      return { lat: fallbackLat, lng: fallbackLng };
-    }
-  }
-
-  if (text.includes("nainavaram")) return { lat: 16.5385, lng: 80.5920 };
-  if (text.includes("bhavani") || text.includes("bhavanipuram")) return { lat: 16.5320, lng: 80.5980 };
-  if (text.includes("benz circle") || text.includes("benzcircle")) return { lat: 16.5062, lng: 80.6480 };
-  if (text.includes("one town") || text.includes("kr market") || text.includes("onetown")) return { lat: 16.5165, lng: 80.6150 };
-  if (text.includes("autonagar") || text.includes("patamata")) return { lat: 16.4950, lng: 80.6650 };
-  if (text.includes("vijayawada") || text.includes("ntr district") || text.includes("bezawada") || text.includes("ap 520")) return { lat: 16.5062, lng: 80.6480 };
-  if (text.includes("guntur")) return { lat: 16.3067, lng: 80.4365 };
-  if (text.includes("vizag") || text.includes("visakhapatnam")) return { lat: 17.6868, lng: 83.2185 };
-
-  if (text.includes("gachibowli") || text.includes("hitech")) return { lat: 17.4401, lng: 78.3489 };
-  if (text.includes("banjara")) return { lat: 17.4156, lng: 78.4347 };
-  if (text.includes("hyderabad") || text.includes("secunderabad")) return { lat: 17.3850, lng: 78.4867 };
-
-  if (text.includes("t-nagar") || text.includes("tnagar")) return { lat: 13.0418, lng: 80.2341 };
-  if (text.includes("chennai") || text.includes("madras")) return { lat: 13.0827, lng: 80.2707 };
-
-  if (text.includes("hsr")) return { lat: 12.9121, lng: 77.6446 };
-  if (text.includes("indiranagar")) return { lat: 12.9784, lng: 77.6408 };
-  if (text.includes("koramangala")) return { lat: 12.9352, lng: 77.6245 };
-  if (text.includes("whitefield")) return { lat: 12.9698, lng: 77.7500 };
-  if (text.includes("bengaluru") || text.includes("bangalore")) return { lat: 12.9716, lng: 77.5946 };
-
-  if (typeof fallbackLat === "number" && typeof fallbackLng === "number" && fallbackLat !== 0 && fallbackLng !== 0) {
-    return { lat: fallbackLat, lng: fallbackLng };
-  }
-
-  return { lat: 16.5062, lng: 80.6480 };
-}
+  }, [acceptedOrder, userLoc]);
 
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [currentAlertOrder, setCurrentAlertOrder] = useState<any | null>(null);
@@ -248,35 +199,20 @@ function geocodeAddress(addressStr: string = "", cityStr: string = "", fallbackL
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            realOrders = data.map((o: any) => {
-              const custAddr = o.address || "Default Address, Nainavaram, Vijayawada";
-              const custCity = o.city || "Vijayawada";
-              const whName = o.warehouseName || "Vijayawada Bhavanipuram Central Warehouse";
-              const whAddr = o.warehouseAddress || "Bhavani Puram, Vijayawada";
-              const payAmt = Number(o.pay || o.totalAmount || o.finalAmount || 280);
-
-              const whCoords = geocodeAddress(whAddr, custCity, Number(o.warehouseLat), Number(o.warehouseLng));
-              const userCoords = geocodeAddress(custAddr, custCity, Number(o.lat), Number(o.lng));
-
-              return {
-                id: o.id || o.orderNumber || "ORD-2026-104",
-                numericId: o.numericId || o.id,
-                customerName: o.customerName || "Customer Order",
-                address: custAddr,
-                city: custCity,
-                items: Array.isArray(o.items) ? o.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Produce"} (${i.quantity || 1})`) : [],
-                distanceKm: 3.2,
-                pay: payAmt,
-                totalAmount: payAmt,
-                status: o.status || "placed",
-                lat: userCoords.lat,
-                lng: userCoords.lng,
-                warehouseName: whName,
-                warehouseAddress: whAddr,
-                warehouseLat: whCoords.lat,
-                warehouseLng: whCoords.lng,
-              };
-            });
+            realOrders = data.map((o: any) => ({
+              id: o.id || o.orderNumber,
+              numericId: o.numericId || o.id,
+              customerName: o.customerName || "",
+              address: o.address || "",
+              city: o.city || "",
+              items: Array.isArray(o.items) ? o.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || ""} (${i.quantity || 1})`) : [],
+              distanceKm: 0,
+              pay: Number(o.totalAmount || 0),
+              totalAmount: Number(o.totalAmount || 0),
+              status: o.status || "placed",
+              lat: Number(o.lat || 0),
+              lng: Number(o.lng || 0),
+            }));
           }
         }
       } catch (err) {
@@ -292,32 +228,20 @@ function geocodeAddress(addressStr: string = "", cityStr: string = "", fallbackL
             const activeUserOrders = userOrders.filter((o: any) => o.status !== "delivered" && o.status !== "cancelled");
             for (const uo of activeUserOrders) {
               const orderIdStr = String(uo.id || uo.orderNumber || uo.orderId);
-              const payAmt = Number(uo.pay || uo.totalAmount || uo.finalAmount || uo.finalPayable || 280);
-              const addrStr = uo.address || (uo.deliveryAddress?.addressLine1 ? `${uo.deliveryAddress.addressLine1}${uo.city ? `, ${uo.city}` : ""}` : "Default Address, Nainavaram, Vijayawada");
-              const nameStr = uo.customerName || uo.name || uo.deliveryAddress?.name || "Customer Order";
-              const cityStr = uo.city || "Vijayawada";
-
-              const whCoords = geocodeAddress("Bhavani Puram Warehouse", cityStr, Number(uo.warehouseLat), Number(uo.warehouseLng));
-              const userCoords = geocodeAddress(addrStr, cityStr, Number(uo.lat), Number(uo.lng));
-
               if (!realOrders.some((ro) => String(ro.id) === orderIdStr)) {
                 realOrders.unshift({
                   id: orderIdStr,
                   numericId: uo.id || uo.numericId,
-                  customerName: nameStr,
-                  address: addrStr,
-                  city: cityStr,
-                  items: Array.isArray(uo.items) ? uo.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || "Produce"} (${i.quantity || 1})`) : [],
-                  distanceKm: 3.2,
-                  pay: payAmt,
-                  totalAmount: payAmt,
+                  customerName: uo.customerName || uo.name || uo.deliveryAddress?.name || "",
+                  address: uo.address || (uo.deliveryAddress?.addressLine1 ? `${uo.deliveryAddress.addressLine1}${uo.city ? `, ${uo.city}` : ""}` : ""),
+                  city: uo.city || "",
+                  items: Array.isArray(uo.items) ? uo.items.map((i: any) => typeof i === "string" ? i : `${i.name || i.title || ""} (${i.quantity || 1})`) : [],
+                  distanceKm: 0,
+                  pay: Number(uo.totalAmount || uo.finalAmount || 0),
+                  totalAmount: Number(uo.totalAmount || uo.finalAmount || 0),
                   status: uo.status || "placed",
-                  lat: userCoords.lat,
-                  lng: userCoords.lng,
-                  warehouseName: uo.warehouseName || "Vijayawada Bhavanipuram Central Warehouse",
-                  warehouseAddress: uo.warehouseAddress || "Bhavani Puram, Vijayawada",
-                  warehouseLat: whCoords.lat,
-                  warehouseLng: whCoords.lng,
+                  lat: Number(uo.lat || 0),
+                  lng: Number(uo.lng || 0),
                 });
               }
             }
@@ -330,23 +254,7 @@ function geocodeAddress(addressStr: string = "", cityStr: string = "", fallbackL
       if (realOrders.length > 0) {
         setPendingOrders(realOrders);
         setCurrentAlertOrder(realOrders[0]);
-        setAcceptedOrder(realOrders[0]);
         setHasAlert(true);
-      } else {
-        const defaultOrder = {
-          id: "ORD-2026-104",
-          customerName: "Ananya Roy (Customer Order)",
-          address: "Flat 402, Green Valley Apartments, HSR Layout, Bengaluru",
-          city: "Bengaluru",
-          items: ["Hydroponic Tomatoes 1kg", "Farm Fresh Milk 1L"],
-          distanceKm: 3.4,
-          pay: 85,
-          lat: 12.9141,
-          lng: 77.6411,
-        };
-        setPendingOrders([defaultOrder]);
-        setCurrentAlertOrder(defaultOrder);
-        setAcceptedOrder(defaultOrder);
       }
     };
 
