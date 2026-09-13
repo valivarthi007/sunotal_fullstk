@@ -1,16 +1,15 @@
 # Stage 1: Build
 FROM node:20-alpine AS builder
-RUN npm install -g pnpm
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --ignore-scripts
+COPY package*.json ./
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY . .
 ARG VITE_PAYMENT_PROVIDER=mock
 ARG VITE_MAP_PROVIDER=cartodb
 ENV VITE_PAYMENT_PROVIDER=${VITE_PAYMENT_PROVIDER}
 ENV VITE_MAP_PROVIDER=${VITE_MAP_PROVIDER}
 
-RUN pnpm build
+RUN npm run build || npx tsc
 
 # Stage 2: Production
 FROM nginx:1.27-alpine
