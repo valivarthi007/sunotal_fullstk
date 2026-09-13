@@ -15,9 +15,25 @@ data "aws_subnets" "default" {
   }
 }
 
+data "aws_ami" "amazon_linux_2023" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 locals {
   target_vpc_id    = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default.id
   target_subnet_id = var.subnet_id != "" ? var.subnet_id : data.aws_subnets.default.ids[0]
+  target_ami_id    = (var.ami_id != "" && var.ami_id != "ami-09afda054f620959a") ? var.ami_id : data.aws_ami.amazon_linux_2023.id
 }
 
 # ─── IAM Role for EC2 ─────────────────────────────────────────────────────────
@@ -153,7 +169,7 @@ resource "aws_cloudwatch_log_group" "backend" {
 # ─── EC2 Instance ─────────────────────────────────────────────────────────────
 
 resource "aws_instance" "backend" {
-  ami                    = var.ami_id
+  ami                    = local.target_ami_id
   instance_type          = var.instance_type   # t2.micro = Free Tier
   key_name               = var.key_name
   subnet_id              = local.target_subnet_id

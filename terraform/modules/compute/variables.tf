@@ -6,8 +6,8 @@ variable "aws_region" {
 
 variable "ami_id" {
   type        = string
-  description = "AMI ID (Amazon Linux 2023 us-east-1)"
-  default     = "ami-09afda054f620959a"
+  description = "AMI ID (leave empty to automatically use latest Amazon Linux 2023)"
+  default     = ""
 }
 
 variable "instance_type" {
