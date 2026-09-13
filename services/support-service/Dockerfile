@@ -12,12 +12,13 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-USER node
-
-COPY --chown=node:node package*.json ./
+COPY package*.json ./
 RUN npm ci --only=production --ignore-scripts
 
-COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder /app/dist ./dist
+
+RUN chown -R node:node /app
+USER node
 
 EXPOSE 5007
 

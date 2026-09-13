@@ -17,10 +17,8 @@ terraform {
     bucket = "jcs-raju-sunotal-final"
     key    = "state/terraform.tfstate"
     region = "us-east-1"
-    # use_lockfile replaces deprecated dynamodb_table (Terraform >= 1.10)
-    # For Terraform < 1.10: comment out use_lockfile and use dynamodb_table instead
+    # For Terraform backend state locking, dynamodb_table can be specified if needed
     # dynamodb_table = "sunotal-terraform-locks"
-    use_lockfile = true
     encrypt      = true
   }
 }

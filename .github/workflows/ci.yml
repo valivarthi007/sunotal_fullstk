@@ -25,7 +25,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install & Build Microservices
         run: |
@@ -35,7 +34,7 @@ jobs:
             if [ -d "$service" ] && [ -f "$service/package.json" ]; then
               echo "⚙️  Building $service..."
               cd "$service"
-              npm ci
+              if [ -f "package-lock.json" ]; then npm ci; else npm install; fi
               npm run build
               if [ $? -ne 0 ]; then
                 failed_services+=("$service")
@@ -85,7 +84,7 @@ jobs:
             if [ -d "$app" ] && [ -f "$app/package.json" ]; then
               echo "🎨 Building $app..."
               cd "$app"
-              npm ci
+              if [ -f "package-lock.json" ]; then npm ci; else npm install; fi
               npm run build
               if [ $? -ne 0 ]; then
                 failed_apps+=("$app")

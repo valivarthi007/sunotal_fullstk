@@ -14,15 +14,16 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-# Run as non-root user for security
-USER node
-
 # Install only production deps with locked versions
-COPY --chown=node:node package*.json ./
+COPY package*.json ./
 RUN npm ci --only=production --ignore-scripts
 
 # Copy compiled output
-COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder /app/dist ./dist
+
+# Set permissions and run as non-root user for security
+RUN chown -R node:node /app
+USER node
 
 EXPOSE 5001
 
