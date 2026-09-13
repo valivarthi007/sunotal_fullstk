@@ -1390,7 +1390,7 @@ app.get("/api/admin/observability", async (_req, res) => {
       { name: "Delivery Microservice", port: 5006, status: "Healthy & Active", latency: "19ms", uptime: "99.97%", metricsUrl: "/metrics" },
       { name: "DocumentDB / MongoDB Engine", port: 27017, status: isDbConnected ? "CONNECTED" : "CONNECTING", latency: "5ms", uptime: "99.99%", metricsUrl: "/metrics" },
       { name: "Prometheus TSDB Engine", port: 9090, status: "Active Telemetry Engine", latency: "12ms", uptime: "99.99%", metricsUrl: "/metrics" },
-      { name: "Grafana Telemetry Server", port: 3000, status: "Live Portal Connected", latency: "8ms", uptime: "99.99%", metricsUrl: "http://localhost:3000" },
+      { name: "Grafana Telemetry Server", port: 3000, status: "Live Portal Connected", latency: "8ms", uptime: "99.99%", metricsUrl: process.env.OBSERVABILITY_URL || "https://observability.automateuniverse.space" },
     ]
   });
 });
