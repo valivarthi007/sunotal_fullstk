@@ -1,4 +1,4 @@
-name: Infrastructure Automation
+name: Continuous Deployment & Infrastructure (CD)
 
 on:
   workflow_dispatch:
@@ -7,13 +7,8 @@ on:
       - main
     paths:
       - 'terraform/**'
-      - '.github/workflows/infra.yml'
-      - 'amplify.yml'
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'terraform/**'
+      - 'services/**'
+      - 'apps/**'
       - '.github/workflows/infra.yml'
       - 'amplify.yml'
 
@@ -21,9 +16,10 @@ env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
 jobs:
-  validate_and_deploy:
-    name: Provision AWS Amplify PaaS Infrastructure via Terraform
+  deploy_infrastructure:
+    name: Provision & Deploy Sunotal Infrastructure via Terraform
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,7 +36,7 @@ jobs:
         with:
           terraform_version: "1.9.3"
 
-      - name: Validate & Apply Terraform
+      - name: Initialize & Plan Infrastructure
         env:
           GH_TOKEN_RAW: ${{ secrets.GH_PAT }}
         run: |
@@ -56,9 +52,12 @@ jobs:
                 aws amplify delete-branch --app-id "$APP_ID" --branch-name main 2>/dev/null || true
               fi
             fi
-            terraform plan -var="github_access_token=${GH_TOKEN}"
-            terraform apply -auto-approve -var="github_access_token=${GH_TOKEN}"
+            terraform plan -var="github_access_token=${GH_TOKEN}" -out=tfplan
           else
-            terraform plan
-            terraform apply -auto-approve
+            terraform plan -out=tfplan
           fi
+
+      - name: Apply Infrastructure Changes
+        run: |
+          cd terraform
+          terraform apply -auto-approve tfplan

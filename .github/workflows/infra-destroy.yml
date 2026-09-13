@@ -1,10 +1,10 @@
-name: Infrastructure Teardown
+name: Infrastructure Teardown (Destroy)
 
 on:
   workflow_dispatch:
     inputs:
       confirm_destroy:
-        description: 'Type "DESTROY" to confirm teardown of infrastructure'
+        description: 'Type "DESTROY" to confirm complete teardown of AWS infrastructure'
         required: true
         default: ''
 
@@ -13,13 +13,14 @@ env:
 
 jobs:
   destroy_infrastructure:
-    name: Destroy Infrastructure
+    name: Teardown Infrastructure via Terraform
     runs-on: ubuntu-latest
+
     steps:
-      - name: Verify Confirmation
+      - name: Verify Teardown Confirmation
         run: |
           if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
-            echo "::error::Confirmation failed. You must type 'DESTROY' to execute teardown."
+            echo "::error::Teardown cancelled. You must type 'DESTROY' in the confirmation prompt to proceed."
             exit 1
           fi
 
@@ -38,8 +39,8 @@ jobs:
         with:
           terraform_version: "1.9.3"
 
-      - name: Destroy Infrastructure with Terraform
+      - name: Destroy AWS Infrastructure
         run: |
           cd terraform
           terraform init -upgrade
-          terraform destroy -auto-approve -var="key_name=jcs_raju_laptop"
+          terraform destroy -auto-approve
