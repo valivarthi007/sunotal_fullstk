@@ -2,7 +2,8 @@ import { AdminLayout } from "@/components/layout/AdminLayout";
 import { useGetAdminStats } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Package, Store, Users, CheckCircle2 } from "lucide-react";
+import { Package, Store, Users, CheckCircle2, Bike } from "lucide-react";
+import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { format } from "date-fns";
 

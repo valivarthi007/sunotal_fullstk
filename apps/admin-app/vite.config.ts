@@ -1,33 +1,32 @@
 import path from 'path';
+import { fileURLToPath } from 'url';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-// ─── No Replit-specific plugins ───────────────────────────────────────────────
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   base: '/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@': path.resolve(import.meta.dirname, 'src'),
-      // Resolves the workspace API-client to the embedded local copy
+      '@': path.resolve(__dirname, 'src'),
       '@workspace/api-client-react': path.resolve(
-        import.meta.dirname,
+        __dirname,
         'src/lib/api-client/index.ts',
       ),
     },
     dedupe: ['react', 'react-dom'],
   },
-  root: path.resolve(import.meta.dirname),
+  root: path.resolve(__dirname),
   build: {
-    outDir: path.resolve(import.meta.dirname, 'dist'),
+    outDir: path.resolve(__dirname, 'dist'),
     emptyOutDir: true,
   },
   server: {
     port: 3000,
     host: '0.0.0.0',
-    // Proxy /api and /uploads to the backend so you only need one origin in dev
     proxy: {
       '/api': { target: 'http://localhost:5000', changeOrigin: true },
       '/uploads': { target: 'http://localhost:5000', changeOrigin: true },
@@ -43,5 +42,3 @@ export default defineConfig({
     exclude: ['**/e2e/**', 'node_modules', 'dist'],
   },
 });
-
-
