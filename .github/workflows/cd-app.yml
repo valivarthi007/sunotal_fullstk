@@ -11,6 +11,10 @@ on:
       - 'docker-compose.yml'
       - 'ansible/**'
       - '.github/workflows/cd-app.yml'
+  workflow_run:
+    workflows: ["CD: Infrastructure Provisioning"]
+    types:
+      - completed
   workflow_dispatch:
 
 env:
