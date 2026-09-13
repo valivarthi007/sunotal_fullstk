@@ -184,6 +184,9 @@ jobs:
     name: Terraform Format & Validation
     runs-on: ubuntu-latest
 
+    env:
+      TF_VERSION: "1.9.3"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -198,7 +201,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.9.3"
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Format Check
         run: |
@@ -206,9 +209,39 @@ jobs:
           terraform fmt -check -recursive
           echo "✅ Terraform formatting is correct"
 
-      - name: Terraform Init & Validate
+      - name: Terraform Init & Validate (root)
         run: |
           cd terraform
-          terraform init -backend=false
+          terraform init -backend=false -input=false
           terraform validate
-          echo "✅ Terraform configuration is valid"
+          echo "✅ Root Terraform configuration is valid"
+
+      - name: Terraform Validate (all modules)
+        run: |
+          echo "🔍 Validating all Terraform modules individually..."
+          failed_modules=()
+          for mod in terraform/modules/*/; do
+            mod_name=$(basename "$mod")
+            result=$(cd "$mod" && \
+              terraform init -backend=false -input=false -upgrade 2>&1 | tail -1 && \
+              terraform validate 2>&1)
+            if echo "$result" | grep -q "Success"; then
+              echo "  ✅ modules/$mod_name"
+            else
+              echo "  ❌ modules/$mod_name: $result"
+              failed_modules+=("$mod_name")
+            fi
+          done
+          if [ ${#failed_modules[@]} -gt 0 ]; then
+            echo "❌ Failed modules: ${failed_modules[*]}"
+            exit 1
+          fi
+          echo "✅ All Terraform modules validated successfully"
+
+      - name: Terraform Security Scan (tfsec)
+        continue-on-error: true
+        run: |
+          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+          tfsec terraform/ --minimum-severity HIGH --no-color 2>&1 | tail -20 || true
+          echo "🔒 tfsec scan complete (failures are warnings only)"
+

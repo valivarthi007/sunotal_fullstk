@@ -1,5 +1,8 @@
-aws_region = "us-east-1"
-ami_id     = "ami-09afda054f620959a"
-instance_type = "t3.small"
-key_name   = "jcs_raju_laptop"
+aws_region          = "us-east-1"
+ami_id              = ""            # leave empty to auto-select latest Amazon Linux 2023
+instance_type       = "t3.small"
+key_name            = "your-ec2-key-pair-name"
 allowed_cidr_blocks = ["0.0.0.0/0"]
+s3_bucket_name      = "jcs-raju-sunotal-final"
+jwt_secret          = "REPLACE_WITH_A_STRONG_RANDOM_SECRET_MIN_32_CHARS"
+
