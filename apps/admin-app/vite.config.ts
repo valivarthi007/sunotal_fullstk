@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 // ─── No Replit-specific plugins ───────────────────────────────────────────────
 
 export default defineConfig({
-  base: '/',
+  base: './',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

@@ -47,7 +47,13 @@ FRONTEND_ORIGIN="${frontend_origin}"
 NODE_ENV="production"
 EOF
 
-# 5. Launch Microservices via Docker Compose
+# 5. Build Frontend & Launch Microservices Cluster via Docker Compose
+(cd apps/user-app && npm install --include=dev && npm run build)
+(cd apps/admin-app && npm install --include=dev && npm run build)
+(cd apps/vendor-app && npm install --include=dev && npm run build)
+(cd apps/delivery-app && npm install --include=dev && npm run build)
+(cd apps/support-app && npm install --include=dev && npm run build)
+
 cd services
 docker compose up -d --build
 

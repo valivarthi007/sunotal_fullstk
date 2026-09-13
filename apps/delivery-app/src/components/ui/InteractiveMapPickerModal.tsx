@@ -199,7 +199,6 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
         },
         async (geoErr) => {
           console.warn("HTML5 Geolocation access failed, resolving via IP API...", geoErr);
-          toast.info("HTML5 GPS access restricted. Resolving current location via network IP...");
           const loc = await detectLocation();
           if (loc && loc.latitude && loc.longitude) {
             applyPosition(loc.latitude, loc.longitude);
