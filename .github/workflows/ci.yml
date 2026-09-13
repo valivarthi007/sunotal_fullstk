@@ -32,7 +32,11 @@ jobs:
             if [ -d "$service" ] && [ -f "$service/package.json" ]; then
               echo "⚙️ Building $service..."
               cd "$service"
-              npm ci || npm install
+              if [ -f "package-lock.json" ]; then
+                npm ci
+              else
+                npm install
+              fi
               npm run build || npx tsc
               cd ../..
             fi
@@ -69,7 +73,11 @@ jobs:
             if [ -d "$app" ] && [ -f "$app/package.json" ]; then
               echo "🎨 Building $app..."
               cd "$app"
-              npm ci || npm install
+              if [ -f "package-lock.json" ]; then
+                npm ci
+              else
+                npm install
+              fi
               npm run build || npx tsc --noEmit
               cd ../..
             fi
