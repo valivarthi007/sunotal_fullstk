@@ -4,6 +4,22 @@
 
 data "aws_availability_zones" "available" {}
 
+data "aws_vpc" "default" {
+  default = true
+}
+
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
+locals {
+  target_vpc_id    = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default.id
+  target_subnet_id = var.subnet_id != "" ? var.subnet_id : data.aws_subnets.default.ids[0]
+}
+
 # ─── IAM Role for EC2 ─────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "ec2_backend" {
@@ -56,7 +72,7 @@ resource "aws_iam_instance_profile" "ec2_backend" {
 resource "aws_security_group" "backend" {
   name        = "sunotal-backend-sg"
   description = "Security group for Sunotal unified backend on EC2"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.target_vpc_id
 
   # SSH — restrict to your IP in production
   ingress {
@@ -140,7 +156,7 @@ resource "aws_instance" "backend" {
   ami                    = var.ami_id
   instance_type          = var.instance_type   # t2.micro = Free Tier
   key_name               = var.key_name
-  subnet_id              = var.subnet_id
+  subnet_id              = local.target_subnet_id
   vpc_security_group_ids = [aws_security_group.backend.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_backend.name
 

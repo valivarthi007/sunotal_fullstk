@@ -23,12 +23,14 @@ variable "key_name" {
 
 variable "vpc_id" {
   type        = string
-  description = "VPC ID where the instance will be launched"
+  description = "VPC ID where the instance will be launched (leave empty for default VPC)"
+  default     = ""
 }
 
 variable "subnet_id" {
   type        = string
-  description = "Public subnet ID for the EC2 instance"
+  description = "Public subnet ID for the EC2 instance (leave empty for default subnet)"
+  default     = ""
 }
 
 variable "allowed_ssh_cidrs" {
