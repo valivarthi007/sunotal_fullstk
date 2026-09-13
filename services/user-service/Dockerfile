@@ -1,9 +1,14 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package.json ./
-RUN npm install --legacy-peer-deps
-COPY tsconfig.json ./
-COPY src ./src
-RUN npm run build
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build || npx tsc
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY --from=builder /app/dist ./dist
 EXPOSE 5004
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]

@@ -1,7 +1,14 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --only=production
-COPY dist ./dist
-EXPOSE 5004
+RUN npm install
+COPY . .
+RUN npm run build || npx tsc
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY --from=builder /app/dist ./dist
+EXPOSE 5006
 CMD ["node", "dist/index.js"]
