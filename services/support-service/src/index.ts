@@ -116,13 +116,19 @@ app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "suppor
 
 const isDocDB = MONGODB_URI.includes("docdb.amazonaws.com");
 mongoose.connect(MONGODB_URI, {
-  tls: true,
-  tlsAllowInvalidCertificates: true,
+  ...(isDocDB
+    ? {
+        tls: true,
+        tlsAllowInvalidCertificates: true,
+        directConnection: true,
+        authMechanism: "SCRAM-SHA-1",
+        authSource: "admin",
+      }
+    : {}),
   serverSelectionTimeoutMS: 5000,
   connectTimeoutMS: 5000,
   socketTimeoutMS: 10000,
   family: 4,
-  ...(isDocDB ? { directConnection: true, authMechanism: "SCRAM-SHA-1", authSource: "admin" } : {})
 }).then(() => {
   console.log("⚡ [support-service] Connected to MongoDB / AWS DocumentDB");
   app.listen(PORT, "0.0.0.0", () => console.log(`✅ [support-service] Running on port ${PORT}`));

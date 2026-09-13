@@ -8,17 +8,30 @@ on:
       - 'terraform/**'
       - '.github/workflows/cd-infra.yml'
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to run'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
 
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+  TF_VERSION: "1.9.3"
+  TF_IN_AUTOMATION: "true"
 
 jobs:
-  provision_infrastructure:
-    name: Provision Infrastructure via Terraform (Self-Healing State)
+  terraform_plan:
+    name: Terraform Plan (Drift Detection)
     runs-on: ubuntu-latest
     outputs:
       ec2_instance_id: ${{ steps.tf_outputs.outputs.ec2_instance_id }}
-      ec2_public_ip: ${{ steps.tf_outputs.outputs.ec2_public_ip }}
+      ec2_public_ip:   ${{ steps.tf_outputs.outputs.ec2_public_ip }}
+      has_changes:     ${{ steps.plan.outputs.has_changes }}
 
     steps:
       - name: Checkout repository
@@ -27,21 +40,122 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region:            ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
+      - name: Setup Terraform ${{ env.TF_VERSION }}
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.9.3"
+          terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Initialize & Apply Terraform (Self-Healing Drift Check)
-        id: terraform
+      - name: Terraform Format Check
         run: |
           cd terraform
-          terraform init -upgrade
-          terraform apply -auto-approve
+          terraform fmt -check -recursive
+          echo "✅ Terraform formatting OK"
+
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init -upgrade -input=false
+          echo "✅ Terraform initialized"
+
+      - name: Terraform Validate
+        run: |
+          cd terraform
+          terraform validate
+          echo "✅ Terraform configuration valid"
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          cd terraform
+          # Pass secrets as TF_VAR_ variables so they don't appear in logs
+          export TF_VAR_jwt_secret="${{ secrets.JWT_SECRET }}"
+
+          terraform plan \
+            -input=false \
+            -out=tfplan \
+            -detailed-exitcode \
+            2>&1 | tee plan.txt
+
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  No infrastructure changes detected"
+          elif [ $EXIT_CODE -eq 2 ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "📋 Infrastructure changes planned"
+          else
+            echo "❌ Terraform plan failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ github.sha }}
+          path: terraform/tfplan
+          retention-days: 7
+
+      - name: Show Plan Summary in Job Summary
+        if: steps.plan.outputs.has_changes == 'true'
+        run: |
+          echo "## 📋 Terraform Plan Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```hcl' >> $GITHUB_STEP_SUMMARY
+          cd terraform && terraform show -no-color tfplan | tail -30 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  terraform_apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: terraform_plan
+    # Apply automatically on push to main if there are changes
+    # or manually via workflow_dispatch with action=apply
+    if: |
+      (github.event_name == 'push' && needs.terraform_plan.outputs.has_changes == 'true') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+
+    environment:
+      name: production
+      url: https://sunotal.automateuniverse.space
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform ${{ env.TF_VERSION }}
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init -input=false
+
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ github.sha }}
+          path: terraform/
+
+      - name: Terraform Apply (Pre-Approved Plan)
+        run: |
+          cd terraform
+          export TF_VAR_jwt_secret="${{ secrets.JWT_SECRET }}"
+          terraform apply -input=false -auto-approve tfplan
+          echo "✅ Terraform apply complete"
 
       - name: Extract Infrastructure Outputs
         id: tf_outputs
@@ -50,4 +164,52 @@ jobs:
           INSTANCE_ID=$(terraform output -raw backend_instance_id 2>/dev/null || echo "")
           PUBLIC_IP=$(terraform output -raw backend_public_ip 2>/dev/null || echo "")
           echo "ec2_instance_id=$INSTANCE_ID" >> $GITHUB_OUTPUT
-          echo "ec2_public_ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
+          echo "ec2_public_ip=$PUBLIC_IP"     >> $GITHUB_OUTPUT
+          echo "📍 EC2 Instance: $INSTANCE_ID ($PUBLIC_IP)"
+
+      - name: Write Outputs to Job Summary
+        run: |
+          echo "## ✅ Infrastructure Provisioned" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| EC2 Instance ID | ${{ steps.tf_outputs.outputs.ec2_instance_id }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Public IP | ${{ steps.tf_outputs.outputs.ec2_public_ip }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform URL | https://sunotal.automateuniverse.space |" >> $GITHUB_STEP_SUMMARY
+
+  terraform_destroy:
+    name: Terraform Destroy (Manual Only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+
+    environment:
+      name: production-destroy
+      url: https://sunotal.automateuniverse.space
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform ${{ env.TF_VERSION }}
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init -input=false
+
+      - name: Terraform Destroy
+        run: |
+          cd terraform
+          export TF_VAR_jwt_secret="${{ secrets.JWT_SECRET }}"
+          terraform destroy -input=false -auto-approve
+          echo "🗑️  Terraform destroy complete"

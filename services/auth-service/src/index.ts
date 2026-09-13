@@ -46,6 +46,10 @@ app.get('/healthz', (_req, res) => {
   res.json({ service: 'auth-service', status: 'OK', usersCount: users.length, timestamp: new Date().toISOString() });
 });
 
+app.get('/api/healthz', (_req, res) => {
+  res.json({ status: 'ok', service: 'auth-service' });
+});
+
 // Register
 app.post('/api/auth/register', async (req, res) => {
   try {

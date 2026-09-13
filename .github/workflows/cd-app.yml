@@ -18,10 +18,11 @@ on:
 
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  deploy_containers_via_aws_cli:
-    name: Build & Push Containers via AWS CLI / ECR
+  build_and_push_containers:
+    name: Build & Push Containers to ECR
     runs-on: ubuntu-latest
 
     steps:
@@ -35,58 +36,136 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Log in to Amazon ECR via AWS CLI
+      - name: Log in to Amazon ECR
         id: login-ecr
         run: |
-          echo "🔑 Logging into Amazon ECR using AWS CLI..."
+          echo "🔑 Logging into Amazon ECR..."
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
           if [ -n "$ACCOUNT_ID" ]; then
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} \
+              | docker login --username AWS --password-stdin \
+                "$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
             echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+            echo "registry=$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
+            echo "✅ Logged in to ECR"
+          else
+            echo "⚠️  AWS credentials unavailable — will build locally only"
           fi
 
-      - name: Build & Push Microservices & Frontend Images via AWS CLI
+      - name: Build & Push Microservices to ECR
         run: |
           ACCOUNT_ID="${{ steps.login-ecr.outputs.account_id }}"
-          REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          GIT_SHA="${{ env.IMAGE_TAG }}"
 
-          if [ -n "$ACCOUNT_ID" ]; then
-            echo "🚀 Building and pushing containers to ECR registry ($REGISTRY)..."
+          for service_dir in services/*/; do
+            if [ -d "$service_dir" ] && [ -f "$service_dir/Dockerfile" ]; then
+              service_name=$(basename "$service_dir")
+              repo_name="sunotal-${service_name}"
+              echo "📦 Building microservice: $repo_name"
 
-            # 1. Microservices
-            for service_dir in services/*; do
-              if [ -d "$service_dir" ] && [ -f "$service_dir/Dockerfile" ]; then
-                service_name=$(basename "$service_dir")
-                repo_name="sunotal-$service_name"
-                echo "📦 Processing microservice: $repo_name"
+              # Build with both :latest and :<git-sha> tags for rollback capability
+              docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" "$service_dir"
+              echo "✅ Built ${repo_name}"
+
+              if [ -n "$ACCOUNT_ID" ]; then
                 aws ecr create-repository --repository-name "$repo_name" 2>/dev/null || true
-                docker build -t "$repo_name:latest" "$service_dir"
-                docker tag "$repo_name:latest" "$REGISTRY/$repo_name:latest"
-                docker push "$REGISTRY/$repo_name:latest"
+                docker tag "${repo_name}:latest" "${REGISTRY}/${repo_name}:latest"
+                docker tag "${repo_name}:${GIT_SHA}" "${REGISTRY}/${repo_name}:${GIT_SHA}"
+                docker push "${REGISTRY}/${repo_name}:latest"
+                docker push "${REGISTRY}/${repo_name}:${GIT_SHA}"
+                echo "🚀 Pushed ${repo_name} to ECR (sha: ${GIT_SHA})"
               fi
-            done
+            fi
+          done
 
-            # 2. Frontend Apps
-            for app_dir in apps/*; do
-              if [ -d "$app_dir" ] && [ -f "$app_dir/Dockerfile" ]; then
-                app_name=$(basename "$app_dir")
-                repo_name="sunotal-$app_name"
-                echo "🎨 Processing frontend app: $repo_name"
+      - name: Build & Push Frontend Apps to ECR
+        run: |
+          ACCOUNT_ID="${{ steps.login-ecr.outputs.account_id }}"
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          GIT_SHA="${{ env.IMAGE_TAG }}"
+
+          for app_dir in apps/*/; do
+            if [ -d "$app_dir" ] && [ -f "$app_dir/Dockerfile" ]; then
+              app_name=$(basename "$app_dir")
+              repo_name="sunotal-${app_name}"
+              echo "🎨 Building frontend app: $repo_name"
+
+              docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" "$app_dir"
+              echo "✅ Built ${repo_name}"
+
+              if [ -n "$ACCOUNT_ID" ]; then
                 aws ecr create-repository --repository-name "$repo_name" 2>/dev/null || true
-                docker build -t "$repo_name:latest" "$app_dir"
-                docker tag "$repo_name:latest" "$REGISTRY/$repo_name:latest"
-                docker push "$REGISTRY/$repo_name:latest"
+                docker tag "${repo_name}:latest" "${REGISTRY}/${repo_name}:latest"
+                docker tag "${repo_name}:${GIT_SHA}" "${REGISTRY}/${repo_name}:${GIT_SHA}"
+                docker push "${REGISTRY}/${repo_name}:latest"
+                docker push "${REGISTRY}/${repo_name}:${GIT_SHA}"
+                echo "🚀 Pushed ${repo_name} to ECR (sha: ${GIT_SHA})"
               fi
-            done
-          else
-            echo "ℹ️ AWS Credentials or Account ID unavailable. Building containers locally via Docker Compose..."
-            docker compose build
+            fi
+          done
+
+  deploy_to_ec2:
+    name: Deploy to EC2 via SSM
+    runs-on: ubuntu-latest
+    needs: build_and_push_containers
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy updated containers on EC2
+        run: |
+          INSTANCE_ID="${{ secrets.EC2_INSTANCE_ID }}"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+          REGISTRY="${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          GIT_SHA="${{ env.IMAGE_TAG }}"
+
+          if [ -z "$INSTANCE_ID" ]; then
+            echo "⚠️  EC2_INSTANCE_ID secret not set — skipping EC2 deploy"
+            exit 0
           fi
 
-      - name: Local Integration Test Verification via Docker Compose
-        run: |
-          echo "🧪 Running full container stack test via Docker Compose..."
-          docker compose up -d
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[
+              \"cd /home/ec2-user/app/sunotal_fullstk\",
+              \"git pull origin main\",
+              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${REGISTRY}\",
+              \"docker compose pull\",
+              \"docker compose up -d --remove-orphans\",
+              \"docker image prune -f\"
+            ]" \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "📡 SSM Command ID: $COMMAND_ID"
+
+          # Wait for command to complete
           sleep 10
-          docker compose ps
-          docker compose down
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "Status" \
+            --output text)
+
+          echo "Deploy status: $STATUS"
+
+          if [ "$STATUS" = "Failed" ]; then
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query "StandardErrorContent" \
+              --output text
+            exit 1
+          fi
+
+          echo "✅ EC2 deployment initiated successfully (sha: ${GIT_SHA})"

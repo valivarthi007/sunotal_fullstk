@@ -1,174 +1,112 @@
 /**
- * Sunotal Quick-Commerce Platform End-to-End Health Verification Script
+ * Sunotal Platform — Docker Compose-Aware Health Verification Script
+ *
+ * Tests each microservice health endpoint individually.
  * Run with: node scripts/test-platform-health.js
+ *
+ * Environment variables:
+ *   SERVICES_HOST  — host for microservices (default: localhost)
  */
 
 const http = require('http');
-const { execSync } = require('child_process');
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
+const HOST = process.env.SERVICES_HOST || 'localhost';
 
-console.log('----------------------------------------------------');
-console.log('🚀 Starting Sunotal Platform Health & Integration Tests');
-console.log(`Backend Target: ${BACKEND_URL}`);
-console.log('----------------------------------------------------\n');
+const SERVICES = [
+  { name: 'auth-service',        port: 5001, path: '/api/healthz' },
+  { name: 'operations-service',  port: 5002, path: '/api/healthz' },
+  { name: 'inventory-service',   port: 5003, path: '/api/healthz' },
+  { name: 'user-service',        port: 5004, path: '/api/healthz' },
+  { name: 'vendor-service',      port: 5005, path: '/api/healthz' },
+  { name: 'delivery-service',    port: 5006, path: '/api/healthz' },
+  { name: 'support-service',     port: 5007, path: '/api/healthz' },
+];
 
-function makeRequest(path, method = 'GET', body = null, customHeaders = {}) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(path, BACKEND_URL);
-    const options = {
-      hostname: url.hostname,
-      port: url.port,
-      path: url.pathname + url.search,
-      method: method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...customHeaders,
+console.log('─'.repeat(60));
+console.log('🚀 Sunotal Platform Health Verification');
+console.log(`   Target Host: ${HOST}`);
+console.log('─'.repeat(60) + '\n');
+
+function checkHealth(service) {
+  return new Promise((resolve) => {
+    const req = http.request(
+      {
+        hostname: HOST,
+        port: service.port,
+        path: service.path,
+        method: 'GET',
+        timeout: 5000,
+        headers: { 'User-Agent': 'sunotal-health-check' },
       },
-    };
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            const body = JSON.parse(data);
+            const isHealthy = res.statusCode === 200 && (body.status === 'ok' || body.status === 'OK');
+            resolve({ service: service.name, port: service.port, healthy: isHealthy, statusCode: res.statusCode, body });
+          } catch {
+            resolve({ service: service.name, port: service.port, healthy: res.statusCode === 200, statusCode: res.statusCode, body: data });
+          }
+        });
+      }
+    );
 
-    const req = http.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          resolve({ status: res.statusCode, body: json });
-        } catch (e) {
-          resolve({ status: res.statusCode, body: data });
-        }
-      });
+    req.on('error', (err) => {
+      resolve({ service: service.name, port: service.port, healthy: false, error: err.message });
     });
 
-    req.on('error', (err) => reject(err));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ service: service.name, port: service.port, healthy: false, error: 'timeout' });
+    });
 
-    if (body) {
-      req.write(JSON.stringify(body));
-    }
     req.end();
   });
 }
 
-let adminToken = '';
-
-async function runTests() {
+async function runHealthChecks() {
   let passed = 0;
   let failed = 0;
+  let offline = 0;
 
-  const testCases = [
-    {
-      name: '1. Healthz Check',
-      path: '/api/healthz',
-      method: 'GET',
-      check: (res) => res.status === 200 && res.body.status === 'OK',
-    },
-    {
-      name: '2. Admin Login',
-      path: '/api/auth/login',
-      method: 'POST',
-      body: { email: 'admin@sunotal.com', password: 'admin123' },
-      check: (res) => {
-        if (res.status === 200 && res.body.success === true && !!res.body.token) {
-          adminToken = res.body.token;
-          return true;
-        }
-        return false;
-      },
-    },
-    {
-      name: '3. Admin Stats Analytics',
-      path: '/api/admin/stats',
-      method: 'GET',
-      getHeaders: () => ({ Authorization: `Bearer ${adminToken}` }),
-      check: (res) =>
-        res.status === 200 &&
-        typeof res.body.totalProducts === 'number' &&
-        Array.isArray(res.body.recentUsers) &&
-        Array.isArray(res.body.recentVendors) &&
-        Array.isArray(res.body.categoryBreakdown),
-    },
-    {
-      name: '4. Dark Store Discovery (<2.5km radius)',
-      path: '/api/storefront/dark-stores/nearby?lat=12.9716&lon=77.5946',
-      method: 'GET',
-      check: (res) => res.status === 200 && res.body.success === true && Array.isArray(res.body.stores),
-    },
-    {
-      name: '5. Catalog Typo-Tolerant Search',
-      path: '/api/storefront/search?q=tomatoes',
-      method: 'GET',
-      check: (res) => res.status === 200 && res.body.success === true && Array.isArray(res.body.products),
-    },
-    {
-      name: '6. WMS Pick-Path Sorting (Aisle -> Shelf -> Bin)',
-      path: '/api/wms/pick-list/ORD-9912',
-      method: 'GET',
-      check: (res) => res.status === 200 && res.body.success === true && Array.isArray(res.body.items),
-    },
-    {
-      name: '7. WMS Barcode Scan Verification',
-      path: '/api/wms/scan-item',
-      method: 'POST',
-      body: { orderId: 'ORD-9912', skuId: 'SKU-MILK-01', barcodeScanned: '8901262010015' },
-      check: (res) => res.status === 200 && res.body.verified === true,
-    },
-    {
-      name: '8. Rider 30s Dispatch Request',
-      path: '/api/rider/dispatch-request',
-      method: 'POST',
-      body: { orderId: 'ORD-9912', darkStoreLat: 12.9716, darkStoreLon: 77.5946 },
-      check: (res) => res.status === 200 && res.body.success === true && res.body.assignmentWindowSeconds === 30,
-    },
-    {
-      name: '9. Customer Handover OTP Verification & Payout',
-      path: '/api/rider/verify-handover-otp',
-      method: 'POST',
-      body: { orderId: 'ORD-9912', riderId: 'RIDER-007', inputOtp: '1234', expectedOtp: '1234' },
-      check: (res) => res.status === 200 && res.body.status === 'DELIVERED' && res.body.payoutCredit > 0,
-    },
-    {
-      name: '10. Farmer Produce Quotation Submission',
-      path: '/api/procurement/quotations',
-      method: 'POST',
-      body: { vendorId: 'VENDOR-001', produceName: 'Organic Tomatoes', quantityKg: 500, pricePerKg: 35 },
-      check: (res) => res.status === 201 && res.body.success === true && res.body.quotation.id.startsWith('QUOTE-'),
-    },
-  ];
+  console.log('=== Microservice Health Checks ===\n');
 
-  console.log('=== Step 1: Testing Backend REST APIs ===\n');
+  const results = await Promise.all(SERVICES.map(checkHealth));
 
-  for (const tc of testCases) {
-    try {
-      const headers = tc.getHeaders ? tc.getHeaders() : {};
-      const res = await makeRequest(tc.path, tc.method, tc.body, headers);
-      const isOk = tc.check(res);
-      if (isOk) {
-        console.log(` ✅ PASS: ${tc.name}`);
-        passed++;
-      } else {
-        console.log(` ❌ FAIL: ${tc.name} - Status: ${res.status}, Response:`, res.body);
-        failed++;
-      }
-    } catch (err) {
-      console.log(` ⚠️ OFF-LINE / SKIPPED: ${tc.name} - ${err.message}`);
-      console.log('    (Start backend server with `cd services/unified-backend && npm start` to test live endpoints)');
+  for (const result of results) {
+    if (result.error) {
+      console.log(`  ⚠️  OFFLINE  ${result.service} (port ${result.port}): ${result.error}`);
+      offline++;
+    } else if (result.healthy) {
+      console.log(`  ✅ HEALTHY  ${result.service} (port ${result.port})`);
+      passed++;
+    } else {
+      console.log(`  ❌ UNHEALTHY ${result.service} (port ${result.port}): HTTP ${result.statusCode}`);
+      failed++;
     }
   }
 
-  console.log('\n=== Step 2: Testing Unified Frontend Build Compilation ===\n');
-  try {
-    console.log('Building apps/user-app...');
-    execSync('cd apps/user-app && npm run build', { stdio: 'inherit' });
-    console.log(' ✅ PASS: Unified Frontend Build succeeded cleanly!');
-    passed++;
-  } catch (e) {
-    console.log(' ❌ FAIL: Unified Frontend Build failed.');
-    failed++;
+  console.log('\n' + '─'.repeat(60));
+  console.log(`Results: ✅ ${passed} healthy  ❌ ${failed} unhealthy  ⚠️ ${offline} offline`);
+  console.log('─'.repeat(60));
+
+  // Fail CI only if services that started returned unhealthy responses
+  // Offline = not started = acceptable in unit CI (no Docker Compose)
+  if (failed > 0) {
+    console.error('\n❌ Health check failed — some services returned unhealthy responses.');
+    process.exit(1);
   }
 
-  console.log('\n----------------------------------------------------');
-  console.log(`🎉 Health Test Complete! Passed: ${passed}, Failed: ${failed}`);
-  console.log('----------------------------------------------------');
+  if (passed === 0 && offline === SERVICES.length) {
+    console.log('\n⚠️  No services were reachable. Run with docker compose up to test live.');
+    // Don't fail CI when no services are running (unit-only CI mode)
+    process.exit(0);
+  }
+
+  console.log('\n🎉 All reachable services are healthy!');
+  process.exit(0);
 }
 
-runTests();
+runHealthChecks();

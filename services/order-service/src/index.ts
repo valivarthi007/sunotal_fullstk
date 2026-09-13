@@ -39,6 +39,10 @@ app.get('/healthz', (_req, res) => {
   res.json({ service: 'order-service', status: 'OK', ordersCount: orders.length, timestamp: new Date().toISOString() });
 });
 
+app.get('/api/healthz', (_req, res) => {
+  res.json({ status: 'ok', service: 'order-service' });
+});
+
 // List Orders
 app.get('/api/orders', (_req, res) => {
   res.json(orders);

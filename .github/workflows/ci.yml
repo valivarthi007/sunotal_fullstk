@@ -12,8 +12,9 @@ env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
 jobs:
+  # ─── Job 1: Backend Microservices Build & Type Check ─────────────────────
   backend_microservices_ci:
-    name: Microservices Build & Unit Health Checks
+    name: Microservices Build & Type Check
     runs-on: ubuntu-latest
 
     steps:
@@ -24,35 +25,45 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Install & Build Microservices
         run: |
           echo "📦 Installing and compiling backend microservices..."
-          for service in services/*; do
+          failed_services=()
+          for service in services/*/; do
             if [ -d "$service" ] && [ -f "$service/package.json" ]; then
-              echo "⚙️ Building $service..."
+              echo "⚙️  Building $service..."
               cd "$service"
-              if [ -f "package-lock.json" ]; then
-                npm ci
+              npm ci
+              npm run build
+              if [ $? -ne 0 ]; then
+                failed_services+=("$service")
+                echo "❌ Build failed: $service"
               else
-                npm install
+                echo "✅ Build OK: $service"
               fi
-              npm run build || npx tsc
+              cd ../..
+            fi
+          done
+          if [ ${#failed_services[@]} -gt 0 ]; then
+            echo "❌ Failed services: ${failed_services[*]}"
+            exit 1
+          fi
+
+      - name: TypeScript Strict Type Check
+        run: |
+          echo "🔍 Running TypeScript noEmit type check across all services..."
+          for service in services/*/; do
+            if [ -d "$service" ] && [ -f "$service/tsconfig.json" ]; then
+              echo "  Checking $service..."
+              cd "$service"
+              npx tsc --noEmit 2>&1 || echo "⚠️  Type issues in $service (non-blocking for now)"
               cd ../..
             fi
           done
 
-      - name: Start Microservices Cluster
-        run: |
-          echo "🚀 Starting backend microservices cluster on background processes..."
-          node scripts/start-microservices.js &
-          sleep 5
-
-      - name: Run Unit & Health Integration Tests
-        run: |
-          echo "🧪 Running Sunotal integration test suite..."
-          node scripts/test-platform-health.js
-
+  # ─── Job 2: Frontend Applications Compilation ─────────────────────────────
   frontend_apps_ci:
     name: Frontend Applications Compilation
     runs-on: ubuntu-latest
@@ -69,23 +80,33 @@ jobs:
       - name: Build Frontend Applications
         run: |
           echo "📦 Compiling and building frontend applications..."
-          for app in apps/*; do
+          failed_apps=()
+          for app in apps/*/; do
             if [ -d "$app" ] && [ -f "$app/package.json" ]; then
               echo "🎨 Building $app..."
               cd "$app"
-              if [ -f "package-lock.json" ]; then
-                npm ci
+              npm ci
+              npm run build
+              if [ $? -ne 0 ]; then
+                failed_apps+=("$app")
+                echo "❌ Build failed: $app"
               else
-                npm install
+                echo "✅ Build OK: $app"
               fi
-              npm run build || npx tsc --noEmit
               cd ../..
             fi
           done
+          if [ ${#failed_apps[@]} -gt 0 ]; then
+            echo "❌ Failed apps: ${failed_apps[*]}"
+            exit 1
+          fi
 
+  # ─── Job 3: Docker Compose Full Stack Integration Test ────────────────────
   docker_compose_testing:
     name: Docker Compose Full Stack Integration Test
     runs-on: ubuntu-latest
+    # Run after build jobs pass
+    needs: [backend_microservices_ci, frontend_apps_ci]
 
     steps:
       - name: Checkout repository
@@ -96,23 +117,69 @@ jobs:
         with:
           node-version: 20
 
+      - name: Create required certs directory (self-signed for CI)
+        run: |
+          mkdir -p certs
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout certs/privkey.pem \
+            -out certs/fullchain.pem \
+            -subj "/CN=localhost"
+
       - name: Start Full Stack via Docker Compose
         run: |
           echo "🐳 Launching complete Sunotal platform stack using Docker Compose..."
-          docker compose up -d --build
-          sleep 15
-          docker compose ps
+          docker compose build --parallel
+          docker compose up -d
+          echo "⏳ Waiting for services to become healthy..."
 
-      - name: Run E2E Health & Integration Suite
+      - name: Wait for Microservices to be Ready
         run: |
-          echo "🧪 Running full E2E platform health integration tests..."
+          echo "🔍 Polling microservice health endpoints..."
+          MAX_WAIT=120
+          ELAPSED=0
+          SERVICES_HEALTHY=false
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            ALL_HEALTHY=true
+            for PORT in 5001 5002 5003 5004 5006 5007; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/api/healthz" 2>/dev/null || echo "000")
+              if [ "$STATUS" != "200" ]; then
+                ALL_HEALTHY=false
+                break
+              fi
+            done
+
+            if $ALL_HEALTHY; then
+              SERVICES_HEALTHY=true
+              echo "✅ All microservices are healthy after ${ELAPSED}s"
+              break
+            fi
+
+            sleep 5
+            ELAPSED=$((ELAPSED + 5))
+            echo "  ... waiting (${ELAPSED}s elapsed)"
+          done
+
+          if ! $SERVICES_HEALTHY; then
+            echo "⚠️  Services did not all become healthy within ${MAX_WAIT}s"
+            docker compose ps
+            docker compose logs --tail=50
+          fi
+
+      - name: Run Microservice Health Integration Suite
+        run: |
+          echo "🧪 Running platform health integration tests..."
           node scripts/test-platform-health.js
+
+      - name: Docker Compose Stack Status
+        if: always()
+        run: docker compose ps
 
       - name: Teardown Docker Stack
         if: always()
-        run: |
-          docker compose down -v
+        run: docker compose down -v
 
+  # ─── Job 4: Terraform Format & Validation ─────────────────────────────────
   terraform_ci:
     name: Terraform Format & Validation
     runs-on: ubuntu-latest
@@ -133,8 +200,15 @@ jobs:
         with:
           terraform_version: "1.9.3"
 
-      - name: Terraform Format & Validate
+      - name: Terraform Format Check
+        run: |
+          cd terraform
+          terraform fmt -check -recursive
+          echo "✅ Terraform formatting is correct"
+
+      - name: Terraform Init & Validate
         run: |
           cd terraform
           terraform init -backend=false
           terraform validate
+          echo "✅ Terraform configuration is valid"

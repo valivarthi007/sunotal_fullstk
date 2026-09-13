@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 
 const app = express();
-const PORT = process.env.PORT || 5005;
+const PORT = Number(process.env.PORT ?? 5005);
 
 app.use(cors());
 app.use(express.json());
@@ -16,6 +16,11 @@ const quotations: any[] = [];
 
 app.get('/healthz', (_req, res) => {
   res.json({ service: 'vendor-service', status: 'OK', vendorsCount: vendors.length, timestamp: new Date().toISOString() });
+});
+
+// Canonical healthz path used by Docker and nginx health checks
+app.get('/api/healthz', (_req, res) => {
+  res.json({ service: 'vendor-service', status: 'ok', vendorsCount: vendors.length, timestamp: new Date().toISOString() });
 });
 
 // List Vendors (Admin)
@@ -45,6 +50,6 @@ app.get('/api/procurement/quotations', (_req, res) => {
   res.json(quotations);
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌾 vendor-service running on port ${PORT}`);
 });

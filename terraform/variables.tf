@@ -46,3 +46,11 @@ variable "dynamodb_table_name" {
   type        = string
   default     = "sunotal-terraform-locks"
 }
+
+variable "jwt_secret" {
+  description = "JWT secret for microservices authentication"
+  type        = string
+  default     = "sunotal-production-jwt-secret-2026"
+  sensitive   = true
+}
+

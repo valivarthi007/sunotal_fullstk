@@ -71,8 +71,8 @@ resource "aws_iam_role_policy" "ec2_s3_access" {
     Version = "2012-10-17",
     Statement = [
       {
-        Effect   = "Allow",
-        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
+        Effect = "Allow",
+        Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
         Resource = [
           "arn:aws:s3:::${var.s3_bucket_name}",
           "arn:aws:s3:::${var.s3_bucket_name}/*"
@@ -136,11 +136,11 @@ resource "aws_security_group" "backend" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # WebSocket (Socket.IO) — same port as API
+  # Microservices ports (5001–5008) — auth, ops, inventory, user, vendor, delivery, support, notification
   ingress {
-    description = "WebSocket"
+    description = "Microservices"
     from_port   = 5001
-    to_port     = 5001
+    to_port     = 5008
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -159,8 +159,8 @@ resource "aws_security_group" "backend" {
 # ─── Elastic IP ───────────────────────────────────────────────────────────────
 
 resource "aws_eip" "backend" {
-  domain   = "vpc"
-  tags     = merge(var.tags, { Name = "sunotal-backend-eip" })
+  domain = "vpc"
+  tags   = merge(var.tags, { Name = "sunotal-backend-eip" })
 }
 
 resource "aws_eip_association" "backend" {
@@ -172,7 +172,7 @@ resource "aws_eip_association" "backend" {
 
 resource "aws_cloudwatch_log_group" "backend" {
   name              = "/sunotal/backend"
-  retention_in_days = 7   # Free tier: 5GB logs
+  retention_in_days = 7 # Free tier: 5GB logs
   tags              = merge(var.tags, { Name = "sunotal-backend-logs" })
 }
 
@@ -180,7 +180,7 @@ resource "aws_cloudwatch_log_group" "backend" {
 
 resource "aws_instance" "backend" {
   ami                    = local.target_ami_id
-  instance_type          = var.instance_type   # t2.micro = Free Tier
+  instance_type          = var.instance_type # t2.micro = Free Tier
   key_name               = var.key_name
   subnet_id              = local.target_subnet_id
   vpc_security_group_ids = [aws_security_group.backend.id]
@@ -188,7 +188,7 @@ resource "aws_instance" "backend" {
 
   root_block_device {
     volume_type           = "gp2"
-    volume_size           = 25    # 25 GB — Free tier allows 30GB
+    volume_size           = 25 # 25 GB — Free tier allows 30GB
     delete_on_termination = true
     encrypted             = true
     tags                  = merge(var.tags, { Name = "sunotal-backend-root-ebs" })
@@ -205,12 +205,12 @@ resource "aws_instance" "backend" {
     frontend_origin = var.frontend_origin
   }))
 
-  user_data_replace_on_change = false  # Don't destroy instance on script change
+  user_data_replace_on_change = false # Don't destroy instance on script change
 
   tags = merge(var.tags, { Name = "sunotal-backend" })
 
   lifecycle {
-    ignore_changes = [user_data]  # Never replace instance due to user_data change
+    ignore_changes = [user_data] # Never replace instance due to user_data change
   }
 }
 

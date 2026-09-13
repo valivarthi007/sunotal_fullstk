@@ -39,6 +39,10 @@ app.get('/healthz', (_req, res) => {
   res.json({ service: 'catalog-service', status: 'OK', productsCount: products.length, timestamp: new Date().toISOString() });
 });
 
+app.get('/api/healthz', (_req, res) => {
+  res.json({ status: 'ok', service: 'catalog-service' });
+});
+
 // Products Listing with Filter/Search/Sort
 app.get('/api/products', (req, res) => {
   const { category, search, sort } = req.query;

@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+  # ─── Infrastructure ───────────────────────────────────────────────────────
   mongodb:
     image: mongo:7.0
     container_name: sunotal-mongo
@@ -9,6 +8,12 @@ services:
       - "27017:27017"
     volumes:
       - sunotal_mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
 
   redis:
     image: redis:7-alpine
@@ -16,7 +21,17 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - sunotal_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
+  # ─── Nginx Gateway ────────────────────────────────────────────────────────
   gateway:
     image: nginx:1.25-alpine
     container_name: sunotal-gateway
@@ -28,18 +43,30 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./certs:/etc/nginx/certs:ro
     depends_on:
-      - user-app
-      - admin-app
-      - vendor-app
-      - delivery-app
-      - support-app
-      - auth-service
-      - operations-service
-      - inventory-service
-      - user-service
-      - delivery-service
-      - support-service
+      user-app:
+        condition: service_healthy
+      admin-app:
+        condition: service_healthy
+      vendor-app:
+        condition: service_healthy
+      delivery-app:
+        condition: service_healthy
+      support-app:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      operations-service:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      delivery-service:
+        condition: service_healthy
+      support-service:
+        condition: service_healthy
 
+  # ─── Backend Microservices ────────────────────────────────────────────────
   auth-service:
     build:
       context: ./services/auth-service
@@ -52,15 +79,18 @@ services:
       - PORT=5001
       - MONGODB_URI=mongodb://mongodb:27017/sunotal
       - REDIS_HOST=redis
-      - SESSION_SECRET=sunotal-super-secret-session-key
+      - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5001/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 15s
 
   operations-service:
     build:
@@ -74,15 +104,18 @@ services:
       - PORT=5002
       - MONGODB_URI=mongodb://mongodb:27017/sunotal
       - REDIS_HOST=redis
-      - SESSION_SECRET=sunotal-super-secret-session-key
+      - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5002/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 20s
 
   inventory-service:
     build:
@@ -95,16 +128,15 @@ services:
     environment:
       - PORT=5003
       - MONGODB_URI=mongodb://mongodb:27017/sunotal
-      - REDIS_HOST=redis
-      - SESSION_SECRET=sunotal-super-secret-session-key
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5003/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 20s
 
   user-service:
     build:
@@ -117,16 +149,36 @@ services:
     environment:
       - PORT=5004
       - MONGODB_URI=mongodb://mongodb:27017/sunotal
-      - REDIS_HOST=redis
-      - SESSION_SECRET=sunotal-super-secret-session-key
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5004/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 15s
+
+  vendor-service:
+    build:
+      context: ./services/vendor-service
+      dockerfile: Dockerfile
+    container_name: sunotal-vendor
+    restart: unless-stopped
+    ports:
+      - "5005:5005"
+    environment:
+      - PORT=5005
+      - MONGODB_URI=mongodb://mongodb:27017/sunotal
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5005/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   delivery-service:
     build:
@@ -138,17 +190,12 @@ services:
       - "5006:5006"
     environment:
       - PORT=5006
-      - MONGODB_URI=mongodb://mongodb:27017/sunotal
-      - REDIS_HOST=redis
-      - SESSION_SECRET=sunotal-super-secret-session-key
-    depends_on:
-      - mongodb
-      - redis
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5006/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 15s
 
   support-service:
     build:
@@ -161,17 +208,17 @@ services:
     environment:
       - PORT=5007
       - MONGODB_URI=mongodb://mongodb:27017/sunotal
-      - REDIS_HOST=redis
-      - SESSION_SECRET=sunotal-super-secret-session-key
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5007/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 15s
 
+  # ─── Frontend Apps ────────────────────────────────────────────────────────
   user-app:
     build:
       context: ./apps/user-app
@@ -180,6 +227,12 @@ services:
     restart: unless-stopped
     ports:
       - "3000:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   admin-app:
     build:
@@ -189,6 +242,12 @@ services:
     restart: unless-stopped
     ports:
       - "3001:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   vendor-app:
     build:
@@ -198,6 +257,12 @@ services:
     restart: unless-stopped
     ports:
       - "3002:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   delivery-app:
     build:
@@ -207,6 +272,12 @@ services:
     restart: unless-stopped
     ports:
       - "3003:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   support-app:
     build:
@@ -216,7 +287,14 @@ services:
     restart: unless-stopped
     ports:
       - "3004:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
+  # ─── Observability ────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
     container_name: sunotal-prometheus
@@ -231,6 +309,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 10s
 
   grafana:
     image: grafana/grafana:latest
@@ -239,7 +318,8 @@ services:
     ports:
       - "3005:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - sunotal_grafanadata:/var/lib/grafana
@@ -248,9 +328,10 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 15s
 
 volumes:
   sunotal_mongodata:
+  sunotal_redisdata:
   sunotal_promdata:
   sunotal_grafanadata:
-
