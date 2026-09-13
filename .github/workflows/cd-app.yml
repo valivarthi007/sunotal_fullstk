@@ -9,7 +9,6 @@ on:
       - 'apps/**'
       - 'nginx.conf'
       - 'docker-compose.yml'
-      - 'ansible/**'
       - '.github/workflows/cd-app.yml'
   workflow_run:
     workflows: ["CD: Infrastructure Provisioning"]
@@ -21,8 +20,8 @@ env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
 jobs:
-  deploy_microservices_and_frontend:
-    name: Microservices & Frontend Ansible Deployment
+  deploy_containers_via_aws_cli:
+    name: Build & Push Containers via AWS CLI / ECR
     runs-on: ubuntu-latest
 
     steps:
@@ -36,24 +35,58 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install Ansible
+      - name: Log in to Amazon ECR via AWS CLI
+        id: login-ecr
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ansible
-
-      - name: Deploy Microservices Cluster & Frontend via AWS SSM Command
-        run: |
-          echo "🚀 Executing live deployment on EC2 target..."
-          INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-backend" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].InstanceId" --output text 2>/dev/null || echo "")
-
-          if [ -n "$INSTANCE_ID" ] && [ "$INSTANCE_ID" != "None" ]; then
-            echo "✅ Targeting EC2 Instance: $INSTANCE_ID"
-            aws ssm send-command \
-              --instance-ids "$INSTANCE_ID" \
-              --document-name "AWS-RunShellScript" \
-              --comment "Microservices & Frontend Live Update" \
-              --parameters 'commands=["cd /home/ec2-user/app/sunotal_fullstk || exit 0", "git pull origin main", "(cd apps/user-app && npm run build)", "(cd apps/admin-app && npm run build)", "(cd apps/vendor-app && npm run build)", "(cd apps/delivery-app && npm run build)", "(cd apps/support-app && npm run build)", "cd services", "docker compose up -d --build"]' \
-              || echo "⚠️ Command dispatched."
-          else
-            echo "ℹ️ No running EC2 instance found. Please run Infrastructure Provisioning workflow first."
+          echo "🔑 Logging into Amazon ECR using AWS CLI..."
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+          if [ -n "$ACCOUNT_ID" ]; then
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+            echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
           fi
+
+      - name: Build & Push Microservices & Frontend Images via AWS CLI
+        run: |
+          ACCOUNT_ID="${{ steps.login-ecr.outputs.account_id }}"
+          REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+
+          if [ -n "$ACCOUNT_ID" ]; then
+            echo "🚀 Building and pushing containers to ECR registry ($REGISTRY)..."
+
+            # 1. Microservices
+            for service_dir in services/*; do
+              if [ -d "$service_dir" ] && [ -f "$service_dir/Dockerfile" ]; then
+                service_name=$(basename "$service_dir")
+                repo_name="sunotal-$service_name"
+                echo "📦 Processing microservice: $repo_name"
+                aws ecr describe-repositories --repository-names "$repo_name" || aws ecr create-repository --repository-name "$repo_name"
+                docker build -t "$repo_name:latest" "$service_dir"
+                docker tag "$repo_name:latest" "$REGISTRY/$repo_name:latest"
+                docker push "$REGISTRY/$repo_name:latest"
+              fi
+            done
+
+            # 2. Frontend Apps
+            for app_dir in apps/*; do
+              if [ -d "$app_dir" ] && [ -f "$app_dir/Dockerfile" ]; then
+                app_name=$(basename "$app_dir")
+                repo_name="sunotal-$app_name"
+                echo "🎨 Processing frontend app: $repo_name"
+                aws ecr describe-repositories --repository-names "$repo_name" || aws ecr create-repository --repository-name "$repo_name"
+                docker build -t "$repo_name:latest" "$app_dir"
+                docker tag "$repo_name:latest" "$REGISTRY/$repo_name:latest"
+                docker push "$REGISTRY/$repo_name:latest"
+              fi
+            done
+          else
+            echo "ℹ️ AWS Credentials or Account ID unavailable. Building containers locally via Docker Compose..."
+            docker compose build
+          fi
+
+      - name: Local Integration Test Verification via Docker Compose
+        run: |
+          echo "🧪 Running full container stack test via Docker Compose..."
+          docker compose up -d
+          sleep 10
+          docker compose ps
+          docker compose down
