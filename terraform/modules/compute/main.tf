@@ -58,6 +58,11 @@ resource "aws_iam_role" "ec2_backend" {
   tags = merge(var.tags, { Name = "sunotal-ec2-backend-role" })
 }
 
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  role       = aws_iam_role.ec2_backend.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 resource "aws_iam_role_policy" "ec2_s3_access" {
   name = "sunotal-ec2-s3-access"
   role = aws_iam_role.ec2_backend.id
