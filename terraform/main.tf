@@ -30,9 +30,7 @@ locals {
   }
 }
 
-
-
-# AWS EC2 Backend Compute Module (Free Tier t2.micro Node.js + MongoDB + Redis)
+# AWS EC2 Backend Compute Module
 module "compute" {
   source        = "./modules/compute"
   aws_region    = var.aws_region
@@ -42,31 +40,13 @@ module "compute" {
   tags          = local.common_tags
 }
 
-# Route53 Hosted Zone lookup for automateuniverse.space
-data "aws_route53_zone" "primary" {
-  name         = "automateuniverse.space."
-  private_zone = false
+# CDN & Application Load Balancer Module (AWS ACM HTTPS SSL Termination & HTTP 301 Redirect)
+module "cdn" {
+  source                = "./modules/cdn"
+  aws_region            = var.aws_region
+  vpc_id                = module.compute.security_group_id != "" ? "vpc-default" : ""
+  public_subnet_ids     = []
+  alb_security_group_id = module.compute.security_group_id
+  s3_bucket_name        = var.s3_bucket_name
+  tags                  = local.common_tags
 }
-
-# DNS A Records pointing all Sunotal subdomains to the EC2 Elastic IP
-resource "aws_route53_record" "sunotal_subdomains" {
-  for_each = toset([
-    "sunotal",
-    "admin",
-    "admin-sunotal",
-    "vendor",
-    "vendor-sunotal",
-    "delivery",
-    "delivery-sunotal",
-    "support",
-    "support-sunotal",
-    "observability"
-  ])
-
-  zone_id = data.aws_route53_zone.primary.zone_id
-  name    = "${each.key}.automateuniverse.space"
-  type    = "A"
-  ttl     = 300
-  records = [module.compute.public_ip]
-}
-
