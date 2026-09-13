@@ -1,0 +1,92 @@
+---
+- name: Deploy Sunotal Quick-Commerce Microservices & Frontend Applications
+  hosts: webservers
+  become: yes
+  vars:
+    app_dir: /home/ec2-user/app/sunotal_fullstk
+    repo_url: https://github.com/valivarthi007/sunotal_fullstk.git
+    node_env: production
+
+  tasks:
+    - name: 1. System Package Update & Prerequisites Installation
+      dnf:
+        name:
+          - git
+          - docker
+          - htop
+          - curl
+          - nginx
+        state: present
+        update_cache: yes
+
+    - name: 2. Enable & Start Docker Service
+      systemd:
+        name: docker
+        enabled: yes
+        state: started
+
+    - name: 3. Add ec2-user to docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+    - name: 4. Ensure Docker Compose CLI plugin directory exists
+      file:
+        path: /usr/local/lib/docker/cli-plugins
+        state: directory
+        mode: '0755'
+
+    - name: 5. Install Docker Compose CLI Plugin
+      get_url:
+        url: https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64
+        dest: /usr/local/lib/docker/cli-plugins/docker-compose
+        mode: '0755'
+
+    - name: 6. Ensure setup workspace directory exists
+      file:
+        path: /home/ec2-user/app
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+
+    - name: 7. Clone or Pull Latest Sunotal Codebase
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: main
+        force: yes
+      become: no
+
+    - name: 8. Configure System Environment File
+      copy:
+        dest: /etc/environment
+        content: |
+          NODE_ENV="production"
+          MONGODB_URI="mongodb://mongodb:27017/sunotal"
+          JWT_SECRET="sunotal_jwt_secret_2026_super_secure"
+          FRONTEND_ORIGIN="https://sunotal.automateuniverse.space"
+          AWS_REGION="us-east-1"
+        mode: '0644'
+
+    - name: 9. Launch Microservices Cluster & Standalone MongoDB via Docker Compose
+      shell: |
+        cd {{ app_dir }}/services
+        docker compose up -d --build
+      become: no
+      register: compose_output
+
+    - name: 10. Display Container Deployment Status
+      debug:
+        var: compose_output.stdout_lines
+
+    - name: 11. Verify Microservices API Gateway Health
+      uri:
+        url: http://localhost:5000/api/healthz
+        method: GET
+        status_code: 200
+      register: health_check
+      retries: 5
+      delay: 5
+      until: health_check.status == 200

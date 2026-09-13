@@ -1,0 +1,18 @@
+{
+  "short_name": "Sunotal Vendor",
+  "name": "Sunotal Farmer Produce Procurement & Vendor Portal",
+  "description": "Direct farmer crop procurement, pricing bidding, and batch quality checks.",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512 192x192 64x64 32x32 24x24 16x16",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#16a34a",
+  "theme_color": "#16a34a",
+  "display": "standalone",
+  "orientation": "any"
+}

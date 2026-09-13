@@ -49,6 +49,8 @@ import NotFound from "@/pages/not-found";
 import Redirect from "@/lib/redirect";
 import { LocationProvider } from "@/lib/location-context";
 import { ApiStatusProvider } from "@/lib/api-status";
+import { WebsiteTour } from "@/components/ui/WebsiteTour";
+import { ChatbotWidget } from "@/components/ui/ChatbotWidget";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -327,6 +329,8 @@ function App() {
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                   <SubdomainRouter />
                 </WouterRouter>
+                <WebsiteTour />
+                <ChatbotWidget />
               </ApiStatusProvider>
               <Toaster />
               <Sonner richColors position="top-right" />
