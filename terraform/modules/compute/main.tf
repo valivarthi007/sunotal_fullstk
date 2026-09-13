@@ -13,6 +13,11 @@ data "aws_subnets" "default" {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
+
+  filter {
+    name   = "availability-zone"
+    values = [for az in data.aws_availability_zones.available.names : az if !endswith(az, "e")]
+  }
 }
 
 data "aws_ami" "amazon_linux_2023" {
