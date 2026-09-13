@@ -423,7 +423,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   className="w-full h-12 text-base font-bold rounded-xl shadow-md shadow-primary/20"
                   onClick={() => {
                     if (totalPrice < 250) {
-                      toast.error(`Minimum order value is ₹250. Please add ₹${(250 - totalPrice).toFixed(0)} more to proceed.`);
                       return;
                     }
                     if (!user) { closeCart(); setLocation("/login"); }

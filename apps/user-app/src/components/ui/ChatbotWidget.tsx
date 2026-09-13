@@ -95,7 +95,7 @@ export const ChatbotWidget: React.FC = () => {
   const handleAddSuggested = (action: NonNullable<ChatMessage['suggestedAction']>) => {
     if (action.productName && action.price) {
       addItem({
-        id: `bot-p-${Date.now()}`,
+        id: Date.now(),
         name: action.productName,
         price: action.price,
         image: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=300&auto=format&fit=crop&q=80',
