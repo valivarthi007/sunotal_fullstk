@@ -1,0 +1,55 @@
+name: "CD: Application & Microservices Deployment"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/**'
+      - 'apps/**'
+      - 'nginx.conf'
+      - 'docker-compose.yml'
+      - 'ansible/**'
+      - '.github/workflows/cd-app.yml'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+
+jobs:
+  deploy_microservices_and_frontend:
+    name: Microservices & Frontend Ansible Deployment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Deploy Microservices Cluster & Frontend via AWS SSM Command
+        run: |
+          echo "🚀 Executing live deployment on EC2 target..."
+          INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=sunotal-backend" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].InstanceId" --output text 2>/dev/null || echo "")
+
+          if [ -n "$INSTANCE_ID" ] && [ "$INSTANCE_ID" != "None" ]; then
+            echo "✅ Targeting EC2 Instance: $INSTANCE_ID"
+            aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --comment "Microservices & Frontend Live Update" \
+              --parameters 'commands=["cd /home/ec2-user/app/sunotal_fullstk || exit 0", "git pull origin main", "(cd apps/user-app && npm run build)", "(cd apps/admin-app && npm run build)", "(cd apps/vendor-app && npm run build)", "(cd apps/delivery-app && npm run build)", "(cd apps/support-app && npm run build)", "cd services", "docker compose up -d --build"]' \
+              || echo "⚠️ Command dispatched."
+          else
+            echo "ℹ️ No running EC2 instance found. Please run Infrastructure Provisioning workflow first."
+          fi

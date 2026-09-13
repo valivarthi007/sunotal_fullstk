@@ -1,10 +1,10 @@
-name: Infrastructure Teardown (Destroy)
+name: "Infrastructure Teardown"
 
 on:
   workflow_dispatch:
     inputs:
       confirm_destroy:
-        description: 'Type "DESTROY" to confirm complete teardown of AWS infrastructure'
+        description: 'Type "DESTROY" to confirm teardown of infrastructure'
         required: true
         default: ''
 
@@ -13,7 +13,7 @@ env:
 
 jobs:
   destroy_infrastructure:
-    name: Teardown Infrastructure via Terraform
+    name: Destroy Infrastructure via Terraform
     runs-on: ubuntu-latest
 
     steps:
@@ -39,7 +39,7 @@ jobs:
         with:
           terraform_version: "1.9.3"
 
-      - name: Destroy AWS Infrastructure
+      - name: Destroy Infrastructure with Terraform
         run: |
           cd terraform
           terraform init -upgrade

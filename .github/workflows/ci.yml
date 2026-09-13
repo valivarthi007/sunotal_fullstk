@@ -1,4 +1,4 @@
-name: Continuous Integration (CI)
+name: "CI: Build & Test"
 
 on:
   push:
@@ -76,7 +76,7 @@ jobs:
           done
 
   terraform_ci:
-    name: Terraform Lint & Validation
+    name: Terraform Format & Validation
     runs-on: ubuntu-latest
 
     steps:

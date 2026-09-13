@@ -1,0 +1,53 @@
+name: "CD: Infrastructure Provisioning"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/cd-infra.yml'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+
+jobs:
+  provision_infrastructure:
+    name: Provision Infrastructure via Terraform (Self-Healing State)
+    runs-on: ubuntu-latest
+    outputs:
+      ec2_instance_id: ${{ steps.tf_outputs.outputs.ec2_instance_id }}
+      ec2_public_ip: ${{ steps.tf_outputs.outputs.ec2_public_ip }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.3"
+
+      - name: Initialize & Apply Terraform (Self-Healing Drift Check)
+        id: terraform
+        run: |
+          cd terraform
+          terraform init -upgrade
+          terraform apply -auto-approve
+
+      - name: Extract Infrastructure Outputs
+        id: tf_outputs
+        run: |
+          cd terraform
+          INSTANCE_ID=$(terraform output -raw backend_instance_id 2>/dev/null || echo "")
+          PUBLIC_IP=$(terraform output -raw backend_public_ip 2>/dev/null || echo "")
+          echo "ec2_instance_id=$INSTANCE_ID" >> $GITHUB_OUTPUT
+          echo "ec2_public_ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
