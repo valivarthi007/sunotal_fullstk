@@ -50,11 +50,13 @@ variable "db_password" {
 variable "subnet_ids" {
   type        = list(string)
   description = "Subnet IDs for database subnet group"
+  default     = []
 }
 
 variable "db_security_group_id" {
   type        = string
   description = "Database security group ID"
+  default     = ""
 }
 
 variable "tags" {
