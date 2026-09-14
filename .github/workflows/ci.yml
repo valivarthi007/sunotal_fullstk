@@ -220,14 +220,14 @@ jobs:
           echo "🔍 Validating all Terraform modules individually..."
           failed_modules=()
           for mod in terraform/modules/*/; do
+            [ -d "$mod" ] || continue
             mod_name=$(basename "$mod")
-            result=$(cd "$mod" && \
-              terraform init -backend=false -input=false -upgrade 2>&1 | tail -1 && \
-              terraform validate 2>&1)
-            if echo "$result" | grep -q "Success"; then
+            val_output=$( (cd "$mod" && terraform init -backend=false -input=false -upgrade >/dev/null 2>&1 && terraform validate) 2>&1 )
+            if [ $? -eq 0 ]; then
               echo "  ✅ modules/$mod_name"
             else
-              echo "  ❌ modules/$mod_name: $result"
+              echo "  ❌ modules/$mod_name:"
+              echo "$val_output"
               failed_modules+=("$mod_name")
             fi
           done
