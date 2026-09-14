@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install dependencies with locked versions
 COPY package*.json ./
-RUN npm ci
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Copy source and compile TypeScript
 COPY . .
@@ -16,7 +16,7 @@ WORKDIR /app
 
 # Install only production deps with locked versions
 COPY package*.json ./
-RUN npm ci --only=production --ignore-scripts
+RUN if [ -f package-lock.json ]; then npm ci --only=production --ignore-scripts; else npm install --only=production --ignore-scripts; fi
 
 # Copy compiled output
 COPY --from=builder /app/dist ./dist
