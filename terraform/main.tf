@@ -19,7 +19,7 @@ terraform {
     region = "us-east-1"
     # For Terraform backend state locking, dynamodb_table can be specified if needed
     # dynamodb_table = "sunotal-terraform-locks"
-    encrypt      = true
+    encrypt = true
   }
 }
 
