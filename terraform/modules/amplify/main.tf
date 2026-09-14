@@ -37,7 +37,7 @@ resource "aws_amplify_app" "sunotal" {
   }
 
   custom_rule {
-    source = "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>"
+    source = "^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)"
     target = "/index.html"
     status = "200"
   }
