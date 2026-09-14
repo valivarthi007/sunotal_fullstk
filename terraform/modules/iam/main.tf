@@ -44,7 +44,7 @@ resource "aws_iam_policy" "s3_artifacts_policy" {
         Action = [
           "lambda:InvokeFunction"
         ]
-        Resource = var.lambda_arn != "" ? [var.lambda_arn] : ["*"]
+        Resource = length(var.lambda_arn) > 0 ? [var.lambda_arn] : ["*"]
       }
     ]
   })

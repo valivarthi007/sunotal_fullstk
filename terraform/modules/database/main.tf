@@ -1,6 +1,6 @@
 resource "aws_db_subnet_group" "main" {
   name       = "sunotal-db-subnet-group"
-  subnet_ids = var.subnet_ids
+  subnet_ids = length(var.subnet_ids) > 0 ? var.subnet_ids : []
 
   tags = merge(var.tags, {
     Name = "sunotal-db-subnet-group"
@@ -19,7 +19,7 @@ resource "aws_db_instance" "postgres" {
   username               = var.db_username
   password               = var.db_password
   db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [var.db_security_group_id]
+  vpc_security_group_ids = length(var.db_security_group_id) > 0 ? [var.db_security_group_id] : []
   skip_final_snapshot    = true
   publicly_accessible    = false
 
@@ -30,7 +30,7 @@ resource "aws_db_instance" "postgres" {
 
 resource "aws_docdb_subnet_group" "main" {
   name       = "sunotal-docdb-subnet-group"
-  subnet_ids = var.subnet_ids
+  subnet_ids = length(var.subnet_ids) > 0 ? var.subnet_ids : []
 
   tags = merge(var.tags, {
     Name = "sunotal-docdb-subnet-group"
@@ -43,7 +43,7 @@ resource "aws_docdb_cluster" "docdb" {
   master_username        = var.db_username
   master_password        = var.db_password
   db_subnet_group_name   = aws_docdb_subnet_group.main.name
-  vpc_security_group_ids = [var.db_security_group_id]
+  vpc_security_group_ids = length(var.db_security_group_id) > 0 ? [var.db_security_group_id] : []
   skip_final_snapshot    = true
   deletion_protection    = false
 
