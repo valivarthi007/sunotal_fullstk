@@ -32,28 +32,26 @@ jobs:
           version: 9.15.4
           run_install: false
 
-      - name: Install & Build Microservices
+      - name: Install Workspace Dependencies
         run: |
-          echo "📦 Installing and compiling backend microservices via pnpm..."
-          echo "unsafe-perm=true" >> ~/.npmrc
+          echo "📦 Installing workspace dependencies at root..."
+          pnpm install --frozen-lockfile
+
+      - name: Compile Backend Microservices
+        run: |
+          echo "⚙️ Building backend microservices..."
           failed_services=()
           for service in services/*/; do
             if [ -d "$service" ] && [ -f "$service/package.json" ]; then
-              echo "⚙️  Building $service..."
+              service_name=$(basename "$service")
+              echo "⚙️  Building $service_name..."
               cd "$service"
-              if [ -f "pnpm-lock.yaml" ]; then
-                pnpm install --frozen-lockfile
-              elif [ -f "package-lock.json" ]; then
-                npm ci
-              else
-                npm install
-              fi
               pnpm build || npm run build
               if [ $? -ne 0 ]; then
-                failed_services+=("$service")
-                echo "❌ Build failed: $service"
+                failed_services+=("$service_name")
+                echo "❌ Build failed: $service_name"
               else
-                echo "✅ Build OK: $service"
+                echo "✅ Build OK: $service_name"
               fi
               cd ../..
             fi
@@ -95,28 +93,26 @@ jobs:
           version: 9.15.4
           run_install: false
 
+      - name: Install Workspace Dependencies
+        run: |
+          echo "📦 Installing workspace dependencies at root..."
+          pnpm install --frozen-lockfile
+
       - name: Build Frontend Applications
         run: |
-          echo "📦 Compiling frontend applications..."
-          echo "unsafe-perm=true" >> ~/.npmrc
+          echo "🎨 Compiling frontend applications..."
           failed_apps=()
           for app in apps/*/; do
             if [ -d "$app" ] && [ -f "$app/package.json" ]; then
-              echo "🎨 Building $app..."
+              app_name=$(basename "$app")
+              echo "🎨 Building $app_name..."
               cd "$app"
-              if [ -f "pnpm-lock.yaml" ]; then
-                pnpm install --frozen-lockfile
-              elif [ -f "package-lock.json" ]; then
-                npm ci
-              else
-                npm install
-              fi
               pnpm build || npm run build
               if [ $? -ne 0 ]; then
-                failed_apps+=("$app")
-                echo "❌ Build failed: $app"
+                failed_apps+=("$app_name")
+                echo "❌ Build failed: $app_name"
               else
-                echo "✅ Build OK: $app"
+                echo "✅ Build OK: $app_name"
               fi
               cd ../..
             fi

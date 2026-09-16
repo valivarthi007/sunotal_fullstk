@@ -73,14 +73,14 @@ module "iam" {
 
 # ─── 5. Database (AWS DocumentDB - MongoDB) ───────────────────────────────────
 module "database" {
-  source                = "./modules/database"
-  subnet_ids            = module.vpc.private_subnets
-  db_security_group_id  = module.security.db_security_group_id
-  docdb_instance_class  = "db.t3.medium"
-  db_username           = "sunotaladmin"
-  db_password           = "SunotalMongoPass123!"
-  identifier            = "sunotal-docdb"
-  tags                  = local.common_tags
+  source               = "./modules/database"
+  subnet_ids           = module.vpc.private_subnets
+  db_security_group_id = module.security.db_security_group_id
+  docdb_instance_class = "db.t3.medium"
+  db_username          = "sunotaladmin"
+  db_password          = "SunotalMongoPass123!"
+  identifier           = "sunotal-docdb"
+  tags                 = local.common_tags
 }
 
 # ─── 6. Event-Driven Messaging (AWS SQS + SNS) ────────────────────────────────
