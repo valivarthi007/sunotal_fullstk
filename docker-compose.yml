@@ -61,8 +61,6 @@ services:
         condition: service_healthy
       user-service:
         condition: service_healthy
-      vendor-service:
-        condition: service_healthy
       delivery-service:
         condition: service_healthy
       support-service:
@@ -161,26 +159,6 @@ services:
       retries: 3
       start_period: 20s
 
-  vendor-service:
-    build:
-      context: ./services/vendor-service
-      dockerfile: Dockerfile
-    container_name: sunotal-vendor
-    restart: unless-stopped
-    ports:
-      - "5005:5005"
-    environment:
-      - PORT=5005
-      - MONGODB_URI=mongodb://mongodb:27017/sunotal
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5005/api/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
 
   delivery-service:
     build:

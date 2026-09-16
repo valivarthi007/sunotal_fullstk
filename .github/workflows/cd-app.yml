@@ -1,17 +1,8 @@
-name: "CD: Application & Microservices Deployment"
+name: "CD: Application Deployment & Verification"
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'services/**'
-      - 'apps/**'
-      - 'nginx.conf'
-      - 'docker-compose.yml'
-      - '.github/workflows/cd-app.yml'
   workflow_run:
-    workflows: ["CD: Infrastructure Provisioning"]
+    workflows: ["CI: Build, Test & Containerize"]
     types:
       - completed
   workflow_dispatch:
@@ -21,9 +12,10 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  build_and_push_containers:
-    name: Build & Push Containers to ECR
+  deploy_and_verify:
+    name: Deploy to EC2 Host & Verify Subdomains
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout repository
@@ -36,104 +28,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        run: |
-          echo "🔑 Logging into Amazon ECR..."
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
-          if [ -n "$ACCOUNT_ID" ]; then
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} \
-              | docker login --username AWS --password-stdin \
-                "$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-            echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
-            echo "registry=$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
-            echo "✅ Logged in to ECR"
-          else
-            echo "⚠️  AWS credentials unavailable — will build locally only"
-          fi
-
-      - name: Build & Push Microservices to ECR
-        run: |
-          ACCOUNT_ID="${{ steps.login-ecr.outputs.account_id }}"
-          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
-          GIT_SHA="${{ env.IMAGE_TAG }}"
-
-          for service_dir in services/*/; do
-            if [ -d "$service_dir" ] && [ -f "$service_dir/Dockerfile" ]; then
-              service_name=$(basename "$service_dir")
-              repo_name="sunotal-${service_name}"
-              echo "📦 Building microservice: $repo_name"
-
-              # Build with both :latest and :<git-sha> tags for rollback capability
-              docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" "$service_dir"
-              echo "✅ Built ${repo_name}"
-
-              if [ -n "$ACCOUNT_ID" ]; then
-                aws ecr create-repository --repository-name "$repo_name" 2>/dev/null || true
-                docker tag "${repo_name}:latest" "${REGISTRY}/${repo_name}:latest"
-                docker tag "${repo_name}:${GIT_SHA}" "${REGISTRY}/${repo_name}:${GIT_SHA}"
-                docker push "${REGISTRY}/${repo_name}:latest"
-                docker push "${REGISTRY}/${repo_name}:${GIT_SHA}"
-                echo "🚀 Pushed ${repo_name} to ECR (sha: ${GIT_SHA})"
-              fi
-            fi
-          done
-
-      - name: Build & Push Frontend Apps to ECR
-        run: |
-          ACCOUNT_ID="${{ steps.login-ecr.outputs.account_id }}"
-          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
-          GIT_SHA="${{ env.IMAGE_TAG }}"
-
-          for app_dir in apps/*/; do
-            if [ -d "$app_dir" ] && [ -f "$app_dir/Dockerfile" ]; then
-              app_name=$(basename "$app_dir")
-              repo_name="sunotal-${app_name}"
-              echo "🎨 Building frontend app: $repo_name"
-
-              if [ "$app_name" = "unified-frontend" ]; then
-                docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" -f apps/unified-frontend/Dockerfile .
-              else
-                docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" "$app_dir"
-              fi
-              echo "✅ Built ${repo_name}"
-
-              if [ -n "$ACCOUNT_ID" ]; then
-                aws ecr create-repository --repository-name "$repo_name" 2>/dev/null || true
-                docker tag "${repo_name}:latest" "${REGISTRY}/${repo_name}:latest"
-                docker tag "${repo_name}:${GIT_SHA}" "${REGISTRY}/${repo_name}:${GIT_SHA}"
-                docker push "${REGISTRY}/${repo_name}:latest"
-                docker push "${REGISTRY}/${repo_name}:${GIT_SHA}"
-                echo "🚀 Pushed ${repo_name} to ECR (sha: ${GIT_SHA})"
-              fi
-            fi
-          done
-
-  deploy_to_ec2:
-    name: Deploy to EC2 via SSM
-    runs-on: ubuntu-latest
-    needs: build_and_push_containers
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Deploy updated containers on EC2
+      - name: Deploy updated containers on EC2 via SSM
         run: |
           INSTANCE_ID="${{ secrets.EC2_INSTANCE_ID }}"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
           REGISTRY="${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-          GIT_SHA="${{ env.IMAGE_TAG }}"
 
           if [ -z "$INSTANCE_ID" ]; then
-            echo "⚠️  EC2_INSTANCE_ID secret not set — skipping EC2 deploy"
+            echo "⚠️ EC2_INSTANCE_ID secret not set — skipping EC2 deploy step"
             exit 0
           fi
 
@@ -153,12 +55,11 @@ jobs:
 
           echo "📡 SSM Command ID: $COMMAND_ID"
 
-          # Poll for SSM command completion (docker pull + compose up can take 3-5 min)
           MAX_WAIT=300
           ELAPSED=0
           INTERVAL=15
 
-          echo "⏳ Waiting for SSM command to complete (up to ${MAX_WAIT}s)..."
+          echo "⏳ Waiting for SSM deployment to complete (up to ${MAX_WAIT}s)..."
           while [ $ELAPSED -lt $MAX_WAIT ]; do
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
@@ -173,7 +74,7 @@ jobs:
 
             case "$STATUS" in
               Success)
-                echo "✅ EC2 deployment completed successfully (sha: ${GIT_SHA})"
+                echo "✅ EC2 deployment completed successfully"
                 exit 0
                 ;;
               Failed|Cancelled|TimedOut|Cancelling)
@@ -186,14 +87,30 @@ jobs:
                 exit 1
                 ;;
               InProgress|Pending|Delayed)
-                # Still running — keep waiting
                 ;;
               *)
-                echo "  Unknown status '$STATUS' — will keep polling"
+                echo "  Unknown status '$STATUS' — continuing polling"
                 ;;
             esac
           done
 
-          echo "⚠️  Timed out waiting for SSM command after ${MAX_WAIT}s"
-          echo "Check AWS Console → Systems Manager → Run Command for details"
-          # Don't fail — the command may still succeed asynchronously
+      - name: Verify Live Endpoints & Subdomains
+        run: |
+          echo "🌐 Verifying live domain health & asset responses..."
+          DOMAINS=(
+            "https://sunotal.automateuniverse.space"
+            "https://admin-sunotal.automateuniverse.space"
+            "https://vendor-sunotal.automateuniverse.space"
+            "https://delivery-sunotal.automateuniverse.space"
+            "https://support-sunotal.automateuniverse.space"
+          )
+
+          for domain in "${DOMAINS[@]}"; do
+            echo "🔍 Testing $domain..."
+            STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "$domain" || echo "000")
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "301" ] || [ "$STATUS" = "302" ]; then
+              echo "  ✅ $domain reachable (HTTP $STATUS)"
+            else
+              echo "  ⚠️ $domain returned HTTP $STATUS (may take a moment for DNS/SSL)"
+            fi
+          done

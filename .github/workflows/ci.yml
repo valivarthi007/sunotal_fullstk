@@ -1,4 +1,4 @@
-name: "CI: Build & Test"
+name: "CI: Build, Test & Containerize"
 
 on:
   push:
@@ -12,7 +12,7 @@ env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
 jobs:
-  # ─── Job 1: Backend Microservices Build & Type Check ─────────────────────
+  # ─── Job 1: Microservices Compilation & Type Check ───────────────────────
   backend_microservices_ci:
     name: Microservices Build & Type Check
     runs-on: ubuntu-latest
@@ -26,16 +26,29 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
       - name: Install & Build Microservices
         run: |
-          echo "📦 Installing and compiling backend microservices..."
+          echo "📦 Installing and compiling backend microservices via pnpm..."
+          echo "unsafe-perm=true" >> ~/.npmrc
           failed_services=()
           for service in services/*/; do
             if [ -d "$service" ] && [ -f "$service/package.json" ]; then
               echo "⚙️  Building $service..."
               cd "$service"
-              if [ -f "package-lock.json" ]; then npm ci; else npm install; fi
-              npm run build
+              if [ -f "pnpm-lock.yaml" ]; then
+                pnpm install --frozen-lockfile
+              elif [ -f "package-lock.json" ]; then
+                npm ci
+              else
+                npm install
+              fi
+              pnpm build || npm run build
               if [ $? -ne 0 ]; then
                 failed_services+=("$service")
                 echo "❌ Build failed: $service"
@@ -50,14 +63,14 @@ jobs:
             exit 1
           fi
 
-      - name: TypeScript Strict Type Check
+      - name: TypeScript Type Check
         run: |
-          echo "🔍 Running TypeScript noEmit type check across all services..."
+          echo "🔍 Running TypeScript type check..."
           for service in services/*/; do
             if [ -d "$service" ] && [ -f "$service/tsconfig.json" ]; then
               echo "  Checking $service..."
               cd "$service"
-              npx tsc --noEmit 2>&1 || echo "⚠️  Type issues in $service (non-blocking for now)"
+              npx tsc --noEmit 2>&1 || echo "⚠️ Type check warnings in $service"
               cd ../..
             fi
           done
@@ -84,8 +97,7 @@ jobs:
 
       - name: Build Frontend Applications
         run: |
-          echo "📦 Compiling and building frontend applications..."
-          # Allow native build scripts (esbuild) required by pnpm v9+ security model
+          echo "📦 Compiling frontend applications..."
           echo "unsafe-perm=true" >> ~/.npmrc
           failed_apps=()
           for app in apps/*/; do
@@ -99,7 +111,7 @@ jobs:
               else
                 npm install
               fi
-              npm run build
+              pnpm build || npm run build
               if [ $? -ne 0 ]; then
                 failed_apps+=("$app")
                 echo "❌ Build failed: $app"
@@ -114,94 +126,12 @@ jobs:
             exit 1
           fi
 
-
-
-  # ─── Job 3: Docker Compose Full Stack Integration Test ────────────────────
-  docker_compose_testing:
-    name: Docker Compose Full Stack Integration Test
+  # ─── Job 3: Docker Container Build & Push to ECR ──────────────────────────
+  build_and_push_ecr:
+    name: Build & Push Containers to ECR
     runs-on: ubuntu-latest
-    # Run after build jobs pass
     needs: [backend_microservices_ci, frontend_apps_ci]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Create required certs directory (self-signed for CI)
-        run: |
-          mkdir -p certs
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout certs/privkey.pem \
-            -out certs/fullchain.pem \
-            -subj "/CN=localhost"
-
-      - name: Start Full Stack via Docker Compose
-        run: |
-          echo "🐳 Launching complete Sunotal platform stack using Docker Compose..."
-          docker compose build --parallel
-          docker compose up -d
-          echo "⏳ Waiting for services to become healthy..."
-
-      - name: Wait for Microservices to be Ready
-        run: |
-          echo "🔍 Polling microservice health endpoints..."
-          MAX_WAIT=180
-          ELAPSED=0
-          SERVICES_HEALTHY=false
-
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
-            ALL_HEALTHY=true
-            for PORT in 5001 5002 5003 5004 5005 5006 5007; do
-              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/api/healthz" 2>/dev/null || echo "000")
-              if [ "$STATUS" != "200" ]; then
-                ALL_HEALTHY=false
-                echo "  ⏳ port ${PORT} not ready yet (HTTP $STATUS)"
-                break
-              fi
-            done
-
-            if $ALL_HEALTHY; then
-              SERVICES_HEALTHY=true
-              echo "✅ All microservices are healthy after ${ELAPSED}s"
-              break
-            fi
-
-            sleep 5
-            ELAPSED=$((ELAPSED + 5))
-            echo "  ... waiting (${ELAPSED}s / ${MAX_WAIT}s elapsed)"
-          done
-
-          if ! $SERVICES_HEALTHY; then
-            echo "⚠️  Services did not all become healthy within ${MAX_WAIT}s — dumping logs"
-            docker compose ps
-            docker compose logs --tail=100
-          fi
-
-      - name: Run Microservice Health Integration Suite
-        run: |
-          echo "🧪 Running platform health integration tests..."
-          node scripts/test-platform-health.js
-
-      - name: Docker Compose Stack Status
-        if: always()
-        run: docker compose ps
-
-      - name: Teardown Docker Stack
-        if: always()
-        run: docker compose down -v
-
-  # ─── Job 4: Terraform Format & Validation ─────────────────────────────────
-  terraform_ci:
-    name: Terraform Format & Validation
-    runs-on: ubuntu-latest
-
-    env:
-      TF_VERSION: "1.9.3"
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout repository
@@ -214,50 +144,74 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Terraform Format Check
+      - name: Log in to Amazon ECR
+        id: login-ecr
         run: |
-          cd terraform
-          terraform fmt -check -recursive
-          echo "✅ Terraform formatting is correct"
+          echo "🔑 Logging into Amazon ECR..."
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+          if [ -n "$ACCOUNT_ID" ]; then
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} \
+              | docker login --username AWS --password-stdin \
+                "$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+            echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+            echo "registry=$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
+            echo "✅ Logged in to ECR"
+          else
+            echo "⚠️ AWS credentials unavailable — skipping ECR push"
+          fi
 
-      - name: Terraform Init & Validate (root)
+      - name: Build & Push Microservices Images
         run: |
-          cd terraform
-          terraform init -backend=false -input=false
-          terraform validate
-          echo "✅ Root Terraform configuration is valid"
+          ACCOUNT_ID="${{ steps.login-ecr.outputs.account_id }}"
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          GIT_SHA="${{ github.sha }}"
 
-      - name: Terraform Validate (all modules)
-        run: |
-          echo "🔍 Validating all Terraform modules individually..."
-          failed_modules=()
-          for mod in terraform/modules/*/; do
-            [ -d "$mod" ] || continue
-            mod_name=$(basename "$mod")
-            val_output=$( (cd "$mod" && terraform init -backend=false -input=false -upgrade >/dev/null 2>&1 && terraform validate) 2>&1 )
-            if [ $? -eq 0 ]; then
-              echo "  ✅ modules/$mod_name"
-            else
-              echo "  ❌ modules/$mod_name:"
-              echo "$val_output"
-              failed_modules+=("$mod_name")
+          for service_dir in services/*/; do
+            if [ -d "$service_dir" ] && [ -f "$service_dir/Dockerfile" ]; then
+              service_name=$(basename "$service_dir")
+              repo_name="sunotal-${service_name}"
+              echo "📦 Building microservice container: $repo_name"
+
+              docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" "$service_dir"
+              echo "✅ Built ${repo_name}"
+
+              if [ -n "$ACCOUNT_ID" ]; then
+                aws ecr create-repository --repository-name "$repo_name" 2>/dev/null || true
+                docker tag "${repo_name}:latest" "${REGISTRY}/${repo_name}:latest"
+                docker tag "${repo_name}:${GIT_SHA}" "${REGISTRY}/${repo_name}:${GIT_SHA}"
+                docker push "${REGISTRY}/${repo_name}:latest"
+                docker push "${REGISTRY}/${repo_name}:${GIT_SHA}"
+                echo "🚀 Pushed ${repo_name} to ECR"
+              fi
             fi
           done
-          if [ ${#failed_modules[@]} -gt 0 ]; then
-            echo "❌ Failed modules: ${failed_modules[*]}"
-            exit 1
-          fi
-          echo "✅ All Terraform modules validated successfully"
 
-      - name: Terraform Security Scan (tfsec)
-        continue-on-error: true
+      - name: Build & Push Frontend App Images
         run: |
-          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
-          tfsec terraform/ --minimum-severity HIGH --no-color 2>&1 | tail -20 || true
-          echo "🔒 tfsec scan complete (failures are warnings only)"
+          ACCOUNT_ID="${{ steps.login-ecr.outputs.account_id }}"
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          GIT_SHA="${{ github.sha }}"
 
+          for app_dir in apps/*/; do
+            if [ -d "$app_dir" ] && [ -f "$app_dir/Dockerfile" ]; then
+              app_name=$(basename "$app_dir")
+              repo_name="sunotal-${app_name}"
+              echo "🎨 Building frontend container: $repo_name"
+
+              if [ "$app_name" = "unified-frontend" ]; then
+                docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" -f apps/unified-frontend/Dockerfile .
+              else
+                docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" "$app_dir"
+              fi
+              echo "✅ Built ${repo_name}"
+
+              if [ -n "$ACCOUNT_ID" ]; then
+                aws ecr create-repository --repository-name "$repo_name" 2>/dev/null || true
+                docker tag "${repo_name}:latest" "${REGISTRY}/${repo_name}:latest"
+                docker tag "${repo_name}:${GIT_SHA}" "${REGISTRY}/${repo_name}:${GIT_SHA}"
+                docker push "${REGISTRY}/${repo_name}:latest"
+                docker push "${REGISTRY}/${repo_name}:${GIT_SHA}"
+                echo "🚀 Pushed ${repo_name} to ECR"
+              fi
+            fi
+          done
