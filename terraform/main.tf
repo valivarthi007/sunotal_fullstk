@@ -123,15 +123,10 @@ data "aws_route53_zone" "primary" {
 resource "aws_route53_record" "sunotal_subdomains" {
   for_each = toset([
     "sunotal",
-    "admin",
     "admin-sunotal",
-    "vendor",
     "vendor-sunotal",
-    "delivery",
     "delivery-sunotal",
-    "support",
     "support-sunotal",
-    "observability",
     "api"
   ])
 

@@ -1490,6 +1490,7 @@ app.delete("/api/admin/warehouses/:id", async (req: any, res: any) => {
 
 app.get("/", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
+app.get("/healthz", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
 
 app.listen(PORT, "0.0.0.0", () => console.log(`✅ [operations-service] Running on port ${PORT}`));
 
