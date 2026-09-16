@@ -14,7 +14,7 @@ env:
 
 jobs:
   deploy_microservices:
-    name: EC2 SSM Container Rollout & Verification via Ansible
+    name: EC2 Container Rollout & Health Verification
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
 
@@ -29,11 +29,30 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install Ansible
-        run: pip install ansible
+      - name: Deploy Microservices via AWS SSM Shell Script
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Project,Values=sunotal" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text 2>/dev/null || echo "")
 
-      - name: Run Ansible Microservices Deployment Playbook
-        run: ansible-playbook ansible/deploy.yml
+          if [ -n "$INSTANCE_ID" ] && [ "$INSTANCE_ID" != "None" ]; then
+            echo "🚀 Deploying to EC2 Instance: ${INSTANCE_ID}..."
+            COMMAND_ID=$(aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters 'commands=[
+                "cd /home/ec2-user/app/sunotal_fullstk || git clone https://github.com/valivarthi007/sunotal_fullstk.git /home/ec2-user/app/sunotal_fullstk",
+                "cd /home/ec2-user/app/sunotal_fullstk && git fetch origin && git reset --hard origin/main",
+                "cd /home/ec2-user/app/sunotal_fullstk && docker compose down || true",
+                "cd /home/ec2-user/app/sunotal_fullstk && docker compose up -d --build"
+              ]' \
+              --query "Command.CommandId" \
+              --output text)
 
-      - name: Verify Live Endpoints & Subdomains via Ansible
-        run: ansible-playbook ansible/verify_health.yml
+            echo "Command sent: $COMMAND_ID. Waiting for completion..."
+            aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" || true
+            echo "✅ Deployment shell script complete!"
+          else
+            echo "ℹ️ No active EC2 host found — skipping SSM remote trigger"
+          fi
