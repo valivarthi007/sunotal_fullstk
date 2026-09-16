@@ -1,5 +1,5 @@
 services:
-  # ─── Infrastructure ───────────────────────────────────────────────────────
+  # ─── Layer 1: Infrastructure (Database & Cache) ───────────────────────────
   mongodb:
     image: mongo:7.0
     container_name: sunotal-mongo
@@ -31,44 +31,7 @@ services:
       retries: 3
       start_period: 5s
 
-  # ─── Nginx Gateway ────────────────────────────────────────────────────────
-  gateway:
-    image: nginx:1.25-alpine
-    container_name: sunotal-gateway
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/nginx/certs:ro
-    depends_on:
-      user-app:
-        condition: service_healthy
-      admin-app:
-        condition: service_healthy
-      vendor-app:
-        condition: service_healthy
-      delivery-app:
-        condition: service_healthy
-      support-app:
-        condition: service_healthy
-      monitoring-app:
-        condition: service_healthy
-      auth-service:
-        condition: service_healthy
-      operations-service:
-        condition: service_healthy
-      inventory-service:
-        condition: service_healthy
-      user-service:
-        condition: service_healthy
-      delivery-service:
-        condition: service_healthy
-      support-service:
-        condition: service_healthy
-
-  # ─── Backend Microservices ────────────────────────────────────────────────
+  # ─── Layer 2: Core Foundation Microservices (Auth & User) ──────────────────
   auth-service:
     build:
       context: ./services/auth-service
@@ -94,6 +57,112 @@ services:
       retries: 3
       start_period: 20s
 
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: sunotal-user
+    restart: unless-stopped
+    ports:
+      - "5004:5004"
+    environment:
+      - PORT=5004
+      - MONGODB_URI=mongodb://mongodb:27017/sunotal
+      - REDIS_HOST=redis
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5004/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ─── Layer 3: Catalog & Inventory Microservices ────────────────────────────
+  catalog-service:
+    build:
+      context: ./services/catalog-service
+      dockerfile: Dockerfile
+    container_name: sunotal-catalog
+    restart: unless-stopped
+    ports:
+      - "5009:5009"
+    environment:
+      - PORT=5009
+      - MONGODB_URI=mongodb://mongodb:27017/sunotal
+      - REDIS_HOST=redis
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5009/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  inventory-service:
+    build:
+      context: ./services/inventory-service
+      dockerfile: Dockerfile
+    container_name: sunotal-inventory
+    restart: unless-stopped
+    ports:
+      - "5003:5003"
+    environment:
+      - PORT=5003
+      - MONGODB_URI=mongodb://mongodb:27017/sunotal
+      - REDIS_HOST=redis
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5003/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ─── Layer 4: Domain & Transaction Microservices ───────────────────────────
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: sunotal-order
+    restart: unless-stopped
+    ports:
+      - "5010:5010"
+    environment:
+      - PORT=5010
+      - MONGODB_URI=mongodb://mongodb:27017/sunotal
+      - REDIS_HOST=redis
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5010/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   operations-service:
     build:
       context: ./services/operations-service
@@ -112,6 +181,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      auth-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5002/api/healthz || exit 1"]
       interval: 15s
@@ -119,48 +190,29 @@ services:
       retries: 3
       start_period: 20s
 
-  inventory-service:
+  vendor-service:
     build:
-      context: ./services/inventory-service
+      context: ./services/vendor-service
       dockerfile: Dockerfile
-    container_name: sunotal-inventory
+    container_name: sunotal-vendor
     restart: unless-stopped
     ports:
-      - "5003:5003"
+      - "5005:5005"
     environment:
-      - PORT=5003
+      - PORT=5005
       - MONGODB_URI=mongodb://mongodb:27017/sunotal
+      - REDIS_HOST=redis
     depends_on:
       mongodb:
         condition: service_healthy
+      catalog-service:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5003/api/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5005/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 20s
-
-  user-service:
-    build:
-      context: ./services/user-service
-      dockerfile: Dockerfile
-    container_name: sunotal-user
-    restart: unless-stopped
-    ports:
-      - "5004:5004"
-    environment:
-      - PORT=5004
-      - MONGODB_URI=mongodb://mongodb:27017/sunotal
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5004/api/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-
 
   delivery-service:
     build:
@@ -172,6 +224,12 @@ services:
       - "5006:5006"
     environment:
       - PORT=5006
+      - REDIS_HOST=redis
+    depends_on:
+      redis:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5006/api/healthz || exit 1"]
       interval: 15s
@@ -200,7 +258,61 @@ services:
       retries: 3
       start_period: 20s
 
-  # ─── Frontend Apps ────────────────────────────────────────────────────────
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: sunotal-notification
+    restart: unless-stopped
+    ports:
+      - "5008:5008"
+    environment:
+      - PORT=5008
+      - REDIS_HOST=redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5008/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ─── Layer 5: API Gateway Router ──────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: sunotal-api-gateway
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      delivery-service:
+        condition: service_healthy
+      operations-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5000/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ─── Layer 6: Frontend Applications ───────────────────────────────────────
   user-app:
     build:
       context: ./apps/user-app
@@ -209,8 +321,11 @@ services:
     restart: unless-stopped
     ports:
       - "3000:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -224,8 +339,11 @@ services:
     restart: unless-stopped
     ports:
       - "3001:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -239,8 +357,11 @@ services:
     restart: unless-stopped
     ports:
       - "3002:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -254,8 +375,11 @@ services:
     restart: unless-stopped
     ports:
       - "3003:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -269,8 +393,11 @@ services:
     restart: unless-stopped
     ports:
       - "3004:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -284,8 +411,11 @@ services:
     restart: unless-stopped
     ports:
       - "3006:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
