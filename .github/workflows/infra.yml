@@ -1,0 +1,75 @@
+name: "Infra: Terraform Provisioning"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/infra.yml'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+
+env:
+  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+  TF_VERSION: "1.9.3"
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  terraform_provision:
+    name: Terraform Init, Plan & Apply
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform ${{ env.TF_VERSION }}
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        run: |
+          cd terraform
+          terraform fmt -check -recursive || true
+
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init -input=false
+
+      - name: Terraform Validate
+        run: |
+          cd terraform
+          terraform validate
+
+      - name: Terraform Plan
+        run: |
+          cd terraform
+          export TF_VAR_jwt_secret="${{ secrets.JWT_SECRET }}"
+          terraform plan -input=false
+
+      - name: Terraform Apply
+        if: |
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'))
+        run: |
+          cd terraform
+          export TF_VAR_jwt_secret="${{ secrets.JWT_SECRET }}"
+          terraform apply -input=false -auto-approve

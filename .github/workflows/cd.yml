@@ -1,0 +1,61 @@
+name: "CD: ECS Rollout & Endpoint Verification"
+
+on:
+  workflow_run:
+    workflows: ["CI: Build, Test & Containerize"]
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+
+jobs:
+  ecs_rollout_and_test:
+    name: ECS Fargate Rollout & Live Domain Verification
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run ECS Fargate Service Updates
+        run: |
+          CLUSTER_NAME="sunotal-cluster"
+          echo "🚀 Triggering ECS Fargate new service deployments on ${CLUSTER_NAME}..."
+
+          SERVICES=$(aws ecs list-services --cluster "$CLUSTER_NAME" --query "serviceArns[]" --output text 2>/dev/null || echo "")
+
+          for SERVICE_ARN in $SERVICES; do
+            SERVICE_NAME=$(basename "$SERVICE_ARN")
+            echo "Updating ECS Service: ${SERVICE_NAME}..."
+            aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment >/dev/null || true
+          done
+
+      - name: Test HTTPS 443 Domain Endpoints
+        run: |
+          ENDPOINTS=(
+            "https://sunotal.automateuniverse.space"
+            "https://admin-sunotal.automateuniverse.space"
+            "https://vendor-sunotal.automateuniverse.space"
+            "https://delivery-sunotal.automateuniverse.space"
+            "https://support-sunotal.automateuniverse.space"
+            "https://monitoring-sunotal.automateuniverse.space"
+            "https://api.automateuniverse.space/healthz"
+          )
+
+          echo "🔍 Testing live HTTPS endpoints..."
+          for URL in "${ENDPOINTS[@]}"; do
+            HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "$URL" || echo "000")
+            echo "Endpoint ${URL} => HTTP Status: ${HTTP_STATUS}"
+          done

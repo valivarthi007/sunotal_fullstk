@@ -1,8 +1,8 @@
 ################################################################################
-# Sunotal Platform — Root Terraform Configuration
-# Manages: VPC, Security Groups, IAM Roles, ECR, AWS DocumentDB (MongoDB),
-#          SQS/SNS Event Bus, Lambda S3 Photo Manager, AWS ECS Fargate Cluster,
-#          ACM SSL Certificate, Application Load Balancer, Route53 DNS
+# Sunotal Quick-Commerce Microservices Cluster — Root Terraform Configuration
+# Infrastructure Stack: VPC, Security Groups, ECR, ACM SSL (HTTPS 443), ALB,
+#                        ECS Fargate Cluster, DocumentDB, ElastiCache Redis,
+#                        S3 + CloudFront, Lambda, SQS/SNS, Route53 A-Alias DNS
 ################################################################################
 
 terraform {
@@ -43,8 +43,9 @@ locals {
 
 # ─── 1. Networking (VPC) ──────────────────────────────────────────────────────
 module "vpc" {
-  source = "./modules/vpc"
-  tags   = local.common_tags
+  source     = "./modules/vpc"
+  aws_region = var.aws_region
+  tags       = local.common_tags
 }
 
 # ─── 2. Security Groups ───────────────────────────────────────────────────────
@@ -54,61 +55,73 @@ module "security" {
   tags   = local.common_tags
 }
 
-# ─── 3. ECR Repositories (Managed dynamically by CI pipeline) ─────────────
-# module "ecr" is managed automatically by CI workflows.
+# ─── 3. ECR Repositories ──────────────────────────────────────────────────────
+module "ecr" {
+  source = "./modules/ecr"
+  tags   = local.common_tags
+}
 
-# ─── 4. IAM Roles & GitHub OIDC ───────────────────────────────────────────────
-module "iam" {
-  source                = "./modules/iam"
-  s3_bucket_name        = var.s3_bucket_name
-  role_name             = "sunotal-ec2-s3-access-role"
-  policy_name           = "sunotal-s3-access-policy"
-  instance_profile_name = "sunotal-ec2-instance-profile"
-  github_repo           = "valivarthi007/sunotal_fullstk"
+# ─── 4. ACM SSL Certificate & Application Load Balancer ───────────────────────
+module "acm_alb" {
+  source                = "./modules/acm_alb"
+  vpc_id                = module.vpc.vpc_id
+  public_subnet_ids     = module.vpc.public_subnet_ids
+  alb_security_group_id = module.security.alb_security_group_id
   tags                  = local.common_tags
 }
 
-# ─── 5. Compute Module (EC2 Host) ────────────────────────────────────────────
-module "compute" {
-  source = "./modules/compute"
-
-  aws_region        = var.aws_region
-  ami_id            = var.ami_id
-  instance_type     = var.instance_type
-  key_name          = var.key_name
-  allowed_ssh_cidrs = var.allowed_cidr_blocks
-  jwt_secret        = var.jwt_secret
-  s3_bucket_name    = var.s3_bucket_name
-  repo_url          = "https://github.com/valivarthi007/sunotal_fullstk.git"
-  frontend_origin   = "https://sunotal.automateuniverse.space"
-  mongodb_uri       = "mongodb://127.0.0.1:27017/sunotal"
-  tags              = local.common_tags
+# ─── 5. ECS Fargate Cluster & Services ────────────────────────────────────────
+module "ecs" {
+  source                = "./modules/ecs"
+  vpc_id                = module.vpc.vpc_id
+  private_subnet_ids    = module.vpc.private_subnet_ids
+  ecs_security_group_id = module.security.ecs_security_group_id
+  target_group_arns     = module.acm_alb.target_group_arns
+  aws_region            = var.aws_region
+  tags                  = local.common_tags
 }
 
-# ─── 6. Route53 DNS Records ───────────────────────────────────────────────────
-data "aws_route53_zone" "primary" {
-  name         = "automateuniverse.space."
-  private_zone = false
+# ─── 6. DocumentDB MongoDB Cluster ────────────────────────────────────────────
+module "documentdb" {
+  source               = "./modules/documentdb"
+  vpc_id               = module.vpc.vpc_id
+  private_subnet_ids   = module.vpc.private_subnet_ids
+  db_security_group_id = module.security.db_security_group_id
+  tags                 = local.common_tags
 }
 
-resource "aws_route53_record" "sunotal_subdomains" {
-  for_each = toset([
-    "sunotal",
-    "admin-sunotal",
-    "vendor-sunotal",
-    "delivery-sunotal",
-    "support-sunotal",
-    "monitoring-sunotal",
-    "api"
-  ])
+# ─── 7. ElastiCache Redis Cluster ─────────────────────────────────────────────
+module "elasticache" {
+  source               = "./modules/elasticache"
+  vpc_id               = module.vpc.vpc_id
+  private_subnet_ids   = module.vpc.private_subnet_ids
+  db_security_group_id = module.security.db_security_group_id
+  tags                 = local.common_tags
+}
 
-  zone_id = data.aws_route53_zone.primary.zone_id
-  name    = "${each.key}.automateuniverse.space"
-  type    = "A"
-  ttl     = 300
-  records = [module.compute.public_ip]
+# ─── 8. S3 Bucket & CloudFront CDN ────────────────────────────────────────────
+module "s3_cloudfront" {
+  source         = "./modules/s3_cloudfront"
+  s3_bucket_name = var.s3_bucket_name
+  tags           = local.common_tags
+}
 
-  lifecycle {
-    prevent_destroy = false
-  }
+# ─── 9. Lambda Photo Manager ──────────────────────────────────────────────────
+module "lambda" {
+  source = "./modules/lambda"
+  tags   = local.common_tags
+}
+
+# ─── 10. SQS Queues & SNS Event Bus ───────────────────────────────────────────
+module "sqs_sns" {
+  source = "./modules/sqs_sns"
+  tags   = local.common_tags
+}
+
+# ─── 11. Route53 Subdomain A-Alias Records ────────────────────────────────────
+module "route53" {
+  source       = "./modules/route53"
+  alb_dns_name = module.acm_alb.alb_dns_name
+  alb_zone_id  = module.acm_alb.alb_zone_id
+  tags         = local.common_tags
 }

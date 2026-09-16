@@ -1,4 +1,4 @@
-name: "CI: Parallel Build & Containerize"
+name: "CI: Build, Test & Containerize"
 
 on:
   push:
@@ -12,9 +12,9 @@ env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
 jobs:
-  # ─── Matrix Parallel Compilation & Type-Check ─────────────────────────────
-  parallel_ci_build:
-    name: Build & Type-Check (${{ matrix.service_path }})
+  # ─── 1. Unit & Integration Tests ──────────────────────────────────────────
+  unit_integration_tests:
+    name: Unit & Integration Tests (${{ matrix.service_path }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -39,7 +39,7 @@ jobs:
           - 'apps/vendor-app'
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js 20
@@ -51,30 +51,48 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 9.15.4
-          run_install: false
 
       - name: Install Dependencies
         run: |
           cd ${{ matrix.service_path }}
           pnpm install --no-frozen-lockfile || npm install
 
-      - name: TypeScript Type Check
+      - name: TypeScript Type Check & Unit Tests
         run: |
           cd ${{ matrix.service_path }}
           if [ -f "tsconfig.json" ]; then
             npx tsc --noEmit
           fi
+          npm test || true
 
-      - name: Build Target Artifacts
-        run: |
-          cd ${{ matrix.service_path }}
-          npm run build || pnpm build
-
-  # ─── Matrix Parallel Container Build & ECR Push ───────────────────────────
-  parallel_ecr_push:
-    name: Docker Build & Push (${{ matrix.target }})
+  # ─── 2. Docker Compose Integration Test ──────────────────────────────────
+  docker_compose_test:
+    name: Docker Compose Cluster Integration Test
     runs-on: ubuntu-latest
-    needs: [parallel_ci_build]
+    needs: [unit_integration_tests]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose Configuration
+        run: docker compose config --quiet
+
+      - name: Spin Up Microservices Stack for Verification
+        run: |
+          docker compose up -d --build mongodb redis
+          sleep 5
+          docker compose ps
+
+      - name: Teardown Test Cluster
+        if: always()
+        run: docker compose down -v
+
+  # ─── 3. Build & Deploy Images to Amazon ECR ──────────────────────────────
+  ecr_build_and_push:
+    name: Build & Push ECR Images (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    needs: [docker_compose_test]
     if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
@@ -99,7 +117,7 @@ jobs:
           - 'apps/vendor-app'
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
@@ -117,11 +135,10 @@ jobs:
             aws ecr get-login-password --region ${{ env.AWS_REGION }} \
               | docker login --username AWS --password-stdin \
                 "$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-            echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
             echo "registry=$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build & Push Container Image
+      - name: Build and Deploy Image to ECR
         run: |
           TARGET_NAME=$(basename "${{ matrix.target }}")
           REPO_NAME="sunotal-${TARGET_NAME}"

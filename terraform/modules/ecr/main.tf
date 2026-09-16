@@ -1,125 +1,28 @@
-resource "aws_ecr_repository" "user_app" {
-  name                 = "sunotal-user-app"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = var.tags
+locals {
+  targets = [
+    "sunotal-api-gateway",
+    "sunotal-auth-service",
+    "sunotal-catalog-service",
+    "sunotal-delivery-service",
+    "sunotal-inventory-service",
+    "sunotal-notification-service",
+    "sunotal-operations-service",
+    "sunotal-order-service",
+    "sunotal-support-service",
+    "sunotal-user-service",
+    "sunotal-vendor-service",
+    "sunotal-admin-app",
+    "sunotal-delivery-app",
+    "sunotal-monitoring-app",
+    "sunotal-support-app",
+    "sunotal-user-app",
+    "sunotal-vendor-app"
+  ]
 }
 
-resource "aws_ecr_repository" "admin_app" {
-  name                 = "sunotal-admin-app"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = var.tags
-}
-
-resource "aws_ecr_repository" "vendor_app" {
-  name                 = "sunotal-vendor-app"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = var.tags
-}
-
-resource "aws_ecr_repository" "delivery_app" {
-  name                 = "sunotal-delivery-app"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = var.tags
-}
-
-resource "aws_ecr_repository" "support_app" {
-  name                 = "sunotal-support-app"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = var.tags
-}
-
-resource "aws_ecr_repository" "auth" {
-  name                 = "sunotal-auth"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = var.tags
-}
-
-resource "aws_ecr_repository" "operations" {
-  name                 = "sunotal-operations"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = var.tags
-}
-
-resource "aws_ecr_repository" "inventory" {
-  name                 = "sunotal-inventory"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = var.tags
-}
-
-resource "aws_ecr_repository" "user" {
-  name                 = "sunotal-user"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = var.tags
-}
-
-resource "aws_ecr_repository" "delivery" {
-  name                 = "sunotal-delivery"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = var.tags
-}
-
-resource "aws_ecr_repository" "support" {
-  name                 = "sunotal-support"
+resource "aws_ecr_repository" "repos" {
+  for_each             = toset(local.targets)
+  name                 = each.value
   image_tag_mutability = "MUTABLE"
   force_delete         = true
 
@@ -135,51 +38,6 @@ variable "tags" {
   description = "Common resource tags"
 }
 
-output "frontend_repository_url" {
-  value = aws_ecr_repository.user_app.repository_url
+output "repository_urls" {
+  value = { for k, v in aws_ecr_repository.repos : k => v.repository_url }
 }
-
-output "user_app_repository_url" {
-  value = aws_ecr_repository.user_app.repository_url
-}
-
-output "admin_app_repository_url" {
-  value = aws_ecr_repository.admin_app.repository_url
-}
-
-output "vendor_app_repository_url" {
-  value = aws_ecr_repository.vendor_app.repository_url
-}
-
-output "delivery_app_repository_url" {
-  value = aws_ecr_repository.delivery_app.repository_url
-}
-
-output "support_app_repository_url" {
-  value = aws_ecr_repository.support_app.repository_url
-}
-
-output "auth_repository_url" {
-  value = aws_ecr_repository.auth.repository_url
-}
-
-output "operations_repository_url" {
-  value = aws_ecr_repository.operations.repository_url
-}
-
-output "inventory_repository_url" {
-  value = aws_ecr_repository.inventory.repository_url
-}
-
-output "user_repository_url" {
-  value = aws_ecr_repository.user.repository_url
-}
-
-output "delivery_repository_url" {
-  value = aws_ecr_repository.delivery.repository_url
-}
-
-output "support_repository_url" {
-  value = aws_ecr_repository.support.repository_url
-}
-
