@@ -195,7 +195,7 @@ resource "aws_instance" "backend" {
   }
 
   # Bootstrap user data — runs once on first boot
-  user_data = base64encode(templatefile("${path.module}/userdata.sh", {
+  user_data = base64encode(templatefile("${path.module}/userdata.yaml", {
     jwt_secret      = var.jwt_secret
     mongodb_uri     = var.mongodb_uri
     repo_url        = var.repo_url

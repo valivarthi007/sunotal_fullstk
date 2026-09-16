@@ -1,0 +1,24 @@
+---
+- name: "Deploy Sunotal Quick-Commerce Microservices Cluster"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    app_dir: "/home/ec2-user/app/sunotal_fullstk"
+
+  tasks:
+    - name: Ensure target application workspace directory exists
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Launch independent microservices via Docker Compose
+      command: docker compose up -d --build
+      args:
+        chdir: "{{ app_dir }}"
+      register: compose_out
+
+    - name: Display deployment output
+      debug:
+        var: compose_out.stdout_lines

@@ -1,0 +1,41 @@
+---
+- name: "Setup Sunotal Microservices Environment & Dependencies"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Ensure Node.js 20 and pnpm are installed
+      command: node --version
+      register: node_version
+      failed_when: false
+
+    - name: Display Node Version
+      debug:
+        msg: "Node version: {{ node_version.stdout }}"
+
+    - name: Find all microservice directories
+      find:
+        paths: "services"
+        file_type: directory
+        recurse: false
+      register: service_dirs
+
+    - name: Install dependencies in each microservice directory
+      command:
+        cmd: "pnpm install || npm install"
+        chdir: "{{ item.path }}"
+      loop: "{{ service_dirs.files }}"
+
+    - name: Find all app directories
+      find:
+        paths: "apps"
+        file_type: directory
+        recurse: false
+      register: app_dirs
+
+    - name: Install dependencies in each app directory
+      command:
+        cmd: "pnpm install || npm install"
+        chdir: "{{ item.path }}"
+      loop: "{{ app_dirs.files }}"

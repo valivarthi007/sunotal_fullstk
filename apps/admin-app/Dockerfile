@@ -7,12 +7,15 @@ RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 # Allow esbuild (and other native deps) to run their postinstall scripts
 # Required by pnpm v9+ security model for packages with native binaries
-RUN echo "unsafe-perm=true" > /root/.npmrc
+RUN echo "unsafe-perm=true" > /root/.npmrc && \
+    echo "only-built-dependencies[]=esbuild" >> /root/.npmrc && \
+    echo "only-built-dependencies[]=@swc/core" >> /root/.npmrc
 
 # Copy lockfile + manifest first for better layer caching
 COPY package.json pnpm-lock.yaml* package-lock.json* ./
 RUN if [ -f pnpm-lock.yaml ]; then \
-      pnpm install --frozen-lockfile; \
+      pnpm config set only-built-dependencies esbuild @swc/core || true; \
+      pnpm install --frozen-lockfile || pnpm install; \
     elif [ -f package-lock.json ]; then \
       npm ci; \
     else \

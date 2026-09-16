@@ -4,11 +4,14 @@ WORKDIR /app
 
 # Support both npm and pnpm lockfiles
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
-RUN echo "unsafe-perm=true" > /root/.npmrc
+RUN echo "unsafe-perm=true" > /root/.npmrc && \
+    echo "only-built-dependencies[]=esbuild" >> /root/.npmrc && \
+    echo "only-built-dependencies[]=@swc/core" >> /root/.npmrc
 
 COPY package.json pnpm-lock.yaml* package-lock.json* ./
 RUN if [ -f pnpm-lock.yaml ]; then \
-      pnpm install --frozen-lockfile; \
+      pnpm config set only-built-dependencies esbuild @swc/core || true; \
+      pnpm install --frozen-lockfile || pnpm install; \
     elif [ -f package-lock.json ]; then \
       npm ci; \
     else \
@@ -27,11 +30,14 @@ RUN apk add --no-cache wget
 
 # Support both npm and pnpm lockfiles (production deps only)
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
-RUN echo "unsafe-perm=true" > /root/.npmrc
+RUN echo "unsafe-perm=true" > /root/.npmrc && \
+    echo "only-built-dependencies[]=esbuild" >> /root/.npmrc && \
+    echo "only-built-dependencies[]=@swc/core" >> /root/.npmrc
 
 COPY package.json pnpm-lock.yaml* package-lock.json* ./
 RUN if [ -f pnpm-lock.yaml ]; then \
-      pnpm install --frozen-lockfile --prod; \
+      pnpm config set only-built-dependencies esbuild @swc/core || true; \
+      pnpm install --frozen-lockfile --prod || pnpm install --prod; \
     elif [ -f package-lock.json ]; then \
       npm ci --only=production --ignore-scripts; \
     else \

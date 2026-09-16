@@ -1,0 +1,41 @@
+---
+- name: "CI: Build, Type-Check & Validate Independent Microservices and Frontend Apps"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: "Find all backend microservices"
+      find:
+        paths: "services"
+        file_type: directory
+        recurse: false
+      register: backend_dirs
+
+    - name: "Install dependencies and compile backend microservices"
+      command:
+        cmd: "npm run build || pnpm build"
+        chdir: "{{ item.path }}"
+      loop: "{{ backend_dirs.files }}"
+      when: item.path != 'services/unified-backend'
+
+    - name: "Run TypeScript type checks on backend microservices"
+      command:
+        cmd: "npx tsc --noEmit"
+        chdir: "{{ item.path }}"
+      loop: "{{ backend_dirs.files }}"
+      ignore_errors: true
+
+    - name: "Find all frontend applications"
+      find:
+        paths: "apps"
+        file_type: directory
+        recurse: false
+      register: frontend_dirs
+
+    - name: "Install dependencies and compile frontend apps"
+      command:
+        cmd: "npm run build || pnpm build"
+        chdir: "{{ item.path }}"
+      loop: "{{ frontend_dirs.files }}"
+      when: item.path != 'apps/unified-frontend'

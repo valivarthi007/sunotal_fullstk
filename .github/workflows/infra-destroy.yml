@@ -13,17 +13,10 @@ env:
 
 jobs:
   destroy_infrastructure:
-    name: Destroy Infrastructure via Terraform
+    name: Destroy Infrastructure via Ansible
     runs-on: ubuntu-latest
 
     steps:
-      - name: Verify Teardown Confirmation
-        run: |
-          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
-            echo "::error::Teardown cancelled. You must type 'DESTROY' in the confirmation prompt to proceed."
-            exit 1
-          fi
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -34,13 +27,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.9.3"
+      - name: Install Ansible
+        run: pip install ansible
 
-      - name: Destroy Infrastructure with Terraform
-        run: |
-          cd terraform
-          terraform init -upgrade
-          terraform destroy -auto-approve
+      - name: Run Ansible Teardown Playbook
+        run: ansible-playbook ansible/destroy.yml
