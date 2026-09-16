@@ -1,33 +1,89 @@
-resource "aws_sqs_queue" "order_events" {
-  name                       = "sunotal-order-events-queue"
-  delay_seconds              = 0
-  max_message_size           = 262144
-  message_retention_seconds  = 864000 # 10 days
-  receive_wait_time_seconds  = 10     # Long polling
-  visibility_timeout_seconds = 60
+################################################################################
+# Module: AWS SQS + SNS Event-Driven Messaging Bus
+################################################################################
 
-  tags = var.tags
-}
-
-resource "aws_sns_topic" "delivery_notifications" {
-  name = "sunotal-delivery-notifications-topic"
-
-  tags = var.tags
+variable "environment" {
+  type        = string
+  default     = "production"
+  description = "Environment name"
 }
 
 variable "tags" {
   type        = map(string)
-  description = "Common resource tags"
+  default     = {}
+  description = "Resource tags"
 }
 
-output "sqs_queue_id" {
-  value = aws_sqs_queue.order_events.id
+# ─── 1. SNS Topics ────────────────────────────────────────────────────────────
+resource "aws_sns_topic" "order_events" {
+  name = "sunotal-order-events-${var.environment}"
+  tags = var.tags
 }
 
-output "sqs_queue_arn" {
-  value = aws_sqs_queue.order_events.arn
+resource "aws_sns_topic" "inventory_events" {
+  name = "sunotal-inventory-events-${var.environment}"
+  tags = var.tags
 }
 
-output "sns_topic_arn" {
-  value = aws_sns_topic.delivery_notifications.arn
+resource "aws_sns_topic" "delivery_events" {
+  name = "sunotal-delivery-events-${var.environment}"
+  tags = var.tags
+}
+
+# ─── 2. SQS Worker Queues ─────────────────────────────────────────────────────
+resource "aws_sqs_queue" "order_processing_queue" {
+  name                       = "sunotal-order-processing-queue-${var.environment}"
+  visibility_timeout_seconds = 30
+  message_retention_seconds  = 864000
+  tags                       = var.tags
+}
+
+resource "aws_sqs_queue" "inventory_deduction_queue" {
+  name                       = "sunotal-inventory-deduction-queue-${var.environment}"
+  visibility_timeout_seconds = 30
+  message_retention_seconds  = 864000
+  tags                       = var.tags
+}
+
+resource "aws_sqs_queue" "delivery_dispatch_queue" {
+  name                       = "sunotal-delivery-dispatch-queue-${var.environment}"
+  visibility_timeout_seconds = 30
+  message_retention_seconds  = 864000
+  tags                       = var.tags
+}
+
+# ─── 3. Subscriptions (SNS → SQS) ─────────────────────────────────────────────
+resource "aws_sns_topic_subscription" "order_to_sqs" {
+  topic_arn = aws_sns_topic.order_events.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.order_processing_queue.arn
+}
+
+resource "aws_sns_topic_subscription" "inventory_to_sqs" {
+  topic_arn = aws_sns_topic.inventory_events.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.inventory_deduction_queue.arn
+}
+
+resource "aws_sns_topic_subscription" "delivery_to_sqs" {
+  topic_arn = aws_sns_topic.delivery_events.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.delivery_dispatch_queue.arn
+}
+
+# ─── Outputs ──────────────────────────────────────────────────────────────────
+output "order_events_topic_arn" {
+  value = aws_sns_topic.order_events.arn
+}
+
+output "inventory_events_topic_arn" {
+  value = aws_sns_topic.inventory_events.arn
+}
+
+output "delivery_events_topic_arn" {
+  value = aws_sns_topic.delivery_events.arn
+}
+
+output "order_queue_url" {
+  value = aws_sqs_queue.order_processing_queue.id
 }

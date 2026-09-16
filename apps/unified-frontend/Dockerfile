@@ -92,6 +92,8 @@ COPY --from=admin-app-builder    /app/dist /usr/share/nginx/html/admin-app
 COPY --from=delivery-app-builder /app/dist /usr/share/nginx/html/delivery-app
 COPY --from=support-app-builder  /app/dist /usr/share/nginx/html/support-app
 
+RUN chmod -R 755 /usr/share/nginx/html
+
 EXPOSE 80 443
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1
