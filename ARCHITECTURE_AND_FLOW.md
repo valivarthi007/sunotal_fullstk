@@ -1,10 +1,10 @@
 # 🥦 Sunotal Grocery - Architecture & System Flow Documentation
 
-This document outlines the **Frontend Applications**, **Backend Microservices**, and the **End-to-End Operational Flow** of the **Sunotal Grocery** quick-commerce platform.
+This document outlines the **Frontend Micro-apps**, **Backend Microservices**, **Gateway Topology**, **MIME/Asset Routing**, and the **End-to-End Operational Flow** of the **Sunotal Grocery** quick-commerce platform.
 
 ---
 
-## 🏗️ System Architecture Overview
+## 🏗️ 1. System Architecture Overview
 
 Sunotal Grocery is built as a **decoupled, containerized micro-frontend and microservices architecture**. Requests entering through the gateway ([nginx.conf](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/nginx.conf)) are routed to specific frontend subdomains or backend API services.
 
@@ -18,8 +18,8 @@ graph TD
         SupportApp["🎧 Support Portal<br/>(apps/support-app)<br/>Port 3004"]
     end
 
-    subgraph ApiGateway ["Gateway Layer"]
-        Gateway["NGINX Gateway / AWS ALB<br/>(nginx.conf)"]
+    subgraph ApiGateway ["Gateway & Routing Layer"]
+        Gateway["NGINX Reverse Proxy / AWS ALB<br/>(nginx.conf)"]
     end
 
     subgraph BackendMicroservices ["Decoupled Microservices (services/*)"]
@@ -33,7 +33,7 @@ graph TD
 
     subgraph StorageTier ["Data & Caching Tier"]
         Mongo[("MongoDB 7.0 / AWS DocumentDB")]
-        Redis[("Redis Cache / In-Memory Stocks")]
+        Redis[("Redis Cache / In-Memory Stock Deductions")]
     end
 
     UserApp & AdminApp & VendorApp & DeliveryApp & SupportApp --> Gateway
@@ -51,43 +51,56 @@ graph TD
 
 ---
 
-## 🏢 1. Frontend Applications (`apps/`)
+## 🏢 2. Frontend Applications (`apps/`)
 
 | Portal | Subdomain / URL | Entry Point | Persona & Primary Features |
 |---|---|---|---|
-| 🛒 **Customer Storefront** | `sunotal.automateuniverse.space` | [App.tsx](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/apps/user-app/src/App.tsx) | **Customers**: 10-15 Min Express Header, Dark Store selector based on pincode/GPS, category pills (Vegetables, Fruits, Dairy, Grains, etc.), instant Cart drawer, wallet checkout, recipes, and live order tracking. |
-| 🛡️ **Admin Control Center** | `admin-sunotal.automateuniverse.space` | [App.tsx](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/apps/admin-app/src/App.tsx) | **Super Admins & Hub Managers**: Real-time metrics telemetry, dark store warehouse manager, inventory control, vendor quotation approvals, banner management, rider payouts, and system observability. |
-| 🌾 **Farmer & Vendor Portal** | `vendor-sunotal.automateuniverse.space` | [App.tsx](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/apps/vendor-app/src/App.tsx) | **Farmers & Suppliers**: Onboarding registration, harvest quotation submissions, dark store allocation tracking, Quality Control (QC) status, and HTML payout invoices. |
-| 🛵 **Delivery Partner App** | `delivery-sunotal.automateuniverse.space` | [App.tsx](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/apps/delivery-app/src/App.tsx) | **Riders / Delivery Agents**: Duty toggle (`Online`/`Offline`), 30-second order assignment alerts, Leaflet turn-by-turn navigation from Dark Store to customer, delivery OTP verification, and instant UPI payouts. |
-| 🎧 **Internal Support Portal** | `support-sunotal.automateuniverse.space` | [App.tsx](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/apps/support-app/src/App.tsx) | **Support Agents**: Internal ticket queue management, order issue resolution, SLA timers, and escalation handling. |
+| 🛒 **Customer Storefront** | `sunotal.automateuniverse.space` | [App.tsx](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/apps/user-app/src/App.tsx) | **Customers**: 10-15 Min Express Header, Dark Store selector based on pincode/GPS, category pills, instant Cart drawer, wallet checkout, live order tracking |
+| 🛡️ **Admin Control Center** | `admin-sunotal.automateuniverse.space` | [App.tsx](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/apps/admin-app/src/App.tsx) | **Super Admins & Hub Managers**: Real-time metrics telemetry, dark store warehouse manager, inventory control, vendor quotation approvals, rider payouts |
+| 🌾 **Farmer & Vendor Portal** | `vendor-sunotal.automateuniverse.space` | [App.tsx](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/apps/vendor-app/src/App.tsx) | **Farmers & Suppliers**: Onboarding registration, harvest quotation submissions, dark store allocation tracking, Quality Control (QC) status, payout invoices |
+| 🛵 **Delivery Partner App** | `delivery-sunotal.automateuniverse.space` | [App.tsx](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/apps/delivery-app/src/App.tsx) | **Riders / Delivery Agents**: Duty toggle (`Online`/`Offline`), 30-second order assignment alerts, turn-by-turn navigation, delivery OTP verification, UPI payouts |
+| 🎧 **Internal Support Portal** | `support-sunotal.automateuniverse.space` | [App.tsx](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/apps/support-app/src/App.tsx) | **Support Agents**: Internal ticket queue management, order issue resolution, SLA timers, escalation handling |
 
 ---
 
-## ⚙️ 2. Backend Microservices (`services/`)
+## ⚙️ 3. Backend Microservices (`services/`)
 
 Each service is domain-isolated, containerized, and backed by MongoDB (and Redis for caching/inventory counts):
 
 1. **🔑 Auth Service (`auth-service`)** — [index.ts](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/services/auth-service/src/index.ts) `[Port 5001]`
-   - Handles user registration, login, JWT token issuing, and role validation across all applications (`USER`, `ADMIN`, `VENDOR`, `RIDER`).
+   - User registration, login, JWT issuing, role validation (`USER`, `ADMIN`, `VENDOR`, `RIDER`).
 
 2. **🏬 Operations Service (`operations-service`)** — [index.ts](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/services/operations-service/src/index.ts) `[Port 5002]`
-   - Core orchestrator for product catalog, categories, dark store hubs, admin stats, vendor quotation management, banners, and general order placement.
+   - Core orchestrator for catalog, categories, dark store hubs, admin telemetry, vendor quotations, banners, and order placement.
 
 3. **📦 Inventory Service (`inventory-service`)** — [index.ts](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/services/inventory-service/src/index.ts) `[Port 5003]`
-   - High-performance real-time stock reservation, batch stock deductions per Dark Store, and Redis cache sync to prevent overselling.
+   - Real-time stock reservation, batch stock deductions per Dark Store, and Redis cache synchronization.
 
 4. **👤 User Service (`user-service`)** — [index.ts](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/services/user-service/src/index.ts) `[Port 5004]`
-   - Manages customer profiles, saved delivery addresses, wallet balances, and user preferences.
+   - Customer profiles, saved delivery addresses, wallet balances, user settings.
 
 5. **🛵 Delivery Service (`delivery-service`)** — [index.ts](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/services/delivery-service/src/index.ts) `[Port 5006]`
-   - Manages driver online/offline duty status, order auto-dispatch, live GPS location tracking, and rider payout calculations.
+   - Driver online/offline duty status, order auto-dispatch, live GPS location tracking, rider payouts.
 
 6. **🎧 Support Service (`support-service`)** — [index.ts](file:///home/valivarthi/DIWAKAR/PROJECTS/jcs/sunotal_fullstk/services/support-service/src/index.ts) `[Port 5007]`
-   - Manages customer support tickets, ticket assignments, status transitions (`OPEN` → `IN_PROGRESS` → `RESOLVED`), and SLA tracking.
+   - Customer support tickets, SLA tracking, case assignment, status transitions (`OPEN` → `IN_PROGRESS` → `RESOLVED`).
 
 ---
 
-## 🔄 3. End-to-End Operational Flow
+## 🌐 4. NGINX Reverse Proxy & MIME Asset Delivery Architecture
+
+### 4.1 Root Reverse Proxy Gateway (`nginx.conf`)
+The root gateway terminates SSL/TLS, inspects incoming `Host` headers, and proxies requests:
+- Subdomain requests (e.g. `sunotal.automateuniverse.space`) forward directly to the corresponding app container (`http://sunotal-user-app:80`).
+- API requests (e.g. `/api/auth/`, `/api/delivery/`) route directly to the responsible microservice container on ports 5001–5007.
+
+### 4.2 MIME Type Integrity & Asset Protection
+- **`include /etc/nginx/mime.types;`**: Included across all app server blocks to serve `.js` (`application/javascript`), `.css` (`text/css`), and `.svg` (`image/svg+xml`) with strict MIME types.
+- **No Proxy Interception of Asset 404s**: Root NGINX does **not** use `proxy_intercept_errors on;`. When an asset returns 404 from upstream, NGINX passes the 404 through rather than returning `index.html` (`text/html`), preventing strict MIME blocking (`X-Content-Type-Options: nosniff`) in modern browsers.
+
+---
+
+## 🔄 5. End-to-End Operational Flow
 
 ```mermaid
 sequenceDiagram
@@ -99,24 +112,22 @@ sequenceDiagram
 
     title Quick-Commerce Platform Operational Flow
 
-    %% Step 1: Supply Chain & Ingestion
-    Note over Farmer, Admin: 1. Supply Chain & Inventory Procurement
-    Farmer->>Farmer App: Submit Harvest Quotation (Qty, Price, Produce Date)
-    Admin->>Admin App: Review & Approve Quotation
-    Admin->>Admin App: Allocate Stock to Nearest Dark Store Warehouse
+    Note over Farmer, Admin: 1. Harvest Supply & Vendor Onboarding
+    Farmer->>Vendor App: Submit Harvest Supply Quotation (Qty, Unit Price)
+    Admin->>Admin App: Approve Quotation & Allocate Batch to Dark Store Hub
+    Admin App->>Operations Service: Create Batch Stock Entry
 
-    %% Step 2: Ordering Flow
-    Note over Customer, Admin: 2. Customer Order Placement & Stock Reservation
-    Customer->>Customer App: Select Delivery Location & Browse Catalog
-    Customer App->>Inventory Service: Check Real-Time Stock at Assigned Dark Store
-    Customer->>Customer App: Place Order (Wallet / Online Payment / COD)
-    Customer App->>Operations Service: Create Order Record
-    Operations Service->>Inventory Service: Reserve & Deduct Dark Store Inventory
+    Note over Customer, Ops: 2. Storefront Browsing & Cart Reservation
+    Customer->>Customer App: Select Delivery Address / Pincode
+    Customer App->>Inventory Service: Fetch Real-Time Dark Store Inventory
+    Customer->>Customer App: Add Items to Cart & Click Checkout
+    Customer App->>Operations Service: Place Order (Payment via Wallet / UPI)
+    Operations Service->>Inventory Service: Lock & Deduct Stock in Redis / MongoDB
 
-    %% Step 3: Dispatch & Delivery
-    Note over Rider, Customer: 3. Order Dispatch & Delivery Execution
-    Delivery Service->>Rider App: Broadcast 30s Order Alert to Nearest Available Rider
-    Rider->>Rider App: Accept Order & Navigate to Dark Store Hub
+    Note over Admin, Rider: 3. Dark Store Fulfillment & Rider Dispatch
+    Operations Service->>Delivery Service: Trigger Auto-Dispatch for Nearest Online Rider
+    Delivery Service->>Rider App: Send 30s Order Payout Alert
+    Rider->>Rider App: Accept Order Assignment
     Rider->>Rider App: Pick up packed order & start navigation to Customer
     Rider App->>Delivery Service: Update Status (OUT_FOR_DELIVERY + Live GPS)
     Customer App->>Customer App: Track Rider on Live Map Timeline
