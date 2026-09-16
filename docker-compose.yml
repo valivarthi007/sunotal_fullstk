@@ -61,6 +61,8 @@ services:
         condition: service_healthy
       user-service:
         condition: service_healthy
+      vendor-service:
+        condition: service_healthy
       delivery-service:
         condition: service_healthy
       support-service:

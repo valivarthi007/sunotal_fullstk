@@ -1,14 +1,15 @@
 node_modules
+# Root-level build artifacts only (not apps/ or services/ - handled per-service)
+/dist
 .git
 .gitignore
 .env*
-dist
-build
-coverage
 *.log
+# Terraform local state (never in Docker context)
 .terraform
 .terraform*
 *.tfstate*
+# Docs and CI config (not needed in image)
 README.md
 docs/
 .github/

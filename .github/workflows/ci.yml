@@ -76,6 +76,12 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
       - name: Build Frontend Applications
         run: |
           echo "📦 Compiling and building frontend applications..."
@@ -84,7 +90,13 @@ jobs:
             if [ -d "$app" ] && [ -f "$app/package.json" ]; then
               echo "🎨 Building $app..."
               cd "$app"
-              if [ -f "package-lock.json" ]; then npm ci; else npm install; fi
+              if [ -f "pnpm-lock.yaml" ]; then
+                pnpm install --frozen-lockfile
+              elif [ -f "package-lock.json" ]; then
+                npm ci
+              else
+                npm install
+              fi
               npm run build
               if [ $? -ne 0 ]; then
                 failed_apps+=("$app")
@@ -99,6 +111,7 @@ jobs:
             echo "❌ Failed apps: ${failed_apps[*]}"
             exit 1
           fi
+
 
   # ─── Job 3: Docker Compose Full Stack Integration Test ────────────────────
   docker_compose_testing:
@@ -134,16 +147,17 @@ jobs:
       - name: Wait for Microservices to be Ready
         run: |
           echo "🔍 Polling microservice health endpoints..."
-          MAX_WAIT=120
+          MAX_WAIT=180
           ELAPSED=0
           SERVICES_HEALTHY=false
 
           while [ $ELAPSED -lt $MAX_WAIT ]; do
             ALL_HEALTHY=true
-            for PORT in 5001 5002 5003 5004 5006 5007; do
+            for PORT in 5001 5002 5003 5004 5005 5006 5007; do
               STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/api/healthz" 2>/dev/null || echo "000")
               if [ "$STATUS" != "200" ]; then
                 ALL_HEALTHY=false
+                echo "  ⏳ port ${PORT} not ready yet (HTTP $STATUS)"
                 break
               fi
             done
@@ -156,13 +170,13 @@ jobs:
 
             sleep 5
             ELAPSED=$((ELAPSED + 5))
-            echo "  ... waiting (${ELAPSED}s elapsed)"
+            echo "  ... waiting (${ELAPSED}s / ${MAX_WAIT}s elapsed)"
           done
 
           if ! $SERVICES_HEALTHY; then
-            echo "⚠️  Services did not all become healthy within ${MAX_WAIT}s"
+            echo "⚠️  Services did not all become healthy within ${MAX_WAIT}s — dumping logs"
             docker compose ps
-            docker compose logs --tail=50
+            docker compose logs --tail=100
           fi
 
       - name: Run Microservice Health Integration Suite

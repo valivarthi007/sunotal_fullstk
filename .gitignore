@@ -3,11 +3,11 @@ node_modules/
 **/node_modules/
 
 # Build outputs — root-level and app-level dist only
-# Note: services/*/dist/ is intentionally NOT ignored so compiled JS is tracked
 /dist/
 frontend/dist/
 backend/dist/
 apps/*/dist/
+services/*/dist/
 .vite/
 **/.vite/
 
