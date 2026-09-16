@@ -127,20 +127,20 @@ resource "aws_security_group" "backend" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Node.js API server direct access
+  # Frontend Web Applications (3000–3006)
   ingress {
-    description = "Node.js API"
-    from_port   = 5000
-    to_port     = 5000
+    description = "Frontend Web Apps"
+    from_port   = 3000
+    to_port     = 3006
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Microservices ports (5001–5008) — auth, ops, inventory, user, vendor, delivery, support, notification
+  # Microservices ports (5000–5010) — api gateway, auth, ops, inventory, user, vendor, delivery, support, notification, catalog, order
   ingress {
-    description = "Microservices"
-    from_port   = 5001
-    to_port     = 5008
+    description = "Microservices Cluster"
+    from_port   = 5000
+    to_port     = 5010
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }

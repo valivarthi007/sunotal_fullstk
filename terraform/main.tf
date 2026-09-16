@@ -54,11 +54,8 @@ module "security" {
   tags   = local.common_tags
 }
 
-# ─── 3. ECR Repositories ───────────────────────────────────────────────────────
-module "ecr" {
-  source = "./modules/ecr"
-  tags   = local.common_tags
-}
+# ─── 3. ECR Repositories (Managed dynamically by CI pipeline) ─────────────
+# module "ecr" is managed automatically by CI workflows.
 
 # ─── 4. IAM Roles & GitHub OIDC ───────────────────────────────────────────────
 module "iam" {
