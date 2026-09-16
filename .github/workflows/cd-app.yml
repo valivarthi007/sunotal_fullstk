@@ -1,14 +1,12 @@
 name: "CD: Application Rollout & Live Verification"
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI: Parallel Build & Containerize"]
+    types:
+      - completed
     branches:
       - main
-    paths:
-      - 'apps/**'
-      - 'services/**'
-      - 'docker-compose.yml'
-      - '.github/workflows/cd-app.yml'
   workflow_dispatch:
 
 env:
@@ -18,6 +16,7 @@ jobs:
   deploy_microservices:
     name: EC2 SSM Container Rollout & Verification via Ansible
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
 
     steps:
       - name: Checkout repository
