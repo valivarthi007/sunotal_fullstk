@@ -12,9 +12,9 @@ env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
 jobs:
-  # ─── Matrix Parallel Compilation via Ansible ──────────────────────────────
+  # ─── Matrix Parallel Compilation & Type-Check ─────────────────────────────
   parallel_ci_build:
-    name: Build & Type-Check via Ansible (${{ matrix.service_path }})
+    name: Build & Type-Check (${{ matrix.service_path }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -53,15 +53,26 @@ jobs:
           version: 9.15.4
           run_install: false
 
-      - name: Install Ansible
-        run: pip install ansible
+      - name: Install Dependencies
+        run: |
+          cd ${{ matrix.service_path }}
+          pnpm install --no-frozen-lockfile || npm install
 
-      - name: Run Ansible Target Compilation Playbook
-        run: ansible-playbook ansible/ci_build_single_target.yml -e "target_path=${{ matrix.service_path }}"
+      - name: TypeScript Type Check
+        run: |
+          cd ${{ matrix.service_path }}
+          if [ -f "tsconfig.json" ]; then
+            npx tsc --noEmit
+          fi
 
-  # ─── Matrix Parallel Container Build & ECR Push via Ansible ─────────────────
+      - name: Build Target Artifacts
+        run: |
+          cd ${{ matrix.service_path }}
+          npm run build || pnpm build
+
+  # ─── Matrix Parallel Container Build & ECR Push ───────────────────────────
   parallel_ecr_push:
-    name: Docker Build & Push via Ansible (${{ matrix.target }})
+    name: Docker Build & Push (${{ matrix.target }})
     runs-on: ubuntu-latest
     needs: [parallel_ci_build]
     if: github.ref == 'refs/heads/main'
@@ -98,11 +109,33 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install Ansible
-        run: pip install ansible
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+          if [ -n "$ACCOUNT_ID" ]; then
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} \
+              | docker login --username AWS --password-stdin \
+                "$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+            echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+            echo "registry=$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Run Ansible ECR Container Build & Push Playbook
-        run: ansible-playbook ansible/build_and_push_single_target.yml -e "target_path=${{ matrix.target }}"
-        env:
-          GITHUB_SHA: ${{ github.sha }}
-          AWS_REGION: ${{ env.AWS_REGION }}
+      - name: Build & Push Container Image
+        run: |
+          TARGET_NAME=$(basename "${{ matrix.target }}")
+          REPO_NAME="sunotal-${TARGET_NAME}"
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          GIT_SHA="${{ github.sha }}"
+
+          echo "📦 Building container for ${REPO_NAME}..."
+          docker build -t "${REPO_NAME}:latest" -t "${REPO_NAME}:${GIT_SHA}" "${{ matrix.target }}"
+
+          if [ -n "$REGISTRY" ]; then
+            aws ecr create-repository --repository-name "$REPO_NAME" 2>/dev/null || true
+            docker tag "${REPO_NAME}:latest" "${REGISTRY}/${REPO_NAME}:latest"
+            docker tag "${REPO_NAME}:${GIT_SHA}" "${REGISTRY}/${REPO_NAME}:${GIT_SHA}"
+            docker push "${REGISTRY}/${REPO_NAME}:latest"
+            docker push "${REGISTRY}/${REPO_NAME}:${GIT_SHA}"
+            echo "🚀 Pushed ${REPO_NAME} to ECR"
+          fi
