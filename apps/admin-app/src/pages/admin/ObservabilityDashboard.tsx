@@ -9,7 +9,7 @@ export const ObservabilityDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(new Date().toLocaleTimeString());
 
-  const observabilityUrl = 'https://observability.automateuniverse.space';
+  const observabilityUrl = 'https://monitoring-sunotal.automateuniverse.space';
 
   const [clusterStats, setClusterStats] = useState({
     status: "HEALTHY",
@@ -144,7 +144,7 @@ export const ObservabilityDashboard: React.FC = () => {
               Prometheus & Grafana Enterprise Telemetry
             </h2>
             <p className="text-xs text-emerald-100/80 leading-relaxed">
-              As per microservices security best practices, the full metrics engine, Grafana dashboards, and Prometheus query console are isolated outside the main Admin App at <code className="text-emerald-300 font-mono bg-black/40 px-1.5 py-0.5 rounded">observability.automateuniverse.space</code>.
+              As per microservices security best practices, the full metrics engine, Grafana dashboards, and Prometheus query console are isolated outside the main Admin App at <code className="text-emerald-300 font-mono bg-black/40 px-1.5 py-0.5 rounded">monitoring-sunotal.automateuniverse.space</code>.
             </p>
           </div>
 

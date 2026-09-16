@@ -1,21 +1,24 @@
-name: "CD: Application Deployment & Verification"
+name: "CD: Application Rollout & Live Verification"
 
 on:
-  workflow_run:
-    workflows: ["CI: Build, Test & Containerize"]
-    types:
-      - completed
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/**'
+      - 'services/**'
+      - 'docker-compose.yml'
+      - 'nginx.conf'
+      - '.github/workflows/cd-app.yml'
   workflow_dispatch:
 
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
-  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  deploy_and_verify:
-    name: Deploy to EC2 Host & Verify Subdomains
+  deploy_to_ec2:
+    name: EC2 SSM Container Rollout & Verification
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout repository
@@ -28,70 +31,60 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy updated containers on EC2 via SSM
+      - name: Get EC2 Instance ID
+        id: ec2_info
         run: |
-          INSTANCE_ID="${{ secrets.EC2_INSTANCE_ID }}"
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
-          REGISTRY="${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Project,Values=sunotal" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text 2>/dev/null || echo "")
 
-          if [ -z "$INSTANCE_ID" ]; then
-            echo "⚠️ EC2_INSTANCE_ID secret not set — skipping EC2 deploy step"
-            exit 0
+          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
+            echo "⚠️ No running EC2 instance tagged Project=sunotal found."
+            echo "instance_id=" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Found target EC2 instance: $INSTANCE_ID"
+            echo "instance_id=$INSTANCE_ID" >> $GITHUB_OUTPUT
           fi
+
+      - name: Trigger Remote Container Deployment via AWS SSM
+        if: steps.ec2_info.outputs.instance_id != ''
+        run: |
+          INSTANCE_ID="${{ steps.ec2_info.outputs.instance_id }}"
+          echo "🚀 Sending deployment script to instance $INSTANCE_ID..."
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[
-              \"cd /home/ec2-user/app/sunotal_fullstk\",
-              \"git pull origin main\",
-              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${REGISTRY}\",
-              \"docker compose pull\",
-              \"docker compose up -d --remove-orphans\",
-              \"docker image prune -f\"
-            ]" \
+            --parameters 'commands=["cd /home/ec2-user/sunotal_fullstk || cd /app || exit 1", "git pull origin main", "docker compose up -d --build"]' \
             --query "Command.CommandId" \
             --output text)
 
-          echo "📡 SSM Command ID: $COMMAND_ID"
+          echo "Command sent. ID: $COMMAND_ID"
 
-          MAX_WAIT=300
-          ELAPSED=0
-          INTERVAL=15
-
-          echo "⏳ Waiting for SSM deployment to complete (up to ${MAX_WAIT}s)..."
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
-            sleep $INTERVAL
-            ELAPSED=$((ELAPSED + INTERVAL))
-
+          # Wait for command execution
+          echo "⏳ Polling SSM command execution..."
+          for i in {1..30}; do
+            sleep 5
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$COMMAND_ID" \
               --instance-id "$INSTANCE_ID" \
               --query "Status" \
               --output text 2>/dev/null || echo "Pending")
 
-            echo "  [${ELAPSED}s] Status: $STATUS"
-
-            case "$STATUS" in
-              Success)
-                echo "✅ EC2 deployment completed successfully"
-                exit 0
-                ;;
-              Failed|Cancelled|TimedOut|Cancelling)
-                echo "❌ EC2 deployment failed with status: $STATUS"
-                aws ssm get-command-invocation \
-                  --command-id "$COMMAND_ID" \
-                  --instance-id "$INSTANCE_ID" \
-                  --query "StandardErrorContent" \
-                  --output text
-                exit 1
-                ;;
-              InProgress|Pending|Delayed)
-                ;;
-              *)
-                echo "  Unknown status '$STATUS' — continuing polling"
-                ;;
-            esac
+            echo "  Status: $STATUS"
+            if [ "$STATUS" = "Success" ]; then
+              echo "✅ EC2 deployment succeeded!"
+              break
+            elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
+              echo "❌ EC2 deployment failed with status: $STATUS"
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query "StandardErrorContent" \
+                --output text
+              exit 1
+            fi
           done
 
       - name: Verify Live Endpoints & Subdomains
@@ -103,6 +96,7 @@ jobs:
             "https://vendor-sunotal.automateuniverse.space"
             "https://delivery-sunotal.automateuniverse.space"
             "https://support-sunotal.automateuniverse.space"
+            "https://monitoring-sunotal.automateuniverse.space"
           )
 
           for domain in "${DOMAINS[@]}"; do

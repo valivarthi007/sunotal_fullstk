@@ -71,33 +71,7 @@ module "iam" {
   tags                  = local.common_tags
 }
 
-# ─── 5. Database (AWS DocumentDB - MongoDB) ───────────────────────────────────
-module "database" {
-  source               = "./modules/database"
-  subnet_ids           = module.vpc.private_subnets
-  db_security_group_id = module.security.db_security_group_id
-  docdb_instance_class = "db.t3.medium"
-  db_username          = "sunotaladmin"
-  db_password          = "SunotalMongoPass123!"
-  identifier           = "sunotal-docdb"
-  tags                 = local.common_tags
-}
-
-# ─── 6. Event-Driven Messaging (AWS SQS + SNS) ────────────────────────────────
-module "sqs_sns" {
-  source      = "./modules/sqs_sns"
-  environment = "production"
-  tags        = local.common_tags
-}
-
-# ─── 7. Dynamic Photo Storage & Lambda ────────────────────────────────────────
-module "lambda" {
-  source      = "./modules/lambda"
-  environment = "production"
-  tags        = local.common_tags
-}
-
-# ─── 8. Compute Module (EC2 / Docker Host Fallback) ───────────────────────────
+# ─── 5. Compute Module (EC2 Host) ────────────────────────────────────────────
 module "compute" {
   source = "./modules/compute"
 
@@ -114,7 +88,7 @@ module "compute" {
   tags              = local.common_tags
 }
 
-# ─── 9. Route53 DNS Records ───────────────────────────────────────────────────
+# ─── 6. Route53 DNS Records ───────────────────────────────────────────────────
 data "aws_route53_zone" "primary" {
   name         = "automateuniverse.space."
   private_zone = false
@@ -127,6 +101,7 @@ resource "aws_route53_record" "sunotal_subdomains" {
     "vendor-sunotal",
     "delivery-sunotal",
     "support-sunotal",
+    "monitoring-sunotal",
     "api"
   ])
 

@@ -53,6 +53,8 @@ services:
         condition: service_healthy
       support-app:
         condition: service_healthy
+      monitoring-app:
+        condition: service_healthy
       auth-service:
         condition: service_healthy
       operations-service:
@@ -267,6 +269,21 @@ services:
     restart: unless-stopped
     ports:
       - "3004:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  monitoring-app:
+    build:
+      context: ./apps/monitoring-app
+      dockerfile: Dockerfile
+    container_name: sunotal-monitoring-app
+    restart: unless-stopped
+    ports:
+      - "3006:80"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1"]
       interval: 15s
