@@ -16,10 +16,11 @@ terraform {
   }
 
   backend "s3" {
-    bucket  = "jcs-raju-sunotal-final"
-    key     = "state/terraform.tfstate"
-    region  = "us-east-1"
-    encrypt = true
+    bucket         = "jcs-raju-sunotal-tfstate"
+    key            = "state/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "sunotal-terraform-locks"
   }
 }
 
