@@ -219,17 +219,29 @@ function SubdomainRouter() {
       <Suspense fallback={<LoadingFallback />}>
         <Switch>
           <Route path="/" component={AdminRouteGuard} />
+          <Route path="/login" component={AdminLogin} />
           <Route path="/admin/login" component={AdminLogin} />
+          <Route path="/dashboard" component={Dashboard} />
           <Route path="/admin/dashboard" component={Dashboard} />
+          <Route path="/products" component={ProductsAdmin} />
           <Route path="/admin/products" component={ProductsAdmin} />
+          <Route path="/warehouses" component={WarehouseManager} />
           <Route path="/admin/warehouses" component={WarehouseManager} />
+          <Route path="/warehouse" component={WarehouseManager} />
           <Route path="/admin/warehouse" component={WarehouseManager} />
+          <Route path="/ledger" component={AdminLedger} />
           <Route path="/admin/ledger" component={AdminLedger} />
+          <Route path="/observability" component={ObservabilityDashboard} />
           <Route path="/admin/observability" component={ObservabilityDashboard} />
+          <Route path="/banners" component={BannersAdmin} />
           <Route path="/admin/banners" component={BannersAdmin} />
+          <Route path="/inventory" component={InventoryAdmin} />
           <Route path="/admin/inventory" component={InventoryAdmin} />
+          <Route path="/vendors" component={VendorsAdmin} />
           <Route path="/admin/vendors" component={VendorsAdmin} />
+          <Route path="/quotations" component={QuotationsAdmin} />
           <Route path="/admin/quotations" component={QuotationsAdmin} />
+          <Route path="/users" component={UsersAdmin} />
           <Route path="/admin/users" component={UsersAdmin} />
           <Route component={AdminRouteGuard} />
         </Switch>
