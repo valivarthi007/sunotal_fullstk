@@ -1,12 +1,16 @@
 name: "CI: Build, Test & Containerize"
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Infra: Terraform Provisioning"]
+    types:
+      - completed
     branches:
       - main
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
@@ -16,6 +20,7 @@ jobs:
   unit_integration_tests:
     name: Unit & Integration Tests (${{ matrix.service_path }})
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     strategy:
       fail-fast: false
       matrix:
