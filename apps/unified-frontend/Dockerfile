@@ -81,7 +81,8 @@ RUN npm run build
 
 # ─── Stage 6: Production Nginx Server ─────────────────────────────────────────
 FROM nginx:1.27-alpine
-RUN apk update && apk upgrade --no-cache
+# Install wget for health checks (nginx:alpine has it but ensure it's present after upgrade)
+RUN apk update && apk upgrade --no-cache && apk add --no-cache wget
 
 COPY apps/unified-frontend/nginx.conf /etc/nginx/nginx.conf
 
@@ -93,5 +94,5 @@ COPY --from=support-app-builder  /app/dist /usr/share/nginx/html/support-app
 
 EXPOSE 80 443
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1
 CMD ["nginx", "-g", "daemon off;"]
