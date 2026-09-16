@@ -1,0 +1,42 @@
+---
+- name: "Build Container Image & Push to AWS ECR via Ansible"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    target_path: "{{ target_path }}"
+    aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-east-1', true) }}"
+    git_sha: "{{ lookup('env', 'GITHUB_SHA') | default('latest', true) }}"
+
+  tasks:
+    - name: Get AWS Account ID
+      command: aws sts get-caller-identity --query Account --output text
+      register: aws_account_id
+      failed_when: false
+
+    - name: Set ECR Registry Variable
+      set_fact:
+        ecr_registry: "{{ aws_account_id.stdout }}.dkr.ecr.{{ aws_region }}.amazonaws.com"
+      when: aws_account_id.stdout != ""
+
+    - name: Log in to AWS ECR
+      shell: |
+        aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin {{ ecr_registry }}
+      when: aws_account_id.stdout != ""
+
+    - name: Set Target and Repo Names
+      set_fact:
+        repo_name: "sunotal-{{ target_path | basename }}"
+
+    - name: Build Docker Container Image
+      command: >
+        docker build -t {{ repo_name }}:latest -t {{ repo_name }}:{{ git_sha }} {{ target_path }}
+
+    - name: Tag and Push Container Image to ECR
+      shell: |
+        aws ecr create-repository --repository-name "{{ repo_name }}" 2>/dev/null || true
+        docker tag "{{ repo_name }}:latest" "{{ ecr_registry }}/{{ repo_name }}:latest"
+        docker tag "{{ repo_name }}:{{ git_sha }}" "{{ ecr_registry }}/{{ repo_name }}:{{ git_sha }}"
+        docker push "{{ ecr_registry }}/{{ repo_name }}:latest"
+        docker push "{{ ecr_registry }}/{{ repo_name }}:{{ git_sha }}"
+      when: aws_account_id.stdout != ""
