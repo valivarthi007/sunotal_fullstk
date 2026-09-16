@@ -79,12 +79,14 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.4
           run_install: false
 
       - name: Build Frontend Applications
         run: |
           echo "📦 Compiling and building frontend applications..."
+          # Allow native build scripts (esbuild) required by pnpm v9+ security model
+          echo "unsafe-perm=true" >> ~/.npmrc
           failed_apps=()
           for app in apps/*/; do
             if [ -d "$app" ] && [ -f "$app/package.json" ]; then
@@ -111,6 +113,7 @@ jobs:
             echo "❌ Failed apps: ${failed_apps[*]}"
             exit 1
           fi
+
 
 
   # ─── Job 3: Docker Compose Full Stack Integration Test ────────────────────

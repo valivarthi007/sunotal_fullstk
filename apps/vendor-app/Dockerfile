@@ -2,8 +2,12 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install pnpm globally
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Enable corepack with pinned pnpm version for reproducible builds
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+# Allow esbuild (and other native deps) to run their postinstall scripts
+# This is required by pnpm v9+ security model for native binary packages
+RUN echo "unsafe-perm=true" > /root/.npmrc
 
 # Copy lockfile + manifest first for better layer caching
 COPY package.json pnpm-lock.yaml* package-lock.json* ./

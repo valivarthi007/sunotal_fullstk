@@ -1,7 +1,9 @@
 # ─── Stage 1: Build user-app ──────────────────────────────────────────────────
 FROM node:20-alpine AS user-app-builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+# Allow native build scripts (esbuild, etc.) — required by pnpm v9+ security model
+RUN echo "unsafe-perm=true" > /root/.npmrc
 COPY apps/user-app/package.json apps/user-app/pnpm-lock.yaml* apps/user-app/package-lock.json* ./
 RUN if [ -f pnpm-lock.yaml ]; then \
       pnpm install --frozen-lockfile; \
@@ -16,7 +18,8 @@ RUN npm run build
 # ─── Stage 2: Build vendor-app ────────────────────────────────────────────────
 FROM node:20-alpine AS vendor-app-builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN echo "unsafe-perm=true" > /root/.npmrc
 COPY apps/vendor-app/package.json apps/vendor-app/pnpm-lock.yaml* apps/vendor-app/package-lock.json* ./
 RUN if [ -f pnpm-lock.yaml ]; then \
       pnpm install --frozen-lockfile; \
@@ -31,7 +34,8 @@ RUN npm run build
 # ─── Stage 3: Build admin-app ─────────────────────────────────────────────────
 FROM node:20-alpine AS admin-app-builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN echo "unsafe-perm=true" > /root/.npmrc
 COPY apps/admin-app/package.json apps/admin-app/pnpm-lock.yaml* apps/admin-app/package-lock.json* ./
 RUN if [ -f pnpm-lock.yaml ]; then \
       pnpm install --frozen-lockfile; \
@@ -46,7 +50,8 @@ RUN npm run build
 # ─── Stage 4: Build delivery-app ──────────────────────────────────────────────
 FROM node:20-alpine AS delivery-app-builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN echo "unsafe-perm=true" > /root/.npmrc
 COPY apps/delivery-app/package.json apps/delivery-app/pnpm-lock.yaml* apps/delivery-app/package-lock.json* ./
 RUN if [ -f pnpm-lock.yaml ]; then \
       pnpm install --frozen-lockfile; \
@@ -61,7 +66,8 @@ RUN npm run build
 # ─── Stage 5: Build support-app ───────────────────────────────────────────────
 FROM node:20-alpine AS support-app-builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN echo "unsafe-perm=true" > /root/.npmrc
 COPY apps/support-app/package.json apps/support-app/pnpm-lock.yaml* apps/support-app/package-lock.json* ./
 RUN if [ -f pnpm-lock.yaml ]; then \
       pnpm install --frozen-lockfile; \
