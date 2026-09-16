@@ -91,7 +91,11 @@ jobs:
               repo_name="sunotal-${app_name}"
               echo "🎨 Building frontend app: $repo_name"
 
-              docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" "$app_dir"
+              if [ "$app_name" = "unified-frontend" ]; then
+                docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" -f apps/unified-frontend/Dockerfile .
+              else
+                docker build -t "${repo_name}:latest" -t "${repo_name}:${GIT_SHA}" "$app_dir"
+              fi
               echo "✅ Built ${repo_name}"
 
               if [ -n "$ACCOUNT_ID" ]; then

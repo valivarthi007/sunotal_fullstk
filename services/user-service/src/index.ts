@@ -173,6 +173,8 @@ app.delete("/api/users/:id", async (req: any, res: any) => {
 
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "user-service" }));
 
+app.listen(PORT, "0.0.0.0", () => console.log(`✅ [user-service] Running on port ${PORT}`));
+
 const isDocDB = MONGODB_URI.includes("docdb.amazonaws.com");
 mongoose.connect(MONGODB_URI, {
   ...(isDocDB
@@ -190,8 +192,6 @@ mongoose.connect(MONGODB_URI, {
   family: 4,
 }).then(() => {
   console.log("⚡ [user-service] Connected to MongoDB / AWS DocumentDB");
-  app.listen(PORT, "0.0.0.0", () => console.log(`✅ [user-service] Running on port ${PORT}`));
 }).catch((err) => {
   console.warn("⚠️ [user-service] MongoDB connection warning:", err.message);
-  app.listen(PORT, "0.0.0.0", () => console.log(`✅ [user-service] Running on port ${PORT}`));
 });

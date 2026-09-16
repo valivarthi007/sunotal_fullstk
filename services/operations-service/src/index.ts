@@ -1491,6 +1491,8 @@ app.delete("/api/admin/warehouses/:id", async (req: any, res: any) => {
 app.get("/", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
 
+app.listen(PORT, "0.0.0.0", () => console.log(`✅ [operations-service] Running on port ${PORT}`));
+
 const isDocDB = MONGODB_URI.includes("docdb.amazonaws.com");
 mongoose.connect(MONGODB_URI, {
   ...(isDocDB
@@ -1508,8 +1510,6 @@ mongoose.connect(MONGODB_URI, {
   family: 4,
 }).then(() => {
   console.log("⚡ [operations-service] Connected to MongoDB / AWS DocumentDB");
-  app.listen(PORT, "0.0.0.0", () => console.log(`✅ [operations-service] Running on port ${PORT}`));
 }).catch((err) => {
   console.warn("⚠️ [operations-service] MongoDB connection warning:", err.message);
-  app.listen(PORT, "0.0.0.0", () => console.log(`✅ [operations-service] Running on port ${PORT}`));
 });
