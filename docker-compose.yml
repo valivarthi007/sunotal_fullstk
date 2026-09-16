@@ -92,7 +92,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 20s
 
   operations-service:
     build:
@@ -159,7 +159,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 20s
 
   vendor-service:
     build:
@@ -180,7 +180,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 20s
 
   delivery-service:
     build:
@@ -197,7 +197,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 20s
 
   support-service:
     build:
@@ -218,7 +218,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 20s
 
   # ─── Frontend Apps ────────────────────────────────────────────────────────
   user-app:
@@ -330,7 +330,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 20s
 
 volumes:
   sunotal_mongodata:
