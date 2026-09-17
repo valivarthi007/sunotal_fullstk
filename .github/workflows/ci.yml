@@ -85,7 +85,7 @@ jobs:
 
       - name: Spin Up Microservices Stack for Verification
         run: |
-          docker compose up -d --build mongodb redis
+          docker compose up -d --build postgres redis
           sleep 5
           docker compose ps
 
