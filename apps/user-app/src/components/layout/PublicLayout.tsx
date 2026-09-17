@@ -171,7 +171,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse ml-0.5" />
             </button>
 
-            {user ? (
+            {localStorage.getItem("sunotal_token") && user ? (
               <div className="hidden sm:flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -210,6 +210,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 Login / Sign Up
               </Button>
             )}
+
 
             {/* Cart Button */}
             <Button
