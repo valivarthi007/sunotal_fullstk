@@ -7,33 +7,8 @@ const PORT = process.env.PORT || 5003;
 app.use(cors());
 app.use(express.json());
 
-const orders: any[] = [
-  {
-    id: 'ORD-9912',
-    orderNumber: 'ORD-9912',
-    numericId: 9912,
-    userId: '1',
-    customerName: 'Rahul Sharma',
-    customerPhone: '9876543210',
-    shippingAddress: 'Flat 402, Green Acres, Indiranagar',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    pincode: '560038',
-    lat: 12.9716,
-    lng: 77.5946,
-    items: [
-      { id: '1', name: 'Fresh Organic Tomatoes', quantity: 2, price: 40, image: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400' },
-      { id: '2', name: 'Farm Fresh Milk', quantity: 1, price: 65, image: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400' }
-    ],
-    totalAmount: 145,
-    finalAmount: 145,
-    status: 'placed',
-    paymentStatus: 'paid',
-    paymentMethod: 'upi',
-    riderName: 'Vikram Singh',
-    createdAt: new Date().toISOString()
-  }
-];
+const orders: any[] = [];
+
 
 app.get('/healthz', (_req, res) => {
   res.json({ service: 'order-service', status: 'OK', ordersCount: orders.length, timestamp: new Date().toISOString() });

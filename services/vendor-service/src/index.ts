@@ -7,10 +7,8 @@ const PORT = Number(process.env.PORT ?? 5005);
 app.use(cors());
 app.use(express.json());
 
-const vendors: any[] = [
-  { id: 'VENDOR-001', firstName: 'Ramesh', lastName: 'Kumar', email: 'ramesh@farms.com', phone: '9876543210', location: 'Indiranagar, Bangalore', produce: 'Organic Vegetables', status: 'approved', createdAt: new Date().toISOString() },
-  { id: 'VENDOR-002', firstName: 'Suresh', lastName: 'Patel', email: 'suresh@dairy.com', phone: '9876543211', location: 'Koramangala, Bangalore', produce: 'Fresh Milk & Dairy', status: 'approved', createdAt: new Date().toISOString() }
-];
+const vendors: any[] = [];
+
 
 const quotations: any[] = [];
 

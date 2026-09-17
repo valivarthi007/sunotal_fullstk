@@ -7,28 +7,8 @@ const PORT = process.env.PORT || 5004;
 app.use(cors());
 app.use(express.json());
 
-const activeDeliveryOrders: any[] = [
-  {
-    id: 'ORD-9912',
-    orderNumber: 'ORD-9912',
-    numericId: 9912,
-    customerName: 'Rahul Sharma',
-    customerPhone: '9876543210',
-    shippingAddress: 'Flat 402, Green Acres, Indiranagar',
-    city: 'Bengaluru',
-    lat: 12.9716,
-    lng: 77.5946,
-    totalAmount: 145,
-    itemsCount: 2,
-    items: [
-      { id: '1', name: 'Fresh Organic Tomatoes', quantity: 2 },
-      { id: '2', name: 'Farm Fresh Milk', quantity: 1 }
-    ],
-    status: 'placed',
-    stage: 'unassigned',
-    estimatedPayout: 45
-  }
-];
+const activeDeliveryOrders: any[] = [];
+
 
 const completedDeliveries: any[] = [];
 
