@@ -81,12 +81,14 @@ module "ecs" {
   source                = "./modules/ecs"
   vpc_id                = module.vpc.vpc_id
   private_subnet_ids    = module.vpc.private_subnet_ids
+  public_subnet_ids     = module.vpc.public_subnet_ids
   ecs_security_group_id = module.security.ecs_security_group_id
   target_group_arns     = module.acm_alb.target_group_arns
   alb_listener_arn      = module.acm_alb.alb_listener_arn
   aws_region            = var.aws_region
   tags                  = local.common_tags
 }
+
 
 # ─── 6. DocumentDB / MongoDB Cluster ──────────────────────────────────────────
 module "documentdb" {

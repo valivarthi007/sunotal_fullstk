@@ -1,5 +1,9 @@
 variable "vpc_id" { type = string }
 variable "private_subnet_ids" { type = list(string) }
+variable "public_subnet_ids" {
+  type    = list(string)
+  default = []
+}
 variable "ecs_security_group_id" { type = string }
 variable "target_group_arns" { type = map(string) }
 variable "alb_listener_arn" {
@@ -9,6 +13,7 @@ variable "alb_listener_arn" {
 variable "aws_region" { type = string }
 variable "tags" { type = map(string) }
 
+data "aws_caller_identity" "current" {}
 
 # ─── 1. ECS Cluster ───────────────────────────────────────────────────────────
 resource "aws_ecs_cluster" "main" {
@@ -100,7 +105,7 @@ resource "aws_ecs_task_definition" "tasks" {
 
   container_definitions = jsonencode([{
     name      = "sunotal-${each.key}"
-    image     = "143797622495.dkr.ecr.${var.aws_region}.amazonaws.com/sunotal-${each.key}:latest"
+    image     = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/sunotal-${each.key}:latest"
     essential = true
     portMappings = [{
       containerPort = each.value.port
@@ -129,10 +134,11 @@ resource "aws_ecs_service" "services" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = var.private_subnet_ids
+    subnets          = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : var.private_subnet_ids
     security_groups  = [var.ecs_security_group_id]
-    assign_public_ip = false
+    assign_public_ip = length(var.public_subnet_ids) > 0 ? true : false
   }
+
 
   dynamic "load_balancer" {
     for_each = contains(keys(var.target_group_arns), each.key) ? [1] : []
