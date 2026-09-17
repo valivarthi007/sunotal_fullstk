@@ -89,6 +89,9 @@ app.get('/api/admin/stats', async (_req, res) => {
 
 // Proxy Rules
 app.use('/api/auth', proxy(SERVICES.AUTH));
+app.use('/api/admin/login', proxy(SERVICES.AUTH));
+app.use('/api/admin/users', proxy(SERVICES.AUTH));
+app.use('/api/users', proxy(SERVICES.AUTH));
 
 app.use('/api/products', proxy(SERVICES.CATALOG));
 app.use('/api/categories', proxy(SERVICES.CATALOG));

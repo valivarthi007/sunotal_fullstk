@@ -121,6 +121,13 @@ const loginRoleHandler = (roles: string[]) => async (req: express.Request, res: 
 
 app.post('/api/auth/login/vendor', loginRoleHandler(['vendor']));
 app.post('/api/auth/login/delivery', loginRoleHandler(['driver']));
+app.post('/api/auth/admin/login', loginRoleHandler(['admin']));
+app.post('/api/admin/login', loginRoleHandler(['admin']));
+
+// Users management for Admin
+app.get(['/api/users', '/api/admin/users'], (_req, res) => {
+  return res.json(users.map(normalizeUser));
+});
 
 // GET /api/auth/me
 app.get('/api/auth/me', (req, res) => {
