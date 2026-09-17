@@ -16,11 +16,16 @@ const users: any[] = [];
 async function seedDefaultUsers() {
   if (users.length > 0) return;
   const adminHash = await bcrypt.hash('admin123', 10);
-  const riderHash = await bcrypt.hash('rider123', 10);
-  users.push(
-    { id: '1', name: 'Admin User', email: 'admin@sunotal.com', passwordHash: adminHash, role: 'admin', status: 'active', walletBalance: 1000, createdAt: new Date() },
-    { id: '2', name: 'Rider Vikram', email: 'rider@sunotal.com', passwordHash: riderHash, role: 'driver', status: 'active', phone: '9000000001', walletBalance: 500, createdAt: new Date() }
-  );
+  users.push({
+    id: '1',
+    name: 'Admin User',
+    email: 'admin@sunotal.com',
+    passwordHash: adminHash,
+    role: 'admin',
+    status: 'active',
+    walletBalance: 1000,
+    createdAt: new Date(),
+  });
 }
 seedDefaultUsers();
 
@@ -104,10 +109,7 @@ const loginRoleHandler = (roles: string[]) => async (req: express.Request, res: 
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
     const user = users.find((u) => u.email === email.toLowerCase() && (roles.includes(u.role) || u.role === 'admin'));
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      // Demo fallback for vendor/rider
-      const demoUser = { id: `DEMO-${Date.now()}`, name: `${roles[0]} User`, email: email.toLowerCase(), role: roles[0], walletBalance: 500, createdAt: new Date() };
-      const token = signToken({ id: demoUser.id, email: demoUser.email, role: demoUser.role });
-      return res.json({ success: true, token, user: normalizeUser(demoUser) });
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
     const token = signToken({ id: user.id, email: user.email, name: user.name, role: user.role });
     return res.json({ success: true, token, user: normalizeUser(user) });
@@ -115,6 +117,7 @@ const loginRoleHandler = (roles: string[]) => async (req: express.Request, res: 
     return res.status(500).json({ error: err.message });
   }
 };
+
 
 app.post('/api/auth/login/vendor', loginRoleHandler(['vendor']));
 app.post('/api/auth/login/delivery', loginRoleHandler(['driver']));
