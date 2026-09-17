@@ -90,9 +90,20 @@ app.get('/api/healthz', async (_req: any, res: any) => {
 // Admin Stats Endpoint (Aggregates stats from Catalog, Order, Auth, Delivery, Vendor)
 app.get('/api/admin/stats', async (_req: any, res: any) => {
   try {
-    const productsRes = await fetch(`${SERVICES.CATALOG}/api/products`).then((r) => r.json()).catch(() => MOCK_PRODUCTS);
-    const ordersRes = await fetch(`${SERVICES.ORDER}/api/orders`).then((r) => r.json()).catch(() => []);
-    const vendorsRes = await fetch(`${SERVICES.VENDOR}/api/vendors`).then((r) => r.json()).catch(() => []);
+    const fetchWithTimeout = (url: string, ms = 2000) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ms);
+      return fetch(url, { signal: controller.signal })
+        .then((r) => r.json())
+        .finally(() => clearTimeout(timer))
+        .catch(() => null);
+    };
+
+    const [productsRes, ordersRes, vendorsRes] = await Promise.all([
+      fetchWithTimeout(`${SERVICES.CATALOG}/api/products`),
+      fetchWithTimeout(`${SERVICES.ORDER}/api/orders`),
+      fetchWithTimeout(`${SERVICES.VENDOR}/api/vendors`),
+    ]);
 
     const totalProducts = Array.isArray(productsRes) ? productsRes.length : MOCK_PRODUCTS.length;
     const totalOrders = Array.isArray(ordersRes) ? ordersRes.length : 12;
