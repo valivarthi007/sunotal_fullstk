@@ -19,7 +19,7 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 // Distributed Tracing Middleware (X-Correlation-ID)
-app.use((req, res, next) => {
+app.use((req: any, res: any, next: any) => {
   const correlationId = (req.headers['x-correlation-id'] as string) || `sn-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   req.headers['x-correlation-id'] = correlationId;
   res.setHeader('X-Correlation-ID', correlationId);
@@ -37,38 +37,40 @@ const MOCK_PRODUCTS = [
 ];
 
 const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, res: any) => void) => proxy(targetUrl, {
-  proxyReqPathResolver: (req) => req.originalUrl,
-  proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
+  proxyReqPathResolver: (req: any) => req.originalUrl,
+  proxyReqOptDecorator: (proxyReqOpts: any, srcReq: any) => {
     if (srcReq.headers['x-correlation-id']) {
       proxyReqOpts.headers['x-correlation-id'] = srcReq.headers['x-correlation-id'];
     }
     return proxyReqOpts;
   },
   timeout: 5000,
-  proxyErrorHandler: (err, res, req, _next) => {
-    console.warn(`⚠️ [API Gateway Proxy Warning] ${req.method} ${req.originalUrl} -> ${targetUrl} unavailable (${err?.message || 'timeout'}). Serving resilient response.`);
+  proxyErrorHandler: (err: any, res: any, _next: any) => {
+    const req = res?.req;
+    const url = req?.originalUrl || '';
+    console.warn(`⚠️ [API Gateway Proxy Warning] -> ${targetUrl} (${url}) unavailable (${err?.message || 'timeout'}). Serving resilient response.`);
     if (fallbackHandler) {
       return fallbackHandler(req, res);
     }
-    if (req.originalUrl.includes('/products') || req.originalUrl.includes('/categories') || req.originalUrl.includes('/storefront')) {
+    if (url.includes('/products') || url.includes('/categories') || url.includes('/storefront')) {
       return res.json(MOCK_PRODUCTS);
     }
-    if (req.originalUrl.includes('/auth') || req.originalUrl.includes('/login')) {
+    if (url.includes('/auth') || url.includes('/login')) {
       return res.json({
         token: "mock-jwt-token-sunotal-2026-fallback",
-        user: { id: "u1", email: req.body?.email || "admin@sunotal.com", role: "admin", name: "Sunotal Admin" }
+        user: { id: "u1", email: req?.body?.email || "admin@sunotal.com", role: "admin", name: "Sunotal Admin" }
       });
     }
     return res.status(200).json({ status: "ok", resilient: true, message: "Request processed gracefully by Sunotal API Gateway" });
   }
 });
 
-app.get('/healthz', (_req, res) => {
+app.get('/healthz', (_req: any, res: any) => {
   res.status(200).json({ status: 'OK', gateway: 'Sunotal Microservices API Gateway' });
 });
 
 // Gateway Aggregated Health Check
-app.get('/api/healthz', async (_req, res) => {
+app.get('/api/healthz', async (_req: any, res: any) => {
   res.status(200).json({
     status: 'OK',
     gateway: 'Sunotal Microservices API Gateway',
@@ -86,7 +88,7 @@ app.get('/api/healthz', async (_req, res) => {
 });
 
 // Admin Stats Endpoint (Aggregates stats from Catalog, Order, Auth, Delivery, Vendor)
-app.get('/api/admin/stats', async (_req, res) => {
+app.get('/api/admin/stats', async (_req: any, res: any) => {
   try {
     const productsRes = await fetch(`${SERVICES.CATALOG}/api/products`).then((r) => r.json()).catch(() => MOCK_PRODUCTS);
     const ordersRes = await fetch(`${SERVICES.ORDER}/api/orders`).then((r) => r.json()).catch(() => []);
