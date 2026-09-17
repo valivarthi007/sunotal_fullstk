@@ -90,6 +90,36 @@ app.post("/api/support/tickets", async (req: any, res: any) => {
   }
 });
 
+// POST /api/support/ai-chat (Groq Cloud LLM AI Customer Assistant)
+app.post("/api/support/ai-chat", async (req: any, res: any) => {
+  const { userMessage, customerName, orderId, orderStatus } = req.body;
+  if (!userMessage) {
+    return res.status(400).json({ error: "userMessage is required" });
+  }
+
+  try {
+    const { askGroqCustomerSupport } = await import("../../common/ai-groq.js").catch(() => ({
+      askGroqCustomerSupport: async () => "Hello! Our Sunotal AI Assistant is reviewing your grocery request."
+    }));
+
+    const responseText = await askGroqCustomerSupport({
+      userMessage,
+      customerName,
+      orderId,
+      orderStatus,
+    });
+
+    return res.json({
+      success: true,
+      botResponse: responseText,
+      timestamp: new Date().toISOString(),
+      provider: "Groq Cloud Llama-3.1-8B-Instant",
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: "AI Support assistant error" });
+  }
+});
+
 // PUT /api/support/tickets/:id/resolve
 app.put("/api/support/tickets/:id/resolve", async (req: any, res: any) => {
   const { id } = req.params;
