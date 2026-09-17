@@ -7,12 +7,12 @@ import {
 } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDemoKey_SunotalGrocery2026",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDHdzv85TjjDDRqK3do4LaBpeLdq4fR6E4",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "sunotal-grocery.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "sunotal-grocery",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "sunotal-grocery.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1234567890",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1234567890:web:abcdef123456",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "sunotal-grocery.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "300250905313",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:300250905313:web:2977dfc120c482e35155a0",
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
