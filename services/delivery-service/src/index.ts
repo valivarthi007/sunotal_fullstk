@@ -25,6 +25,43 @@ app.get('/api/delivery/orders/active', (_req, res) => {
   res.json(activeDeliveryOrders);
 });
 
+// Server-Sent Events (SSE) Live Rider GPS Tracking Stream (Blinkit/Instamart 3s Real-Time Updates)
+app.get('/api/delivery/stream/:orderId', (req, res) => {
+  const { orderId } = req.params;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  let step = 0;
+  const interval = setInterval(() => {
+    step++;
+    const data = {
+      orderId,
+      riderName: 'Rider Vikram',
+      riderPhone: '+919876543210',
+      lat: 12.9716 + step * 0.0005,
+      lng: 77.5946 + step * 0.0005,
+      etaMinutes: Math.max(1, 10 - step),
+      status: step > 8 ? 'ARRIVING_NOW' : 'ON_THE_WAY',
+      timestamp: new Date().toISOString()
+    };
+
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+    if (step >= 10) {
+      clearInterval(interval);
+      res.end();
+    }
+  }, 3000);
+
+  req.on('close', () => {
+    clearInterval(interval);
+    res.end();
+  });
+});
+
 // Rider Accept Order
 app.post('/api/delivery/orders/:id/accept', (req, res) => {
   const order = activeDeliveryOrders.find((o) => o.id === req.params.id || o.orderNumber === req.params.id);

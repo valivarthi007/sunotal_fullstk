@@ -106,15 +106,6 @@ app.get('/api/admin/stats', async (_req, res) => {
   }
 });
 
-const createProxy = (targetUrl: string) => proxy(targetUrl, {
-  proxyReqPathResolver: (req) => req.originalUrl,
-  timeout: 10000,
-  proxyErrorHandler: (err, res, _next) => {
-    console.error(`[Proxy Error] -> ${targetUrl}:`, err?.message || err);
-    res.status(502).json({ error: 'Upstream microservice unavailable', service: targetUrl });
-  }
-});
-
 // Proxy Rules
 app.use('/api/auth', createProxy(SERVICES.AUTH));
 app.use('/api/admin/login', createProxy(SERVICES.AUTH));
