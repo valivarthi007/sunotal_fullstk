@@ -110,9 +110,10 @@ module "elasticache" {
 
 # ─── 8. S3 Bucket & CloudFront CDN ────────────────────────────────────────────
 module "s3_cloudfront" {
-  source         = "./modules/s3_cloudfront"
-  s3_bucket_name = var.s3_bucket_name
-  tags           = local.common_tags
+  source            = "./modules/s3_cloudfront"
+  s3_bucket_name    = var.s3_bucket_name
+  enable_cloudfront = var.enable_cloudfront
+  tags              = local.common_tags
 }
 
 # ─── 9. Lambda Photo Manager ──────────────────────────────────────────────────
@@ -129,8 +130,10 @@ module "sqs_sns" {
 
 # ─── 11. Route53 Subdomain A-Alias Records ────────────────────────────────────
 module "route53" {
-  source       = "./modules/route53"
-  alb_dns_name = module.acm_alb.alb_dns_name
-  alb_zone_id  = module.acm_alb.alb_zone_id
-  tags         = local.common_tags
+  source           = "./modules/route53"
+  alb_dns_name     = module.acm_alb.alb_dns_name
+  alb_zone_id      = module.acm_alb.alb_zone_id
+  s3_bucket_domain = module.s3_cloudfront.cloudfront_domain
+  tags             = local.common_tags
 }
+

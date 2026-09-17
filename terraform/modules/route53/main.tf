@@ -4,6 +4,10 @@ variable "domain_name" {
   type    = string
   default = "automateuniverse.space"
 }
+variable "s3_bucket_domain" {
+  type    = string
+  default = ""
+}
 variable "tags" { type = map(string) }
 
 data "aws_route53_zone" "primary" {
@@ -37,6 +41,16 @@ resource "aws_route53_record" "subdomains" {
   }
 }
 
-output "registered_subdomains" {
-  value = [for k, v in aws_route53_record.subdomains : v.fqdn]
+resource "aws_route53_record" "cdn" {
+  count   = var.s3_bucket_domain != "" ? 1 : 0
+  zone_id = data.aws_route53_zone.primary.zone_id
+  name    = "cdn.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 300
+  records = [var.s3_bucket_domain]
 }
+
+output "registered_subdomains" {
+  value = concat([for k, v in aws_route53_record.subdomains : v.fqdn], var.s3_bucket_domain != "" ? [aws_route53_record.cdn[0].fqdn] : [])
+}
+

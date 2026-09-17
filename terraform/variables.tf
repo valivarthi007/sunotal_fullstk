@@ -60,4 +60,11 @@ variable "enable_docdb" {
   default     = false
 }
 
+variable "enable_cloudfront" {
+  description = "Enable AWS CloudFront distribution for S3 bucket assets (set to false if account is unverified for CloudFront)"
+  type        = bool
+  default     = false
+}
+
+
 
