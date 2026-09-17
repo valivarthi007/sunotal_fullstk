@@ -240,6 +240,7 @@ app.use('/api/users', createResilientProxy(SERVICES.AUTH));
 // Catalog & Storefront
 app.use('/api/products', createResilientProxy(SERVICES.CATALOG));
 app.use('/api/categories', createResilientProxy(SERVICES.CATALOG));
+app.use('/api/product-definitions', createResilientProxy(SERVICES.CATALOG));
 app.use('/api/storefront', createResilientProxy(SERVICES.CATALOG));
 
 // Orders & WMS

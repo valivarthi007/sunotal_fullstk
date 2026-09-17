@@ -72,9 +72,97 @@ app.post('/api/products', (req, res) => {
   res.status(201).json(newProduct);
 });
 
-// Categories List
+const productDefinitions: any[] = [];
+
+// Categories List & CRUD
 app.get('/api/categories', (_req, res) => {
   res.json(categories);
+});
+
+app.post('/api/categories', (req, res) => {
+  const { name, icon } = req.body;
+  if (!name) return res.status(400).json({ error: 'Category name is required' });
+  const newCategory = {
+    id: categories.length + 1,
+    name: name.trim(),
+    icon: icon || '📦'
+  };
+  categories.push(newCategory);
+
+  // Sync to operations service
+  fetch('http://127.0.0.1:5002/api/categories', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newCategory),
+  }).catch(() => null);
+
+  res.status(201).json(newCategory);
+});
+
+app.delete('/api/categories/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const idx = categories.findIndex((c) => c.id === id);
+  if (idx !== -1) {
+    categories.splice(idx, 1);
+  }
+  res.json({ success: true, message: 'Category deleted' });
+});
+
+// Product Definitions List & CRUD (Manage Product Names)
+app.get('/api/product-definitions', (_req, res) => {
+  res.json(productDefinitions);
+});
+
+app.post('/api/product-definitions', (req, res) => {
+  const { name, category, defaultUnit } = req.body;
+  if (!name || !category) {
+    return res.status(400).json({ error: 'Product name and category are required' });
+  }
+  const newDef = {
+    id: productDefinitions.length + 1,
+    name: name.trim(),
+    category: category.trim(),
+    defaultUnit: defaultUnit || '1 kg',
+    createdAt: new Date().toISOString()
+  };
+  productDefinitions.push(newDef);
+
+  // Sync to operations service
+  fetch('http://127.0.0.1:5002/api/product-definitions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newDef),
+  }).catch(() => null);
+
+  res.status(201).json(newDef);
+});
+
+app.delete('/api/product-definitions/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const idx = productDefinitions.findIndex((d) => d.id === id);
+  if (idx !== -1) {
+    productDefinitions.splice(idx, 1);
+  }
+  res.json({ success: true, message: 'Product definition deleted' });
+});
+
+// Update Product (Admin)
+app.put('/api/products/:id', (req, res) => {
+  const targetId = req.params.id;
+  const prod = products.find((p) => String(p.id) === targetId);
+  if (!prod) return res.status(404).json({ error: 'Product not found' });
+  Object.assign(prod, req.body);
+  res.json(prod);
+});
+
+// Delete Product (Admin)
+app.delete('/api/products/:id', (req, res) => {
+  const targetId = req.params.id;
+  const idx = products.findIndex((p) => String(p.id) === targetId);
+  if (idx !== -1) {
+    products.splice(idx, 1);
+  }
+  res.json({ success: true, message: 'Product deleted' });
 });
 
 // Dark Store Discovery
