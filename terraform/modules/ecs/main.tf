@@ -130,8 +130,11 @@ resource "aws_ecs_service" "services" {
   name            = "sunotal-${each.key}"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.tasks[each.key].arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
+  desired_count                      = 1
+  launch_type                        = "FARGATE"
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+  health_check_grace_period_seconds  = contains(keys(var.target_group_arns), each.key) ? 30 : null
 
   network_configuration {
     subnets          = var.private_subnet_ids

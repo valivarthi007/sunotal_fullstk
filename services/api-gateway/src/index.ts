@@ -14,9 +14,28 @@ const SERVICES = {
   NOTIFICATION: process.env.NOTIFICATION_SERVICE_URL || 'http://127.0.0.1:5006',
 };
 
-app.use(cors());
+// Distributed Tracing Middleware (X-Correlation-ID)
+app.use((req, res, next) => {
+  const correlationId = (req.headers['x-correlation-id'] as string) || `sn-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  req.headers['x-correlation-id'] = correlationId;
+  res.setHeader('X-Correlation-ID', correlationId);
+  next();
+});
 
-// Lightweight ALB Health Check Endpoint
+const createProxy = (targetUrl: string) => proxy(targetUrl, {
+  proxyReqPathResolver: (req) => req.originalUrl,
+  proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
+    if (srcReq.headers['x-correlation-id']) {
+      proxyReqOpts.headers['x-correlation-id'] = srcReq.headers['x-correlation-id'];
+    }
+    return proxyReqOpts;
+  },
+  timeout: 10000,
+  proxyErrorHandler: (err, res, _next) => {
+    console.error(`[Proxy Error] -> ${targetUrl}:`, err?.message || err);
+    res.status(502).json({ error: 'Upstream microservice unavailable', service: targetUrl });
+  }
+});
 app.get('/healthz', (_req, res) => {
   res.status(200).json({ status: 'OK', gateway: 'Sunotal Microservices API Gateway' });
 });

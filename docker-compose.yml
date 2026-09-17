@@ -4,16 +4,17 @@ services:
     image: mongo:7.0
     container_name: sunotal-mongo
     restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "27017:27017"
     volumes:
       - sunotal_mongodata:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
-      interval: 15s
+      test: ["CMD-SHELL", "mongosh --eval \"try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok }\" || exit 1"]
+      interval: 10s
       timeout: 10s
       retries: 5
-      start_period: 20s
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
