@@ -27,14 +27,7 @@ app.use((req: any, res: any, next: any) => {
 });
 
 // Seed Fallback Data for Zero-Downtime Guarantee
-const MOCK_PRODUCTS = [
-  { id: "p1", name: "Organic Farm Whole Milk (1L)", category: "Dairy", price: 3.99, stock: 45, image: "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=500&auto=format&fit=crop&q=80", rating: 4.8 },
-  { id: "p2", name: "Fresh Bananas Bunch (1kg)", category: "Fruits", price: 1.49, stock: 120, image: "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=500&auto=format&fit=crop&q=80", rating: 4.9 },
-  { id: "p3", name: "Vine Ripe Red Tomatoes (500g)", category: "Vegetables", price: 2.29, stock: 85, image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=500&auto=format&fit=crop&q=80", rating: 4.7 },
-  { id: "p4", name: "Free Range Brown Eggs (12pk)", category: "Dairy", price: 4.50, stock: 35, image: "https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=500&auto=format&fit=crop&q=80", rating: 4.9 },
-  { id: "p5", name: "Hass Avocados (2pk)", category: "Fruits", price: 2.99, stock: 60, image: "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=500&auto=format&fit=crop&q=80", rating: 4.6 },
-  { id: "p6", name: "Artisanal Sourdough Bread", category: "Bakery", price: 4.99, stock: 25, image: "https://images.unsplash.com/photo-1589367920969-ab8e050bbb04?w=500&auto=format&fit=crop&q=80", rating: 4.8 },
-];
+const MOCK_PRODUCTS: any[] = [];
 
 const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, res: any) => void) => proxy(targetUrl, {
   proxyReqPathResolver: (req: any) => req.originalUrl,
@@ -53,7 +46,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       return fallbackHandler(req, res);
     }
     if (url.includes('/products') || url.includes('/categories') || url.includes('/storefront')) {
-      return res.json(MOCK_PRODUCTS);
+      return res.json([]);
     }
     if (url.includes('/auth') || url.includes('/login')) {
       return res.json({
@@ -99,47 +92,43 @@ app.get('/api/admin/stats', async (_req: any, res: any) => {
         .catch(() => null);
     };
 
-    const [productsRes, ordersRes, vendorsRes] = await Promise.all([
+    const [productsRes, ordersRes, vendorsRes, usersRes] = await Promise.all([
       fetchWithTimeout(`${SERVICES.CATALOG}/api/products`),
       fetchWithTimeout(`${SERVICES.ORDER}/api/orders`),
       fetchWithTimeout(`${SERVICES.VENDOR}/api/vendors`),
+      fetchWithTimeout(`${SERVICES.AUTH}/api/users`),
     ]);
 
-    const totalProducts = Array.isArray(productsRes) ? productsRes.length : MOCK_PRODUCTS.length;
-    const totalOrders = Array.isArray(ordersRes) ? ordersRes.length : 12;
-    const totalVendors = Array.isArray(vendorsRes) ? vendorsRes.length : 2;
-    const totalRevenue = Array.isArray(ordersRes) ? ordersRes.reduce((sum: number, o: any) => sum + (o.finalAmount || o.totalAmount || 0), 0) : 4850.50;
+    const totalProducts = Array.isArray(productsRes) ? productsRes.length : 0;
+    const totalOrders = Array.isArray(ordersRes) ? ordersRes.length : 0;
+    const totalVendors = Array.isArray(vendorsRes) ? vendorsRes.length : 0;
+    const totalUsers = Array.isArray(usersRes) ? usersRes.length : 0;
+    const totalRevenue = Array.isArray(ordersRes) ? ordersRes.reduce((sum: number, o: any) => sum + (o.finalAmount || o.totalAmount || 0), 0) : 0;
 
     res.json({
       totalProducts,
-      totalUsers: 148,
+      totalUsers,
       totalVendors,
       activeVendors: totalVendors,
       activeOrders: totalOrders,
       totalRevenue,
       totalOrders,
-      onlineRiders: 8,
-      activeDarkStores: 3,
-      categoryBreakdown: [
-        { category: 'Vegetables', count: 4 },
-        { category: 'Fruits', count: 2 },
-        { category: 'Dairy', count: 4 }
-      ],
-      recentOrders: Array.isArray(ordersRes) && ordersRes.length > 0 ? ordersRes.slice(0, 5) : [
-        { id: "ORD-2026-9012", customerName: "Rahul Sharma", totalAmount: 24.50, status: "out_for_delivery", deliveryETA: "8 mins" }
-      ],
-      recentUsers: [],
+      onlineRiders: 0,
+      activeDarkStores: 0,
+      categoryBreakdown: [],
+      recentOrders: Array.isArray(ordersRes) ? ordersRes.slice(0, 5) : [],
+      recentUsers: Array.isArray(usersRes) ? usersRes.slice(0, 5) : [],
       recentVendors: Array.isArray(vendorsRes) ? vendorsRes.slice(0, 5) : []
     });
   } catch (err: any) {
     res.status(200).json({
-      totalProducts: MOCK_PRODUCTS.length,
-      totalUsers: 148,
-      totalVendors: 2,
-      activeOrders: 12,
-      totalRevenue: 4850.50,
-      onlineRiders: 8,
-      activeDarkStores: 3
+      totalProducts: 0,
+      totalUsers: 0,
+      totalVendors: 0,
+      activeOrders: 0,
+      totalRevenue: 0,
+      onlineRiders: 0,
+      activeDarkStores: 0
     });
   }
 });

@@ -7,33 +7,9 @@ const PORT = process.env.PORT || 5002;
 app.use(cors());
 app.use(express.json());
 
-const DEFAULT_PRODUCTS = [
-  { id: '1', name: 'Fresh Organic Tomatoes', category: 'Vegetables', price: 40, originalPrice: 50, unit: '1 kg', image: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400', isOrganic: true, stock: 150, rating: 4.8 },
-  { id: '2', name: 'Farm Fresh Milk (A2 Gir Cow)', category: 'Dairy', price: 65, originalPrice: 75, unit: '1 L', image: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400', isOrganic: true, stock: 80, rating: 4.9 },
-  { id: '3', name: 'Alphonso Mangoes (Devgad)', category: 'Fruits', price: 450, originalPrice: 600, unit: '1 dozen', image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=400', isOrganic: true, stock: 40, rating: 5.0 },
-  { id: '4', name: 'Whole Wheat Sourdough Bread', category: 'Bakery', price: 90, originalPrice: 110, unit: '400g', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400', isOrganic: false, stock: 25, rating: 4.6 },
-  { id: '5', name: 'Organic Spinach (Palak)', category: 'Vegetables', price: 25, originalPrice: 35, unit: '250g', image: 'https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=400', isOrganic: true, stock: 200, rating: 4.7 },
-  { id: '6', name: 'Cold Pressed Coconut Oil', category: 'Oils & Ghee', price: 320, originalPrice: 380, unit: '500ml', image: 'https://images.unsplash.com/photo-1620706857370-e1b9770e8bb1?w=400', isOrganic: true, stock: 60, rating: 4.9 },
-  { id: '7', name: 'Premium Kashmiri Almonds', category: 'Dry Fruits', price: 600, originalPrice: 750, unit: '500g', image: 'https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=400', isOrganic: true, stock: 90, rating: 4.8 },
-  { id: '8', name: 'Fresh Paneer (Cottage Cheese)', category: 'Dairy', price: 120, originalPrice: 140, unit: '200g', image: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=400', isOrganic: false, stock: 50, rating: 4.7 }
-];
-
-const DEFAULT_CATEGORIES = [
-  { id: '1', name: 'Vegetables', icon: '🥬' },
-  { id: '2', name: 'Fruits', icon: '🍎' },
-  { id: '3', name: 'Dairy', icon: '🥛' },
-  { id: '4', name: 'Bakery', icon: '🍞' },
-  { id: '5', name: 'Dry Fruits', icon: '🥜' },
-  { id: '6', name: 'Oils & Ghee', icon: '🛢️' }
-];
-
-const DARK_STORES = [
-  { id: 'DS-BLR-01', name: 'Sunotal Express - Indiranagar', lat: 12.9716, lon: 77.5946, status: 'ACTIVE', radiusKm: 2.5 },
-  { id: 'DS-BLR-02', name: 'Sunotal Express - Koramangala', lat: 12.9352, lon: 77.6245, status: 'ACTIVE', radiusKm: 3.0 }
-];
-
-let products = [...DEFAULT_PRODUCTS];
-let categories = [...DEFAULT_CATEGORIES];
+const products: any[] = [];
+const categories: any[] = [];
+const DARK_STORES: any[] = [];
 
 app.get('/healthz', (_req, res) => {
   res.json({ service: 'catalog-service', status: 'OK', productsCount: products.length, timestamp: new Date().toISOString() });

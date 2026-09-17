@@ -12,31 +12,25 @@ app.use(express.json());
 
 const pgPool = getPgPool({ serviceName: "user-service" });
 
-let memoryUsers: any[] = [
-  { id: 1, name: "Sunotal Admin", email: "admin@sunotal.com", role: "admin", active: true, phone: "+919876543210", city: "Mumbai" },
-  { id: 2, name: "Grocery Customer", email: "user@sunotal.com", role: "user", active: true, phone: "+919876543211", city: "Bengaluru" }
-];
+let memoryUsers: any[] = [];
 
 // GET /api/users
 app.get("/api/users", async (req: any, res: any) => {
   const searchQuery = (req.query.search || "").toString().toLowerCase().trim();
   try {
-    let filtered = [...memoryUsers];
+    const dbRes = await pgPool.query("SELECT id, name, email, role, active, phone, city FROM users ORDER BY id ASC").catch(() => null);
+    let list = dbRes && dbRes.rows ? dbRes.rows : memoryUsers;
     if (searchQuery) {
-      filtered = filtered.filter(
-        (u) =>
+      list = list.filter(
+        (u: any) =>
           u.name.toLowerCase().includes(searchQuery) ||
           u.email.toLowerCase().includes(searchQuery) ||
           (u.phone && u.phone.includes(searchQuery))
       );
     }
-    const dbRes = await pgPool.query("SELECT id, name, email, role, active, phone, city FROM users ORDER BY id ASC").catch(() => null);
-    if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
-      return res.json(dbRes.rows);
-    }
-    return res.json(filtered);
+    return res.json(list);
   } catch (err: any) {
-    return res.json(memoryUsers);
+    return res.json([]);
   }
 });
 

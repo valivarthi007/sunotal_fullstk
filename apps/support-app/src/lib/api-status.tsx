@@ -8,7 +8,12 @@ async function checkHealth(): Promise<boolean> {
   try {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch("/api/healthz", { cache: "no-store", signal: controller.signal });
+    const healthUrl =
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+        ? "/api/healthz"
+        : "https://api.automateuniverse.space/api/healthz";
+    const res = await fetch(healthUrl, { cache: "no-store", signal: controller.signal });
     clearTimeout(id);
     return res.ok || res.status === 200 || res.status === 304;
   } catch (err) {
