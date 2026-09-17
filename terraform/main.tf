@@ -110,11 +110,13 @@ module "elasticache" {
 
 # ─── 8. S3 Bucket & CloudFront CDN ────────────────────────────────────────────
 module "s3_cloudfront" {
-  source            = "./modules/s3_cloudfront"
-  s3_bucket_name    = var.s3_bucket_name
-  enable_cloudfront = var.enable_cloudfront
-  tags              = local.common_tags
+  source                  = "./modules/s3_cloudfront"
+  s3_bucket_name          = var.s3_bucket_name
+  enable_cloudfront       = var.enable_cloudfront
+  enable_s3_public_policy = var.enable_s3_public_policy
+  tags                    = local.common_tags
 }
+
 
 # ─── 9. Lambda Photo Manager ──────────────────────────────────────────────────
 module "lambda" {

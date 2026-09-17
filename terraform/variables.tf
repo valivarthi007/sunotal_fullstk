@@ -66,5 +66,12 @@ variable "enable_cloudfront" {
   default     = false
 }
 
+variable "enable_s3_public_policy" {
+  description = "Attach public read policy to S3 bucket (requires Account-level S3 Block Public Access to be disabled)"
+  type        = bool
+  default     = false
+}
+
+
 
 

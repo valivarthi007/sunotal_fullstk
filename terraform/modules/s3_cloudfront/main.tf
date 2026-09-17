@@ -12,9 +12,14 @@ resource "aws_s3_bucket" "assets" {
   tags = merge(var.tags, { Name = var.s3_bucket_name })
 }
 
-# Configure public access block (Unblock public access if CloudFront is disabled so direct S3 URLs work)
+variable "enable_s3_public_policy" {
+  type    = bool
+  default = false
+}
+
+# Configure public access block (Unblock public access if enabled)
 resource "aws_s3_bucket_public_access_block" "public_access" {
-  count  = var.enable_cloudfront ? 0 : 1
+  count  = var.enable_s3_public_policy ? 1 : 0
   bucket = aws_s3_bucket.assets.id
 
   block_public_acls       = false
@@ -23,9 +28,9 @@ resource "aws_s3_bucket_public_access_block" "public_access" {
   restrict_public_buckets = false
 }
 
-# Public read policy for S3 bucket when CloudFront is disabled
+# Public read policy for S3 bucket when enable_s3_public_policy is true
 resource "aws_s3_bucket_policy" "public_read" {
-  count      = var.enable_cloudfront ? 0 : 1
+  count      = var.enable_s3_public_policy ? 1 : 0
   bucket     = aws_s3_bucket.assets.id
   depends_on = [aws_s3_bucket_public_access_block.public_access]
 
@@ -42,6 +47,7 @@ resource "aws_s3_bucket_policy" "public_read" {
     ]
   })
 }
+
 
 resource "aws_cloudfront_origin_access_identity" "oai" {
   count   = var.enable_cloudfront ? 1 : 0
