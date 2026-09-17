@@ -34,37 +34,10 @@ export function RiderPayoutsAdmin() {
         const data = await res.json();
         setPayouts(Array.isArray(data) ? data : []);
       } else {
-        // Sample default fallback if DB has no requests yet
-        setPayouts([
-          {
-            id: 1,
-            riderName: "Express Rider (Bengaluru)",
-            email: "delivery@sunotal.com",
-            phone: "9876543211",
-            upiId: "rider@upi",
-            completedDeliveries: 18,
-            totalDistanceKm: 64.5,
-            amount: 1060,
-            status: "pending",
-            createdAt: new Date().toISOString(),
-          }
-        ]);
+        setPayouts([]);
       }
     } catch {
-      setPayouts([
-        {
-          id: 1,
-          riderName: "Express Rider (Bengaluru)",
-          email: "delivery@sunotal.com",
-          phone: "9876543211",
-          upiId: "rider@upi",
-          completedDeliveries: 18,
-          totalDistanceKm: 64.5,
-          amount: 1060,
-          status: "pending",
-          createdAt: new Date().toISOString(),
-        }
-      ]);
+      setPayouts([]);
     } finally {
       setLoading(false);
     }

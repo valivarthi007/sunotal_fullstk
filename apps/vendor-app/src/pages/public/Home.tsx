@@ -34,14 +34,6 @@ const FALLBACK_SLIDES = [
   },
 ];
 
-const DEFAULT_CATEGORIES = [
-  { name: "Vegetables", path: "/vegetables", icon: "🥬", color: "bg-emerald-100 text-emerald-800" },
-  { name: "Fruits", path: "/fruits", icon: "🍎", color: "bg-orange-100 text-orange-800" },
-  { name: "Dairy", path: "/dairy", icon: "🥛", color: "bg-blue-100 text-blue-800" },
-  { name: "Dry Fruits", path: "/dry-fruits", icon: "🥜", color: "bg-amber-100 text-amber-800" },
-  { name: "Grains", path: "/grains", icon: "🌾", color: "bg-yellow-100 text-yellow-800" },
-];
-
 export default function Home() {
   const [, setLocation] = useLocation();
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
@@ -65,7 +57,7 @@ export default function Home() {
   const { data: rawCategories } = useListCategories();
   const dbCategories = Array.isArray(rawCategories) ? rawCategories : [];
   const categoriesList = useMemo(() => {
-    if (!Array.isArray(dbCategories) || dbCategories.length === 0) return DEFAULT_CATEGORIES;
+    if (!Array.isArray(dbCategories) || dbCategories.length === 0) return [];
     return dbCategories.map((c) => ({
       name: c.name,
       path: c.name === "Vegetables" ? "/vegetables" : c.name === "Fruits" ? "/fruits" : c.name === "Dairy" ? "/dairy" : c.name === "Dry Fruits" ? "/dry-fruits" : c.name === "Grains" ? "/grains" : `/products?category=${encodeURIComponent(c.name)}`,
