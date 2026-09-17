@@ -942,7 +942,14 @@ app.get("/api/orders", async (req: any, res: any) => {
     if (status) filter.status = status;
 
     const orders = await Order.find(filter).sort({ createdAt: -1 }).exec().catch(() => []);
-    return res.json(orders || []);
+    const cleanOrders = (orders || []).filter(
+      (o: any) =>
+        o.orderId !== "ORD-2026-7425" &&
+        o.orderId !== "ORD-2026-2298" &&
+        o.orderNumber !== "ORD-2026-7425" &&
+        o.orderNumber !== "ORD-2026-2298"
+    );
+    return res.json(cleanOrders);
   } catch {
     return res.json([]);
   }

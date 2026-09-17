@@ -106,6 +106,14 @@ export default function Orders() {
         }
       } catch (e) {}
 
+      combined = combined.filter(
+        (item: any) =>
+          item.id !== "ORD-2026-7425" &&
+          item.id !== "ORD-2026-2298" &&
+          item.orderNumber !== "ORD-2026-7425" &&
+          item.orderNumber !== "ORD-2026-2298"
+      );
+
       setOrders(combined);
     } catch (e: any) {
       console.error("Failed to load orders:", e);
@@ -113,7 +121,16 @@ export default function Orders() {
         const stored = localStorage.getItem("sunotal_user_orders");
         if (stored) {
           const parsed = JSON.parse(stored);
-          setOrders(Array.isArray(parsed) ? parsed : []);
+          const cleanParsed = Array.isArray(parsed)
+            ? parsed.filter(
+                (item: any) =>
+                  item.id !== "ORD-2026-7425" &&
+                  item.id !== "ORD-2026-2298" &&
+                  item.orderNumber !== "ORD-2026-7425" &&
+                  item.orderNumber !== "ORD-2026-2298"
+              )
+            : [];
+          setOrders(cleanParsed);
         } else {
           setOrders([]);
         }

@@ -4,6 +4,26 @@ import { setAuthTokenGetter as setLocalAuthTokenGetter } from '@/lib/api-client'
 import App from './App';
 import './index.css';
 
+// Purge legacy test mock orders from localStorage
+try {
+  const stored = localStorage.getItem('sunotal_user_orders');
+  if (stored) {
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed)) {
+      const cleaned = parsed.filter(
+        (item: any) =>
+          item.id !== 'ORD-2026-7425' &&
+          item.id !== 'ORD-2026-2298' &&
+          item.orderNumber !== 'ORD-2026-7425' &&
+          item.orderNumber !== 'ORD-2026-2298'
+      );
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem('sunotal_user_orders', JSON.stringify(cleaned));
+      }
+    }
+  }
+} catch (e) {}
+
 const tokenGetter = () => {
   const isAdminPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
   return isAdminPath
