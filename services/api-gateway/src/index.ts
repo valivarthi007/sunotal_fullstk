@@ -16,8 +16,14 @@ const SERVICES = {
 
 app.use(cors());
 
+// Lightweight ALB Health Check Endpoint
+app.get('/healthz', (_req, res) => {
+  res.status(200).json({ status: 'OK', gateway: 'Sunotal Microservices API Gateway' });
+});
+
 // Gateway Aggregated Health Check
 app.get('/api/healthz', async (_req, res) => {
+
   const checkService = async (url: string) => {
     try {
       const res = await fetch(`${url}/healthz`);
