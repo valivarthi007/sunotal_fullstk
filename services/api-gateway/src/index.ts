@@ -137,10 +137,10 @@ app.get('/api/healthz', async (_req: any, res: any) => {
   });
 });
 
-// Admin Stats Endpoint (Aggregates stats from Catalog, Order, Auth, Delivery, Vendor)
+// Admin Stats Endpoint (Aggregates stats from Catalog, Order, Auth, Delivery, Vendor, Operations)
 app.get('/api/admin/stats', async (_req: any, res: any) => {
   try {
-    const fetchWithTimeout = (url: string, ms = 2000) => {
+    const fetchWithTimeout = (url: string, ms = 4000) => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), ms);
       return fetch(url, { signal: controller.signal })
@@ -149,18 +149,44 @@ app.get('/api/admin/stats', async (_req: any, res: any) => {
         .catch(() => null);
     };
 
-    const [productsRes, ordersRes, vendorsRes, usersRes] = await Promise.all([
+    const [productsRes, ordersRes, vendorsRes, usersRes, opsStatsRes, opsUsersRes] = await Promise.all([
       fetchWithTimeout(`${SERVICES.CATALOG}/api/products`),
       fetchWithTimeout(`${SERVICES.ORDER}/api/orders`),
       fetchWithTimeout(`${SERVICES.VENDOR}/api/vendors`),
       fetchWithTimeout(`${SERVICES.AUTH}/api/users`),
+      fetchWithTimeout(`${SERVICES.OPERATIONS}/api/admin/stats`),
+      fetchWithTimeout(`${SERVICES.OPERATIONS}/api/users`),
     ]);
 
-    const totalProducts = Array.isArray(productsRes) ? productsRes.length : 0;
-    const totalOrders = Array.isArray(ordersRes) ? ordersRes.length : 0;
-    const totalVendors = Array.isArray(vendorsRes) ? vendorsRes.length : 0;
-    const totalUsers = Array.isArray(usersRes) ? usersRes.length : 0;
-    const totalRevenue = Array.isArray(ordersRes) ? ordersRes.reduce((sum: number, o: any) => sum + (o.finalAmount || o.totalAmount || 0), 0) : 0;
+    const authUsers = Array.isArray(usersRes) ? usersRes : [];
+    const opsUsers = Array.isArray(opsUsersRes) ? opsUsersRes : (Array.isArray(opsStatsRes?.recentUsers) ? opsStatsRes.recentUsers : []);
+
+    const userMap = new Map();
+    [...authUsers, ...opsUsers].forEach((u) => {
+      if (u && (u.email || u.id)) {
+        const key = (u.email || String(u.id)).toLowerCase();
+        if (!userMap.has(key)) {
+          userMap.set(key, {
+            id: u.id || key,
+            name: u.name || "User",
+            email: u.email || key,
+            role: u.role || "customer",
+            city: u.city || "",
+            status: u.status || "active",
+            createdAt: u.createdAt || new Date().toISOString(),
+          });
+        }
+      }
+    });
+
+    const combinedUsers = Array.from(userMap.values());
+    const totalUsers = Math.max(combinedUsers.length, opsStatsRes?.totalUsers || 0, authUsers.length);
+    const totalProducts = Array.isArray(productsRes) ? productsRes.length : (opsStatsRes?.totalProducts || 0);
+    const totalOrders = Array.isArray(ordersRes) ? ordersRes.length : (opsStatsRes?.totalOrders || 0);
+    const totalVendors = Array.isArray(vendorsRes) ? vendorsRes.length : (opsStatsRes?.totalVendors || 0);
+    const totalRevenue = Array.isArray(ordersRes) ? ordersRes.reduce((sum: number, o: any) => sum + (o.finalAmount || o.totalAmount || 0), 0) : (opsStatsRes?.totalRevenue || 0);
+
+    const categoryBreakdown = opsStatsRes?.categoryBreakdown || [];
 
     res.json({
       totalProducts,
@@ -171,10 +197,10 @@ app.get('/api/admin/stats', async (_req: any, res: any) => {
       totalRevenue,
       totalOrders,
       onlineRiders: 0,
-      activeDarkStores: 0,
-      categoryBreakdown: [],
+      activeDarkStores: opsStatsRes?.activeDarkStores || 0,
+      categoryBreakdown: Array.isArray(categoryBreakdown) ? categoryBreakdown : [],
       recentOrders: Array.isArray(ordersRes) ? ordersRes.slice(0, 5) : [],
-      recentUsers: Array.isArray(usersRes) ? usersRes.slice(0, 5) : [],
+      recentUsers: combinedUsers.slice(0, 5),
       recentVendors: Array.isArray(vendorsRes) ? vendorsRes.slice(0, 5) : []
     });
   } catch (err: any) {

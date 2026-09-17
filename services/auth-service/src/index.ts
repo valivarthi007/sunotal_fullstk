@@ -41,6 +41,7 @@ function normalizeUser(u: any) {
     role: u.role,
     status: u.status,
     phone: u.phone,
+    city: u.city || '',
     walletBalance: u.walletBalance || 0,
     createdAt: u.createdAt,
   };
@@ -58,7 +59,7 @@ app.get('/api/healthz', (_req, res) => {
 // Register
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password, role = 'customer', phone } = req.body;
+    const { name, email, password, role = 'customer', phone, city } = req.body;
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Name, email, and password required' });
     }
@@ -72,13 +73,22 @@ app.post('/api/auth/register', async (req, res) => {
       name,
       email: email.toLowerCase(),
       passwordHash,
-      role,
+      role: role || 'customer',
       status: 'active',
       phone: phone || '',
+      city: city || '',
       walletBalance: 100,
       createdAt: new Date(),
     };
     users.push(newUser);
+
+    // Synchronize user to operations-service in background
+    fetch('http://127.0.0.1:5002/api/users/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newUser),
+    }).catch(() => null);
+
     const token = signToken({ id: newUser.id, email: newUser.email, name: newUser.name, role: newUser.role });
     return res.status(201).json({ success: true, token, user: normalizeUser(newUser) });
   } catch (err: any) {

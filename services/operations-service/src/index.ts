@@ -933,6 +933,43 @@ app.delete("/api/vendors/:id", async (req: any, res: any) => {
   }
 });
 
+// USER SYNCHRONIZATION & MANAGEMENT ENDPOINTS (/api/users)
+app.post(["/api/users/sync", "/api/users"], async (req: any, res: any) => {
+  try {
+    const { id, name, email, role, phone, city, active, status } = req.body;
+    if (!email) return res.status(400).json({ error: "Email required" });
+    const cleanEmail = email.toLowerCase().trim();
+    const existing = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
+    if (!existing) {
+      const userNextId = await getNextId(User);
+      const newUser = await User.create({
+        id: id || userNextId,
+        name: name || "User",
+        email: cleanEmail,
+        role: role || "customer",
+        active: active !== false,
+        status: status || "active",
+        phone: phone || "",
+        city: city || "",
+        createdAt: new Date(),
+      });
+      return res.status(201).json({ success: true, user: newUser });
+    }
+    return res.json({ success: true, user: existing });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get(["/api/users", "/api/admin/users"], async (_req: any, res: any) => {
+  try {
+    const users = await User.find().select("-passwordHash").sort({ createdAt: -1 }).exec().catch(() => []);
+    return res.json(users || []);
+  } catch {
+    return res.json([]);
+  }
+});
+
 // ORDERS & CHECKOUT API ENDPOINTS (/api/orders)
 app.get("/api/orders", async (req: any, res: any) => {
   try {
