@@ -82,12 +82,19 @@ export default function Orders() {
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
-            for (const item of parsed) {
+            const cleanParsed = parsed.filter(
+              (item: any) =>
+                item.id !== "ORD-2026-7425" &&
+                item.id !== "ORD-2026-2298" &&
+                item.orderNumber !== "ORD-2026-7425" &&
+                item.orderNumber !== "ORD-2026-2298"
+            );
+            localStorage.setItem("sunotal_user_orders", JSON.stringify(cleanParsed));
+            for (const item of cleanParsed) {
               const existingIdx = combined.findIndex(
-                (o) => o.orderNumber === item.orderNumber || o.id === item.id || (o.orderNumber && item.orderNumber && o.orderNumber === item.orderNumber)
+                (o) => o.orderNumber === item.orderNumber || o.id === item.id
               );
               if (existingIdx >= 0) {
-                // If local status is delivered, prioritize delivered status
                 if (item.status === "delivered" || item.paymentStatus === "paid") {
                   combined[existingIdx] = { ...combined[existingIdx], ...item, status: "delivered", paymentStatus: "paid" };
                 }

@@ -7,11 +7,13 @@ const PORT = process.env.PORT || 5000;
 
 const SERVICES = {
   AUTH: process.env.AUTH_SERVICE_URL || 'http://127.0.0.1:5001',
-  CATALOG: process.env.CATALOG_SERVICE_URL || 'http://127.0.0.1:5002',
-  ORDER: process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:5003',
+  OPERATIONS: process.env.OPERATIONS_SERVICE_URL || 'http://127.0.0.1:5002',
+  CATALOG: process.env.CATALOG_SERVICE_URL || 'http://127.0.0.1:5009',
+  ORDER: process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:5010',
   DELIVERY: process.env.DELIVERY_SERVICE_URL || 'http://127.0.0.1:5004',
   VENDOR: process.env.VENDOR_SERVICE_URL || 'http://127.0.0.1:5005',
   NOTIFICATION: process.env.NOTIFICATION_SERVICE_URL || 'http://127.0.0.1:5006',
+  SUPPORT: process.env.SUPPORT_SERVICE_URL || 'http://127.0.0.1:5007',
 };
 
 // Enable CORS
@@ -135,23 +137,46 @@ app.get('/api/admin/stats', async (_req: any, res: any) => {
 
 // Proxy Rules with Zero-Downtime Fallbacks
 app.use('/api/auth', createResilientProxy(SERVICES.AUTH));
+
+// Warehouses, Quotations, Admin Operations & Dynamic Delivery Fee
+app.use('/api/warehouses', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/admin/warehouses', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/admin/quotations', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/admin/ledger', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/admin/rider-payouts', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/admin/observability', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/admin/inventory', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/inventory', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/banners', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/admin/banners', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/delivery/calculate', createResilientProxy(SERVICES.OPERATIONS));
+
+// Auth & Users
 app.use('/api/admin/login', createResilientProxy(SERVICES.AUTH));
 app.use('/api/admin/users', createResilientProxy(SERVICES.AUTH));
 app.use('/api/users', createResilientProxy(SERVICES.AUTH));
 
+// Catalog & Storefront
 app.use('/api/products', createResilientProxy(SERVICES.CATALOG));
 app.use('/api/categories', createResilientProxy(SERVICES.CATALOG));
 app.use('/api/storefront', createResilientProxy(SERVICES.CATALOG));
 
+// Orders & WMS
 app.use('/api/orders', createResilientProxy(SERVICES.ORDER));
 app.use('/api/wms', createResilientProxy(SERVICES.ORDER));
 
+// Delivery & Riders
 app.use('/api/delivery', createResilientProxy(SERVICES.DELIVERY));
 app.use('/api/rider', createResilientProxy(SERVICES.DELIVERY));
 
+// Vendors & Procurement
 app.use('/api/procurement', createResilientProxy(SERVICES.VENDOR));
 app.use('/api/vendors', createResilientProxy(SERVICES.VENDOR));
 
+// Support & Groq Cloud AI LLM Assistant
+app.use('/api/support', createResilientProxy(SERVICES.SUPPORT));
+
+// Notifications
 app.use('/api/notifications', createResilientProxy(SERVICES.NOTIFICATION));
 
 app.listen(PORT, () => {

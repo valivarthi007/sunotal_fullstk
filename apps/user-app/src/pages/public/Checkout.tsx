@@ -58,6 +58,7 @@ export default function Checkout() {
   const [, setLocation] = useLocation();
   const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
   const { items, totalItems, totalPrice, clearCart } = useCart();
+  const safeItems = Array.isArray(items) ? items : [];
   const { location: userLoc, setManualLocation } = useLocationState();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -147,7 +148,7 @@ export default function Checkout() {
 
     setIsSubmitting(true);
     try {
-      const checkoutItems = items.map((i) => ({
+      const checkoutItems = safeItems.map((i) => ({
         productId: i.product.id,
         quantity: i.quantity,
         price: i.product.price,
@@ -179,7 +180,7 @@ export default function Checkout() {
         orderId: orderNumber,
         orderNumber: orderNumber,
         date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
-        items: items.map((i) => ({
+        items: safeItems.map((i) => ({
           id: i.product.id,
           productName: i.product.name,
           name: i.product.name,
@@ -210,7 +211,7 @@ export default function Checkout() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            items: items.map((i) => ({
+            items: safeItems.map((i) => ({
               productId: i.product.id,
               productName: i.product.name,
               quantity: i.quantity,
@@ -552,7 +553,7 @@ export default function Checkout() {
 
                   {/* Items List */}
                   <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                    {items.map((i) => (
+                    {safeItems.map((i) => (
                       <div key={i.product.id} className="flex items-center gap-3 text-xs">
                         <img
                           src={normalizeImageUrl(i.product.image)}

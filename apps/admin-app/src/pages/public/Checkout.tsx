@@ -58,6 +58,7 @@ export default function Checkout() {
   const [, setLocation] = useLocation();
   const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
   const { items, totalItems, totalPrice, clearCart } = useCart();
+  const safeItems = Array.isArray(items) ? items : [];
   const { location: userLoc, setManualLocation } = useLocationState();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
