@@ -2,8 +2,13 @@ variable "vpc_id" { type = string }
 variable "private_subnet_ids" { type = list(string) }
 variable "ecs_security_group_id" { type = string }
 variable "target_group_arns" { type = map(string) }
+variable "alb_listener_arn" {
+  type    = string
+  default = ""
+}
 variable "aws_region" { type = string }
 variable "tags" { type = map(string) }
+
 
 # ─── 1. ECS Cluster ───────────────────────────────────────────────────────────
 resource "aws_ecs_cluster" "main" {
@@ -138,7 +143,7 @@ resource "aws_ecs_service" "services" {
     }
   }
 
-  depends_on = [aws_iam_role_policy_attachment.ecs_execution]
+  depends_on = [aws_iam_role_policy_attachment.ecs_execution, var.alb_listener_arn]
 
   tags = merge(var.tags, { Name = "sunotal-${each.key}-service" })
 }

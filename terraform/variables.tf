@@ -54,3 +54,10 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
+variable "enable_docdb" {
+  description = "Enable AWS DocumentDB cluster creation (disabled by default for Free Tier compatibility)"
+  type        = bool
+  default     = false
+}
+
+

@@ -146,6 +146,9 @@ resource "aws_lb_listener_rule" "rules" {
 output "alb_arn" { value = aws_lb.main.arn }
 output "alb_dns_name" { value = aws_lb.main.dns_name }
 output "alb_zone_id" { value = aws_lb.main.zone_id }
+output "alb_listener_arn" { value = aws_lb_listener.https.arn }
 output "target_group_arns" {
-  value = { for k, v in aws_lb_target_group.targets : k => v.arn }
+  value      = { for k, v in aws_lb_target_group.targets : k => v.arn }
+  depends_on = [aws_lb_listener_rule.rules, aws_lb_listener.https]
 }
+

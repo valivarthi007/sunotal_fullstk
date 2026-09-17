@@ -13,7 +13,12 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.89.0"
     }
+    mongodbatlas = {
+      source  = "mongodb/mongodbatlas"
+      version = "~> 1.14.0"
+    }
   }
+
 
   backend "s3" {
     bucket         = "jcs-raju-sunotal-tfstate"
@@ -78,18 +83,21 @@ module "ecs" {
   private_subnet_ids    = module.vpc.private_subnet_ids
   ecs_security_group_id = module.security.ecs_security_group_id
   target_group_arns     = module.acm_alb.target_group_arns
+  alb_listener_arn      = module.acm_alb.alb_listener_arn
   aws_region            = var.aws_region
   tags                  = local.common_tags
 }
 
-# ─── 6. DocumentDB MongoDB Cluster ────────────────────────────────────────────
+# ─── 6. DocumentDB / MongoDB Cluster ──────────────────────────────────────────
 module "documentdb" {
   source               = "./modules/documentdb"
   vpc_id               = module.vpc.vpc_id
   private_subnet_ids   = module.vpc.private_subnet_ids
   db_security_group_id = module.security.db_security_group_id
+  enable_docdb         = var.enable_docdb
   tags                 = local.common_tags
 }
+
 
 # ─── 7. ElastiCache Redis Cluster ─────────────────────────────────────────────
 module "elasticache" {
