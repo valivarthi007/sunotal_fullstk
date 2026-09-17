@@ -26,6 +26,34 @@ app.get('/api/vendors', (_req, res) => {
   res.json(vendors);
 });
 
+// Create / Register Vendor
+app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], (req, res) => {
+  const { name, vendorName, email, phone, category, address, city, location } = req.body;
+  const newVendor = {
+    id: vendors.length + 1,
+    vendorName: vendorName || name || 'New Vendor',
+    name: name || vendorName || 'New Vendor',
+    email: (email || '').toLowerCase(),
+    phone: phone || '',
+    category: category || 'Fresh Produce',
+    address: address || location || city || '',
+    city: city || location || '',
+    status: 'approved',
+    active: true,
+    createdAt: new Date().toISOString()
+  };
+  vendors.push(newVendor);
+
+  // Sync to operations service in background
+  fetch('http://127.0.0.1:5002/api/vendors', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newVendor)
+  }).catch(() => null);
+
+  res.status(201).json(newVendor);
+});
+
 // Farmer Produce Quotation Submission
 app.post('/api/procurement/quotations', (req, res) => {
   const { vendorId, produceName, quantityKg, pricePerKg } = req.body;
