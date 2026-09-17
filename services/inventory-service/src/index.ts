@@ -57,7 +57,7 @@ app.get("/api/inventory", async (_req, res) => {
   try {
     let items = await Inventory.find().sort({ createdAt: -1 }).exec().catch(() => []);
 
-    // Auto-sync products into inventory if inventory items are missing
+    // Sync active products into inventory if inventory items are missing
     const products = await Product.find({ active: true }).exec().catch(() => []);
     if (Array.isArray(products) && products.length > 0) {
       for (const prod of products) {
@@ -68,17 +68,18 @@ app.get("/api/inventory", async (_req, res) => {
             id: nextInvId,
             productId: prod.id,
             productName: prod.name,
-            vendorName: "Direct Source Vendor",
+            vendorName: "Pending Quotation Sourcing",
             warehouseName: "Central Dark Store Hub",
-            quantity: 150,
+            quantity: 0,
             unit: prod.unit || "kg",
-            status: "in_stock",
-            notes: "Auto-synced Catalog Item",
+            status: "out_of_stock",
+            notes: "Initial Catalog Item - Awaiting Sourcing",
           }).catch(() => null);
           if (newInv) items.push(newInv);
         }
       }
     }
+
 
     return res.json(items || []);
   } catch (err: any) {

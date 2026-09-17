@@ -681,25 +681,12 @@ app.patch("/api/admin/quotations/:id/payout", handlePayout);
 app.get("/api/admin/rider-payouts", async (_req: any, res: any) => {
   try {
     const payouts = await RiderPayout.find().sort({ createdAt: -1 }).exec().catch(() => []);
-    if (payouts && payouts.length > 0) return res.json(payouts);
+    return res.json(payouts || []);
   } catch (err: any) {
-    // Ignored
+    return res.json([]);
   }
-  return res.json([
-    {
-      id: 1,
-      riderName: "Express Rider (Bengaluru)",
-      email: "delivery@sunotal.com",
-      phone: "9876543211",
-      upiId: "rider@upi",
-      completedDeliveries: 18,
-      totalDistanceKm: 64.5,
-      amount: 1060,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    }
-  ]);
 });
+
 
 const handleUpdateRiderPayoutOps = async (req: any, res: any) => {
   try {
