@@ -6,6 +6,7 @@ async function getGroqClient(): Promise<any> {
   if (!GROQ_API_KEY) return null;
   if (!groqClient) {
     try {
+      // Dynamic import to prevent build failure if groq-sdk is absent
       const { default: Groq } = await import('groq-sdk' as any);
       groqClient = new Groq({ apiKey: GROQ_API_KEY });
     } catch {

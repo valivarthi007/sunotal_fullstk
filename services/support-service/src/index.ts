@@ -98,7 +98,7 @@ app.post("/api/support/ai-chat", async (req: any, res: any) => {
   }
 
   try {
-    const { askGroqCustomerSupport } = await import("../../common/ai-groq.js").catch(() => ({
+    const { askGroqCustomerSupport } = await import("./lib/ai-groq.js").catch(() => ({
       askGroqCustomerSupport: async () => "Hello! Our Sunotal AI Assistant is reviewing your grocery request."
     }));
 
