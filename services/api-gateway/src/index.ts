@@ -87,26 +87,35 @@ app.get('/api/admin/stats', async (_req, res) => {
   }
 });
 
+const createProxy = (targetUrl: string) => proxy(targetUrl, {
+  proxyReqPathResolver: (req) => req.originalUrl,
+  timeout: 10000,
+  proxyErrorHandler: (err, res, _next) => {
+    console.error(`[Proxy Error] -> ${targetUrl}:`, err?.message || err);
+    res.status(502).json({ error: 'Upstream microservice unavailable', service: targetUrl });
+  }
+});
+
 // Proxy Rules
-app.use('/api/auth', proxy(SERVICES.AUTH));
-app.use('/api/admin/login', proxy(SERVICES.AUTH));
-app.use('/api/admin/users', proxy(SERVICES.AUTH));
-app.use('/api/users', proxy(SERVICES.AUTH));
+app.use('/api/auth', createProxy(SERVICES.AUTH));
+app.use('/api/admin/login', createProxy(SERVICES.AUTH));
+app.use('/api/admin/users', createProxy(SERVICES.AUTH));
+app.use('/api/users', createProxy(SERVICES.AUTH));
 
-app.use('/api/products', proxy(SERVICES.CATALOG));
-app.use('/api/categories', proxy(SERVICES.CATALOG));
-app.use('/api/storefront', proxy(SERVICES.CATALOG));
+app.use('/api/products', createProxy(SERVICES.CATALOG));
+app.use('/api/categories', createProxy(SERVICES.CATALOG));
+app.use('/api/storefront', createProxy(SERVICES.CATALOG));
 
-app.use('/api/orders', proxy(SERVICES.ORDER));
-app.use('/api/wms', proxy(SERVICES.ORDER));
+app.use('/api/orders', createProxy(SERVICES.ORDER));
+app.use('/api/wms', createProxy(SERVICES.ORDER));
 
-app.use('/api/delivery', proxy(SERVICES.DELIVERY));
-app.use('/api/rider', proxy(SERVICES.DELIVERY));
+app.use('/api/delivery', createProxy(SERVICES.DELIVERY));
+app.use('/api/rider', createProxy(SERVICES.DELIVERY));
 
-app.use('/api/procurement', proxy(SERVICES.VENDOR));
-app.use('/api/vendors', proxy(SERVICES.VENDOR));
+app.use('/api/procurement', createProxy(SERVICES.VENDOR));
+app.use('/api/vendors', createProxy(SERVICES.VENDOR));
 
-app.use('/api/notifications', proxy(SERVICES.NOTIFICATION));
+app.use('/api/notifications', createProxy(SERVICES.NOTIFICATION));
 
 app.listen(PORT, () => {
   console.log(`\n🌐 Sunotal API Gateway v3.0 running on port ${PORT}`);
