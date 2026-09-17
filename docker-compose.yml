@@ -1,18 +1,21 @@
 services:
   # ─── Layer 1: Infrastructure (Database & Cache) ───────────────────────────
-  mongodb:
-    image: mongo:7.0
-    container_name: sunotal-mongo
+  postgres:
+    image: postgres:16-alpine
+    container_name: sunotal-postgres
     restart: unless-stopped
-    command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
-      - "27017:27017"
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: sunotal
+      POSTGRES_PASSWORD: sunotal_pass_dev
+      POSTGRES_DB: sunotal
     volumes:
-      - sunotal_mongodata:/data/db
+      - sunotal_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --eval \"try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok }\" || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U sunotal"]
       interval: 10s
-      timeout: 10s
+      timeout: 5s
       retries: 5
       start_period: 10s
 

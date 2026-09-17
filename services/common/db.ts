@@ -1,33 +1,32 @@
-import mongoose from 'mongoose';
+import { Pool } from 'pg';
 
-export interface DbConnectOptions {
-  uri?: string;
+let pool: Pool | null = null;
+
+export interface PgDbConnectOptions {
+  connectionString?: string;
   serviceName?: string;
 }
 
-export async function connectDatabase(options: DbConnectOptions = {}) {
+export function getPgPool(options: PgDbConnectOptions = {}): Pool {
   const {
-    uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/sunotal?retryWrites=true&w=majority',
+    connectionString = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@127.0.0.1:5432/sunotal',
     serviceName = 'Microservice'
   } = options;
 
-  if (mongoose.connection.readyState >= 1) {
-    return mongoose.connection;
+  if (!pool) {
+    pool = new Pool({
+      connectionString,
+      max: 50,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    });
+
+    pool.on('error', (err) => {
+      console.error(`❌ [${serviceName}] PostgreSQL Pool Error:`, err);
+    });
+
+    console.log(`🐘 [${serviceName}] PostgreSQL Connection Pool Initialized (max: 50)`);
   }
 
-  try {
-    const conn = await mongoose.connect(uri, {
-      maxPoolSize: 50,
-      minPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-      heartbeatFrequencyMS: 10000,
-      retryWrites: true,
-    });
-    console.log(`🍃 [${serviceName}] MongoDB connected (Replica Set / Pool size: 50)`);
-    return conn;
-  } catch (error) {
-    console.error(`❌ [${serviceName}] MongoDB Connection Error:`, error);
-    throw error;
-  }
+  return pool;
 }

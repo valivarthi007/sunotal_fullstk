@@ -3,9 +3,9 @@ output "alb_dns_name" {
   value       = module.acm_alb.alb_dns_name
 }
 
-output "documentdb_endpoint" {
-  description = "DocumentDB MongoDB cluster endpoint"
-  value       = module.documentdb.endpoint
+output "rds_endpoint" {
+  description = "AWS RDS PostgreSQL database endpoint"
+  value       = module.rds.rds_endpoint
 }
 
 output "redis_endpoint" {

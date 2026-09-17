@@ -90,13 +90,12 @@ module "ecs" {
 }
 
 
-# ─── 6. DocumentDB / MongoDB Cluster ──────────────────────────────────────────
-module "documentdb" {
-  source               = "./modules/documentdb"
+# ─── 6. AWS RDS PostgreSQL Database ───────────────────────────────────────────
+module "rds" {
+  source               = "./modules/rds"
   vpc_id               = module.vpc.vpc_id
   private_subnet_ids   = module.vpc.private_subnet_ids
   db_security_group_id = module.security.db_security_group_id
-  enable_docdb         = var.enable_docdb
   tags                 = local.common_tags
 }
 
