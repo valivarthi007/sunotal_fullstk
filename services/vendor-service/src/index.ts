@@ -29,13 +29,16 @@ app.get('/api/vendors', (_req, res) => {
 // Farmer Produce Quotation Submission
 app.post('/api/procurement/quotations', (req, res) => {
   const { vendorId, produceName, quantityKg, pricePerKg } = req.body;
+  if (!produceName || quantityKg === undefined || pricePerKg === undefined) {
+    return res.status(400).json({ error: 'Produce name, quantity, and price per kg required' });
+  }
   const newQuotation = {
     id: `QUOTE-${Math.floor(1000 + Math.random() * 9000)}`,
-    vendorId: vendorId || 'VENDOR-001',
-    produceName: produceName || 'Organic Produce',
-    quantityKg: Number(quantityKg || 100),
-    pricePerKg: Number(pricePerKg || 30),
-    totalValuation: Number(quantityKg || 100) * Number(pricePerKg || 30),
+    vendorId: vendorId || '',
+    produceName,
+    quantityKg: Number(quantityKg),
+    pricePerKg: Number(pricePerKg),
+    totalValuation: Number(quantityKg) * Number(pricePerKg),
     status: 'PENDING',
     submittedAt: new Date().toISOString()
   };

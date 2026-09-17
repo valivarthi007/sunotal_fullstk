@@ -228,8 +228,8 @@ app.post('/api/rider/dispatch-request', (req, res) => {
 
 // Handover OTP Verification & Rider Payout
 app.post('/api/rider/verify-handover-otp', (req, res) => {
-  const { orderId, inputOtp, expectedOtp = '1234' } = req.body;
-  if (inputOtp !== expectedOtp && inputOtp !== '1234') {
+  const { orderId, inputOtp, expectedOtp } = req.body;
+  if (!inputOtp || (expectedOtp && inputOtp !== expectedOtp)) {
     return res.status(400).json({ error: 'Invalid handover OTP code' });
   }
   const payoutCredit = 45;
@@ -242,7 +242,7 @@ app.post('/api/rider/verify-handover-otp', (req, res) => {
   }
   res.json({
     success: true,
-    orderId: orderId || 'ORD-9912',
+    orderId: orderId || '',
     status: 'DELIVERED',
     payoutCredit,
     message: `OTP verified! Credited ₹${payoutCredit} to rider wallet.`
@@ -251,7 +251,7 @@ app.post('/api/rider/verify-handover-otp', (req, res) => {
 
 // Rider Stats & Earnings
 app.get('/api/delivery/stats', (_req, res) => {
-  const totalPayout = completedDeliveries.reduce((sum, d) => sum + (d.estimatedPayout || 45), 0) + 180;
+  const totalPayout = completedDeliveries.reduce((sum, d) => sum + (d.estimatedPayout || 45), 0);
   res.json({
     success: true,
     totalDeliveries: completedDeliveries.length,

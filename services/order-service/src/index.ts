@@ -32,7 +32,11 @@ app.get('/api/orders/:id', (req, res) => {
 
 // Checkout Endpoint
 app.post('/api/orders/checkout', (req, res) => {
-  const { items, address, paymentMethod = 'upi', subtotal = 0 } = req.body;
+  const { items, address, paymentMethod = 'upi', subtotal = 0, userId } = req.body;
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Order items are required' });
+  }
+
   const num = Math.floor(1000 + Math.random() * 9000);
   const id = `ORD-${num}`;
 
@@ -40,22 +44,22 @@ app.post('/api/orders/checkout', (req, res) => {
     id,
     orderNumber: id,
     numericId: num,
-    userId: '1',
-    customerName: address?.name || 'Valued Customer',
-    customerPhone: address?.phone || '9876543210',
-    shippingAddress: address?.street || 'Central Bengaluru',
-    city: address?.city || 'Bengaluru',
-    state: address?.state || 'Karnataka',
-    pincode: address?.pincode || '560001',
-    lat: address?.lat || 12.9716,
-    lng: address?.lng || 77.5946,
+    userId: userId || String(Date.now()),
+    customerName: address?.name || address?.customerName || '',
+    customerPhone: address?.phone || '',
+    shippingAddress: address?.street || address?.address || '',
+    city: address?.city || '',
+    state: address?.state || '',
+    pincode: address?.pincode || '',
+    lat: address?.lat || 0,
+    lng: address?.lng || 0,
     items: items || [],
-    totalAmount: subtotal,
-    finalAmount: subtotal + 25, // Distance fee
+    totalAmount: Number(subtotal),
+    finalAmount: Number(subtotal) + 25, // Distance fee
     status: 'placed',
     paymentStatus: 'paid',
     paymentMethod,
-    riderName: 'Rider Vikram',
+    riderName: '',
     createdAt: new Date().toISOString()
   };
 
@@ -82,13 +86,23 @@ app.put('/api/orders/:id/status', (req, res) => {
 
 // WMS Pick List
 app.get('/api/wms/pick-list/:id', (req, res) => {
+  const order = orders.find((o) => o.id === req.params.id || o.orderNumber === req.params.id);
+  const items = order && Array.isArray(order.items)
+    ? order.items.map((it: any, idx: number) => ({
+        skuId: `SKU-${it.productId || it.id || idx + 1}`,
+        name: it.name || it.productName || 'Order Product',
+        aisle: `A${(idx % 4) + 1}`,
+        shelf: `S${(idx % 3) + 1}`,
+        bin: `B0${idx + 1}`,
+        quantity: Number(it.quantity || 1),
+        barcode: `8901262${Math.floor(100000 + Math.random() * 900000)}`
+      }))
+    : [];
+
   res.json({
     success: true,
     orderId: req.params.id,
-    items: [
-      { skuId: 'SKU-MILK-01', name: 'Farm Fresh Milk', aisle: 'A1', shelf: 'S2', bin: 'B04', quantity: 1, barcode: '8901262010015' },
-      { skuId: 'SKU-TOMATO-01', name: 'Organic Tomatoes', aisle: 'A2', shelf: 'S1', bin: 'B12', quantity: 2, barcode: '8901262010016' }
-    ]
+    items
   });
 });
 
