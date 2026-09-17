@@ -36,13 +36,13 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     { name: "Products", path: "/admin/products", icon: Package },
     { name: "Stores & Warehouses", path: "/admin/warehouses", icon: Navigation },
     { name: "Ledger & Reports", path: "/admin/ledger", icon: BookOpen },
-    { name: "Observability", path: "/admin/observability", icon: Activity },
     { name: "Banners", path: "/admin/banners", icon: GalleryHorizontalEnd },
     { name: "Inventory", path: "/admin/inventory", icon: ClipboardList },
     { name: "Vendors List", path: "/admin/vendors", icon: Store },
     { name: "Vendor Payouts & Invoices", path: "/admin/quotations", icon: FileText },
     { name: "Rider Fleet Payouts", path: "/admin/rider-payouts", icon: Bike },
     { name: "Users", path: "/admin/users", icon: Users },
+
   ];
 
   if (!token) {
