@@ -105,7 +105,9 @@ app.post("/api/support/tickets", async (req: any, res: any) => {
     return res.status(400).json({ error: "Required fields missing" });
   }
 
-  const ticketId = `TKT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+  const timestamp = Date.now().toString().slice(-6);
+  const uniqueNum = Math.floor(100000 + Math.random() * 900000);
+  const ticketId = `TKT-2026-${timestamp}-${uniqueNum}`;
 
   try {
     const dbRes = await pool.query(

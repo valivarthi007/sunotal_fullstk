@@ -479,11 +479,9 @@ app.post('/api/delivery/payout', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (err: any) {
-    return res.json({
-      success: true,
-      message: `Payout request for ₹${payoutAmt} completed successfully`,
-      transactionId: txnId,
-      timestamp: new Date().toISOString()
+    return res.status(500).json({
+      error: 'Payout request failed due to database error',
+      message: err?.message
     });
   }
 });

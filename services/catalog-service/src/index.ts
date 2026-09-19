@@ -295,6 +295,8 @@ app.get('/api/categories', async (_req, res) => {
   return res.json(Array.from(catMap.values()));
 });
 
+const OPERATIONS_SERVICE_URL = process.env.OPERATIONS_SERVICE_URL || 'http://127.0.0.1:5002';
+
 app.post('/api/categories', async (req, res) => {
   const { name, icon } = req.body;
   if (!name) return res.status(400).json({ error: 'Category name is required' });
@@ -310,7 +312,7 @@ app.post('/api/categories', async (req, res) => {
     const newCat = { id: dbRes.rows[0].id, name: dbRes.rows[0].name, icon: dbRes.rows[0].icon, active: true };
     inMemoryCategories.push(newCat);
 
-    fetch('http://127.0.0.1:5002/api/categories', {
+    fetch(`${OPERATIONS_SERVICE_URL}/api/categories`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newCat),
@@ -321,7 +323,7 @@ app.post('/api/categories', async (req, res) => {
     const newCategory = { id: Date.now(), name: cleanName, icon: catIcon, active: true };
     inMemoryCategories.push(newCategory);
 
-    fetch('http://127.0.0.1:5002/api/categories', {
+    fetch(`${OPERATIONS_SERVICE_URL}/api/categories`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newCategory),
@@ -338,8 +340,7 @@ app.delete('/api/categories/:id', async (req, res) => {
     inMemoryCategories = inMemoryCategories.filter((c) => Number(c.id) !== id);
     return res.json({ success: true, message: 'Category deleted' });
   } catch (err: any) {
-    inMemoryCategories = inMemoryCategories.filter((c) => Number(c.id) !== id);
-    return res.json({ success: true, message: 'Category deleted' });
+    return res.status(500).json({ error: 'Failed to delete category', message: err?.message });
   }
 });
 
@@ -382,7 +383,7 @@ app.post('/api/product-definitions', async (req, res) => {
     const newDef = { id: d.id, name: d.name, category: d.category, defaultUnit: d.default_unit, createdAt: d.created_at };
     inMemoryDefinitions.push(newDef);
 
-    fetch('http://127.0.0.1:5002/api/product-definitions', {
+    fetch(`${OPERATIONS_SERVICE_URL}/api/product-definitions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newDef),
@@ -403,8 +404,7 @@ app.delete('/api/product-definitions/:id', async (req, res) => {
     inMemoryDefinitions = inMemoryDefinitions.filter((d) => d.id !== id);
     return res.json({ success: true, message: 'Product definition deleted' });
   } catch (err: any) {
-    inMemoryDefinitions = inMemoryDefinitions.filter((d) => d.id !== id);
-    return res.json({ success: true, message: 'Product definition deleted' });
+    return res.status(500).json({ error: 'Failed to delete product definition', message: err?.message });
   }
 });
 
@@ -422,8 +422,7 @@ app.put(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
     inMemoryProducts = inMemoryProducts.map((p) => (String(p.id) === String(targetId) ? { ...p, ...req.body } : p));
     return res.json({ id: String(targetId), ...req.body });
   } catch (err: any) {
-    inMemoryProducts = inMemoryProducts.map((p) => (String(p.id) === String(targetId) ? { ...p, ...req.body } : p));
-    return res.json({ id: String(targetId), ...req.body });
+    return res.status(500).json({ error: 'Failed to update product', message: err?.message });
   }
 });
 
@@ -435,8 +434,7 @@ app.delete(['/api/products/:id', '/api/admin/products/:id'], async (req, res) =>
     inMemoryProducts = inMemoryProducts.filter((p) => String(p.id) !== String(targetId));
     return res.json({ success: true, message: 'Product deleted successfully' });
   } catch (err: any) {
-    inMemoryProducts = inMemoryProducts.filter((p) => String(p.id) !== String(targetId));
-    return res.json({ success: true, message: 'Product deleted successfully' });
+    return res.status(500).json({ error: 'Failed to delete product', message: err?.message });
   }
 });
 
