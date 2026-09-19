@@ -27,9 +27,31 @@ const DEFAULT_CATEGORIES = [
   { id: 8, name: "Fresh Bakery", icon: "🍞", active: true }
 ];
 
+const DEFAULT_PRODUCTS = [
+  { id: "1", name: "Fresh Spinach", category: "Vegetables", price: 40, originalPrice: 50, unit: "1 kg", image: "https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=400", isOrganic: true, stock: 100, rating: 4.8, active: true },
+  { id: "2", name: "Organic Tomatoes", category: "Vegetables", price: 35, originalPrice: 45, unit: "1 kg", image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400", isOrganic: true, stock: 150, rating: 4.9, active: true },
+  { id: "3", name: "Alphonso Mangoes", category: "Fruits", price: 350, originalPrice: 450, unit: "1 Dozen", image: "https://images.unsplash.com/photo-1553279768-865429fa0078?w=400", isOrganic: true, stock: 50, rating: 5.0, active: true },
+  { id: "4", name: "Fresh Milk", category: "Dairy", price: 60, originalPrice: 65, unit: "1 L", image: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400", isOrganic: false, stock: 200, rating: 4.7, active: true },
+  { id: "5", name: "Whole Almonds", category: "Dry Fruits", price: 450, originalPrice: 550, unit: "500g", image: "https://images.unsplash.com/photo-1508061252966-173859dbab0b?w=400", isOrganic: true, stock: 80, rating: 4.9, active: true },
+  { id: "6", name: "Basmati Rice", category: "Grains", price: 120, originalPrice: 150, unit: "1 kg", image: "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400", isOrganic: true, stock: 120, rating: 4.9, active: true },
+  { id: "7", name: "Cold Pressed Coconut Oil", category: "Cold Pressed Oils", price: 280, originalPrice: 350, unit: "500ml", image: "https://images.unsplash.com/photo-1612198188258-038202970591?w=400", isOrganic: true, stock: 60, rating: 5.0, active: true },
+  { id: "8", name: "Multigrain Bread", category: "Fresh Bakery", price: 50, originalPrice: 60, unit: "400g", image: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400", isOrganic: true, stock: 90, rating: 4.8, active: true }
+];
+
+const DEFAULT_PRODUCT_DEFINITIONS = [
+  { id: 1, name: "Fresh Spinach", category: "Vegetables", defaultUnit: "1 kg" },
+  { id: 2, name: "Organic Tomatoes", category: "Vegetables", defaultUnit: "1 kg" },
+  { id: 3, name: "Alphonso Mangoes", category: "Fruits", defaultUnit: "1 Dozen" },
+  { id: 4, name: "Fresh Milk", category: "Dairy", defaultUnit: "1 L" },
+  { id: 5, name: "Whole Almonds", category: "Dry Fruits", defaultUnit: "500g" },
+  { id: 6, name: "Basmati Rice", category: "Grains", defaultUnit: "1 kg" },
+  { id: 7, name: "Cold Pressed Coconut Oil", category: "Cold Pressed Oils", defaultUnit: "500ml" },
+  { id: 8, name: "Multigrain Bread", category: "Fresh Bakery", defaultUnit: "400g" }
+];
+
 let inMemoryCategories: any[] = [...DEFAULT_CATEGORIES];
-let inMemoryProducts: any[] = [];
-let inMemoryDefinitions: any[] = [];
+let inMemoryProducts: any[] = [...DEFAULT_PRODUCTS];
+let inMemoryDefinitions: any[] = [...DEFAULT_PRODUCT_DEFINITIONS];
 
 // Auto-initialize PostgreSQL Database Schema
 async function initDb() {
@@ -77,7 +99,24 @@ async function initDb() {
       ).catch(() => null);
     }
 
-    console.log('🐘 [catalog-service] PostgreSQL database tables and default categories ready.');
+    for (const def of DEFAULT_PRODUCT_DEFINITIONS) {
+      await pool.query(
+        `INSERT INTO product_definitions (id, name, category, default_unit) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (id) DO NOTHING`,
+        [def.id, def.name, def.category, def.defaultUnit]
+      ).catch(() => null);
+    }
+
+    for (const p of DEFAULT_PRODUCTS) {
+      await pool.query(
+        `INSERT INTO products (id, name, category, price, original_price, unit, image, is_organic, stock, rating, active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (id) DO NOTHING`,
+        [Number(p.id), p.name, p.category, p.price, p.originalPrice, p.unit, p.image, p.isOrganic, p.stock, p.rating, true]
+      ).catch(() => null);
+    }
+
+    console.log('🐘 [catalog-service] PostgreSQL database tables, categories, definitions, and products ready.');
   } catch (err: any) {
     console.warn('⚠️ [catalog-service] DB init warning:', err?.message || err);
   }
