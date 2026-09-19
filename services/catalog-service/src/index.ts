@@ -50,7 +50,7 @@ const DEFAULT_PRODUCT_DEFINITIONS = [
 ];
 
 let inMemoryCategories: any[] = [...DEFAULT_CATEGORIES];
-let inMemoryProducts: any[] = [...DEFAULT_PRODUCTS];
+let inMemoryProducts: any[] = [];
 let inMemoryDefinitions: any[] = [...DEFAULT_PRODUCT_DEFINITIONS];
 
 // Auto-initialize PostgreSQL Database Schema

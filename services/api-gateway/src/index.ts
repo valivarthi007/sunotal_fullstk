@@ -116,7 +116,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       }
       return proxyReqOpts;
     },
-    timeout: 800,
+    timeout: 3500,
     proxyErrorHandler: (err: any, res: any, _next: any) => {
       const req = res?.req;
       const url = req?.originalUrl || '';
@@ -129,7 +129,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
         return res.json(DEFAULT_CATEGORIES);
       }
       if (url.includes('/products') || url.includes('/storefront')) {
-        return res.json(DEFAULT_PRODUCTS);
+        return res.json([]);
       }
       if (
         url.includes('/quotations') ||
@@ -162,12 +162,12 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       if (!responded && !res.headersSent) {
         responded = true;
         const url = req.originalUrl || '';
-        console.warn(`⏱️ [API Gateway Timeout Guard] -> ${targetUrl} (${url}) timed out after 800ms. Serving resilient response.`);
+        console.warn(`⏱️ [API Gateway Timeout Guard] -> ${targetUrl} (${url}) timed out after 3500ms. Serving resilient response.`);
         if (url.includes('/categories')) {
           return res.json(DEFAULT_CATEGORIES);
         }
         if (url.includes('/products') || url.includes('/storefront')) {
-          return res.json(DEFAULT_PRODUCTS);
+          return res.json([]);
         }
         if (
           url.includes('/quotations') ||
@@ -193,7 +193,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
         }
         return res.status(200).json({ status: "ok", resilient: true, message: "Request processed gracefully by Sunotal API Gateway" });
       }
-    }, 800);
+    }, 3500);
 
     res.on('finish', () => {
       responded = true;
@@ -331,6 +331,7 @@ app.use('/api/admin/users', createResilientProxy(SERVICES.AUTH));
 app.use('/api/users', createResilientProxy(SERVICES.AUTH));
 
 // Catalog & Storefront
+app.use('/api/admin/products', createResilientProxy(SERVICES.CATALOG));
 app.use('/api/products', createResilientProxy(SERVICES.CATALOG));
 app.use('/api/categories', createResilientProxy(SERVICES.CATALOG));
 app.use('/api/product-definitions', createResilientProxy(SERVICES.CATALOG));
