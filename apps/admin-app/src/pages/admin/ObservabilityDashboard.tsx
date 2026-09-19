@@ -43,6 +43,10 @@ export const ObservabilityDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchClusterHealth();
+    const timer = setInterval(() => {
+      fetchClusterHealth();
+    }, 3000);
+    return () => clearInterval(timer);
   }, []);
 
   return (

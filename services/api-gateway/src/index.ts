@@ -29,6 +29,17 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
+const DEFAULT_CATEGORIES = [
+  { id: 1, name: "Vegetables", icon: "🥦", active: true },
+  { id: 2, name: "Fruits", icon: "🍎", active: true },
+  { id: 3, name: "Dairy", icon: "🥛", active: true },
+  { id: 4, name: "Dry Fruits", icon: "🥜", active: true },
+  { id: 5, name: "Grains", icon: "🌾", active: true },
+  { id: 6, name: "Organic Herbs", icon: "🌿", active: true },
+  { id: 7, name: "Cold Pressed Oils", icon: "🫒", active: true },
+  { id: 8, name: "Fresh Bakery", icon: "🍞", active: true }
+];
+
 const DEFAULT_PRODUCTS = [
   { id: "1", name: "Fresh Spinach", category: "Vegetables", price: 40, originalPrice: 50, unit: "1 kg", image: "https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=400", isOrganic: true, stock: 100, rating: 4.8, active: true },
   { id: "2", name: "Organic Tomatoes", category: "Vegetables", price: 35, originalPrice: 45, unit: "1 kg", image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400", isOrganic: true, stock: 150, rating: 4.9, active: true },

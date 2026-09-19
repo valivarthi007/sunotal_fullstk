@@ -93,6 +93,10 @@ export default function QuotationsAdmin() {
 
   useEffect(() => {
     fetchQuotations();
+    const timer = setInterval(() => {
+      fetchQuotations();
+    }, 4000);
+    return () => clearInterval(timer);
   }, []);
 
   const handleUpdateStatus = async (id: number, status: string, productId?: string) => {

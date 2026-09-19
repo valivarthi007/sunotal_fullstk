@@ -46,6 +46,10 @@ export function RiderPayoutsAdmin() {
 
   useEffect(() => {
     fetchRiderPayouts();
+    const timer = setInterval(() => {
+      fetchRiderPayouts();
+    }, 4000);
+    return () => clearInterval(timer);
   }, []);
 
   const handleApprovePayout = async (id: number) => {
