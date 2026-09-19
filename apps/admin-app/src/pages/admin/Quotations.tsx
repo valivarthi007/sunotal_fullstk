@@ -82,12 +82,10 @@ export default function QuotationsAdmin() {
           setLocation("/admin/login");
           return;
         }
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP ${res.status}`);
       }
     } catch (err: any) {
       console.error("Failed to load quotations", err);
-      toast.error(err.message || "Failed to load quotations");
+      setQuotations([]);
     } finally {
       setLoading(false);
     }

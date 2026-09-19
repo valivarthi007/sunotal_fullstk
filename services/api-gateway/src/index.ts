@@ -41,7 +41,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       }
       return proxyReqOpts;
     },
-    timeout: 15000,
+    timeout: 2500,
     proxyErrorHandler: (err: any, res: any, _next: any) => {
       const req = res?.req;
       const url = req?.originalUrl || '';
@@ -84,7 +84,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       if (!responded && !res.headersSent) {
         responded = true;
         const url = req.originalUrl || '';
-        console.warn(`⏱️ [API Gateway Timeout Guard] -> ${targetUrl} (${url}) timed out after 15000ms. Serving resilient response.`);
+        console.warn(`⏱️ [API Gateway Timeout Guard] -> ${targetUrl} (${url}) timed out after 2500ms. Serving resilient response.`);
         if (
           url.includes('/products') ||
           url.includes('/categories') ||
@@ -112,7 +112,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
         }
         return res.status(200).json({ status: "ok", resilient: true, message: "Request processed gracefully by Sunotal API Gateway" });
       }
-    }, 15000);
+    }, 2500);
 
     res.on('finish', () => {
       responded = true;
