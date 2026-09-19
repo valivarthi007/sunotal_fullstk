@@ -107,16 +107,22 @@ async function initDb() {
       ).catch(() => null);
     }
 
-    for (const p of DEFAULT_PRODUCTS) {
-      await pool.query(
-        `INSERT INTO products (id, name, category, price, original_price, unit, image, is_organic, stock, rating, active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         ON CONFLICT (id) DO NOTHING`,
-        [Number(p.id), p.name, p.category, p.price, p.originalPrice, p.unit, p.image, p.isOrganic, p.stock, p.rating, true]
-      ).catch(() => null);
-    }
+    const pCountRes = await pool.query('SELECT COUNT(*) FROM products').catch(() => null);
+    const existingCount = Number(pCountRes?.rows?.[0]?.count || 0);
 
-    console.log('🐘 [catalog-service] PostgreSQL database tables, categories, definitions, and products ready.');
+    if (existingCount === 0) {
+      for (const p of DEFAULT_PRODUCTS) {
+        await pool.query(
+          `INSERT INTO products (id, name, category, price, original_price, unit, image, is_organic, stock, rating, active)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           ON CONFLICT (id) DO NOTHING`,
+          [Number(p.id), p.name, p.category, p.price, p.originalPrice, p.unit, p.image, p.isOrganic, p.stock, p.rating, true]
+        ).catch(() => null);
+      }
+      console.log('🐘 [catalog-service] PostgreSQL database initialized with initial seed products.');
+    } else {
+      console.log(`🐘 [catalog-service] PostgreSQL database connected with ${existingCount} live product records.`);
+    }
   } catch (err: any) {
     console.warn('⚠️ [catalog-service] DB init warning:', err?.message || err);
   }
@@ -403,7 +409,7 @@ app.delete('/api/product-definitions/:id', async (req, res) => {
 });
 
 // Update Product
-app.put('/api/products/:id', async (req, res) => {
+app.put(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
   const targetId = Number(req.params.id);
   const { name, category, price, originalPrice, unit, image } = req.body;
 
@@ -413,27 +419,24 @@ app.put('/api/products/:id', async (req, res) => {
       [name, category, price !== undefined ? Number(price) : null, originalPrice !== undefined ? Number(originalPrice) : null, unit, image, targetId]
     );
 
-    const mem = inMemoryProducts.find((p) => String(p.id) === String(req.params.id));
-    if (mem) Object.assign(mem, req.body);
-
+    inMemoryProducts = inMemoryProducts.map((p) => (String(p.id) === String(targetId) ? { ...p, ...req.body } : p));
     return res.json({ id: String(targetId), ...req.body });
   } catch (err: any) {
-    const mem = inMemoryProducts.find((p) => String(p.id) === String(req.params.id));
-    if (mem) Object.assign(mem, req.body);
-    return res.json(mem || { id: String(targetId), ...req.body });
+    inMemoryProducts = inMemoryProducts.map((p) => (String(p.id) === String(targetId) ? { ...p, ...req.body } : p));
+    return res.json({ id: String(targetId), ...req.body });
   }
 });
 
 // Delete Product
-app.delete('/api/products/:id', async (req, res) => {
+app.delete(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
   const targetId = Number(req.params.id);
   try {
     await pool.query('DELETE FROM products WHERE id = $1', [targetId]);
-    inMemoryProducts = inMemoryProducts.filter((p) => String(p.id) !== String(req.params.id));
-    return res.json({ success: true, message: 'Product deleted' });
+    inMemoryProducts = inMemoryProducts.filter((p) => String(p.id) !== String(targetId));
+    return res.json({ success: true, message: 'Product deleted successfully' });
   } catch (err: any) {
-    inMemoryProducts = inMemoryProducts.filter((p) => String(p.id) !== String(req.params.id));
-    return res.json({ success: true, message: 'Product deleted' });
+    inMemoryProducts = inMemoryProducts.filter((p) => String(p.id) !== String(targetId));
+    return res.json({ success: true, message: 'Product deleted successfully' });
   }
 });
 
