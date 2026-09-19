@@ -35,8 +35,6 @@ interface DeliveryOrder {
   updatedAt: string;
 }
 
-const activeDeliveryOrders: Map<string, DeliveryOrder> = new Map();
-
 async function initDb() {
   try {
     await pool.query(`
@@ -85,7 +83,7 @@ async function initDb() {
 
 initDb();
 
-function calculateEtaMinutes(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function calculateEtaMinutes(lat1: number, lon1: number, lat2: number, lon2: number, speedKmh = 25): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
@@ -95,46 +93,43 @@ function calculateEtaMinutes(lat1: number, lon1: number, lat2: number, lon2: num
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distanceKm = R * c;
-  const timeHours = distanceKm / 20;
+  const timeHours = distanceKm / Math.max(5, speedKmh);
   return Math.max(1, Math.round(timeHours * 60));
 }
 
 app.get('/healthz', (_req, res) => {
-  res.json({ service: 'delivery-service', status: 'OK', activeOrdersCount: activeDeliveryOrders.size, timestamp: new Date().toISOString() });
+  res.json({ service: 'delivery-service', status: 'OK', timestamp: new Date().toISOString() });
 });
 
 app.get('/api/healthz', (_req, res) => {
   res.json({ status: 'ok', service: 'delivery-service' });
 });
 
-// GET Active Delivery Orders
+// GET Active Delivery Orders — Direct PostgreSQL SQL Querying
 app.get('/api/delivery/orders/active', async (_req, res) => {
   try {
     const dbRes = await pool.query("SELECT * FROM delivery_orders WHERE status != 'delivered' ORDER BY updated_at DESC");
-    if (dbRes.rows && dbRes.rows.length > 0) {
-      const dbOrders = dbRes.rows.map((r: any) => ({
-        id: r.id,
-        orderNumber: r.order_number || r.id,
-        riderId: r.rider_id,
-        riderName: r.rider_name,
-        riderPhone: r.rider_phone,
-        stage: r.stage,
-        status: r.status,
-        currentLat: Number(r.current_lat),
-        currentLng: Number(r.current_lng),
-        destLat: Number(r.dest_lat),
-        destLng: Number(r.dest_lng),
-        updatedAt: r.updated_at
-      }));
-      return res.json(dbOrders);
-    }
-    return res.json(Array.from(activeDeliveryOrders.values()));
+    const dbOrders = (dbRes.rows || []).map((r: any) => ({
+      id: r.id,
+      orderNumber: r.order_number || r.id,
+      riderId: r.rider_id,
+      riderName: r.rider_name,
+      riderPhone: r.rider_phone,
+      stage: r.stage,
+      status: r.status,
+      currentLat: Number(r.current_lat),
+      currentLng: Number(r.current_lng),
+      destLat: Number(r.dest_lat),
+      destLng: Number(r.dest_lng),
+      updatedAt: r.updated_at
+    }));
+    return res.json(dbOrders);
   } catch (err: any) {
-    return res.json(Array.from(activeDeliveryOrders.values()));
+    return res.json([]);
   }
 });
 
-// Dynamic Rider Location Update Endpoint
+// Dynamic Rider Location Update Endpoint — Direct PostgreSQL SQL Persistence
 app.post('/api/delivery/rider/location', async (req, res) => {
   const { orderId, riderId, riderName, riderPhone, lat, lng } = req.body;
 
@@ -142,54 +137,47 @@ app.post('/api/delivery/rider/location', async (req, res) => {
     return res.status(400).json({ error: 'orderId, lat, and lng are required' });
   }
 
-  let order = activeDeliveryOrders.get(orderId);
   const numLat = Number(lat);
   const numLng = Number(lng);
 
-  if (!order) {
-    order = {
-      id: orderId,
-      orderNumber: orderId,
-      riderId: riderId || '',
-      riderName: riderName || 'Delivery Partner',
-      riderPhone: riderPhone || '',
-      stage: 'in_transit',
-      status: 'ON_THE_WAY',
-      currentLat: numLat,
-      currentLng: numLng,
-      destLat: numLat + 0.015,
-      destLng: numLng + 0.015,
-      updatedAt: new Date().toISOString()
-    };
-  } else {
-    order.currentLat = numLat;
-    order.currentLng = numLng;
-    if (riderName) order.riderName = riderName;
-    if (riderPhone) order.riderPhone = riderPhone;
-    order.updatedAt = new Date().toISOString();
-  }
-
-  activeDeliveryOrders.set(orderId, order);
-
   try {
-    await pool.query(
+    const dbRes = await pool.query(
       `INSERT INTO delivery_orders (id, order_number, rider_id, rider_name, rider_phone, stage, status, current_lat, current_lng, dest_lat, dest_lng, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+       VALUES ($1, $1, $2, $3, $4, 'in_transit', 'ON_THE_WAY', $5, $6, $5 + 0.015, $6 + 0.015, NOW())
        ON CONFLICT (id) DO UPDATE SET
          current_lat = EXCLUDED.current_lat,
          current_lng = EXCLUDED.current_lng,
          rider_name = COALESCE(EXCLUDED.rider_name, delivery_orders.rider_name),
          rider_phone = COALESCE(EXCLUDED.rider_phone, delivery_orders.rider_phone),
-         updated_at = NOW()`,
-      [order.id, order.orderNumber, order.riderId, order.riderName, order.riderPhone, order.stage, order.status, order.currentLat, order.currentLng, order.destLat, order.destLng]
+         updated_at = NOW()
+       RETURNING *`,
+      [orderId, riderId || '', riderName || 'Delivery Partner', riderPhone || '', numLat, numLng]
     );
-  } catch (err: any) {}
 
-  deliveryEventEmitter.emit(`location_update:${orderId}`, order);
-  return res.json({ success: true, message: 'Rider location updated dynamically', order });
+    const r = dbRes.rows[0];
+    const updatedOrder: DeliveryOrder = {
+      id: r.id,
+      orderNumber: r.order_number || r.id,
+      riderId: r.rider_id,
+      riderName: r.rider_name,
+      riderPhone: r.rider_phone,
+      stage: r.stage,
+      status: r.status,
+      currentLat: Number(r.current_lat),
+      currentLng: Number(r.current_lng),
+      destLat: Number(r.dest_lat),
+      destLng: Number(r.dest_lng),
+      updatedAt: r.updated_at
+    };
+
+    deliveryEventEmitter.emit(`location_update:${orderId}`, updatedOrder);
+    return res.json({ success: true, message: 'Rider location updated in PostgreSQL RDS', order: updatedOrder });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update rider location in database', message: err?.message });
+  }
 });
 
-// Real-time SSE Live Tracking Stream (queries PostgreSQL DB for live tracking telemetry)
+// Real-time SSE Live Tracking Stream — Direct PostgreSQL Telemetry Querying
 app.get(['/api/delivery/stream/:orderId', '/api/delivery/tracking/:orderId/stream'], async (req, res) => {
   const { orderId } = req.params;
 
@@ -215,36 +203,30 @@ app.get(['/api/delivery/stream/:orderId', '/api/delivery/tracking/:orderId/strea
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
-  const existingOrder = activeDeliveryOrders.get(orderId);
-  if (existingOrder) {
-    sendOrderUpdate(existingOrder);
-  } else {
-    try {
-      const dbRes = await pool.query('SELECT * FROM delivery_orders WHERE id = $1 OR order_number = $1', [orderId]);
-      if (dbRes.rows && dbRes.rows.length > 0) {
-        const r = dbRes.rows[0];
-        const dbOrder: DeliveryOrder = {
-          id: r.id,
-          orderNumber: r.order_number || r.id,
-          riderId: r.rider_id || '',
-          riderName: r.rider_name || 'Delivery Partner',
-          riderPhone: r.rider_phone || '',
-          stage: r.stage || 'in_transit',
-          status: r.status || 'ON_THE_WAY',
-          currentLat: Number(r.current_lat || 12.9716),
-          currentLng: Number(r.current_lng || 77.5946),
-          destLat: Number(r.dest_lat || 12.9816),
-          destLng: Number(r.dest_lng || 77.6046),
-          updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString()
-        };
-        activeDeliveryOrders.set(orderId, dbOrder);
-        sendOrderUpdate(dbOrder);
-      } else {
-        res.write(`data: ${JSON.stringify({ orderId, status: 'PREPARING', message: 'Order is being packed at dark store' })}\n\n`);
-      }
-    } catch (err: any) {
-      res.write(`data: ${JSON.stringify({ orderId, status: 'PREPARING', message: 'Connecting to delivery telemetry...' })}\n\n`);
+  try {
+    const dbRes = await pool.query('SELECT * FROM delivery_orders WHERE id = $1 OR order_number = $1', [orderId]);
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      const r = dbRes.rows[0];
+      const dbOrder: DeliveryOrder = {
+        id: r.id,
+        orderNumber: r.order_number || r.id,
+        riderId: r.rider_id || '',
+        riderName: r.rider_name || 'Delivery Partner',
+        riderPhone: r.rider_phone || '',
+        stage: r.stage || 'in_transit',
+        status: r.status || 'ON_THE_WAY',
+        currentLat: Number(r.current_lat || 12.9716),
+        currentLng: Number(r.current_lng || 77.5946),
+        destLat: Number(r.dest_lat || 12.9816),
+        destLng: Number(r.dest_lng || 77.6046),
+        updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString()
+      };
+      sendOrderUpdate(dbOrder);
+    } else {
+      res.write(`data: ${JSON.stringify({ orderId, status: 'PREPARING', message: 'Order is being packed at dark store' })}\n\n`);
     }
+  } catch (err: any) {
+    res.write(`data: ${JSON.stringify({ orderId, status: 'PREPARING', message: 'Connecting to delivery telemetry...' })}\n\n`);
   }
 
   const listener = (updatedOrder: DeliveryOrder) => {
@@ -258,73 +240,79 @@ app.get(['/api/delivery/stream/:orderId', '/api/delivery/tracking/:orderId/strea
   });
 });
 
-// Rider Accept Order
+// Rider Accept Order — Direct PostgreSQL SQL Mutation
 app.post('/api/delivery/orders/:id/accept', async (req, res) => {
   const { riderName, riderPhone, riderId } = req.body;
   const orderId = req.params.id;
 
-  let order = activeDeliveryOrders.get(orderId);
-  if (!order) {
-    order = {
-      id: orderId,
-      orderNumber: orderId,
-      riderId: riderId || 'rider_' + Date.now().toString().slice(-4),
-      riderName: riderName || 'Delivery Partner',
-      riderPhone: riderPhone || '',
-      stage: 'accepted',
-      status: 'accepted',
-      currentLat: 12.9716,
-      currentLng: 77.5946,
-      destLat: 12.9816,
-      destLng: 77.6046,
-      updatedAt: new Date().toISOString()
-    };
-  } else {
-    order.stage = 'accepted';
-    order.status = 'accepted';
-    if (riderName) order.riderName = riderName;
-    if (riderPhone) order.riderPhone = riderPhone;
-  }
-
-  activeDeliveryOrders.set(orderId, order);
-
   try {
-    await pool.query(
+    const dbRes = await pool.query(
       `INSERT INTO delivery_orders (id, order_number, rider_id, rider_name, rider_phone, stage, status, current_lat, current_lng, dest_lat, dest_lng)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       ON CONFLICT (id) DO UPDATE SET stage = 'accepted', status = 'accepted', rider_name = COALESCE($4, delivery_orders.rider_name), rider_phone = COALESCE($5, delivery_orders.rider_phone), updated_at = NOW()`,
-      [order.id, order.orderNumber, order.riderId, order.riderName, order.riderPhone, 'accepted', 'accepted', order.currentLat, order.currentLng, order.destLat, order.destLng]
+       VALUES ($1, $1, $2, $3, $4, 'accepted', 'accepted', 12.9716, 77.5946, 12.9816, 77.6046)
+       ON CONFLICT (id) DO UPDATE SET stage = 'accepted', status = 'accepted', rider_name = COALESCE($3, delivery_orders.rider_name), rider_phone = COALESCE($4, delivery_orders.rider_phone), updated_at = NOW()
+       RETURNING *`,
+      [orderId, riderId || 'rider_' + Date.now().toString().slice(-4), riderName || 'Delivery Partner', riderPhone || '']
     );
-  } catch (err: any) {}
 
-  deliveryEventEmitter.emit(`location_update:${orderId}`, order);
-  return res.json({ success: true, message: 'Order accepted dynamically by rider', order });
+    const r = dbRes.rows[0];
+    const order: DeliveryOrder = {
+      id: r.id,
+      orderNumber: r.order_number || r.id,
+      riderId: r.rider_id,
+      riderName: r.rider_name,
+      riderPhone: r.rider_phone,
+      stage: r.stage,
+      status: r.status,
+      currentLat: Number(r.current_lat),
+      currentLng: Number(r.current_lng),
+      destLat: Number(r.dest_lat),
+      destLng: Number(r.dest_lng),
+      updatedAt: r.updated_at
+    };
+
+    deliveryEventEmitter.emit(`location_update:${orderId}`, order);
+    return res.json({ success: true, message: 'Order accepted in PostgreSQL RDS', order });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to accept order in database' });
+  }
 });
 
-// Rider Stage Progression
+// Rider Stage Progression — Direct PostgreSQL SQL Mutation
 app.put('/api/delivery/orders/:id/stage', async (req, res) => {
   const { stage } = req.body;
   const orderId = req.params.id;
 
-  const order = activeDeliveryOrders.get(orderId);
-  if (order) {
-    order.stage = stage;
-    order.updatedAt = new Date().toISOString();
-    if (stage === 'delivered') {
-      order.status = 'delivered';
-      activeDeliveryOrders.delete(orderId);
-    }
-  }
-
   try {
-    await pool.query(
-      `UPDATE delivery_orders SET stage = $1, status = $2, updated_at = NOW() WHERE id = $3`,
-      [stage, stage === 'delivered' ? 'delivered' : (order?.status || 'in_transit'), orderId]
+    const dbRes = await pool.query(
+      `UPDATE delivery_orders SET stage = $1, status = $2, updated_at = NOW() WHERE id = $3 RETURNING *`,
+      [stage, stage === 'delivered' ? 'delivered' : 'in_transit', orderId]
     );
-  } catch (err: any) {}
 
-  if (order) deliveryEventEmitter.emit(`location_update:${orderId}`, order);
-  return res.json({ success: true, order: order || { id: orderId, stage } });
+    if (!dbRes.rows || dbRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Delivery order not found' });
+    }
+
+    const r = dbRes.rows[0];
+    const order: DeliveryOrder = {
+      id: r.id,
+      orderNumber: r.order_number || r.id,
+      riderId: r.rider_id,
+      riderName: r.rider_name,
+      riderPhone: r.rider_phone,
+      stage: r.stage,
+      status: r.status,
+      currentLat: Number(r.current_lat),
+      currentLng: Number(r.current_lng),
+      destLat: Number(r.dest_lat),
+      destLng: Number(r.dest_lng),
+      updatedAt: r.updated_at
+    };
+
+    deliveryEventEmitter.emit(`location_update:${orderId}`, order);
+    return res.json({ success: true, order });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update stage in database' });
+  }
 });
 
 // Delivery Slots Endpoint
@@ -335,25 +323,9 @@ app.get('/api/delivery/slots', (_req, res) => {
   ]);
 });
 
-// 1. Fixed single order tracking telemetry (query PostgreSQL)
+// Single Order Tracking Telemetry — Direct PostgreSQL SQL Querying
 app.get('/api/delivery/track/:orderId', async (req, res) => {
   const { orderId } = req.params;
-  const order = activeDeliveryOrders.get(orderId);
-
-  if (order) {
-    const etaMinutes = calculateEtaMinutes(order.currentLat, order.currentLng, order.destLat, order.destLng);
-    return res.json({
-      orderId,
-      status: order.status,
-      riderName: order.riderName,
-      riderPhone: order.riderPhone,
-      currentLocation: { lat: order.currentLat, lng: order.currentLng },
-      destinationLocation: { lat: order.destLat, lng: order.destLng },
-      etaMinutes,
-      updatedAt: order.updatedAt
-    });
-  }
-
   try {
     const dbRes = await pool.query('SELECT * FROM delivery_orders WHERE id = $1 OR order_number = $1', [orderId]);
     if (dbRes.rows && dbRes.rows.length > 0) {
@@ -379,7 +351,7 @@ app.get('/api/delivery/track/:orderId', async (req, res) => {
   return res.status(404).json({ error: 'Delivery tracking not found for specified order' });
 });
 
-// 2. Fixed Rider Login (query PostgreSQL delivery_riders table)
+// Rider Login — Direct PostgreSQL SQL Querying
 app.post('/api/delivery/login', async (req, res) => {
   const { phone, email } = req.body;
   const rEmail = (email || '').toLowerCase().trim();
@@ -409,7 +381,7 @@ app.post('/api/delivery/login', async (req, res) => {
   return res.status(401).json({ error: 'Rider account not found. Please register first.' });
 });
 
-// Rider Registration Endpoint
+// Rider Registration Endpoint — Direct PostgreSQL SQL Mutation
 app.post('/api/delivery/register', async (req, res) => {
   const { name, phone, email, city, vehicle } = req.body;
   if (!name || (!phone && !email)) {
@@ -450,7 +422,7 @@ app.post('/api/delivery/register', async (req, res) => {
   }
 });
 
-// 3. Fixed Rider Payout Request (query/insert PostgreSQL rider_payouts table)
+// Rider Payout Request — Direct PostgreSQL SQL Mutation
 app.post('/api/delivery/payout', async (req, res) => {
   const { amount, riderId } = req.body;
   const payoutAmt = Number(amount || 0);
@@ -486,19 +458,6 @@ app.post('/api/delivery/payout', async (req, res) => {
   }
 });
 
-// Dispatch Engine Request
-app.post('/api/rider/dispatch-request', (req, res) => {
-  const { orderId } = req.body;
-  res.json({
-    success: true,
-    orderId: orderId || 'ORD-' + Date.now().toString().slice(-4),
-    assignmentWindowSeconds: 30,
-    dispatchEngine: 'H3-Spatial-Proximity-V2',
-    nearbyRidersCount: 3,
-    status: 'ALERTED'
-  });
-});
-
 // Handover OTP Verification & Rider Payout Credit
 app.post('/api/rider/verify-handover-otp', async (req, res) => {
   const { orderId, inputOtp, expectedOtp, riderId } = req.body;
@@ -506,13 +465,6 @@ app.post('/api/rider/verify-handover-otp', async (req, res) => {
     return res.status(400).json({ error: 'Invalid handover OTP code' });
   }
   const payoutCredit = 45;
-
-  if (orderId && activeDeliveryOrders.has(orderId)) {
-    const order = activeDeliveryOrders.get(orderId)!;
-    order.stage = 'delivered';
-    order.status = 'delivered';
-    activeDeliveryOrders.delete(orderId);
-  }
 
   try {
     await pool.query("UPDATE delivery_orders SET stage = 'delivered', status = 'delivered', updated_at = NOW() WHERE id = $1", [orderId]);
@@ -530,7 +482,7 @@ app.post('/api/rider/verify-handover-otp', async (req, res) => {
   });
 });
 
-// Rider Stats & Earnings (query PostgreSQL database)
+// Rider Stats & Earnings — Direct PostgreSQL Querying
 app.get('/api/delivery/stats', async (req, res) => {
   const riderId = String(req.query.riderId || '');
 
