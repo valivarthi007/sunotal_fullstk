@@ -29,8 +29,16 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
-// Seed Fallback Data for Zero-Downtime Guarantee
-const MOCK_PRODUCTS: any[] = [];
+const DEFAULT_CATEGORIES = [
+  { id: 1, name: "Vegetables", icon: "🥦", active: true },
+  { id: 2, name: "Fruits", icon: "🍎", active: true },
+  { id: 3, name: "Dairy", icon: "🥛", active: true },
+  { id: 4, name: "Dry Fruits", icon: "🥜", active: true },
+  { id: 5, name: "Grains", icon: "🌾", active: true },
+  { id: 6, name: "Organic Herbs", icon: "🌿", active: true },
+  { id: 7, name: "Cold Pressed Oils", icon: "🫒", active: true },
+  { id: 8, name: "Fresh Bakery", icon: "🍞", active: true }
+];
 
 const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, res: any) => void) => {
   const proxyMiddleware = proxy(targetUrl, {
@@ -50,9 +58,11 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       if (fallbackHandler) {
         return fallbackHandler(req, res);
       }
+      if (url.includes('/categories')) {
+        return res.json(DEFAULT_CATEGORIES);
+      }
       if (
         url.includes('/products') ||
-        url.includes('/categories') ||
         url.includes('/storefront') ||
         url.includes('/quotations') ||
         url.includes('/warehouses') ||
@@ -85,9 +95,11 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
         responded = true;
         const url = req.originalUrl || '';
         console.warn(`⏱️ [API Gateway Timeout Guard] -> ${targetUrl} (${url}) timed out after 2500ms. Serving resilient response.`);
+        if (url.includes('/categories')) {
+          return res.json(DEFAULT_CATEGORIES);
+        }
         if (
           url.includes('/products') ||
-          url.includes('/categories') ||
           url.includes('/storefront') ||
           url.includes('/quotations') ||
           url.includes('/warehouses') ||

@@ -289,7 +289,14 @@ export default function ProductsAdmin() {
           onError: () => toast.error("Failed to activate product")
         });
       } else {
-        toast.error("Please select a product from inventory");
+        createProduct.mutate(finalValues as any, {
+          onSuccess: () => {
+            toast.success("New product created successfully");
+            queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+            setOpen(false);
+          },
+          onError: (err: any) => toast.error(err?.message || "Failed to create product")
+        });
       }
     }
   };
