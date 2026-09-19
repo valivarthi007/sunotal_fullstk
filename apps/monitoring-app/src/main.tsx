@@ -1,3 +1,8 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
 // Intercept global fetch so any relative /api/ call is sent directly to API Gateway from browser
 if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
   const originalFetch = window.fetch;

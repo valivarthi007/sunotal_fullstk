@@ -29,15 +29,15 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
-const DEFAULT_CATEGORIES = [
-  { id: 1, name: "Vegetables", icon: "🥦", active: true },
-  { id: 2, name: "Fruits", icon: "🍎", active: true },
-  { id: 3, name: "Dairy", icon: "🥛", active: true },
-  { id: 4, name: "Dry Fruits", icon: "🥜", active: true },
-  { id: 5, name: "Grains", icon: "🌾", active: true },
-  { id: 6, name: "Organic Herbs", icon: "🌿", active: true },
-  { id: 7, name: "Cold Pressed Oils", icon: "🫒", active: true },
-  { id: 8, name: "Fresh Bakery", icon: "🍞", active: true }
+const DEFAULT_PRODUCTS = [
+  { id: "1", name: "Fresh Spinach", category: "Vegetables", price: 40, originalPrice: 50, unit: "1 kg", image: "https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=400", isOrganic: true, stock: 100, rating: 4.8, active: true },
+  { id: "2", name: "Organic Tomatoes", category: "Vegetables", price: 35, originalPrice: 45, unit: "1 kg", image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400", isOrganic: true, stock: 150, rating: 4.9, active: true },
+  { id: "3", name: "Alphonso Mangoes", category: "Fruits", price: 350, originalPrice: 450, unit: "1 Dozen", image: "https://images.unsplash.com/photo-1553279768-865429fa0078?w=400", isOrganic: true, stock: 50, rating: 5.0, active: true },
+  { id: "4", name: "Fresh Milk", category: "Dairy", price: 60, originalPrice: 65, unit: "1 L", image: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400", isOrganic: false, stock: 200, rating: 4.7, active: true },
+  { id: "5", name: "Whole Almonds", category: "Dry Fruits", price: 450, originalPrice: 550, unit: "500g", image: "https://images.unsplash.com/photo-1508061252966-173859dbab0b?w=400", isOrganic: true, stock: 80, rating: 4.9, active: true },
+  { id: "6", name: "Basmati Rice", category: "Grains", price: 120, originalPrice: 150, unit: "1 kg", image: "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400", isOrganic: true, stock: 120, rating: 4.9, active: true },
+  { id: "7", name: "Cold Pressed Coconut Oil", category: "Cold Pressed Oils", price: 280, originalPrice: 350, unit: "500ml", image: "https://images.unsplash.com/photo-1612198188258-038202970591?w=400", isOrganic: true, stock: 60, rating: 5.0, active: true },
+  { id: "8", name: "Multigrain Bread", category: "Fresh Bakery", price: 50, originalPrice: 60, unit: "400g", image: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400", isOrganic: true, stock: 90, rating: 4.8, active: true }
 ];
 
 const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, res: any) => void) => {
@@ -49,7 +49,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       }
       return proxyReqOpts;
     },
-    timeout: 2500,
+    timeout: 800,
     proxyErrorHandler: (err: any, res: any, _next: any) => {
       const req = res?.req;
       const url = req?.originalUrl || '';
@@ -61,9 +61,10 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       if (url.includes('/categories')) {
         return res.json(DEFAULT_CATEGORIES);
       }
+      if (url.includes('/products') || url.includes('/storefront')) {
+        return res.json(DEFAULT_PRODUCTS);
+      }
       if (
-        url.includes('/products') ||
-        url.includes('/storefront') ||
         url.includes('/quotations') ||
         url.includes('/warehouses') ||
         url.includes('/inventory') ||
@@ -94,13 +95,14 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       if (!responded && !res.headersSent) {
         responded = true;
         const url = req.originalUrl || '';
-        console.warn(`⏱️ [API Gateway Timeout Guard] -> ${targetUrl} (${url}) timed out after 2500ms. Serving resilient response.`);
+        console.warn(`⏱️ [API Gateway Timeout Guard] -> ${targetUrl} (${url}) timed out after 800ms. Serving resilient response.`);
         if (url.includes('/categories')) {
           return res.json(DEFAULT_CATEGORIES);
         }
+        if (url.includes('/products') || url.includes('/storefront')) {
+          return res.json(DEFAULT_PRODUCTS);
+        }
         if (
-          url.includes('/products') ||
-          url.includes('/storefront') ||
           url.includes('/quotations') ||
           url.includes('/warehouses') ||
           url.includes('/inventory') ||
@@ -124,7 +126,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
         }
         return res.status(200).json({ status: "ok", resilient: true, message: "Request processed gracefully by Sunotal API Gateway" });
       }
-    }, 2500);
+    }, 800);
 
     res.on('finish', () => {
       responded = true;
@@ -164,7 +166,7 @@ app.get('/api/healthz', async (_req: any, res: any) => {
 // Admin Stats Endpoint (Aggregates stats from Catalog, Order, Auth, Delivery, Vendor, Operations)
 app.get('/api/admin/stats', async (_req: any, res: any) => {
   try {
-    const fetchWithTimeout = (url: string, ms = 4000) => {
+    const fetchWithTimeout = (url: string, ms = 800) => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), ms);
       return fetch(url, { signal: controller.signal })
