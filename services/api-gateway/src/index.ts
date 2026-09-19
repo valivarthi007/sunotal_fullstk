@@ -17,7 +17,7 @@ const SERVICES = {
   USER: process.env.USER_SERVICE_URL || 'http://127.0.0.1:5004',
 };
 
-// Enable CORS
+// Enable CORS & JSON parsing
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
@@ -26,6 +26,62 @@ app.use((req: any, res: any, next: any) => {
   const correlationId = (req.headers['x-correlation-id'] as string) || `sn-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   req.headers['x-correlation-id'] = correlationId;
   res.setHeader('X-Correlation-ID', correlationId);
+  next();
+});
+
+// Real-Time SSE Event-Broadcasting Engine
+const sseClients = new Set<any>();
+
+export function broadcastRealtimeEvent(event: { type: string; path: string; method: string; data?: any }) {
+  const payload = `data: ${JSON.stringify({ ...event, timestamp: Date.now() })}\n\n`;
+  sseClients.forEach((client) => {
+    try {
+      client.write(payload);
+    } catch {
+      sseClients.delete(client);
+    }
+  });
+}
+
+// SSE Real-Time Stream Endpoint
+app.get('/api/realtime/stream', (req: any, res: any) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', message: 'Sunotal Real-time Engine Connected' })}\n\n`);
+
+  sseClients.add(res);
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(`:ping\n\n`);
+    } catch {
+      clearInterval(heartbeat);
+      sseClients.delete(res);
+    }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients.delete(res);
+  });
+});
+
+// Automatic Mutation Realtime Broadcast Middleware
+app.use((req: any, res: any, next: any) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    res.on('finish', () => {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        broadcastRealtimeEvent({
+          type: 'REALTIME_MUTATION',
+          path: req.originalUrl || req.url,
+          method: req.method,
+        });
+      }
+    });
+  }
   next();
 });
 

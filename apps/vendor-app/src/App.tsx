@@ -320,23 +320,32 @@ function SubdomainRouter() {
   );
 }
 
+import { useRealtimeSync } from "@/lib/use-realtime-sync";
+
+function RealtimeSyncProvider({ children }: { children: ReactNode }) {
+  useRealtimeSync();
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <LocationProvider>
-            <CartProvider>
-              <ApiStatusProvider>
-                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                  <SubdomainRouter />
-                </WouterRouter>
-              </ApiStatusProvider>
-              <Toaster />
-              <Sonner richColors position="top-right" />
-            </CartProvider>
-          </LocationProvider>
-        </TooltipProvider>
+        <RealtimeSyncProvider>
+          <TooltipProvider>
+            <LocationProvider>
+              <CartProvider>
+                <ApiStatusProvider>
+                  <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                    <SubdomainRouter />
+                  </WouterRouter>
+                </ApiStatusProvider>
+                <Toaster />
+                <Sonner richColors position="top-right" />
+              </CartProvider>
+            </LocationProvider>
+          </TooltipProvider>
+        </RealtimeSyncProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );
