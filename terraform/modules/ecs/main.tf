@@ -93,6 +93,11 @@ resource "aws_cloudwatch_log_group" "ecs" {
   tags              = var.tags
 }
 
+variable "database_url" {
+  type    = string
+  default = "postgresql://sunotal_admin:SunotalPostgres2026SecurePass!@sunotal-postgres-db.c2d668wu0n34.us-east-1.rds.amazonaws.com:5432/sunotal"
+}
+
 resource "aws_ecs_task_definition" "tasks" {
   for_each                 = local.microservices
   family                   = "sunotal-${each.key}"
@@ -112,6 +117,21 @@ resource "aws_ecs_task_definition" "tasks" {
       hostPort      = each.value.port
       protocol      = "tcp"
     }]
+    environment = [
+      { name = "DATABASE_URL", value = var.database_url },
+      { name = "PORT", value = tostring(each.value.port) },
+      { name = "JWT_SECRET", value = "sunotal_jwt_secret_2026_super_secure" },
+      { name = "AUTH_SERVICE_URL", value = "http://localhost:5001" },
+      { name = "OPERATIONS_SERVICE_URL", value = "http://localhost:5002" },
+      { name = "INVENTORY_SERVICE_URL", value = "http://localhost:5003" },
+      { name = "DELIVERY_SERVICE_URL", value = "http://localhost:5004" },
+      { name = "VENDOR_SERVICE_URL", value = "http://localhost:5005" },
+      { name = "SUPPORT_SERVICE_URL", value = "http://localhost:5007" },
+      { name = "USER_SERVICE_URL", value = "http://localhost:5008" },
+      { name = "CATALOG_SERVICE_URL", value = "http://localhost:5009" },
+      { name = "ORDER_SERVICE_URL", value = "http://localhost:5010" },
+      { name = "NOTIFICATION_SERVICE_URL", value = "http://localhost:5011" }
+    ]
     logConfiguration = {
       logDriver = "awslogs"
       options = {

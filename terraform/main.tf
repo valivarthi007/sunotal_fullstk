@@ -86,6 +86,7 @@ module "ecs" {
   target_group_arns     = module.acm_alb.target_group_arns
   alb_listener_arn      = module.acm_alb.alb_listener_arn
   aws_region            = var.aws_region
+  database_url          = module.rds.database_url
   tags                  = local.common_tags
 }
 
