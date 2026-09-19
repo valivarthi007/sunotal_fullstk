@@ -32,14 +32,6 @@ const formSchema = z.object({
 export default function FarmerRegistration() {
   const [, setLocation] = useLocation();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
-  
-  // Redirect logged-in users away from registration page
-  useEffect(() => {
-    if (user) {
-      setLocation(user.role === "vendor" ? "/vendor" : "/");
-    }
-  }, [user, setLocation]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

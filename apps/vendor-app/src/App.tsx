@@ -240,6 +240,8 @@ function SubdomainRouter() {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <Switch>
+          <Route path="/registration" component={FarmerRegistration} />
+          <Route path="/vendor/registration" component={FarmerRegistration} />
           <Route path="/register" component={FarmerRegistration} />
           <Route path="/vendor/register" component={FarmerRegistration} />
           <Route path="/farmer" component={FarmerRegistration} />
