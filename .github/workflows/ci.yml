@@ -1,6 +1,9 @@
 name: "CI: Build, Test & Containerize"
 
 on:
+  push:
+    branches:
+      - main
   workflow_run:
     workflows: ["Infra: Terraform Provisioning"]
     types:
