@@ -10,11 +10,12 @@ const SERVICES = {
   OPERATIONS: process.env.OPERATIONS_SERVICE_URL || 'http://127.0.0.1:5002',
   CATALOG: process.env.CATALOG_SERVICE_URL || 'http://127.0.0.1:5009',
   ORDER: process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:5010',
-  DELIVERY: process.env.DELIVERY_SERVICE_URL || 'http://127.0.0.1:5006',
+  DELIVERY: process.env.DELIVERY_SERVICE_URL || 'http://127.0.0.1:5004',
   VENDOR: process.env.VENDOR_SERVICE_URL || 'http://127.0.0.1:5005',
-  NOTIFICATION: process.env.NOTIFICATION_SERVICE_URL || 'http://127.0.0.1:5008',
+  NOTIFICATION: process.env.NOTIFICATION_SERVICE_URL || 'http://127.0.0.1:5011',
   SUPPORT: process.env.SUPPORT_SERVICE_URL || 'http://127.0.0.1:5007',
-  USER: process.env.USER_SERVICE_URL || 'http://127.0.0.1:5004',
+  USER: process.env.USER_SERVICE_URL || 'http://127.0.0.1:5008',
+  INVENTORY: process.env.INVENTORY_SERVICE_URL || 'http://127.0.0.1:5003',
 };
 
 // Enable CORS & JSON parsing
@@ -96,17 +97,6 @@ const DEFAULT_CATEGORIES = [
   { id: 8, name: "Fresh Bakery", icon: "🍞", active: true }
 ];
 
-const DEFAULT_PRODUCTS = [
-  { id: "1", name: "Fresh Spinach", category: "Vegetables", price: 40, originalPrice: 50, unit: "1 kg", image: "https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=400", isOrganic: true, stock: 100, rating: 4.8, active: true },
-  { id: "2", name: "Organic Tomatoes", category: "Vegetables", price: 35, originalPrice: 45, unit: "1 kg", image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400", isOrganic: true, stock: 150, rating: 4.9, active: true },
-  { id: "3", name: "Alphonso Mangoes", category: "Fruits", price: 350, originalPrice: 450, unit: "1 Dozen", image: "https://images.unsplash.com/photo-1553279768-865429fa0078?w=400", isOrganic: true, stock: 50, rating: 5.0, active: true },
-  { id: "4", name: "Fresh Milk", category: "Dairy", price: 60, originalPrice: 65, unit: "1 L", image: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400", isOrganic: false, stock: 200, rating: 4.7, active: true },
-  { id: "5", name: "Whole Almonds", category: "Dry Fruits", price: 450, originalPrice: 550, unit: "500g", image: "https://images.unsplash.com/photo-1508061252966-173859dbab0b?w=400", isOrganic: true, stock: 80, rating: 4.9, active: true },
-  { id: "6", name: "Basmati Rice", category: "Grains", price: 120, originalPrice: 150, unit: "1 kg", image: "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400", isOrganic: true, stock: 120, rating: 4.9, active: true },
-  { id: "7", name: "Cold Pressed Coconut Oil", category: "Cold Pressed Oils", price: 280, originalPrice: 350, unit: "500ml", image: "https://images.unsplash.com/photo-1612198188258-038202970591?w=400", isOrganic: true, stock: 60, rating: 5.0, active: true },
-  { id: "8", name: "Multigrain Bread", category: "Fresh Bakery", price: 50, originalPrice: 60, unit: "400g", image: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400", isOrganic: true, stock: 90, rating: 4.8, active: true }
-];
-
 const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, res: any) => void) => {
   const proxyMiddleware = proxy(targetUrl, {
     proxyReqPathResolver: (req: any) => req.originalUrl,
@@ -128,10 +118,8 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       if (url.includes('/categories')) {
         return res.json(DEFAULT_CATEGORIES);
       }
-      if (url.includes('/products') || url.includes('/storefront')) {
-        return res.json([]);
-      }
       if (
+        url.includes('/products') || url.includes('/storefront') ||
         url.includes('/quotations') ||
         url.includes('/warehouses') ||
         url.includes('/inventory') ||
@@ -144,15 +132,9 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
         return res.json([]);
       }
       if (url.includes('/auth') || url.includes('/login')) {
-        const inputEmail = req?.body?.email || "user@sunotal.com";
-        const emailName = inputEmail.split('@')[0];
-        const displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-        return res.json({
-          token: "mock-jwt-token-sunotal-2026-fallback",
-          user: { id: "u1", email: inputEmail, role: inputEmail.includes('admin') ? "admin" : "customer", name: displayName }
-        });
+        return res.status(503).json({ error: 'Authentication service is temporarily unavailable. Please try again.' });
       }
-      return res.status(200).json({ status: "ok", resilient: true, message: "Request processed gracefully by Sunotal API Gateway" });
+      return res.status(503).json({ error: 'Service temporarily unavailable. Please try again later.' });
     }
   });
 
@@ -166,10 +148,8 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
         if (url.includes('/categories')) {
           return res.json(DEFAULT_CATEGORIES);
         }
-        if (url.includes('/products') || url.includes('/storefront')) {
-          return res.json([]);
-        }
         if (
+          url.includes('/products') || url.includes('/storefront') ||
           url.includes('/quotations') ||
           url.includes('/warehouses') ||
           url.includes('/inventory') ||
@@ -183,15 +163,9 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
         }
 
         if (url.includes('/auth') || url.includes('/login')) {
-          const inputEmail = req?.body?.email || "user@sunotal.com";
-          const emailName = inputEmail.split('@')[0];
-          const displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-          return res.json({
-            token: "mock-jwt-token-sunotal-2026-fallback",
-            user: { id: "u1", email: inputEmail, role: inputEmail.includes('admin') ? "admin" : "customer", name: displayName }
-          });
+          return res.status(503).json({ error: 'Authentication service is temporarily unavailable. Please try again.' });
         }
-        return res.status(200).json({ status: "ok", resilient: true, message: "Request processed gracefully by Sunotal API Gateway" });
+        return res.status(503).json({ error: 'Service temporarily unavailable. Please try again later.' });
       }
     }, 3500);
 
@@ -309,7 +283,7 @@ app.get('/api/admin/stats', async (_req: any, res: any) => {
   }
 });
 
-// Proxy Rules with Zero-Downtime Fallbacks
+// Proxy Rules
 app.use('/api/auth', createResilientProxy(SERVICES.AUTH));
 
 // Warehouses, Quotations, Admin Operations & Dynamic Delivery Fee
@@ -319,8 +293,8 @@ app.use('/api/admin/quotations', createResilientProxy(SERVICES.OPERATIONS));
 app.use('/api/admin/ledger', createResilientProxy(SERVICES.OPERATIONS));
 app.use('/api/admin/rider-payouts', createResilientProxy(SERVICES.OPERATIONS));
 app.use('/api/admin/observability', createResilientProxy(SERVICES.OPERATIONS));
-app.use('/api/admin/inventory', createResilientProxy(SERVICES.OPERATIONS));
-app.use('/api/inventory', createResilientProxy(SERVICES.OPERATIONS));
+app.use('/api/admin/inventory', createResilientProxy(SERVICES.INVENTORY));
+app.use('/api/inventory', createResilientProxy(SERVICES.INVENTORY));
 app.use('/api/banners', createResilientProxy(SERVICES.OPERATIONS));
 app.use('/api/admin/banners', createResilientProxy(SERVICES.OPERATIONS));
 app.use('/api/delivery/calculate', createResilientProxy(SERVICES.OPERATIONS));

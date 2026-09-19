@@ -16,9 +16,6 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
-let inMemoryVendors: any[] = [];
-let inMemoryQuotations: any[] = [];
-
 // Initialize PostgreSQL database schema
 async function initDb() {
   try {
@@ -56,6 +53,22 @@ async function initDb() {
 
 initDb();
 
+function formatVendor(row: any) {
+  return {
+    id: row.id,
+    name: row.name || row.vendor_name,
+    vendorName: row.vendor_name || row.name,
+    email: row.email,
+    phone: row.phone,
+    category: row.category,
+    address: row.address,
+    city: row.city,
+    status: row.status,
+    active: row.active,
+    createdAt: row.created_at
+  };
+}
+
 app.get('/healthz', (_req, res) => {
   res.json({ service: 'vendor-service', status: 'OK', timestamp: new Date().toISOString() });
 });
@@ -68,25 +81,9 @@ app.get('/api/healthz', (_req, res) => {
 app.get('/api/vendors', async (_req, res) => {
   try {
     const dbRes = await pool.query('SELECT * FROM vendors ORDER BY id DESC');
-    if (dbRes.rows && dbRes.rows.length > 0) {
-      const formatted = dbRes.rows.map((row: any) => ({
-        id: row.id,
-        name: row.name || row.vendor_name,
-        vendorName: row.vendor_name || row.name,
-        email: row.email,
-        phone: row.phone,
-        category: row.category,
-        address: row.address,
-        city: row.city,
-        status: row.status,
-        active: row.active,
-        createdAt: row.created_at
-      }));
-      return res.json(formatted);
-    }
-    return res.json(inMemoryVendors);
+    return res.json(dbRes.rows.map(formatVendor));
   } catch (err: any) {
-    return res.json(inMemoryVendors);
+    return res.status(503).json({ error: 'Could not fetch vendors. Database unavailable.' });
   }
 });
 
@@ -106,22 +103,7 @@ app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], asyn
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
       [vName, vName, cEmail, cPhone, cCategory, cAddress, cCity, 'approved', true]
     );
-    const newVendor = dbRes.rows[0];
-    const formatted = {
-      id: newVendor.id,
-      name: newVendor.name,
-      vendorName: newVendor.vendor_name,
-      email: newVendor.email,
-      phone: newVendor.phone,
-      category: newVendor.category,
-      address: newVendor.address,
-      city: newVendor.city,
-      status: newVendor.status,
-      active: newVendor.active,
-      createdAt: newVendor.created_at
-    };
-
-    inMemoryVendors.unshift(formatted);
+    const formatted = formatVendor(dbRes.rows[0]);
 
     // Sync to operations service in background
     fetch('http://127.0.0.1:5002/api/vendors', {
@@ -132,21 +114,7 @@ app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], asyn
 
     return res.status(201).json(formatted);
   } catch (err: any) {
-    const newVendor = {
-      id: inMemoryVendors.length + 1,
-      name: vName,
-      vendorName: vName,
-      email: cEmail,
-      phone: cPhone,
-      category: cCategory,
-      address: cAddress,
-      city: cCity,
-      status: 'approved',
-      active: true,
-      createdAt: new Date().toISOString()
-    };
-    inMemoryVendors.unshift(newVendor);
-    return res.status(201).json(newVendor);
+    return res.status(500).json({ error: 'Failed to register vendor', message: err?.message });
   }
 });
 
@@ -156,19 +124,17 @@ app.put(['/api/vendors/:id', '/api/vendors/:id/update'], async (req, res) => {
   const { name, vendorName, email, phone, category, address, city, status, active } = req.body;
 
   try {
-    await pool.query(
-      `UPDATE vendors SET name = COALESCE($1, name), vendor_name = COALESCE($2, vendor_name), email = COALESCE($3, email), phone = COALESCE($4, phone), category = COALESCE($5, category), address = COALESCE($6, address), city = COALESCE($7, city), status = COALESCE($8, status), active = COALESCE($9, active) WHERE id = $10`,
+    const dbRes = await pool.query(
+      `UPDATE vendors SET name = COALESCE($1, name), vendor_name = COALESCE($2, vendor_name), email = COALESCE($3, email), phone = COALESCE($4, phone), category = COALESCE($5, category), address = COALESCE($6, address), city = COALESCE($7, city), status = COALESCE($8, status), active = COALESCE($9, active) WHERE id = $10 RETURNING *`,
       [name, vendorName || name, email, phone, category, address, city, status, active, targetId]
     );
 
-    const mem = inMemoryVendors.find((v) => v.id === targetId);
-    if (mem) Object.assign(mem, req.body);
-
-    return res.json({ id: targetId, ...req.body });
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      return res.json(formatVendor(dbRes.rows[0]));
+    }
+    return res.status(404).json({ error: 'Vendor not found' });
   } catch (err: any) {
-    const mem = inMemoryVendors.find((v) => v.id === targetId);
-    if (mem) Object.assign(mem, req.body);
-    return res.json(mem || { id: targetId, ...req.body });
+    return res.status(500).json({ error: 'Failed to update vendor', message: err?.message });
   }
 });
 
@@ -178,13 +144,16 @@ app.post('/api/vendors/:id/status', async (req, res) => {
   const { status, active } = req.body;
 
   try {
-    await pool.query(
-      `UPDATE vendors SET status = COALESCE($1, status), active = COALESCE($2, active) WHERE id = $3`,
+    const dbRes = await pool.query(
+      `UPDATE vendors SET status = COALESCE($1, status), active = COALESCE($2, active) WHERE id = $3 RETURNING *`,
       [status, active, targetId]
     );
-    return res.json({ id: targetId, status: status || 'approved', active: active ?? true });
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      return res.json(formatVendor(dbRes.rows[0]));
+    }
+    return res.status(404).json({ error: 'Vendor not found' });
   } catch (err: any) {
-    return res.json({ id: targetId, status: status || 'approved', active: active ?? true });
+    return res.status(500).json({ error: 'Failed to update vendor status', message: err?.message });
   }
 });
 
@@ -192,12 +161,13 @@ app.post('/api/vendors/:id/status', async (req, res) => {
 app.delete('/api/vendors/:id', async (req, res) => {
   const targetId = Number(req.params.id);
   try {
-    await pool.query('DELETE FROM vendors WHERE id = $1', [targetId]);
-    inMemoryVendors = inMemoryVendors.filter((v) => v.id !== targetId);
-    return res.json({ success: true, message: 'Vendor deleted successfully' });
+    const dbRes = await pool.query('DELETE FROM vendors WHERE id = $1 RETURNING id', [targetId]);
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      return res.json({ success: true, message: 'Vendor deleted successfully' });
+    }
+    return res.status(404).json({ error: 'Vendor not found' });
   } catch (err: any) {
-    inMemoryVendors = inMemoryVendors.filter((v) => v.id !== targetId);
-    return res.json({ success: true, message: 'Vendor deleted successfully' });
+    return res.status(500).json({ error: 'Failed to delete vendor', message: err?.message });
   }
 });
 
@@ -219,31 +189,21 @@ app.post('/api/procurement/quotations', async (req, res) => {
       [quoteId, String(vendorId || ''), produceName, qty, price, valuation, 'PENDING']
     );
 
-    const newQuotation = {
-      id: quoteId,
-      vendorId: vendorId || '',
-      produceName,
-      quantityKg: qty,
-      pricePerKg: price,
-      totalValuation: valuation,
-      status: 'PENDING',
-      submittedAt: new Date().toISOString()
-    };
-    inMemoryQuotations.unshift(newQuotation);
-    return res.status(201).json({ success: true, quotation: newQuotation });
+    return res.status(201).json({
+      success: true,
+      quotation: {
+        id: quoteId,
+        vendorId: vendorId || '',
+        produceName,
+        quantityKg: qty,
+        pricePerKg: price,
+        totalValuation: valuation,
+        status: 'PENDING',
+        submittedAt: new Date().toISOString()
+      }
+    });
   } catch (err: any) {
-    const newQuotation = {
-      id: quoteId,
-      vendorId: vendorId || '',
-      produceName,
-      quantityKg: qty,
-      pricePerKg: price,
-      totalValuation: valuation,
-      status: 'PENDING',
-      submittedAt: new Date().toISOString()
-    };
-    inMemoryQuotations.unshift(newQuotation);
-    return res.status(201).json({ success: true, quotation: newQuotation });
+    return res.status(500).json({ error: 'Failed to submit quotation', message: err?.message });
   }
 });
 
@@ -251,22 +211,18 @@ app.post('/api/procurement/quotations', async (req, res) => {
 app.get('/api/procurement/quotations', async (_req, res) => {
   try {
     const dbRes = await pool.query('SELECT * FROM farmer_quotations ORDER BY submitted_at DESC');
-    if (dbRes.rows && dbRes.rows.length > 0) {
-      const formatted = dbRes.rows.map((r: any) => ({
-        id: r.id,
-        vendorId: r.vendor_id,
-        produceName: r.produce_name,
-        quantityKg: Number(r.quantity_kg),
-        pricePerKg: Number(r.price_per_kg),
-        totalValuation: Number(r.total_valuation),
-        status: r.status,
-        submittedAt: r.submitted_at
-      }));
-      return res.json(formatted);
-    }
-    return res.json(inMemoryQuotations);
+    return res.json(dbRes.rows.map((r: any) => ({
+      id: r.id,
+      vendorId: r.vendor_id,
+      produceName: r.produce_name,
+      quantityKg: Number(r.quantity_kg),
+      pricePerKg: Number(r.price_per_kg),
+      totalValuation: Number(r.total_valuation),
+      status: r.status,
+      submittedAt: r.submitted_at
+    })));
   } catch (err: any) {
-    return res.json(inMemoryQuotations);
+    return res.status(503).json({ error: 'Could not fetch quotations. Database unavailable.' });
   }
 });
 

@@ -12,25 +12,24 @@ app.use(express.json());
 
 const pgPool = getPgPool({ serviceName: "user-service" });
 
-let memoryUsers: any[] = [];
-
 // GET /api/users
 app.get("/api/users", async (req: any, res: any) => {
   const searchQuery = (req.query.search || "").toString().toLowerCase().trim();
   try {
-    const dbRes = await pgPool.query("SELECT id, name, email, role, active, phone, city FROM users ORDER BY id ASC").catch(() => null);
-    let list = dbRes && dbRes.rows ? dbRes.rows : memoryUsers;
+    let queryStr = "SELECT id, name, email, role, active, phone, city, wallet_balance, created_at FROM users ORDER BY id ASC";
+    const params: any[] = [];
+
     if (searchQuery) {
-      list = list.filter(
-        (u: any) =>
-          u.name.toLowerCase().includes(searchQuery) ||
-          u.email.toLowerCase().includes(searchQuery) ||
-          (u.phone && u.phone.includes(searchQuery))
-      );
+      queryStr = `SELECT id, name, email, role, active, phone, city, wallet_balance, created_at FROM users
+                  WHERE LOWER(name) LIKE $1 OR LOWER(email) LIKE $1 OR (phone IS NOT NULL AND phone LIKE $1)
+                  ORDER BY id ASC`;
+      params.push(`%${searchQuery}%`);
     }
-    return res.json(list);
+
+    const dbRes = await pgPool.query(queryStr, params);
+    return res.json(dbRes.rows);
   } catch (err: any) {
-    return res.json([]);
+    return res.status(503).json({ error: "Could not fetch users. Database unavailable." });
   }
 });
 
@@ -38,17 +37,16 @@ app.get("/api/users", async (req: any, res: any) => {
 app.get("/api/users/:id", async (req: any, res: any) => {
   const targetId = Number(req.params.id);
   try {
-    const dbRes = await pgPool.query("SELECT id, name, email, role, active, phone, city FROM users WHERE id = $1", [targetId]).catch(() => null);
-    if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+    const dbRes = await pgPool.query(
+      "SELECT id, name, email, role, active, phone, city, wallet_balance, created_at FROM users WHERE id = $1",
+      [targetId]
+    );
+    if (dbRes.rows && dbRes.rows.length > 0) {
       return res.json(dbRes.rows[0]);
     }
-    const user = memoryUsers.find((u) => u.id === targetId);
-    if (!user) return res.status(404).json({ error: "User not found" });
-    return res.json(user);
+    return res.status(404).json({ error: "User not found" });
   } catch (err: any) {
-    const user = memoryUsers.find((u) => u.id === targetId);
-    if (!user) return res.status(404).json({ error: "User not found" });
-    return res.json(user);
+    return res.status(500).json({ error: "Failed to fetch user", message: err?.message });
   }
 });
 
@@ -60,35 +58,23 @@ app.post("/api/users", async (req: any, res: any) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const existing = memoryUsers.find((u) => u.email === cleanEmail);
-  if (existing) {
-    return res.status(409).json({ error: "Email already exists" });
-  }
-
   const passwordHash = await bcrypt.hash(password || "user123", 10);
-  const nextId = memoryUsers.length + 1;
-  const newUser = {
-    id: nextId,
-    name,
-    email: cleanEmail,
-    role: role || "user",
-    active: true,
-    phone: phone || null,
-    city: city || null,
-  };
 
   try {
-    await pgPool.query(
-      `INSERT INTO users (id, name, email, password_hash, role, active, phone, city)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING`,
-      [nextId, name, cleanEmail, passwordHash, role || "user", true, phone || "", city || ""]
-    ).catch(() => null);
+    // Check for duplicate
+    const existing = await pgPool.query("SELECT id FROM users WHERE LOWER(email) = $1", [cleanEmail]);
+    if (existing.rows && existing.rows.length > 0) {
+      return res.status(409).json({ error: "Email already exists" });
+    }
 
-    memoryUsers.push(newUser);
-    return res.status(201).json(newUser);
+    const dbRes = await pgPool.query(
+      `INSERT INTO users (name, email, password_hash, role, active, phone, city)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, email, role, active, phone, city, created_at`,
+      [name, cleanEmail, passwordHash, role || "customer", true, phone || null, city || null]
+    );
+    return res.status(201).json(dbRes.rows[0]);
   } catch (err: any) {
-    memoryUsers.push(newUser);
-    return res.status(201).json(newUser);
+    return res.status(500).json({ error: "Failed to create user", message: err?.message });
   }
 });
 
@@ -98,24 +84,25 @@ const handleUpdateUser = async (req: any, res: any) => {
   const updateData = req.body || {};
   const payload = updateData.data || updateData;
 
-  let user = memoryUsers.find((u) => u.id === targetId);
-  if (user) {
-    if (payload.name !== undefined) user.name = payload.name;
-    if (payload.phone !== undefined) user.phone = payload.phone;
-    if (payload.city !== undefined) user.city = payload.city;
-    if (payload.role !== undefined) user.role = payload.role;
-    if (payload.active !== undefined) user.active = payload.active;
-  }
-
   try {
-    await pgPool.query(
-      `UPDATE users SET name = $1, phone = $2, city = $3, role = $4, active = $5 WHERE id = $6`,
+    const dbRes = await pgPool.query(
+      `UPDATE users SET
+        name = COALESCE($1, name),
+        phone = COALESCE($2, phone),
+        city = COALESCE($3, city),
+        role = COALESCE($4, role),
+        active = COALESCE($5, active)
+       WHERE id = $6
+       RETURNING id, name, email, role, active, phone, city, created_at`,
       [payload.name, payload.phone, payload.city, payload.role, payload.active, targetId]
-    ).catch(() => null);
+    );
 
-    return res.json(user || { id: targetId, ...payload });
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      return res.json(dbRes.rows[0]);
+    }
+    return res.status(404).json({ error: "User not found" });
   } catch (err: any) {
-    return res.json(user || { id: targetId, ...payload });
+    return res.status(500).json({ error: "Failed to update user", message: err?.message });
   }
 };
 
@@ -126,18 +113,20 @@ app.patch("/api/users/:id", handleUpdateUser);
 const handleUserStatus = async (req: any, res: any) => {
   const targetId = Number(req.params.id);
   const { active, data } = req.body || {};
-  const newActive = active !== undefined ? active : (data?.active !== undefined ? data.active : true);
-
-  let user = memoryUsers.find((u) => u.id === targetId);
-  if (user) {
-    user.active = newActive;
-  }
+  const newActive = active !== undefined ? Boolean(active) : (data?.active !== undefined ? Boolean(data.active) : true);
 
   try {
-    await pgPool.query("UPDATE users SET active = $1 WHERE id = $2", [newActive, targetId]).catch(() => null);
-    return res.json(user || { id: targetId, active: newActive });
+    const dbRes = await pgPool.query(
+      "UPDATE users SET active = $1 WHERE id = $2 RETURNING id, name, email, role, active, phone, city",
+      [newActive, targetId]
+    );
+
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      return res.json(dbRes.rows[0]);
+    }
+    return res.status(404).json({ error: "User not found" });
   } catch (err: any) {
-    return res.json(user || { id: targetId, active: newActive });
+    return res.status(500).json({ error: "Failed to update user status", message: err?.message });
   }
 };
 
@@ -147,12 +136,14 @@ app.patch("/api/users/:id/status", handleUserStatus);
 // DELETE /api/users/:id
 app.delete("/api/users/:id", async (req: any, res: any) => {
   const targetId = Number(req.params.id);
-  memoryUsers = memoryUsers.filter((u) => u.id !== targetId);
   try {
-    await pgPool.query("DELETE FROM users WHERE id = $1", [targetId]).catch(() => null);
-    return res.json({ success: true, message: "User deleted successfully" });
+    const dbRes = await pgPool.query("DELETE FROM users WHERE id = $1 RETURNING id", [targetId]);
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      return res.json({ success: true, message: "User deleted successfully" });
+    }
+    return res.status(404).json({ error: "User not found" });
   } catch (err: any) {
-    return res.json({ success: true, message: "User deleted successfully" });
+    return res.status(500).json({ error: "Failed to delete user", message: err?.message });
   }
 });
 

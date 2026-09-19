@@ -95,19 +95,74 @@ function createFastModel(initialData: any[] = []) {
 const Product = createFastModel();
 const Vendor = createFastModel();
 const Warehouse = createFastModel();
-const User = createFastModel([
-  { id: 1, name: "Sunotal Admin", email: "admin@sunotal.com", role: "admin", active: true }
-]);
+const User = createFastModel();
 const Category = createFastModel();
-const Quotation = createFastModel();
 const Order = createFastModel();
 const Inventory = createFastModel();
-const RiderPayout = createFastModel();
 
 async function getNextId(Model: any): Promise<number> {
   const count = await Model.countDocuments();
   return count + 1;
 }
+
+// Initialize PostgreSQL tables for operations-service (quotations, payouts, warehouses)
+async function initDb() {
+  try {
+    await pgPool.query(`
+      CREATE TABLE IF NOT EXISTS quotations (
+        id SERIAL PRIMARY KEY,
+        vendor_name VARCHAR(255),
+        produce VARCHAR(255),
+        crop_name VARCHAR(255),
+        quantity NUMERIC(10, 2),
+        price NUMERIC(10, 2),
+        category VARCHAR(100) DEFAULT 'Grains',
+        unit VARCHAR(50) DEFAULT 'Quintal',
+        quality_grade VARCHAR(100) DEFAULT 'Grade A',
+        expected_harvest_date VARCHAR(50),
+        dark_store_allocation VARCHAR(255) DEFAULT 'Central Store',
+        notes TEXT,
+        phone VARCHAR(50),
+        address TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        payment_status VARCHAR(50) DEFAULT 'processing',
+        invoice_generated BOOLEAN DEFAULT FALSE,
+        invoice_number VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS rider_payouts (
+        id SERIAL PRIMARY KEY,
+        rider_id VARCHAR(255),
+        amount NUMERIC(10, 2) NOT NULL,
+        transaction_id VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS warehouses (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        address TEXT,
+        city VARCHAR(100),
+        latitude NUMERIC(10, 6),
+        longitude NUMERIC(10, 6),
+        free_delivery_radius_km NUMERIC(5,2) DEFAULT 30,
+        max_service_radius_km NUMERIC(5,2) DEFAULT 70,
+        base_delivery_fee NUMERIC(10,2) DEFAULT 50,
+        per_km_rate NUMERIC(10,2) DEFAULT 8,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('🐘 [operations-service] PostgreSQL tables ready (quotations, rider_payouts, warehouses).');
+  } catch (err: any) {
+    console.warn('⚠️ [operations-service] DB init warning:', err?.message || err);
+  }
+}
+
+initDb();
 
 // GET /api/admin/stats — Dynamic Real-Time PostgreSQL Querying
 app.get("/api/admin/stats", async (_req, res) => {
@@ -213,70 +268,67 @@ const withTimeout = (promise: Promise<any>, ms = 1500, fallback: any = []) => {
 // GET & POST /api/admin/quotations
 app.get("/api/admin/quotations", async (_req, res) => {
   try {
-    const quotes = await withTimeout(Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []), 1500, []);
-    return res.json(quotes || []);
-  } catch {
-    return res.json([]);
+    const dbRes = await pgPool.query('SELECT * FROM quotations ORDER BY created_at DESC');
+    return res.json(dbRes.rows.map((q: any) => ({
+      id: q.id, vendorName: q.vendor_name, name: q.vendor_name,
+      produce: q.produce, cropName: q.crop_name,
+      quantity: Number(q.quantity), price: Number(q.price),
+      category: q.category, unit: q.unit, qualityGrade: q.quality_grade,
+      expectedHarvestDate: q.expected_harvest_date, darkStoreAllocation: q.dark_store_allocation,
+      notes: q.notes, phone: q.phone, address: q.address,
+      status: q.status, paymentStatus: q.payment_status,
+      invoiceGenerated: q.invoice_generated, invoiceNumber: q.invoice_number,
+      createdAt: q.created_at, updatedAt: q.updated_at
+    })));
+  } catch (err: any) {
+    return res.status(503).json({ error: 'Could not fetch quotations. Database unavailable.' });
   }
 });
 
 app.get("/api/vendors/quotations", async (_req, res) => {
   try {
-    const quotes = await withTimeout(Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []), 1500, []);
-    return res.json(quotes || []);
-  } catch {
-    return res.json([]);
+    const dbRes = await pgPool.query('SELECT * FROM quotations ORDER BY created_at DESC');
+    return res.json(dbRes.rows.map((q: any) => ({
+      id: q.id, vendorName: q.vendor_name, name: q.vendor_name,
+      produce: q.produce, cropName: q.crop_name,
+      quantity: Number(q.quantity), price: Number(q.price),
+      category: q.category, unit: q.unit, qualityGrade: q.quality_grade,
+      expectedHarvestDate: q.expected_harvest_date, darkStoreAllocation: q.dark_store_allocation,
+      notes: q.notes, phone: q.phone, address: q.address,
+      status: q.status, paymentStatus: q.payment_status,
+      invoiceGenerated: q.invoice_generated, invoiceNumber: q.invoice_number,
+      createdAt: q.created_at
+    })));
+  } catch (err: any) {
+    return res.status(503).json({ error: 'Could not fetch quotations. Database unavailable.' });
   }
 });
 
 app.post("/api/vendors/quotations", async (req: any, res: any) => {
   try {
-    const {
-      vendorName,
-      name,
-      cropName,
-      produce,
-      quantity,
-      price,
-      category,
-      unit,
-      qualityGrade,
-      expectedHarvestDate,
-      darkStoreAllocation,
-      notes,
-      phone,
-      address,
-      location,
-    } = req.body;
-
+    const { vendorName, name, cropName, produce, quantity, price, category, unit, qualityGrade, expectedHarvestDate, darkStoreAllocation, notes, phone, address, location } = req.body;
     const produceName = produce || cropName;
-    const vName = vendorName || name || req.user?.name || "Local Farm Vendor";
+    const vName = vendorName || name || "Local Farm Vendor";
 
     if (!produceName || quantity === undefined || price === undefined) {
       return res.status(400).json({ error: "Missing required quotation fields: produce name, quantity, and price are required" });
     }
 
-    const nextId = await getNextId(Quotation);
-    const newQuote = await Quotation.create({
-      id: nextId,
-      name: vName,
-      vendorName: vName,
-      produce: produceName,
-      cropName: produceName,
-      quantity: Number(quantity),
-      price: Number(price),
-      category: category || "Grains",
-      unit: unit || "Quintal",
-      qualityGrade: qualityGrade || "Grade A (Organic / Premium)",
-      expectedHarvestDate: expectedHarvestDate || new Date().toISOString().split("T")[0],
-      darkStoreAllocation: darkStoreAllocation || "Central Store",
-      notes: notes || "",
-      phone: phone || req.user?.phone || "N/A",
-      address: address || location || req.user?.city || "Direct Sourcing Mandal",
-      status: "pending",
-      paymentStatus: "processing",
+    const dbRes = await pgPool.query(
+      `INSERT INTO quotations (vendor_name, produce, crop_name, quantity, price, category, unit, quality_grade, expected_harvest_date, dark_store_allocation, notes, phone, address, status, payment_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+      [vName, produceName, produceName, Number(quantity), Number(price), category || 'Grains', unit || 'Quintal', qualityGrade || 'Grade A (Organic / Premium)', expectedHarvestDate || new Date().toISOString().split('T')[0], darkStoreAllocation || 'Central Store', notes || '', phone || 'N/A', address || location || 'Direct Sourcing Mandal', 'pending', 'processing']
+    );
+    const q = dbRes.rows[0];
+    return res.status(201).json({
+      id: q.id, vendorName: q.vendor_name, name: q.vendor_name,
+      produce: q.produce, cropName: q.crop_name,
+      quantity: Number(q.quantity), price: Number(q.price),
+      category: q.category, unit: q.unit, qualityGrade: q.quality_grade,
+      expectedHarvestDate: q.expected_harvest_date, darkStoreAllocation: q.dark_store_allocation,
+      notes: q.notes, phone: q.phone, address: q.address,
+      status: q.status, paymentStatus: q.payment_status, createdAt: q.created_at
     });
-    return res.status(201).json(newQuote);
   } catch (err: any) {
     console.error("Error creating quotation:", err);
     return res.status(500).json({ error: err.message || "Failed to create quotation" });
@@ -287,8 +339,23 @@ const handleQuotationStatus = async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
     const { status } = req.body;
-    const updated = await Quotation.findOneAndUpdate({ id }, { $set: { status } }, { new: true }).exec();
-    if (!updated) return res.status(404).json({ error: "Quotation not found" });
+    const dbRes = await pgPool.query(
+      `UPDATE quotations SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [status, id]
+    );
+    if (!dbRes.rows || dbRes.rows.length === 0) return res.status(404).json({ error: "Quotation not found" });
+    const q = dbRes.rows[0];
+    const updated = {
+      id: q.id, vendorName: q.vendor_name, name: q.vendor_name,
+      produce: q.produce, cropName: q.crop_name,
+      quantity: Number(q.quantity), price: Number(q.price),
+      category: q.category, unit: q.unit, qualityGrade: q.quality_grade,
+      expectedHarvestDate: q.expected_harvest_date, darkStoreAllocation: q.dark_store_allocation,
+      notes: q.notes, phone: q.phone, address: q.address,
+      status: q.status, paymentStatus: q.payment_status,
+      invoiceGenerated: q.invoice_generated, invoiceNumber: q.invoice_number,
+      createdAt: q.created_at, updatedAt: q.updated_at
+    };
 
     // Automatic product and inventory creation when quotation is approved/accepted by Admin!
     if (status === "accepted" || status === "approved") {
@@ -389,11 +456,22 @@ app.patch("/api/admin/quotations/:id/status", handleQuotationStatus);
 
 const handleGenerateInvoice = async (req: any, res: any) => {
   const id = Number(req.params.id);
-  const q = await Quotation.findOneAndUpdate(
-    { id },
-    { $set: { invoiceGenerated: true, invoiceNumber: `INV-2026-${id}` } },
-    { new: true }
-  ).exec().catch(() => null);
+  const invoiceNum = `INV-2026-${id}`;
+  const dbRes = await pgPool.query(
+    `UPDATE quotations SET invoice_generated = TRUE, invoice_number = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [invoiceNum, id]
+  ).catch(() => null);
+  const q = dbRes?.rows?.[0] ? {
+    invoiceNumber: dbRes.rows[0].invoice_number,
+    quantity: dbRes.rows[0].quantity,
+    price: dbRes.rows[0].price,
+    vendorName: dbRes.rows[0].vendor_name,
+    produce: dbRes.rows[0].produce,
+    unit: dbRes.rows[0].unit,
+    qualityGrade: dbRes.rows[0].quality_grade,
+    paymentStatus: dbRes.rows[0].payment_status,
+    createdAt: dbRes.rows[0].created_at
+  } : null;
 
   const totalAmount = Number(q?.quantity || 10) * Number(q?.price || 500);
   const gst = Math.round(totalAmount * 0.05);
@@ -403,8 +481,8 @@ const handleGenerateInvoice = async (req: any, res: any) => {
     success: true,
     invoiceNumber: q?.invoiceNumber || `INV-2026-${id}`,
     quotationId: id,
-    vendorName: q?.vendorName || q?.name || "Local Farmer",
-    cropName: q?.produce || q?.cropName || "Produce",
+    vendorName: q?.vendorName || "Local Farmer",
+    cropName: q?.produce || "Produce",
     quantity: q?.quantity || 10,
     unit: q?.unit || "Quintal",
     price: q?.price || 500,
@@ -421,7 +499,15 @@ app.post("/api/admin/quotations/:id/invoice", handleGenerateInvoice);
 // GET /api/vendors/invoices
 app.get("/api/vendors/invoices", async (_req: any, res: any) => {
   try {
-    const quotes = await Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    const dbRes = await pgPool.query("SELECT * FROM quotations ORDER BY created_at DESC");
+    const quotes = dbRes.rows.map((q: any) => ({
+      id: q.id, vendorName: q.vendor_name, name: q.vendor_name,
+      produce: q.produce, cropName: q.crop_name,
+      quantity: Number(q.quantity), price: Number(q.price),
+      unit: q.unit, paymentStatus: q.payment_status,
+      status: q.status, invoiceGenerated: q.invoice_generated,
+      invoiceNumber: q.invoice_number, createdAt: q.created_at
+    }));
     // Include accepted, approved, paid, or invoice generated quotations
     const eligibleQuotes = (quotes || []).filter((q: any) =>
       q.status === "accepted" || q.status === "approved" || q.paymentStatus === "paid" || q.invoiceGenerated
@@ -463,20 +549,21 @@ app.get("/api/vendors/invoices", async (_req: any, res: any) => {
 app.get("/api/vendors/invoices/:id/download", async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
-    const q = await Quotation.findOne({ id }).exec().catch(() => null);
+    const dbRes = await pgPool.query('SELECT * FROM quotations WHERE id = $1', [id]).catch(() => null);
+    const row = dbRes?.rows?.[0] || null;
 
-    const invoiceNum = q?.invoiceNumber || `INV-2026-${id}`;
-    const vendorName = q?.vendorName || q?.name || "Farmer Vendor";
-    const produce = q?.produce || q?.cropName || "Organic Crop Produce";
-    const qty = Number(q?.quantity || 10);
-    const unit = q?.unit || "Quintal";
-    const price = Number(q?.price || 500);
+    const invoiceNum = row?.invoice_number || `INV-2026-${id}`;
+    const vendorName = row?.vendor_name || "Farmer Vendor";
+    const produce = row?.produce || row?.crop_name || "Organic Crop Produce";
+    const qty = Number(row?.quantity || 10);
+    const unit = row?.unit || "Quintal";
+    const price = Number(row?.price || 500);
     const subtotal = qty * price;
     const gst = Math.round(subtotal * 0.05);
     const grandTotal = subtotal + gst;
-    const dateStr = q?.createdAt ? new Date(q.createdAt).toLocaleDateString("en-IN", { dateStyle: "full" }) : new Date().toLocaleDateString("en-IN", { dateStyle: "full" });
-    const location = q?.address || q?.location || "Direct Sourcing Center";
-    const statusStr = (q?.paymentStatus || "paid").toUpperCase();
+    const dateStr = row?.created_at ? new Date(row.created_at).toLocaleDateString("en-IN", { dateStyle: "full" }) : new Date().toLocaleDateString("en-IN", { dateStyle: "full" });
+    const location = row?.address || "Direct Sourcing Center";
+    const statusStr = (row?.payment_status || "paid").toUpperCase();
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -555,7 +642,7 @@ app.get("/api/vendors/invoices/:id/download", async (req: any, res: any) => {
       </thead>
       <tbody>
         <tr>
-          <td><strong>${produce}</strong><br/><span style="font-size: 11px; color: #94a3b8;">${q?.qualityGrade || 'Grade A Quality Passed'}</span></td>
+          <td><strong>${produce}</strong><br/><span style="font-size: 11px; color: #94a3b8;">${row?.quality_grade || 'Grade A Quality Passed'}</span></td>
           <td>${qty} ${unit}</td>
           <td>₹${price.toLocaleString('en-IN')}</td>
           <td>₹${subtotal.toLocaleString('en-IN')}</td>
@@ -588,16 +675,19 @@ app.get("/api/vendors/invoices/:id/download", async (req: any, res: any) => {
 
 const handlePayout = async (req: any, res: any) => {
   const id = Number(req.params.id);
-  const updated = await Quotation.findOneAndUpdate(
-    { id },
-    { $set: { paymentStatus: "paid" } },
-    { new: true }
-  ).exec().catch(() => null);
-
+  const dbRes = await pgPool.query(
+    `UPDATE quotations SET payment_status = 'paid', updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [id]
+  ).catch(() => null);
+  const q = dbRes?.rows?.[0] || null;
   return res.json({
     success: true,
     message: "Payout confirmed successfully",
-    quotation: updated,
+    quotation: q ? {
+      id: q.id, vendorName: q.vendor_name, produce: q.produce,
+      quantity: Number(q.quantity), price: Number(q.price),
+      status: q.status, paymentStatus: q.payment_status
+    } : null,
   });
 };
 
@@ -606,60 +696,51 @@ app.post("/api/admin/quotations/:id/payout", handlePayout);
 app.put("/api/admin/quotations/:id/payout", handlePayout);
 app.patch("/api/admin/quotations/:id/payout", handlePayout);
 
-// GET & PUT /api/admin/rider-payouts
+// GET & PUT /api/admin/rider-payouts — PostgreSQL
 app.get("/api/admin/rider-payouts", async (_req: any, res: any) => {
   try {
-    const payouts = await RiderPayout.find().sort({ createdAt: -1 }).exec().catch(() => []);
-    return res.json(payouts || []);
+    const dbRes = await pgPool.query('SELECT * FROM rider_payouts ORDER BY created_at DESC');
+    return res.json(dbRes.rows);
   } catch (err: any) {
-    return res.json([]);
+    return res.status(503).json({ error: 'Could not fetch rider payouts. Database unavailable.' });
   }
 });
-
 
 const handleUpdateRiderPayoutOps = async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
     const { status } = req.body;
-    const updated = await RiderPayout.findOneAndUpdate({ id }, { $set: { status: status || "paid" } }, { new: true }).exec();
-    if (!updated) return res.status(404).json({ error: "Rider payout request not found" });
-    return res.json(updated);
-  } catch {
-    return res.status(500).json({ error: "Failed to update rider payout" });
+    const dbRes = await pgPool.query(
+      `UPDATE rider_payouts SET status = $1 WHERE id = $2 RETURNING *`,
+      [status || 'paid', id]
+    );
+    if (!dbRes.rows || dbRes.rows.length === 0) return res.status(404).json({ error: "Rider payout request not found" });
+    return res.json(dbRes.rows[0]);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to update rider payout", message: err?.message });
   }
 };
 app.put("/api/admin/rider-payouts/:id", handleUpdateRiderPayoutOps);
 app.patch("/api/admin/rider-payouts/:id", handleUpdateRiderPayoutOps);
 
-// POST /api/admin/login
+// POST /api/admin/login — proxied from auth-service; duplicate here removed to avoid confusion
+// Auth is handled by auth-service at port 5001. This route kept for compatibility.
 app.post("/api/admin/login", async (req: any, res: any) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: "Email and password are required" });
   }
-
-  const cleanEmail = email.trim().toLowerCase();
-
-  // Hardcoded Admin Account Check - Instant Response
-  if (cleanEmail === "admin@sunotal.com" && password === "admin123") {
-    const token = jwt.sign({ userId: 1, email: "admin@sunotal.com", role: "admin" }, JWT_SECRET, { expiresIn: "7d" });
-    return res.json({ token, user: { id: 1, name: "Admin User", email: "admin@sunotal.com", role: "admin" } });
-  }
-
+  // Forward to auth-service which handles credentials properly
   try {
-    const user: any = await User.findOne({ email: cleanEmail }).exec().catch(() => null);
-
-    if (user && user.passwordHash) {
-      const isMatch = await bcrypt.compare(password, user.passwordHash).catch(() => false);
-      if (isMatch) {
-        const token = jwt.sign({ userId: user.id, email: user.email, role: user.role || "admin" }, JWT_SECRET, { expiresIn: "7d" });
-        return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role || "admin" } });
-      }
-    }
-    return res.status(401).json({ error: "Invalid admin credentials" });
+    const authRes = await fetch('http://127.0.0.1:5001/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await authRes.json();
+    return res.status(authRes.status).json(data);
   } catch (err: any) {
-    console.error("Admin login error:", err);
-    return res.status(401).json({ error: "Invalid admin credentials" });
+    return res.status(503).json({ error: 'Auth service unavailable. Please try again.' });
   }
 });
 
@@ -856,11 +937,9 @@ app.get(["/api/vendors", "/api/admin/vendors"], async (_req: any, res: any) => {
       }));
       return res.json(formatted);
     }
-    const vendors = await Vendor.find().sort({ createdAt: -1 }).exec().catch(() => []);
-    return res.json(vendors || []);
+    return res.json([]);
   } catch {
-    const vendors = await Vendor.find().sort({ createdAt: -1 }).exec().catch(() => []);
-    return res.json(vendors || []);
+    return res.json([]);
   }
 });
 
@@ -881,11 +960,9 @@ app.get(["/api/users", "/api/admin/users"], async (_req: any, res: any) => {
       }));
       return res.json(formatted);
     }
-    const users = await User.find().select("-passwordHash").sort({ createdAt: -1 }).exec().catch(() => []);
-    return res.json(users || []);
+    return res.json([]);
   } catch {
-    const users = await User.find().select("-passwordHash").sort({ createdAt: -1 }).exec().catch(() => []);
-    return res.json(users || []);
+    return res.json([]);
   }
 });
 
@@ -1389,40 +1466,57 @@ app.get("/api/admin/observability", async (_req, res) => {
 
 app.get("/api/admin/ledger", async (_req, res) => {
   try {
-    const orders = await Order.find().sort({ createdAt: -1 }).limit(20).exec().catch(() => []);
-    const transactions = orders.map((o: any) => ({
-      id: o.orderId,
-      type: "credit",
-      description: `Customer Payment - ${o.orderId}`,
-      amount: o.totalAmount || 0,
-      date: o.createdAt,
-      status: "completed",
-    }));
-    return res.json(transactions);
+    const dbRes = await pgPool.query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 20').catch(() => null);
+    if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+      const transactions = dbRes.rows.map((o: any) => ({
+        id: o.id || o.order_number,
+        type: "credit",
+        description: `Customer Payment - ${o.id || o.order_number}`,
+        amount: Number(o.final_amount || o.total_amount || 0),
+        date: o.created_at,
+        status: "completed",
+      }));
+      return res.json(transactions);
+    }
+    return res.json([]);
   } catch {
     return res.json([]);
   }
 });
 
-// GET & POST /api/warehouses
+// GET & POST /api/warehouses — PostgreSQL
 app.get("/api/warehouses", async (_req, res) => {
   try {
-    const warehouses = await Warehouse.find().sort({ createdAt: -1 }).exec().catch(() => []);
-    return res.json(warehouses || []);
+    const dbRes = await pgPool.query('SELECT * FROM warehouses ORDER BY id DESC');
+    return res.json(dbRes.rows.map((w: any) => ({
+      id: w.id, name: w.name, address: w.address, city: w.city,
+      latitude: Number(w.latitude), longitude: Number(w.longitude),
+      freeDeliveryRadiusKm: Number(w.free_delivery_radius_km),
+      maxServiceRadiusKm: Number(w.max_service_radius_km),
+      baseDeliveryFee: Number(w.base_delivery_fee),
+      perKmRate: Number(w.per_km_rate),
+      isActive: w.is_active, createdAt: w.created_at
+    })));
   } catch {
-    // Ignored
+    return res.json([]);
   }
-  return res.json([]);
 });
 
 app.get("/api/admin/warehouses", async (_req, res) => {
   try {
-    const warehouses = await Warehouse.find().sort({ createdAt: -1 }).exec().catch(() => []);
-    return res.json(warehouses || []);
+    const dbRes = await pgPool.query('SELECT * FROM warehouses ORDER BY id DESC');
+    return res.json(dbRes.rows.map((w: any) => ({
+      id: w.id, name: w.name, address: w.address, city: w.city,
+      latitude: Number(w.latitude), longitude: Number(w.longitude),
+      freeDeliveryRadiusKm: Number(w.free_delivery_radius_km),
+      maxServiceRadiusKm: Number(w.max_service_radius_km),
+      baseDeliveryFee: Number(w.base_delivery_fee),
+      perKmRate: Number(w.per_km_rate),
+      isActive: w.is_active, createdAt: w.created_at
+    })));
   } catch {
-    // Ignored
+    return res.json([]);
   }
-  return res.json([]);
 });
 
 app.post("/api/admin/warehouses", async (req: any, res: any) => {
@@ -1432,51 +1526,67 @@ app.post("/api/admin/warehouses", async (req: any, res: any) => {
       return res.status(400).json({ error: "Name, address, and city are required" });
     }
     const coords = geocodeAddress(`${name} ${address}`, city, Number(latitude), Number(longitude));
-    const nextId = await getNextId(Warehouse);
-    const warehouse = await Warehouse.create({
-      id: nextId,
-      name,
-      address,
-      city,
-      latitude: coords.lat,
-      longitude: coords.lng,
-      freeDeliveryRadiusKm: Number(freeDeliveryRadiusKm || 30),
-      maxServiceRadiusKm: Number(maxServiceRadiusKm || 70),
-      baseDeliveryFee: Number(baseDeliveryFee || 50),
-      perKmRate: Number(perKmRate || 8),
-      isActive: true,
+    const dbRes = await pgPool.query(
+      `INSERT INTO warehouses (name, address, city, latitude, longitude, free_delivery_radius_km, max_service_radius_km, base_delivery_fee, per_km_rate, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [name, address, city, coords.lat, coords.lng, Number(freeDeliveryRadiusKm || 30), Number(maxServiceRadiusKm || 70), Number(baseDeliveryFee || 50), Number(perKmRate || 8), true]
+    );
+    const w = dbRes.rows[0];
+    return res.status(201).json({
+      id: w.id, name: w.name, address: w.address, city: w.city,
+      latitude: Number(w.latitude), longitude: Number(w.longitude),
+      freeDeliveryRadiusKm: Number(w.free_delivery_radius_km),
+      maxServiceRadiusKm: Number(w.max_service_radius_km),
+      baseDeliveryFee: Number(w.base_delivery_fee),
+      perKmRate: Number(w.per_km_rate),
+      isActive: w.is_active, createdAt: w.created_at
     });
-    return res.status(201).json(warehouse);
   } catch (err: any) {
-    return res.status(500).json({ error: "Failed to create warehouse" });
+    return res.status(500).json({ error: "Failed to create warehouse", message: err?.message });
   }
 });
 
 app.put("/api/admin/warehouses/:id", async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
-    const updateData = req.body;
-    if (updateData.address || updateData.city || updateData.name) {
-      const coords = geocodeAddress(`${updateData.name || ""} ${updateData.address || ""}`, updateData.city || "", Number(updateData.latitude), Number(updateData.longitude));
-      updateData.latitude = coords.lat;
-      updateData.longitude = coords.lng;
-    }
-    const dbW = await Warehouse.findOneAndUpdate({ id }, { $set: updateData }, { new: true }).exec();
-    if (!dbW) return res.status(404).json({ error: "Warehouse not found" });
-    return res.json(dbW);
+    const { name, address, city, latitude, longitude, freeDeliveryRadiusKm, maxServiceRadiusKm, baseDeliveryFee, perKmRate, isActive } = req.body;
+    const coords = geocodeAddress(`${name || ''} ${address || ''}`, city || '', Number(latitude), Number(longitude));
+    const dbRes = await pgPool.query(
+      `UPDATE warehouses SET
+        name = COALESCE($1, name), address = COALESCE($2, address), city = COALESCE($3, city),
+        latitude = COALESCE($4, latitude), longitude = COALESCE($5, longitude),
+        free_delivery_radius_km = COALESCE($6, free_delivery_radius_km),
+        max_service_radius_km = COALESCE($7, max_service_radius_km),
+        base_delivery_fee = COALESCE($8, base_delivery_fee),
+        per_km_rate = COALESCE($9, per_km_rate),
+        is_active = COALESCE($10, is_active)
+       WHERE id = $11 RETURNING *`,
+      [name, address, city, coords.lat || null, coords.lng || null, freeDeliveryRadiusKm, maxServiceRadiusKm, baseDeliveryFee, perKmRate, isActive, id]
+    );
+    if (!dbRes.rows || dbRes.rows.length === 0) return res.status(404).json({ error: "Warehouse not found" });
+    const w = dbRes.rows[0];
+    return res.json({
+      id: w.id, name: w.name, address: w.address, city: w.city,
+      latitude: Number(w.latitude), longitude: Number(w.longitude),
+      freeDeliveryRadiusKm: Number(w.free_delivery_radius_km),
+      maxServiceRadiusKm: Number(w.max_service_radius_km),
+      baseDeliveryFee: Number(w.base_delivery_fee),
+      perKmRate: Number(w.per_km_rate),
+      isActive: w.is_active
+    });
   } catch (err: any) {
-    return res.status(500).json({ error: "Failed to update warehouse" });
+    return res.status(500).json({ error: "Failed to update warehouse", message: err?.message });
   }
 });
 
 app.delete("/api/admin/warehouses/:id", async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
-    const result = await Warehouse.deleteOne({ id }).exec();
-    if (result.deletedCount === 0) return res.status(404).json({ error: "Warehouse not found" });
+    const dbRes = await pgPool.query('DELETE FROM warehouses WHERE id = $1 RETURNING id', [id]);
+    if (!dbRes.rows || dbRes.rows.length === 0) return res.status(404).json({ error: "Warehouse not found" });
     return res.json({ success: true, message: "Warehouse deleted" });
   } catch (err: any) {
-    return res.status(500).json({ error: "Failed to delete warehouse" });
+    return res.status(500).json({ error: "Failed to delete warehouse", message: err?.message });
   }
 });
 

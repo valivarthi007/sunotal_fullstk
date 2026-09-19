@@ -26,8 +26,6 @@ const DEFAULT_DEMO_USERS = [
   { id: "4", name: "Express Rider", email: "rider@sunotal.com", role: "rider", status: "active", active: true, phone: "9876543213", city: "Bengaluru", walletBalance: 300, createdAt: new Date().toISOString() }
 ];
 
-let inMemoryUsers: any[] = [...DEFAULT_DEMO_USERS];
-
 async function initDb() {
   try {
     await pool.query(`
@@ -116,7 +114,6 @@ app.post('/api/auth/register', async (req, res) => {
     );
 
     const newUser = normalizeUserRow(insertRes.rows[0]);
-    inMemoryUsers.unshift(newUser);
 
     fetch('http://127.0.0.1:5002/api/users/sync', {
       method: 'POST',
@@ -127,30 +124,11 @@ app.post('/api/auth/register', async (req, res) => {
     const token = signToken({ id: newUser.id, email: newUser.email, name: newUser.name, role: newUser.role });
     return res.status(201).json({ success: true, token, user: newUser });
   } catch (err: any) {
-    // Zero-Downtime Fallback: Create resilient user record if DB is unavailable
-    const existing = inMemoryUsers.find((u) => u.email.toLowerCase() === cleanEmail);
-    if (existing) {
-      return res.status(409).json({ error: 'User already exists with this email' });
-    }
-    const newUser = {
-      id: String(Date.now()),
-      name,
-      email: cleanEmail,
-      role: role || 'customer',
-      status: 'active',
-      active: true,
-      phone: phone || '',
-      city: city || '',
-      walletBalance: 100,
-      createdAt: new Date().toISOString()
-    };
-    inMemoryUsers.unshift(newUser);
-    const token = signToken({ id: newUser.id, email: newUser.email, name: newUser.name, role: newUser.role });
-    return res.status(201).json({ success: true, token, user: newUser });
+    return res.status(500).json({ error: 'Registration failed. Please try again.', message: err?.message });
   }
 });
 
-// Login
+// Login — DB-only authentication (no password bypass)
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -167,41 +145,15 @@ app.post('/api/auth/login', async (req, res) => {
         const token = signToken({ id: normUser.id, email: normUser.email, name: normUser.name, role: normUser.role });
         return res.json({ success: true, token, user: normUser });
       }
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
-  } catch (err: any) {}
-
-  // Check inMemoryUsers fallback
-  const memUser = inMemoryUsers.find((u) => u.email.toLowerCase() === cleanEmail);
-  if (memUser) {
-    const token = signToken({ id: memUser.id, email: memUser.email, name: memUser.name, role: memUser.role });
-    return res.json({ success: true, token, user: memUser });
+    return res.status(401).json({ error: 'Invalid email or password' });
+  } catch (err: any) {
+    return res.status(503).json({ error: 'Authentication service temporarily unavailable. Please try again.' });
   }
-
-  // Graceful fallback for any email provided with valid length password
-  if (password && password.length >= 6) {
-    const emailName = cleanEmail.split('@')[0];
-    const displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-    const fallbackUser = {
-      id: String(Date.now()),
-      name: displayName,
-      email: cleanEmail,
-      role: cleanEmail.includes('admin') ? 'admin' : cleanEmail.includes('vendor') ? 'vendor' : 'customer',
-      status: 'active',
-      active: true,
-      phone: '9876543210',
-      city: 'Bengaluru',
-      walletBalance: 250,
-      createdAt: new Date().toISOString()
-    };
-    inMemoryUsers.unshift(fallbackUser);
-    const token = signToken({ id: fallbackUser.id, email: fallbackUser.email, name: fallbackUser.name, role: fallbackUser.role });
-    return res.json({ success: true, token, user: fallbackUser });
-  }
-
-  return res.status(401).json({ error: 'Invalid email or password' });
 });
 
-// Role-based Login Handlers
+// Role-based Login Handlers — DB-only authentication
 const loginRoleHandler = (roles: string[]) => async (req: express.Request, res: express.Response) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -221,36 +173,12 @@ const loginRoleHandler = (roles: string[]) => async (req: express.Request, res: 
         const token = signToken({ id: normUser.id, email: normUser.email, name: normUser.name, role: normUser.role });
         return res.json({ success: true, token, user: normUser });
       }
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
-  } catch (err: any) {}
-
-  const memUser = inMemoryUsers.find((u) => u.email.toLowerCase() === cleanEmail);
-  if (memUser) {
-    const token = signToken({ id: memUser.id, email: memUser.email, name: memUser.name, role: memUser.role });
-    return res.json({ success: true, token, user: memUser });
+    return res.status(401).json({ error: 'Invalid email or password' });
+  } catch (err: any) {
+    return res.status(503).json({ error: 'Authentication service temporarily unavailable. Please try again.' });
   }
-
-  if (password && password.length >= 6) {
-    const emailName = cleanEmail.split('@')[0];
-    const displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-    const fallbackUser = {
-      id: String(Date.now()),
-      name: displayName,
-      email: cleanEmail,
-      role: roles[0] || 'admin',
-      status: 'active',
-      active: true,
-      phone: '9876543210',
-      city: 'Bengaluru',
-      walletBalance: 250,
-      createdAt: new Date().toISOString()
-    };
-    inMemoryUsers.unshift(fallbackUser);
-    const token = signToken({ id: fallbackUser.id, email: fallbackUser.email, name: fallbackUser.name, role: fallbackUser.role });
-    return res.json({ success: true, token, user: fallbackUser });
-  }
-
-  return res.status(401).json({ error: 'Invalid email or password' });
 };
 
 app.post('/api/auth/login/vendor', loginRoleHandler(['vendor']));
@@ -258,36 +186,50 @@ app.post('/api/auth/login/delivery', loginRoleHandler(['driver', 'delivery', 'ri
 app.post('/api/auth/admin/login', loginRoleHandler(['admin']));
 app.post('/api/admin/login', loginRoleHandler(['admin']));
 
-// Users management for Admin
+// Users management for Admin — DB-only
 app.get(['/api/users', '/api/admin/users'], async (_req, res) => {
-  const userMap = new Map();
-  inMemoryUsers.forEach((u) => {
-    if (u && (u.email || u.id)) userMap.set(String(u.email || u.id).toLowerCase(), u);
-  });
-
   try {
     const dbRes = await pool.query('SELECT * FROM users ORDER BY id ASC');
-    if (dbRes.rows && dbRes.rows.length > 0) {
-      dbRes.rows.forEach((row: any) => {
-        const norm = normalizeUserRow(row);
-        userMap.set(norm.email.toLowerCase(), norm);
-      });
-    }
-  } catch (err: any) {}
+    return res.json(dbRes.rows.map(normalizeUserRow));
+  } catch (err: any) {
+    return res.status(503).json({ error: 'Could not fetch users. Database unavailable.' });
+  }
+});
 
-  return res.json(Array.from(userMap.values()));
+// Sync user from another service
+app.post('/api/users/sync', async (req, res) => {
+  const { id, name, email, role, phone, city, active } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required for sync' });
+
+  const cleanEmail = email.trim().toLowerCase();
+  try {
+    await pool.query(
+      `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (email) DO UPDATE SET
+         name = COALESCE(EXCLUDED.name, users.name),
+         role = COALESCE(EXCLUDED.role, users.role),
+         phone = COALESCE(EXCLUDED.phone, users.phone),
+         city = COALESCE(EXCLUDED.city, users.city),
+         active = COALESCE(EXCLUDED.active, users.active)`,
+      [name || 'User', cleanEmail, 'synced_no_password', role || 'customer', active ?? true, phone || '', city || '', 100]
+    );
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.json({ success: false, message: err?.message });
+  }
 });
 
 // Update User (Admin)
 app.put('/api/users/:id', async (req, res) => {
   const targetId = Number(req.params.id);
   const { name, role, phone, city, status, active } = req.body;
-  const newActive = active !== undefined ? Boolean(active) : (status ? status === 'active' : true);
+  const newActive = active !== undefined ? Boolean(active) : (status ? status === 'active' : undefined);
 
   try {
     const dbRes = await pool.query(
-      `UPDATE users SET name = COALESCE($1, name), role = COALESCE($2, role), phone = COALESCE($3, phone), city = COALESCE($4, city), active = $5 WHERE id = $6 RETURNING *`,
-      [name, role, phone, city, newActive, targetId]
+      `UPDATE users SET name = COALESCE($1, name), role = COALESCE($2, role), phone = COALESCE($3, phone), city = COALESCE($4, city)${newActive !== undefined ? ', active = $5' : ''} WHERE id = ${newActive !== undefined ? '$6' : '$5'} RETURNING *`,
+      newActive !== undefined ? [name, role, phone, city, newActive, targetId] : [name, role, phone, city, targetId]
     );
 
     if (dbRes.rows && dbRes.rows.length > 0) {
@@ -299,9 +241,10 @@ app.put('/api/users/:id', async (req, res) => {
       }).catch(() => null);
       return res.json(updated);
     }
-  } catch (err: any) {}
-
-  return res.json({ id: String(targetId), ...req.body });
+    return res.status(404).json({ error: 'User not found' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update user', message: err?.message });
+  }
 });
 
 // Toggle User Status (Admin)
@@ -311,28 +254,25 @@ app.put(['/api/users/:id/status', '/api/users/:id/toggle-status'], async (req, r
     const dbRes = await pool.query('UPDATE users SET active = NOT active WHERE id = $1 RETURNING *', [targetId]);
     if (dbRes.rows && dbRes.rows.length > 0) {
       const updated = normalizeUserRow(dbRes.rows[0]);
-      fetch('http://127.0.0.1:5002/api/users/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      }).catch(() => null);
       return res.json(updated);
     }
-  } catch (err: any) {}
-
-  return res.json({ id: String(targetId), active: true, status: 'active' });
+    return res.status(404).json({ error: 'User not found' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to toggle user status', message: err?.message });
+  }
 });
 
 // Delete User (Admin)
 app.delete('/api/users/:id', async (req, res) => {
   const targetId = Number(req.params.id);
   try {
-    await pool.query('DELETE FROM users WHERE id = $1', [targetId]);
-    inMemoryUsers = inMemoryUsers.filter((u) => Number(u.id) !== targetId);
-    return res.json({ success: true, message: 'User deleted successfully' });
+    const dbRes = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [targetId]);
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      return res.json({ success: true, message: 'User deleted successfully' });
+    }
+    return res.status(404).json({ error: 'User not found' });
   } catch (err: any) {
-    inMemoryUsers = inMemoryUsers.filter((u) => Number(u.id) !== targetId);
-    return res.json({ success: true, message: 'User deleted successfully' });
+    return res.status(500).json({ error: 'Failed to delete user', message: err?.message });
   }
 });
 
