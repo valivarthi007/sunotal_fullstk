@@ -35,9 +35,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const { location: userLoc, isLoading: isLocLoading, setManualLocation } = useLocationState();
 
   const queryClient = useQueryClient();
-  const { data: user } = useGetCurrentUser({
+  const { data: rawUser } = useGetCurrentUser({
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false, refetchOnWindowFocus: false },
   });
+  const user = (rawUser as any)?.user || rawUser;
   const { items, totalItems, totalPrice, isOpen, openCart, closeCart, updateQuantity, removeItem, clearCart } = useCart();
 
   useEffect(() => {

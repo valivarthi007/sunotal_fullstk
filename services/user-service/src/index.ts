@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { getPgPool } from "./lib/db.js";
 
 export const app = express();
-const PORT = Number(process.env.PORT ?? 5004);
+const PORT = Number(process.env.PORT ?? 5008);
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());

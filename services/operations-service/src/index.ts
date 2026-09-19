@@ -188,25 +188,32 @@ app.get("/api/admin/stats", async (_req, res) => {
   }
 });
 
+// Helper to race Mongoose queries with a fast timeout fallback
+const withTimeout = (promise: Promise<any>, ms = 1500, fallback: any = []) => {
+  let timer: any;
+  const timeoutPromise = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+};
+
 // GET & POST /api/admin/quotations
 app.get("/api/admin/quotations", async (_req, res) => {
   try {
-    const quotes = await Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    const quotes = await withTimeout(Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []), 1500, []);
     return res.json(quotes || []);
   } catch {
-    // Ignored
+    return res.json([]);
   }
-  return res.json([]);
 });
 
 app.get("/api/vendors/quotations", async (_req, res) => {
   try {
-    const quotes = await Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []);
+    const quotes = await withTimeout(Quotation.find().sort({ createdAt: -1 }).exec().catch(() => []), 1500, []);
     return res.json(quotes || []);
   } catch {
-    // Ignored
+    return res.json([]);
   }
-  return res.json([]);
 });
 
 app.post("/api/vendors/quotations", async (req: any, res: any) => {

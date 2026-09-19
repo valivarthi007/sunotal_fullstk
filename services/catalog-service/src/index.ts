@@ -1,18 +1,92 @@
 import express from 'express';
 import cors from 'cors';
+import { Pool } from 'pg';
 
 const app = express();
-const PORT = process.env.PORT || 5002;
+const PORT = Number(process.env.PORT ?? 5009);
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@127.0.0.1:5432/sunotal';
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-const products: any[] = [];
-const categories: any[] = [];
-const DARK_STORES: any[] = [];
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
+
+const DEFAULT_CATEGORIES = [
+  { id: 1, name: "Vegetables", icon: "🥦", active: true },
+  { id: 2, name: "Fruits", icon: "🍎", active: true },
+  { id: 3, name: "Dairy", icon: "🥛", active: true },
+  { id: 4, name: "Dry Fruits", icon: "🥜", active: true },
+  { id: 5, name: "Grains", icon: "🌾", active: true },
+  { id: 6, name: "Organic Herbs", icon: "🌿", active: true },
+  { id: 7, name: "Cold Pressed Oils", icon: "🫒", active: true },
+  { id: 8, name: "Fresh Bakery", icon: "🍞", active: true }
+];
+
+let inMemoryCategories: any[] = [...DEFAULT_CATEGORIES];
+let inMemoryProducts: any[] = [];
+let inMemoryDefinitions: any[] = [];
+
+// Auto-initialize PostgreSQL Database Schema
+async function initDb() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(255),
+        icon VARCHAR(255),
+        description TEXT,
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS product_definitions (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(255),
+        default_unit VARCHAR(50) DEFAULT '1 kg',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(255) NOT NULL,
+        price NUMERIC(10, 2) NOT NULL,
+        original_price NUMERIC(10, 2),
+        unit VARCHAR(50) DEFAULT '1 kg',
+        image TEXT,
+        is_organic BOOLEAN DEFAULT TRUE,
+        stock INT DEFAULT 100,
+        rating NUMERIC(3, 2) DEFAULT 5.0,
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    for (const cat of DEFAULT_CATEGORIES) {
+      await pool.query(
+        `INSERT INTO categories (id, name, icon, active) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (id) DO UPDATE SET active = TRUE`,
+        [cat.id, cat.name, cat.icon, true]
+      ).catch(() => null);
+    }
+
+    console.log('🐘 [catalog-service] PostgreSQL database tables and default categories ready.');
+  } catch (err: any) {
+    console.warn('⚠️ [catalog-service] DB init warning:', err?.message || err);
+  }
+}
+
+initDb();
 
 app.get('/healthz', (_req, res) => {
-  res.json({ service: 'catalog-service', status: 'OK', productsCount: products.length, timestamp: new Date().toISOString() });
+  res.json({ service: 'catalog-service', status: 'OK', timestamp: new Date().toISOString() });
 });
 
 app.get('/api/healthz', (_req, res) => {
@@ -20,160 +94,328 @@ app.get('/api/healthz', (_req, res) => {
 });
 
 // Products Listing with Filter/Search/Sort
-app.get('/api/products', (req, res) => {
+app.get('/api/products', async (req, res) => {
   const { category, search, sort } = req.query;
-  let result = [...products];
+  try {
+    let queryStr = 'SELECT * FROM products WHERE active = true';
+    const params: any[] = [];
 
-  if (category && typeof category === 'string' && category !== 'All') {
-    result = result.filter((p) => p.category.toLowerCase() === category.toLowerCase());
+    if (category && typeof category === 'string' && category !== 'All') {
+      params.push(category);
+      queryStr += ` AND LOWER(category) = LOWER($${params.length})`;
+    }
+
+    if (search && typeof search === 'string') {
+      params.push(`%${search.toLowerCase()}%`);
+      queryStr += ` AND (LOWER(name) LIKE $${params.length} OR LOWER(category) LIKE $${params.length})`;
+    }
+
+    if (sort === 'price-low') queryStr += ' ORDER BY price ASC';
+    else if (sort === 'price-high') queryStr += ' ORDER BY price DESC';
+    else if (sort === 'rating') queryStr += ' ORDER BY rating DESC';
+    else queryStr += ' ORDER BY id DESC';
+
+    const dbRes = await pool.query(queryStr, params);
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      const formatted = dbRes.rows.map((p: any) => ({
+        id: String(p.id),
+        name: p.name,
+        category: p.category,
+        price: Number(p.price),
+        originalPrice: Number(p.original_price || p.price),
+        unit: p.unit,
+        image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
+        isOrganic: p.is_organic,
+        stock: p.stock,
+        rating: Number(p.rating || 5.0)
+      }));
+      return res.json(formatted);
+    }
+    return res.json(inMemoryProducts);
+  } catch (err: any) {
+    return res.json(inMemoryProducts);
   }
-
-  if (search && typeof search === 'string') {
-    const q = search.toLowerCase();
-    result = result.filter((p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q));
-  }
-
-  if (sort && typeof sort === 'string') {
-    if (sort === 'price-low') result.sort((a, b) => a.price - b.price);
-    else if (sort === 'price-high') result.sort((a, b) => b.price - a.price);
-    else if (sort === 'rating') result.sort((a, b) => b.rating - a.rating);
-  }
-
-  // Returns direct plain array
-  res.json(result);
 });
 
 // Single Product
-app.get('/api/products/:id', (req, res) => {
-  const product = products.find((p) => p.id === req.params.id);
-  if (!product) return res.status(404).json({ error: 'Product not found' });
-  res.json(product);
+app.get('/api/products/:id', async (req, res) => {
+  const targetId = Number(req.params.id);
+  try {
+    const dbRes = await pool.query('SELECT * FROM products WHERE id = $1', [targetId]);
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      const p = dbRes.rows[0];
+      return res.json({
+        id: String(p.id),
+        name: p.name,
+        category: p.category,
+        price: Number(p.price),
+        originalPrice: Number(p.original_price || p.price),
+        unit: p.unit,
+        image: p.image,
+        isOrganic: p.is_organic,
+        stock: p.stock,
+        rating: Number(p.rating || 5.0)
+      });
+    }
+    const mem = inMemoryProducts.find((p) => String(p.id) === String(req.params.id));
+    if (!mem) return res.status(404).json({ error: 'Product not found' });
+    return res.json(mem);
+  } catch (err: any) {
+    const mem = inMemoryProducts.find((p) => String(p.id) === String(req.params.id));
+    if (!mem) return res.status(404).json({ error: 'Product not found' });
+    return res.json(mem);
+  }
 });
 
 // Create Product (Admin)
-app.post('/api/products', (req, res) => {
+app.post('/api/products', async (req, res) => {
   const { name, category, price, originalPrice, unit, image } = req.body;
   if (!name || !category || !price) {
     return res.status(400).json({ error: 'Name, category, and price required' });
   }
-  const newProduct = {
-    id: String(Date.now()),
-    name,
-    category,
-    price: Number(price),
-    originalPrice: Number(originalPrice || price),
-    unit: unit || '1 kg',
-    image: image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
-    isOrganic: true,
-    stock: 100,
-    rating: 5.0
-  };
-  products.push(newProduct);
-  res.status(201).json(newProduct);
-});
 
-const productDefinitions: any[] = [];
+  const numPrice = Number(price);
+  const numOrigPrice = Number(originalPrice || price);
+  const prodUnit = unit || '1 kg';
+  const prodImg = image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400';
+
+  try {
+    const dbRes = await pool.query(
+      `INSERT INTO products (name, category, price, original_price, unit, image, is_organic, stock, rating)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [name, category, numPrice, numOrigPrice, prodUnit, prodImg, true, 100, 5.0]
+    );
+
+    const newP = dbRes.rows[0];
+    const formatted = {
+      id: String(newP.id),
+      name: newP.name,
+      category: newP.category,
+      price: Number(newP.price),
+      originalPrice: Number(newP.original_price),
+      unit: newP.unit,
+      image: newP.image,
+      isOrganic: true,
+      stock: 100,
+      rating: 5.0
+    };
+    inMemoryProducts.unshift(formatted);
+    return res.status(201).json(formatted);
+  } catch (err: any) {
+    const newProduct = {
+      id: String(Date.now()),
+      name,
+      category,
+      price: numPrice,
+      originalPrice: numOrigPrice,
+      unit: prodUnit,
+      image: prodImg,
+      isOrganic: true,
+      stock: 100,
+      rating: 5.0
+    };
+    inMemoryProducts.unshift(newProduct);
+    return res.status(201).json(newProduct);
+  }
+});
 
 // Categories List & CRUD
-app.get('/api/categories', (_req, res) => {
-  res.json(categories);
+app.get('/api/categories', async (_req, res) => {
+  const catMap = new Map();
+  inMemoryCategories.forEach((c) => {
+    if (c && c.name) {
+      catMap.set(c.name.toLowerCase(), {
+        id: c.id,
+        name: c.name,
+        icon: c.icon || '📦',
+        active: c.active ?? true
+      });
+    }
+  });
+
+  try {
+    const dbRes = await pool.query('SELECT * FROM categories ORDER BY id ASC');
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      dbRes.rows.forEach((c: any) => {
+        catMap.set(c.name.toLowerCase(), {
+          id: c.id,
+          name: c.name,
+          icon: c.icon || '📦',
+          active: c.active ?? true
+        });
+      });
+    }
+  } catch (err: any) {}
+
+  return res.json(Array.from(catMap.values()));
 });
 
-app.post('/api/categories', (req, res) => {
+app.post('/api/categories', async (req, res) => {
   const { name, icon } = req.body;
   if (!name) return res.status(400).json({ error: 'Category name is required' });
-  const newCategory = {
-    id: categories.length + 1,
-    name: name.trim(),
-    icon: icon || '📦'
-  };
-  categories.push(newCategory);
 
-  // Sync to operations service
-  fetch('http://127.0.0.1:5002/api/categories', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(newCategory),
-  }).catch(() => null);
+  const cleanName = name.trim();
+  const catIcon = icon || '📦';
 
-  res.status(201).json(newCategory);
-});
+  try {
+    const dbRes = await pool.query(
+      `INSERT INTO categories (name, icon, active) VALUES ($1, $2, $3) RETURNING *`,
+      [cleanName, catIcon, true]
+    );
+    const newCat = { id: dbRes.rows[0].id, name: dbRes.rows[0].name, icon: dbRes.rows[0].icon, active: true };
+    inMemoryCategories.push(newCat);
 
-app.delete('/api/categories/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const idx = categories.findIndex((c) => c.id === id);
-  if (idx !== -1) {
-    categories.splice(idx, 1);
+    fetch('http://127.0.0.1:5002/api/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCat),
+    }).catch(() => null);
+
+    return res.status(201).json(newCat);
+  } catch (err: any) {
+    const newCategory = { id: Date.now(), name: cleanName, icon: catIcon, active: true };
+    inMemoryCategories.push(newCategory);
+
+    fetch('http://127.0.0.1:5002/api/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCategory),
+    }).catch(() => null);
+
+    return res.status(201).json(newCategory);
   }
-  res.json({ success: true, message: 'Category deleted' });
 });
 
-// Product Definitions List & CRUD (Manage Product Names)
-app.get('/api/product-definitions', (_req, res) => {
-  res.json(productDefinitions);
+app.delete('/api/categories/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    await pool.query('DELETE FROM categories WHERE id = $1', [id]);
+    inMemoryCategories = inMemoryCategories.filter((c) => Number(c.id) !== id);
+    return res.json({ success: true, message: 'Category deleted' });
+  } catch (err: any) {
+    inMemoryCategories = inMemoryCategories.filter((c) => Number(c.id) !== id);
+    return res.json({ success: true, message: 'Category deleted' });
+  }
 });
 
-app.post('/api/product-definitions', (req, res) => {
+// Product Definitions List & CRUD
+app.get('/api/product-definitions', async (_req, res) => {
+  try {
+    const dbRes = await pool.query('SELECT * FROM product_definitions ORDER BY id ASC');
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      const formatted = dbRes.rows.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        category: d.category,
+        defaultUnit: d.default_unit,
+        createdAt: d.created_at
+      }));
+      return res.json(formatted);
+    }
+    return res.json(inMemoryDefinitions);
+  } catch (err: any) {
+    return res.json(inMemoryDefinitions);
+  }
+});
+
+app.post('/api/product-definitions', async (req, res) => {
   const { name, category, defaultUnit } = req.body;
   if (!name || !category) {
     return res.status(400).json({ error: 'Product name and category are required' });
   }
-  const newDef = {
-    id: productDefinitions.length + 1,
-    name: name.trim(),
-    category: category.trim(),
-    defaultUnit: defaultUnit || '1 kg',
-    createdAt: new Date().toISOString()
-  };
-  productDefinitions.push(newDef);
 
-  // Sync to operations service
-  fetch('http://127.0.0.1:5002/api/product-definitions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(newDef),
-  }).catch(() => null);
+  const defName = name.trim();
+  const defCat = category.trim();
+  const defUnit = defaultUnit || '1 kg';
 
-  res.status(201).json(newDef);
+  try {
+    const dbRes = await pool.query(
+      `INSERT INTO product_definitions (name, category, default_unit) VALUES ($1, $2, $3) RETURNING *`,
+      [defName, defCat, defUnit]
+    );
+    const d = dbRes.rows[0];
+    const newDef = { id: d.id, name: d.name, category: d.category, defaultUnit: d.default_unit, createdAt: d.created_at };
+    inMemoryDefinitions.push(newDef);
+
+    fetch('http://127.0.0.1:5002/api/product-definitions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newDef),
+    }).catch(() => null);
+
+    return res.status(201).json(newDef);
+  } catch (err: any) {
+    const newDef = { id: inMemoryDefinitions.length + 1, name: defName, category: defCat, defaultUnit: defUnit, createdAt: new Date().toISOString() };
+    inMemoryDefinitions.push(newDef);
+    return res.status(201).json(newDef);
+  }
 });
 
-app.delete('/api/product-definitions/:id', (req, res) => {
+app.delete('/api/product-definitions/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const idx = productDefinitions.findIndex((d) => d.id === id);
-  if (idx !== -1) {
-    productDefinitions.splice(idx, 1);
+  try {
+    await pool.query('DELETE FROM product_definitions WHERE id = $1', [id]);
+    inMemoryDefinitions = inMemoryDefinitions.filter((d) => d.id !== id);
+    return res.json({ success: true, message: 'Product definition deleted' });
+  } catch (err: any) {
+    inMemoryDefinitions = inMemoryDefinitions.filter((d) => d.id !== id);
+    return res.json({ success: true, message: 'Product definition deleted' });
   }
-  res.json({ success: true, message: 'Product definition deleted' });
 });
 
-// Update Product (Admin)
-app.put('/api/products/:id', (req, res) => {
-  const targetId = req.params.id;
-  const prod = products.find((p) => String(p.id) === targetId);
-  if (!prod) return res.status(404).json({ error: 'Product not found' });
-  Object.assign(prod, req.body);
-  res.json(prod);
-});
+// Update Product
+app.put('/api/products/:id', async (req, res) => {
+  const targetId = Number(req.params.id);
+  const { name, category, price, originalPrice, unit, image } = req.body;
 
-// Delete Product (Admin)
-app.delete('/api/products/:id', (req, res) => {
-  const targetId = req.params.id;
-  const idx = products.findIndex((p) => String(p.id) === targetId);
-  if (idx !== -1) {
-    products.splice(idx, 1);
+  try {
+    await pool.query(
+      `UPDATE products SET name = COALESCE($1, name), category = COALESCE($2, category), price = COALESCE($3, price), original_price = COALESCE($4, original_price), unit = COALESCE($5, unit), image = COALESCE($6, image) WHERE id = $7`,
+      [name, category, price !== undefined ? Number(price) : null, originalPrice !== undefined ? Number(originalPrice) : null, unit, image, targetId]
+    );
+
+    const mem = inMemoryProducts.find((p) => String(p.id) === String(req.params.id));
+    if (mem) Object.assign(mem, req.body);
+
+    return res.json({ id: String(targetId), ...req.body });
+  } catch (err: any) {
+    const mem = inMemoryProducts.find((p) => String(p.id) === String(req.params.id));
+    if (mem) Object.assign(mem, req.body);
+    return res.json(mem || { id: String(targetId), ...req.body });
   }
-  res.json({ success: true, message: 'Product deleted' });
 });
 
-// Dark Store Discovery
-app.get('/api/storefront/dark-stores/nearby', (_req, res) => {
-  res.json({ success: true, stores: DARK_STORES });
+// Delete Product
+app.delete('/api/products/:id', async (req, res) => {
+  const targetId = Number(req.params.id);
+  try {
+    await pool.query('DELETE FROM products WHERE id = $1', [targetId]);
+    inMemoryProducts = inMemoryProducts.filter((p) => String(p.id) !== String(req.params.id));
+    return res.json({ success: true, message: 'Product deleted' });
+  } catch (err: any) {
+    inMemoryProducts = inMemoryProducts.filter((p) => String(p.id) !== String(req.params.id));
+    return res.json({ success: true, message: 'Product deleted' });
+  }
 });
 
-// Search API
-app.get('/api/storefront/search', (req, res) => {
+// Storefront Search API
+app.get('/api/storefront/search', async (req, res) => {
   const q = String(req.query.q || '').toLowerCase();
-  const matched = products.filter((p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q));
+  try {
+    const dbRes = await pool.query('SELECT * FROM products WHERE LOWER(name) LIKE $1 OR LOWER(category) LIKE $1', [`%${q}%`]);
+    if (dbRes.rows) {
+      const matched = dbRes.rows.map((p: any) => ({
+        id: String(p.id),
+        name: p.name,
+        category: p.category,
+        price: Number(p.price),
+        image: p.image
+      }));
+      return res.json({ success: true, products: matched });
+    }
+  } catch (err: any) {}
+
+  const matched = inMemoryProducts.filter((p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q));
   res.json({ success: true, products: matched });
 });
 

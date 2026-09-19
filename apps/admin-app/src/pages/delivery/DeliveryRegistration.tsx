@@ -57,19 +57,19 @@ export default function DeliveryRegistration() {
         });
       }
 
-      const contentType = res.headers.get("content-type") || "";
-      let data: any = {};
-      if (contentType.includes("application/json")) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        if (!res.ok) {
-          throw new Error(`Server response standard error (${res.status}): ${text.slice(0, 100) || res.statusText}`);
+      if (!res.ok) {
+        let errText = "Registration failed";
+        try {
+          const jsonErr = await res.json();
+          errText = jsonErr.error || jsonErr.message || errText;
+        } catch {
+          const rawText = await res.text().catch(() => "");
+          if (rawText) errText = rawText.slice(0, 100);
         }
+        throw new Error(errText);
       }
 
-      if (!res.ok) throw new Error(data.error || data.message || "Registration failed");
-
+      const data = await res.json().catch(() => ({}));
       toast.success("Delivery partner application submitted!");
       if (data.token) {
         localStorage.setItem("sunotal_delivery_token", data.token);
@@ -77,12 +77,7 @@ export default function DeliveryRegistration() {
       }
       setSubmitted(true);
     } catch (err: any) {
-      const msg = err?.message || "";
-      if (msg.includes("502") || msg.includes("503") || msg.includes("504") || msg.includes("Bad Gateway")) {
-        toast.error("Service Gateway Error (502): The backend delivery server is restarting or initializing. Please retry in a moment.");
-      } else {
-        toast.error(msg || "Failed to submit onboarding form");
-      }
+      toast.error(err?.message || "Failed to submit onboarding form");
     } finally {
       setLoading(false);
     }

@@ -28,10 +28,12 @@ export default function Login() {
     loginUser.mutate(
       { data: values },
       {
-        onSuccess: (data) => {
+        onSuccess: (data: any) => {
           localStorage.setItem("sunotal_token", data.token);
           queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-          toast.success(`Welcome back, ${(data?.user?.name || "User").split(" ")[0]}!`);
+          const userObj = data?.user || data;
+          const displayName = (userObj?.name || values.email.split('@')[0] || "User").split(" ")[0];
+          toast.success(`Welcome back, ${displayName}!`);
           setLocation("/");
         },
         onError: (error: any) => {

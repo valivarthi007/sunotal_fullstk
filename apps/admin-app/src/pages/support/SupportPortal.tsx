@@ -54,22 +54,34 @@ export default function SupportPortal() {
     e.preventDefault();
     setLoginError("");
     try {
-      const res = await fetch("/api/admin/login", {
+      let res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       });
+      if (!res.ok) {
+        res = await fetch("/api/admin/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+        });
+      }
       if (res.ok) {
         const data = await res.json();
-        localStorage.setItem("sunotal_admin_token", data.token);
-        setIsAdminAuthenticated(true);
-        toast.success("Support Portal Admin authenticated successfully");
+        if (data.token) {
+          localStorage.setItem("sunotal_admin_token", data.token);
+          localStorage.setItem("sunotal_token", data.token);
+          setIsAdminAuthenticated(true);
+          toast.success("Support Portal Admin authenticated successfully");
+        } else {
+          setLoginError("Invalid authentication token returned");
+        }
       } else {
-        const err = await res.json();
-        setLoginError(err.error || "Invalid Admin credentials");
+        const err = await res.json().catch(() => ({}));
+        setLoginError(err.error || err.message || "Invalid Admin credentials");
       }
-    } catch {
-      setLoginError("Failed to connect to authentication service");
+    } catch (err: any) {
+      setLoginError(err?.message || "Failed to connect to authentication service");
     }
   };
 

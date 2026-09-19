@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 
 const app = express();
-const PORT = process.env.PORT || 5003;
+const PORT = Number(process.env.PORT ?? 5010);
 
 app.use(cors());
 app.use(express.json());
@@ -108,13 +108,16 @@ app.post('/api/orders/:id/cancel', (req, res) => {
 });
 
 // Order Status Update (Admin / Rider)
-app.put('/api/orders/:id/status', (req, res) => {
+const handleUpdateStatus = (req: any, res: any) => {
   const { status } = req.body;
   const order = orders.find((o) => o.id === req.params.id || o.orderNumber === req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   order.status = status || order.status;
   res.json({ success: true, order });
-});
+};
+
+app.put('/api/orders/:id/status', handleUpdateStatus);
+app.patch('/api/orders/:id/status', handleUpdateStatus);
 
 // WMS Pick List (Optimized Aisle/Shelf/Bin Route Sorting for <120s Picking)
 app.get('/api/wms/pick-list/:id', (req, res) => {

@@ -210,9 +210,10 @@ export default function ProductsAdmin() {
     createCategory.mutate(
       { name: newCatName.trim(), icon: newCatIcon.trim() || "📦" },
       {
-        onSuccess: (added) => {
-          toast.success(`Category "${added.name}" added successfully!`);
-          form.setValue("category", added.name);
+        onSuccess: (added: any) => {
+          const catName = added?.name || added?.category?.name || added?.data?.name || newCatName.trim();
+          toast.success(`Category "${catName}" added successfully!`);
+          form.setValue("category", catName);
           setNewCatName("");
           setNewCatIcon("📦");
           setCatModalOpen(false);

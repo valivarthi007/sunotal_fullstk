@@ -217,11 +217,10 @@ function SubdomainRouter() {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <Switch>
-          <Route path="/" component={AdminRouteGuard} />
           <Route path="/login" component={AdminLogin} />
           <Route path="/admin/login" component={AdminLogin} />
-          <Route path="/dashboard" component={Dashboard} />
-          <Route path="/admin/dashboard" component={Dashboard} />
+          <Route path="/dashboard" component={AdminRouteGuard} />
+          <Route path="/admin/dashboard" component={AdminRouteGuard} />
           <Route path="/products" component={ProductsAdmin} />
           <Route path="/admin/products" component={ProductsAdmin} />
           <Route path="/warehouses" component={WarehouseManager} />
@@ -246,6 +245,7 @@ function SubdomainRouter() {
           <Route path="/admin/riders" component={RiderPayoutsAdmin} />
           <Route path="/users" component={UsersAdmin} />
           <Route path="/admin/users" component={UsersAdmin} />
+          <Route path="/" component={AdminRouteGuard} />
           <Route component={AdminRouteGuard} />
         </Switch>
       </Suspense>
@@ -256,13 +256,13 @@ function SubdomainRouter() {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <Switch>
-          <Route path="/" component={VendorRouteGuard} />
-          <Route path="/login" component={VendorLogin} />
-          <Route path="/vendor/login" component={VendorLogin} />
           <Route path="/register" component={FarmerRegistration} />
           <Route path="/vendor/register" component={FarmerRegistration} />
           <Route path="/farmer" component={FarmerRegistration} />
+          <Route path="/login" component={VendorLogin} />
+          <Route path="/vendor/login" component={VendorLogin} />
           <Route path="/vendor" component={VendorRouteGuard} />
+          <Route path="/" component={VendorRouteGuard} />
           <Route component={VendorRouteGuard} />
         </Switch>
       </Suspense>
@@ -273,10 +273,10 @@ function SubdomainRouter() {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <Switch>
-          <Route path="/login" component={DeliveryLogin} />
-          <Route path="/delivery/login" component={DeliveryLogin} />
           <Route path="/register" component={DeliveryRegistration} />
           <Route path="/delivery/register" component={DeliveryRegistration} />
+          <Route path="/login" component={DeliveryLogin} />
+          <Route path="/delivery/login" component={DeliveryLogin} />
           <Route path="/earnings" component={DeliveryEarnings} />
           <Route path="/delivery/earnings" component={DeliveryEarnings} />
           <Route path="/payouts" component={DeliveryEarnings} />
@@ -312,6 +312,9 @@ function SubdomainRouter() {
         <Route path="/help" component={SupportPortal} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
+        <Route path="/vendor/register" component={FarmerRegistration} />
+        <Route path="/farmer" component={FarmerRegistration} />
+        <Route path="/delivery/register" component={DeliveryRegistration} />
 
         {/* Strict Subdomain Protection */}
         <Route path="/admin/:rest*">
