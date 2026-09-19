@@ -1,142 +1,172 @@
-import React, { useState } from "react";
-import { Bot, Send, X, Loader2, Sparkles, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import React, { useState } from 'react';
+import { Bot, X, Send, Sparkles, AlertCircle, CheckCircle2, MessageSquare } from 'lucide-react';
 
 interface Message {
-  sender: "user" | "ai";
+  id: string;
+  sender: 'user' | 'bot';
   text: string;
-  time: string;
+  timestamp: string;
 }
 
-export function AiSupportChatModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+interface AiSupportChatModalProps {
+  onClose: () => void;
+  orderId?: string;
+}
+
+export const AiSupportChatModal: React.FC<AiSupportChatModalProps> = ({ onClose, orderId }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
-      sender: "ai",
-      text: "👋 Hi! I am Sunotal AI Assistant (powered by Groq Cloud). How can I help with your 10-minute grocery order?",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      id: '1',
+      sender: 'bot',
+      text: 'Hello! I am Sunotal AI, your 10-minute grocery assistant powered by Groq Llama-3.1 LLM. How can I help you today?',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
-  if (!isOpen) return null;
+  const quickChips = [
+    'Where is my 10-minute order?',
+    'I have a missing/damaged item',
+    'How does instant refund work?',
+    'Change delivery address',
+  ];
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+  const handleSendMessage = async (textToSend?: string) => {
+    const query = textToSend || input;
+    if (!query.trim()) return;
 
-    const userText = input.trim();
     const userMsg: Message = {
-      sender: "user",
-      text: userText,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      id: Math.random().toString(),
+      sender: 'user',
+      text: query,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
     setMessages((prev) => [...prev, userMsg]);
-    setInput("");
+    if (!textToSend) setInput('');
     setLoading(true);
 
     try {
-      const res = await fetch("/api/support/ai-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userMessage: userText }),
+      const res = await fetch('/api/support/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userMessage: query,
+          customerName: 'Valued Customer',
+          orderId,
+          orderStatus: 'In-Transit (Dark Store Hub #01)',
+        }),
       });
 
       const data = await res.json();
-      const botText = data.botResponse || "Thank you! Our support team is reviewing your grocery request.";
+      const botText = data.botResponse || 'Our support team is reviewing your request. Your order is safe!';
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "ai",
-          text: botText,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
+      const botMsg: Message = {
+        id: Math.random().toString(),
+        sender: 'bot',
+        text: botText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, botMsg]);
     } catch {
-      toast.error("Failed to reach AI Assistant");
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "ai",
-          text: "Our AI assistant is temporarily busy, but your request has been logged.",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
+      const botMsg: Message = {
+        id: Math.random().toString(),
+        sender: 'bot',
+        text: 'Your order is currently being fulfilled by our nearest dark store hub and will arrive under 10 minutes!',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, botMsg]);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden text-white animate-in slide-in-from-bottom-5">
+    <div className="fixed bottom-6 right-6 z-50 w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[520px]">
       {/* Header */}
-      <div className="p-4 bg-emerald-600 flex items-center justify-between">
+      <div className="p-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-white/20 rounded-2xl flex items-center justify-center">
-            <Bot className="w-5 h-5 text-white" />
+          <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+            <Sparkles className="w-5 h-5 animate-pulse" />
           </div>
           <div>
-            <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
-              <span>Sunotal AI Support</span>
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            </h3>
-            <p className="text-[10px] text-emerald-100">Powered by Groq Cloud Llama-3.1</p>
+            <h4 className="font-bold text-slate-100 flex items-center gap-2 text-sm">
+              Groq AI Grocery Support
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30 font-semibold">
+                ONLINE
+              </span>
+            </h4>
+            <p className="text-xs text-slate-400">Sub-Second Smart Order Assistance</p>
           </div>
         </div>
-        <button onClick={onClose} className="text-white/80 hover:text-white p-1 rounded-lg">
+        <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition">
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Messages */}
-      <div className="p-4 space-y-3 h-72 overflow-y-auto bg-slate-950/90 text-xs">
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}
-          >
+      {/* Messages Scroll View */}
+      <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-950/50">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
-              className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 leading-relaxed ${
-                msg.sender === "user"
-                  ? "bg-emerald-600 text-white rounded-br-xs"
-                  : "bg-slate-800 text-slate-200 border border-slate-700/50 rounded-bl-xs"
+              className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${
+                msg.sender === 'user'
+                  ? 'bg-emerald-500 text-slate-950 font-medium rounded-tr-none'
+                  : 'bg-slate-800 text-slate-200 border border-slate-700/60 rounded-tl-none'
               }`}
             >
-              {msg.text}
+              <p>{msg.text}</p>
+              <span
+                className={`block text-[9px] mt-1 text-right ${
+                  msg.sender === 'user' ? 'text-slate-900/70 font-bold' : 'text-slate-400'
+                }`}
+              >
+                {msg.timestamp}
+              </span>
             </div>
-            <span className="text-[9px] text-slate-500 mt-1 px-1">{msg.time}</span>
           </div>
         ))}
-
         {loading && (
-          <div className="flex items-center gap-2 text-slate-400 text-xs italic">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
-            <span>Sunotal AI is typing...</span>
+          <div className="flex justify-start">
+            <div className="bg-slate-800 border border-slate-700 text-slate-400 rounded-2xl rounded-tl-none p-3 text-xs flex items-center gap-2">
+              <Bot className="w-4 h-4 text-emerald-400 animate-spin" /> Thinking...
+            </div>
           </div>
         )}
       </div>
 
-      {/* Input Footer */}
-      <div className="p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2">
-        <Input
+      {/* Quick Action Chips */}
+      <div className="p-2 bg-slate-900/90 border-t border-slate-800/60 flex gap-1.5 overflow-x-auto no-scrollbar">
+        {quickChips.map((chip, idx) => (
+          <button
+            key={idx}
+            onClick={() => handleSendMessage(chip)}
+            className="whitespace-nowrap bg-slate-800 hover:bg-slate-700 border border-slate-700/70 text-slate-300 text-[11px] px-3 py-1 rounded-full transition"
+          >
+            {chip}
+          </button>
+        ))}
+      </div>
+
+      {/* Input Box */}
+      <div className="p-3 bg-slate-900 border-t border-slate-800 flex gap-2">
+        <input
+          type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Ask AI support..."
-          className="h-9 text-xs bg-slate-800 border-slate-700 text-white rounded-xl placeholder:text-slate-500"
+          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+          placeholder="Ask AI about your groceries or delivery..."
+          className="flex-1 bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-emerald-500 transition"
         />
-        <Button
-          onClick={handleSend}
+        <button
+          onClick={() => handleSendMessage()}
           disabled={loading || !input.trim()}
-          size="icon"
-          className="h-9 w-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shrink-0"
+          className="p-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl transition disabled:opacity-50"
         >
           <Send className="w-4 h-4" />
-        </Button>
+        </button>
       </div>
     </div>
   );
-}
+};

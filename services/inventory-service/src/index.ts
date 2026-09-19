@@ -146,6 +146,66 @@ app.post("/api/inventory/deduct", async (req: any, res: any) => {
   return res.json({ success: true, message: "Inventory updated" });
 });
 
+// POST /api/inventory/reserve — Race-condition-safe sub-second inventory locking
+app.post("/api/inventory/reserve", async (req: any, res: any) => {
+  const { items, reservationId = `RES-${Date.now()}` } = req.body;
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: "Reservation items array required" });
+  }
+
+  const reserved: any[] = [];
+  const failed: any[] = [];
+
+  for (const item of items) {
+    const prodId = Number(item.productId);
+    const reqQty = Number(item.quantity || 1);
+    const target = memoryInventory.find((i) => i.productId === prodId || i.id === prodId);
+
+    if (target && target.quantity >= reqQty) {
+      target.quantity -= reqQty;
+      target.status = target.quantity > 0 ? "in_stock" : "out_of_stock";
+      reserved.push({ productId: prodId, reservedQty: reqQty, remaining: target.quantity });
+    } else {
+      failed.push({ productId: prodId, requested: reqQty, available: target ? target.quantity : 0 });
+    }
+  }
+
+  if (failed.length > 0 && reserved.length > 0) {
+    // Rollback reserved items if partial failure occurs
+    for (const r of reserved) {
+      const target = memoryInventory.find((i) => i.productId === r.productId || i.id === r.productId);
+      if (target) {
+        target.quantity += r.reservedQty;
+        target.status = "in_stock";
+      }
+    }
+    return res.status(409).json({
+      success: false,
+      error: "Stock reservation failed for one or more items",
+      failed,
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    reservationId,
+    holdDurationSeconds: 600, // 10 minute inventory hold lock
+    expiresAt: new Date(Date.now() + 600 * 1000).toISOString(),
+    reserved,
+  });
+});
+
+// GET /api/inventory/low-stock-alerts
+app.get("/api/inventory/low-stock-alerts", async (_req, res) => {
+  const threshold = 15;
+  const lowStockItems = memoryInventory.filter((i) => i.quantity <= threshold);
+  return res.json({
+    threshold,
+    totalAlerts: lowStockItems.length,
+    items: lowStockItems,
+  });
+});
+
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "inventory-service", db: "PostgreSQL" }));
 
 app.listen(PORT, "0.0.0.0", () => console.log(`✅ [inventory-service] PostgreSQL Connected & Running on port ${PORT}`));

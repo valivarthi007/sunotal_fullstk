@@ -1435,6 +1435,63 @@ app.delete("/api/admin/warehouses/:id", async (req: any, res: any) => {
   }
 });
 
+// GET /api/admin/dark-stores/nearest — Geofenced Dark Store lookup
+app.get("/api/admin/dark-stores/nearest", async (req: any, res: any) => {
+  const { lat, lng } = req.query;
+  const userLat = Number(lat || 12.9716);
+  const userLng = Number(lng || 77.5946);
+
+  const darkStores = [
+    { id: 1, name: "HSR Central Dark Store", lat: 12.9121, lng: 77.6446, city: "Bengaluru", radiusKm: 3.5, activePickers: 12, estEtaMinutes: 8 },
+    { id: 2, name: "Indiranagar Hub #02", lat: 12.9784, lng: 77.6408, city: "Bengaluru", radiusKm: 4.0, activePickers: 18, estEtaMinutes: 10 },
+    { id: 3, name: "Koramangala Dark Store", lat: 12.9352, lng: 77.6245, city: "Bengaluru", radiusKm: 3.0, activePickers: 9, estEtaMinutes: 7 },
+  ];
+
+  function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  const sortedStores = darkStores.map((store) => {
+    const distanceKm = Math.round(calculateDistance(userLat, userLng, store.lat, store.lng) * 10) / 10;
+    return { ...store, distanceKm };
+  }).sort((a, b) => a.distanceKm - b.distanceKm);
+
+  return res.json({
+    userLocation: { lat: userLat, lng: userLng },
+    nearestHub: sortedStores[0],
+    availableStores: sortedStores,
+  });
+});
+
+// GET & POST /api/admin/surge-pricing
+app.get("/api/admin/surge-pricing", (_req, res) => {
+  res.json({
+    isSurgeActive: false,
+    surgeMultiplier: 1.0,
+    rainSurgeFee: 0,
+    peakHourSurgeFee: 0,
+    reason: "Normal operating conditions",
+  });
+});
+
+app.post("/api/admin/surge-pricing", (req, res) => {
+  const { multiplier = 1.25, isSurgeActive = true, reason = "Heavy Rain Demand" } = req.body;
+  res.json({
+    success: true,
+    isSurgeActive: Boolean(isSurgeActive),
+    surgeMultiplier: Number(multiplier),
+    reason,
+    updatedAt: new Date().toISOString(),
+  });
+});
+
 app.get("/", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok", service: "operations-service" }));
 app.get("/healthz", (_req, res) => res.json({ status: "ok", service: "operations-service" }));

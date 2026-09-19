@@ -1,55 +1,65 @@
-const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-
-let groqClient: any = null;
-
-async function getGroqClient(): Promise<any> {
-  if (!GROQ_API_KEY) return null;
-  if (!groqClient) {
-    try {
-      // Dynamic import to prevent build failure if groq-sdk is absent
-      const { default: Groq } = await import('groq-sdk' as any);
-      groqClient = new Groq({ apiKey: GROQ_API_KEY });
-    } catch {
-      return null;
-    }
-  }
-  return groqClient;
-}
-
-export interface SupportBotContext {
+export interface AiChatParams {
   userMessage: string;
   customerName?: string;
   orderId?: string;
   orderStatus?: string;
 }
 
-export async function askGroqCustomerSupport(context: SupportBotContext): Promise<string> {
-  const client = await getGroqClient();
+export async function askGroqCustomerSupport(params: AiChatParams): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  const { userMessage, customerName = 'valued customer', orderId, orderStatus } = params;
 
-  if (!client) {
-    return `Hello ${context.customerName || 'Valued Customer'}! Your request regarding ${context.orderId ? `Order #${context.orderId}` : 'Sunotal Grocery'} has been logged. Our 10-minute quick response team is reviewing it.`;
-  }
-
-  try {
-    const chatCompletion = await client.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content: 'You are Sunotal AI, an ultra-fast customer support assistant for Sunotal 10-minute grocery delivery. Be polite, concise (max 3 sentences), and offer solutions like instant refund or redelivery.'
+  if (apiKey && apiKey.startsWith('gsk_')) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
         },
-        {
-          role: 'user',
-          content: `Customer Name: ${context.customerName || 'User'}, Order ID: ${context.orderId || 'N/A'}, Status: ${context.orderStatus || 'N/A'}. User Question: "${context.userMessage}"`
-        }
-      ],
-      model: 'llama-3.1-8b-instant',
-      temperature: 0.3,
-      max_tokens: 150,
-    });
+        body: JSON.stringify({
+          model: 'llama-3.1-8b-instant',
+          messages: [
+            {
+              role: 'system',
+              content: `You are Sunotal AI, the ultra-fast 10-minute quick-commerce grocery delivery assistant. Be polite, concise, extremely helpful, and empathetic. Customer Name: ${customerName}. Order ID: ${orderId || 'N/A'}. Order Status: ${orderStatus || 'N/A'}.`,
+            },
+            {
+              role: 'user',
+              content: userMessage,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 300,
+        }),
+      });
 
-    return chatCompletion.choices[0]?.message?.content || 'I am here to assist you with your grocery order!';
-  } catch (error: any) {
-    console.error('❌ Groq AI Support Error:', error?.message || error);
-    return 'Our AI assistant is temporarily busy, but your support ticket has been received by our dark store manager.';
+      if (response.ok) {
+        const data = await response.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (text) return text.trim();
+      }
+    } catch (e: any) {
+      console.warn('⚠️ [Groq AI Support] API request error, falling back to smart rule engine:', e.message);
+    }
   }
+
+  // Smart Context-Aware Fallback Assistant Rule Engine
+  const msg = userMessage.toLowerCase();
+  if (msg.includes('order') || msg.includes('where') || msg.includes('status') || msg.includes('track')) {
+    if (orderId) {
+      return `Hi ${customerName}! Your order ${orderId} is currently ${orderStatus || 'being picked at our dark store'} and is on track for sub-10 minute delivery! You can view live GPS rider movements in your tracking map.`;
+    }
+    return `Hi ${customerName}! You can check your live order picking status and rider telemetry anytime under the Active Orders tab on your home screen.`;
+  }
+
+  if (msg.includes('refund') || msg.includes('money') || msg.includes('cancel')) {
+    return `Hi ${customerName}, for order cancellations or instant refunds, our automated system credits your wallet or original payment method within 15 minutes of item return validation.`;
+  }
+
+  if (msg.includes('damaged') || msg.includes('missing') || msg.includes('quality')) {
+    return `We deeply apologize! If an item is missing or damaged, please tap "Request Instant Replacement" in your order details, and our nearest dark store hub will dispatch a replacement rider immediately.`;
+  }
+
+  return `Hello ${customerName}! Thank you for reaching out to Sunotal 10-Minute Grocery Support. How can I assist you with your items, delivery ETA, or payments today?`;
 }

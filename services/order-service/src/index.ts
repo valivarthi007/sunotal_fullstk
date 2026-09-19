@@ -67,35 +67,52 @@ app.post('/api/orders/checkout', (req, res) => {
   res.status(201).json({ success: true, order: newOrder });
 });
 
+import { PaymentContext } from './strategies/payment-strategy.js';
+
+const paymentContext = new PaymentContext();
+
 // Razorpay Create Order Endpoint (Payment Gateway Integration)
-app.post('/api/orders/create-razorpay-order', (req, res) => {
-  const { amount, currency = 'INR', receipt } = req.body;
-  const razorpayOrderId = `order_rzp_${Math.floor(10000000 + Math.random() * 90000000)}`;
-  res.json({
-    id: razorpayOrderId,
-    entity: 'order',
-    amount: Number(amount || 100) * 100, // Amount in paise for Razorpay
-    amount_paid: 0,
-    amount_due: Number(amount || 100) * 100,
+app.post('/api/orders/create-razorpay-order', async (req, res) => {
+  const { amount, currency = 'INR', receipt, paymentMethod = 'razorpay', orderId = `ORD-${Date.now()}` } = req.body;
+  const strategy = paymentContext.getStrategy(paymentMethod);
+  const result = await strategy.createOrder({
+    orderId,
+    amount: Number(amount || 100),
     currency,
+  });
+
+  res.json({
+    id: result.gatewayOrderId,
+    entity: 'order',
+    amount: result.amount,
+    amount_paid: 0,
+    amount_due: result.amount,
+    currency: result.currency,
     receipt: receipt || `rcpt_${Date.now()}`,
     status: 'created',
-    key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_SunotalDemoKey2026'
+    key_id: result.keyId || 'rzp_test_SunotalDemoKey2026'
   });
 });
 
 // Razorpay Payment Signature Verification Endpoint
-app.post('/api/orders/verify-razorpay-signature', (req, res) => {
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-  if (!razorpay_order_id || !razorpay_payment_id) {
-    return res.status(400).json({ error: 'Missing payment verification parameters' });
+app.post('/api/orders/verify-razorpay-signature', async (req, res) => {
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, paymentMethod = 'razorpay' } = req.body;
+  const strategy = paymentContext.getStrategy(paymentMethod);
+  const result = await strategy.verifyPayment({
+    razorpay_order_id,
+    razorpay_payment_id,
+    razorpay_signature
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.message });
   }
-  // Signature verified successfully
+
   res.json({
     success: true,
-    message: 'Payment verified successfully via Razorpay Gateway',
-    paymentId: razorpay_payment_id,
-    orderId: razorpay_order_id
+    message: result.message,
+    paymentId: result.paymentId,
+    orderId: result.gatewayOrderId || razorpay_order_id
   });
 });
 
