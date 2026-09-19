@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { getApiUrl } from "@/lib/api-client";
 import { 
   LifeBuoy, 
   Search, 
@@ -54,13 +55,13 @@ export default function SupportPortal() {
     e.preventDefault();
     setLoginError("");
     try {
-      let res = await fetch("/api/auth/login", {
+      let res = await fetch(getApiUrl("/api/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       });
       if (!res.ok) {
-        res = await fetch("/api/admin/login", {
+        res = await fetch(getApiUrl("/api/admin/login"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: loginEmail, password: loginPassword }),
@@ -105,7 +106,7 @@ export default function SupportPortal() {
   const loadTickets = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/support/tickets");
+      const res = await fetch(getApiUrl("/api/support/tickets"));
       if (res.ok) {
         const data = await res.json();
         setTickets(Array.isArray(data) ? data : []);
@@ -118,8 +119,10 @@ export default function SupportPortal() {
   };
 
   useEffect(() => {
-    loadTickets();
-  }, []);
+    if (isAdminAuthenticated) {
+      loadTickets();
+    }
+  }, [isAdminAuthenticated]);
 
   const filteredTickets = tickets.filter((t) => {
     if (roleFilter !== "all" && t.role !== roleFilter) return false;

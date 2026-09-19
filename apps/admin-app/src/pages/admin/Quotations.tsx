@@ -1,5 +1,5 @@
 import { AdminLayout } from "@/components/layout/AdminLayout";
-import { useListProducts } from "@/lib/api-client";
+import { useListProducts, getApiUrl } from "@/lib/api-client";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +68,7 @@ export default function QuotationsAdmin() {
         setLocation("/admin/login");
         return;
       }
-      const res = await fetch("/api/admin/quotations", {
+      const res = await fetch(getApiUrl("/api/admin/quotations"), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -106,7 +106,7 @@ export default function QuotationsAdmin() {
         body.productId = Number(productId);
       }
       
-      const res = await fetch(`/api/admin/quotations/${id}/status`, {
+      const res = await fetch(getApiUrl(`/api/admin/quotations/${id}/status`), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -133,7 +133,7 @@ export default function QuotationsAdmin() {
   const handleGenerateInvoice = async (id: number) => {
     try {
       const token = localStorage.getItem("sunotal_admin_token") || localStorage.getItem("sunotal_token");
-      const res = await fetch(`/api/admin/quotations/${id}/invoice`, {
+      const res = await fetch(getApiUrl(`/api/admin/quotations/${id}/invoice`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -164,7 +164,7 @@ export default function QuotationsAdmin() {
   const handlePayout = async (id: number) => {
     try {
       const token = localStorage.getItem("sunotal_admin_token") || localStorage.getItem("sunotal_token");
-      const res = await fetch(`/api/admin/quotations/${id}/payout`, {
+      const res = await fetch(getApiUrl(`/api/admin/quotations/${id}/payout`), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

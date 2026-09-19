@@ -1,4 +1,5 @@
 import { AdminLayout } from "@/components/layout/AdminLayout";
+import { getApiUrl } from "@/lib/api-client";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +28,7 @@ export function RiderPayoutsAdmin() {
     setLoading(true);
     try {
       const token = localStorage.getItem("sunotal_admin_token") || localStorage.getItem("sunotal_token");
-      const res = await fetch("/api/admin/rider-payouts", {
+      const res = await fetch(getApiUrl("/api/admin/rider-payouts"), {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
       if (res.ok) {

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { AdminLayout } from "@/components/layout/AdminLayout";
+import { getApiUrl } from "@/lib/api-client";
 import { BookOpen, Download, Calendar, DollarSign, CreditCard, QrCode, FileText, ArrowUpRight, CheckCircle2, Clock, Filter, RefreshCw } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -24,7 +25,7 @@ export const AdminLedger: React.FC = () => {
       try {
         const token = localStorage.getItem("sunotal_admin_token") || localStorage.getItem("sunotal_token");
         const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-        const res = await fetch("/api/admin/ledger", { headers });
+        const res = await fetch(getApiUrl("/api/admin/ledger"), { headers });
         if (res.ok) {
           const data = await res.json();
           if (data.summary) setLedgerSummary(data.summary);

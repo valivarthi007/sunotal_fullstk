@@ -22,6 +22,14 @@ let _baseUrl: string | null =
   (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") ? null : DEFAULT_API_URL);
 let _authTokenGetter: AuthTokenGetter | null = null;
 
+export function getApiUrl(path: string): string {
+  if (!path) return path;
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const base = isLocal ? "" : DEFAULT_API_URL;
+  return `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
 /**
  * Set a base URL that is prepended to every relative request URL
  * (i.e. paths that start with `/`).
