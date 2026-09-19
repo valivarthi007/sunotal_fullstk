@@ -209,12 +209,12 @@ app.post("/api/inventory/reserve", async (req: any, res: any) => {
     await client.query('BEGIN');
 
     for (const item of items) {
-      const prodId = Number(item.productId);
+      const prodId = Number(item.productId || item.id || 0);
       const reqQty = Number(item.quantity || 1);
 
       // Lock row for update to prevent race conditions
       const lockRes = await client.query(
-        'SELECT * FROM inventory WHERE product_id = $1 FOR UPDATE',
+        'SELECT * FROM inventory WHERE product_id = $1 OR id = $1 FOR UPDATE',
         [prodId]
       );
 
@@ -225,8 +225,8 @@ app.post("/api/inventory/reserve", async (req: any, res: any) => {
              quantity = quantity - $1,
              status = CASE WHEN quantity - $1 <= 0 THEN 'out_of_stock' ELSE 'in_stock' END,
              updated_at = NOW()
-           WHERE product_id = $2`,
-          [reqQty, prodId]
+           WHERE id = $2`,
+          [reqQty, inv.id]
         );
         reserved.push({ productId: prodId, reservedQty: reqQty, remaining: Number(inv.quantity) - reqQty });
       } else {
@@ -254,6 +254,42 @@ app.post("/api/inventory/reserve", async (req: any, res: any) => {
   } catch (err: any) {
     await client.query('ROLLBACK').catch(() => null);
     return res.status(500).json({ error: "Reservation transaction failed", message: err?.message });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/inventory/release — Atomic release/rollback of reserved stock
+app.post("/api/inventory/release", async (req: any, res: any) => {
+  const { items } = req.body;
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: "Release items array required" });
+  }
+
+  const client = await pgPool.connect().catch(() => null);
+  if (!client) {
+    return res.status(503).json({ error: "Database unavailable for inventory release" });
+  }
+
+  try {
+    await client.query('BEGIN');
+    for (const item of items) {
+      const prodId = Number(item.productId || item.id || 0);
+      const reqQty = Number(item.quantity || 1);
+      await client.query(
+        `UPDATE inventory SET
+           quantity = quantity + $1,
+           status = 'in_stock',
+           updated_at = NOW()
+         WHERE product_id = $2 OR id = $2`,
+        [reqQty, prodId]
+      );
+    }
+    await client.query('COMMIT');
+    return res.json({ success: true, message: "Inventory released successfully" });
+  } catch (err: any) {
+    await client.query('ROLLBACK').catch(() => null);
+    return res.status(500).json({ error: "Inventory release failed", message: err?.message });
   } finally {
     client.release();
   }

@@ -1,0 +1,27 @@
+{
+  "name": "sunotal-grocery-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sunotal Grocery Quick-Commerce Monorepo Platform",
+  "scripts": {
+    "dev": "pnpm --recursive run dev",
+    "build": "pnpm --recursive run build",
+    "test": "pnpm --recursive run test",
+    "lint": "pnpm --recursive run lint"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "protobufjs",
+      "bcrypt",
+      "bcryptjs"
+    ]
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2"
+  }
+}

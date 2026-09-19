@@ -68,9 +68,9 @@ services:
     container_name: sunotal-user
     restart: unless-stopped
     ports:
-      - "5004:5004"
+      - "5008:5008"
     environment:
-      - PORT=5004
+      - PORT=5008
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
     depends_on:
@@ -81,7 +81,7 @@ services:
       auth-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5004/api/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5008/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -225,9 +225,9 @@ services:
     container_name: sunotal-delivery
     restart: unless-stopped
     ports:
-      - "5006:5006"
+      - "5004:5004"
     environment:
-      - PORT=5006
+      - PORT=5004
       - REDIS_HOST=redis
     depends_on:
       redis:
@@ -235,7 +235,7 @@ services:
       order-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5006/api/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5004/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -269,15 +269,15 @@ services:
     container_name: sunotal-notification
     restart: unless-stopped
     ports:
-      - "5008:5008"
+      - "5011:5011"
     environment:
-      - PORT=5008
+      - PORT=5011
       - REDIS_HOST=redis
     depends_on:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5008/api/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5011/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3

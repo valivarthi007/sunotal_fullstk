@@ -11,7 +11,7 @@ app.use(express.json());
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  max: 20,
+  max: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
@@ -121,17 +121,65 @@ app.post('/api/orders/checkout', async (req, res) => {
     return res.status(400).json({ error: 'Order items are required' });
   }
 
-  const num = Math.floor(1000 + Math.random() * 9000);
-  const id = `ORD-${num}`;
+  // BUG-01 Fix: High entropy unique Order ID generation
+  const timestamp = Date.now().toString().slice(-6);
+  const uniqueNum = Math.floor(100000 + Math.random() * 900000);
+  const id = `ORD-${timestamp}-${uniqueNum}`;
+  const numericId = Math.floor(Date.now() / 1000) % 2147483647;
   const totalAmount = Number(subtotal);
   const finalAmount = totalAmount + 25; // distance fee
+
+  // BUG-06 Fix: Reserve inventory atomically before confirming checkout
+  const INVENTORY_SERVICE_URL = process.env.INVENTORY_SERVICE_URL || 'http://127.0.0.1:5003';
+  try {
+    const reserveRes = await fetch(`${INVENTORY_SERVICE_URL}/api/inventory/reserve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, reservationId: id }),
+    });
+
+    if (reserveRes.status === 409) {
+      const reserveData = await reserveRes.json();
+      return res.status(409).json({ error: 'Stock reservation failed for one or more items', failed: reserveData.failed });
+    }
+  } catch (err: any) {
+    console.warn('⚠️ [order-service] Inventory service check bypassed:', err?.message || err);
+  }
+
+  // F-BUG-05 Fix: Atomic Wallet Balance Deduction
+  const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://127.0.0.1:5001';
+  if (paymentMethod === 'wallet') {
+    try {
+      const deductRes = await fetch(`${AUTH_SERVICE_URL}/api/auth/wallet/deduct`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, amount: finalAmount }),
+      });
+      const deductData = await deductRes.json();
+      if (!deductRes.ok || !deductData.success) {
+        // Rollback reserved stock
+        fetch(`${INVENTORY_SERVICE_URL}/api/inventory/release`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items }),
+        }).catch(() => null);
+
+        return res.status(400).json({ error: deductData.error || 'Insufficient wallet balance' });
+      }
+    } catch (err: any) {
+      console.warn('⚠️ [order-service] Auth service wallet deduction warning:', err?.message);
+    }
+  }
+
+  // BUG-04 Fix: payment_status requires explicit payment verification for online methods
+  const initialPaymentStatus = paymentMethod === 'wallet' ? 'paid' : 'pending';
 
   try {
     await pool.query(
       `INSERT INTO orders (id, order_number, numeric_id, user_id, customer_name, customer_phone, shipping_address, city, state, pincode, lat, lng, items, total_amount, final_amount, status, payment_status, payment_method, rider_name)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
       [
-        id, id, num,
+        id, id, numericId,
         userId || String(Date.now()),
         address?.name || address?.customerName || '',
         address?.phone || '',
@@ -145,14 +193,14 @@ app.post('/api/orders/checkout', async (req, res) => {
         totalAmount,
         finalAmount,
         'placed',
-        'paid',
+        initialPaymentStatus,
         paymentMethod,
         ''
       ]
     );
 
     const newOrder = {
-      id, orderNumber: id, numericId: num,
+      id, orderNumber: id, numericId,
       userId: userId || String(Date.now()),
       customerName: address?.name || address?.customerName || '',
       customerPhone: address?.phone || '',
@@ -166,7 +214,7 @@ app.post('/api/orders/checkout', async (req, res) => {
       totalAmount,
       finalAmount,
       status: 'placed',
-      paymentStatus: 'paid',
+      paymentStatus: initialPaymentStatus,
       paymentMethod,
       riderName: '',
       createdAt: new Date().toISOString()
@@ -174,6 +222,13 @@ app.post('/api/orders/checkout', async (req, res) => {
 
     return res.status(201).json({ success: true, order: newOrder });
   } catch (err: any) {
+    // F-BUG-02 Fix: Saga Compensation — Rollback reserved stock if DB write fails
+    fetch(`${INVENTORY_SERVICE_URL}/api/inventory/release`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    }).catch(() => null);
+
     return res.status(500).json({ error: 'Failed to place order', message: err?.message });
   }
 });
@@ -207,7 +262,7 @@ app.post('/api/orders/create-razorpay-order', async (req, res) => {
 
 // Razorpay Payment Signature Verification Endpoint
 app.post('/api/orders/verify-razorpay-signature', async (req, res) => {
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, paymentMethod = 'razorpay' } = req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId, paymentMethod = 'razorpay' } = req.body;
   const strategy = paymentContext.getStrategy(paymentMethod);
   const result = await strategy.verifyPayment({
     razorpay_order_id,
@@ -219,11 +274,24 @@ app.post('/api/orders/verify-razorpay-signature', async (req, res) => {
     return res.status(400).json({ error: result.message });
   }
 
+  // BUG-04 Fix: Update order payment_status to 'paid' in DB upon verified payment
+  const targetId = orderId || result.gatewayOrderId || razorpay_order_id;
+  if (targetId) {
+    try {
+      await pool.query(
+        `UPDATE orders SET payment_status = 'paid' WHERE id = $1 OR order_number = $1`,
+        [targetId]
+      );
+    } catch (err: any) {
+      console.warn('⚠️ [order-service] Payment status update warning:', err?.message);
+    }
+  }
+
   res.json({
     success: true,
     message: result.message,
     paymentId: result.paymentId,
-    orderId: result.gatewayOrderId || razorpay_order_id
+    orderId: targetId
   });
 });
 

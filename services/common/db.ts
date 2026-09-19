@@ -16,7 +16,7 @@ export function getPgPool(options: PgDbConnectOptions = {}): Pool {
   if (!pool) {
     pool = new Pool({
       connectionString,
-      max: 50,
+      max: 5,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
     });
@@ -25,7 +25,7 @@ export function getPgPool(options: PgDbConnectOptions = {}): Pool {
       console.error(`❌ [${serviceName}] PostgreSQL Pool Error:`, err);
     });
 
-    console.log(`🐘 [${serviceName}] PostgreSQL Connection Pool Initialized (max: 50)`);
+    console.log(`🐘 [${serviceName}] PostgreSQL Connection Pool Initialized (max: 5)`);
   }
 
   return pool;

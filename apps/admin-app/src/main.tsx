@@ -37,6 +37,25 @@ try {
   }
 } catch (e) {}
 
+// Purge stale mock/fallback tokens — force re-login with real credentials after auth security fix
+try {
+  const FAKE_TOKEN = 'mock-jwt-token-sunotal-2026-fallback';
+  const TOKEN_KEYS = [
+    'sunotal_admin_token',
+    'sunotal_token',
+    'sunotal_vendor_token',
+    'sunotal_delivery_token',
+    'sunotal_user_token',
+  ];
+  for (const key of TOKEN_KEYS) {
+    const t = localStorage.getItem(key);
+    if (t && (t === FAKE_TOKEN || t.startsWith('mock-jwt') || t.length < 20)) {
+      localStorage.removeItem(key);
+      console.info(`[Sunotal] Purged stale mock token from ${key} — please log in again.`);
+    }
+  }
+} catch (e) {}
+
 const tokenGetter = () => {
   const isAdminPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
   return isAdminPath

@@ -37,7 +37,11 @@ export function broadcastRealtimeEvent(event: { type: string; path: string; meth
   const payload = `data: ${JSON.stringify({ ...event, timestamp: Date.now() })}\n\n`;
   sseClients.forEach((client) => {
     try {
-      client.write(payload);
+      if (!client.writableEnded) {
+        client.write(payload);
+      } else {
+        sseClients.delete(client);
+      }
     } catch {
       sseClients.delete(client);
     }
@@ -57,7 +61,12 @@ app.get('/api/realtime/stream', (req: any, res: any) => {
 
   const heartbeat = setInterval(() => {
     try {
-      res.write(`:ping\n\n`);
+      if (!res.writableEnded) {
+        res.write(`:ping\n\n`);
+      } else {
+        clearInterval(heartbeat);
+        sseClients.delete(res);
+      }
     } catch {
       clearInterval(heartbeat);
       sseClients.delete(res);

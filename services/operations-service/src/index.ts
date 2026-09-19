@@ -14,7 +14,7 @@ const pgPool = getPgPool({ serviceName: "operations-service" });
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-function createFastModel(initialData: any[] = []) {
+function createFastModel(tableName?: string, initialData: any[] = []) {
   const store: any[] = [...initialData];
 
   const getQueryChain = (currentList: any[]) => ({
@@ -56,6 +56,28 @@ function createFastModel(initialData: any[] = []) {
       const nextId = store.length + 1;
       const newItem = { id: data.id || nextId, ...data, createdAt: new Date() };
       store.unshift(newItem);
+      if (tableName) {
+        try {
+          if (tableName === 'users' && data.email) {
+            await pgPool.query(
+              `INSERT INTO users (name, email, password_hash, role, active, phone, city) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (email) DO NOTHING`,
+              [data.name || 'User', data.email, data.password_hash || 'hash', data.role || 'customer', true, data.phone || '', data.city || '']
+            );
+          } else if (tableName === 'vendors' && data.email) {
+            await pgPool.query(
+              `INSERT INTO vendors (name, vendor_name, email, phone, category, status) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (email) DO NOTHING`,
+              [data.name || data.vendor_name || 'Vendor', data.vendor_name || data.name || 'Vendor', data.email, data.phone || '', data.category || 'General', data.status || 'active']
+            );
+          } else if (tableName === 'products' && data.name) {
+            await pgPool.query(
+              `INSERT INTO products (name, category, price, status) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+              [data.name, data.category || 'General', data.price || 0, data.status || 'active']
+            );
+          }
+        } catch (e: any) {
+          console.warn(`⚠️ [operations-service] Failed to persist ${tableName} item to DB:`, e.message);
+        }
+      }
       return newItem;
     },
     findOneAndUpdate: (filter: any, update: any, _options?: any) => ({
@@ -92,23 +114,56 @@ function createFastModel(initialData: any[] = []) {
   };
 }
 
-const Product = createFastModel();
-const Vendor = createFastModel();
-const Warehouse = createFastModel();
-const User = createFastModel();
-const Category = createFastModel();
-const Order = createFastModel();
-const Inventory = createFastModel();
+const Product = createFastModel('products');
+const Vendor = createFastModel('vendors');
+const Warehouse = createFastModel('warehouses');
+const User = createFastModel('users');
+const Category = createFastModel('categories');
+const Order = createFastModel('orders');
+const Inventory = createFastModel('inventory');
 
 async function getNextId(Model: any): Promise<number> {
   const count = await Model.countDocuments();
   return count + 1;
 }
 
-// Initialize PostgreSQL tables for operations-service (quotations, payouts, warehouses)
+// Initialize PostgreSQL tables for operations-service and ensure persistence tables exist
 async function initDb() {
   try {
     await pgPool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL DEFAULT 'hash',
+        role VARCHAR(50) DEFAULT 'customer',
+        active BOOLEAN DEFAULT TRUE,
+        phone VARCHAR(50),
+        city VARCHAR(100),
+        wallet_balance NUMERIC(10, 2) DEFAULT 100.00,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS vendors (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255),
+        vendor_name VARCHAR(255),
+        email VARCHAR(255) UNIQUE,
+        phone VARCHAR(50),
+        category VARCHAR(100) DEFAULT 'General',
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(100) DEFAULT 'General',
+        price NUMERIC(10, 2) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS quotations (
         id SERIAL PRIMARY KEY,
         vendor_name VARCHAR(255),
@@ -156,7 +211,7 @@ async function initDb() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('🐘 [operations-service] PostgreSQL tables ready (quotations, rider_payouts, warehouses).');
+    console.log('🐘 [operations-service] PostgreSQL tables ready.');
   } catch (err: any) {
     console.warn('⚠️ [operations-service] DB init warning:', err?.message || err);
   }
@@ -1466,22 +1521,82 @@ app.get("/api/admin/observability", async (_req, res) => {
 
 app.get("/api/admin/ledger", async (_req, res) => {
   try {
-    const dbRes = await pgPool.query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 20').catch(() => null);
-    if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
-      const transactions = dbRes.rows.map((o: any) => ({
-        id: o.id || o.order_number,
-        type: "credit",
-        description: `Customer Payment - ${o.id || o.order_number}`,
-        amount: Number(o.final_amount || o.total_amount || 0),
-        date: o.created_at,
-        status: "completed",
-      }));
-      return res.json(transactions);
-    }
-    return res.json([]);
+    const dbRes = await pgPool.query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 50').catch(() => null);
+    const rows = dbRes?.rows || [];
+
+    let totalRevenue = 0;
+    let onlineCollections = 0;
+    let upiCollections = 0;
+    let poReceivables = 0;
+
+    const transactions = rows.map((o: any, idx: number) => {
+      const amt = Number(o.final_amount || o.total_amount || 0);
+      totalRevenue += amt;
+      if (o.payment_method === 'upi') upiCollections += amt;
+      else if (o.payment_method === 'po') poReceivables += amt;
+      else onlineCollections += amt;
+
+      return {
+        id: `TXN-${1000 + idx}`,
+        orderId: o.id || o.order_number,
+        time: o.created_at ? new Date(o.created_at).toLocaleTimeString() : "10:30 AM",
+        customer: o.customer_name ? `${o.customer_name} (${o.city || 'Bengaluru'})` : "Customer",
+        type: o.payment_method || "upi",
+        VPA: `PAY-${o.id || o.order_number}`,
+        amount: amt,
+        status: o.payment_status === "paid" ? "Captured" : "Pending",
+        payoutStatus: o.status === "delivered" ? "Settled" : "Processing",
+      };
+    });
+
+    const summary = {
+      totalRevenue,
+      onlineCollections,
+      upiCollections,
+      poReceivables,
+      completedSettlements: Math.round(totalRevenue * 0.85),
+      pendingVendorPayouts: Math.round(totalRevenue * 0.15),
+    };
+
+    return res.json({ summary, transactions });
   } catch {
-    return res.json([]);
+    return res.json({
+      summary: { totalRevenue: 0, onlineCollections: 0, upiCollections: 0, poReceivables: 0, completedSettlements: 0, pendingVendorPayouts: 0 },
+      transactions: []
+    });
   }
+});
+
+// POST /api/delivery/calculate — Dynamic Delivery Fee Calculation Endpoint
+app.post("/api/delivery/calculate", async (req, res) => {
+  const { distance = 5 } = req.body;
+  const numDist = Number(distance || 5);
+  let baseFee = 50;
+  let perKmRate = 8;
+  let freeRadius = 3;
+
+  try {
+    const dbRes = await pgPool.query('SELECT * FROM warehouses WHERE is_active = true ORDER BY id ASC LIMIT 1').catch(() => null);
+    if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+      const w = dbRes.rows[0];
+      baseFee = Number(w.base_delivery_fee || 50);
+      perKmRate = Number(w.per_km_rate || 8);
+      freeRadius = Number(w.free_delivery_radius_km || 3);
+    }
+  } catch (e: any) {}
+
+  const extraKm = Math.max(0, numDist - freeRadius);
+  const deliveryFee = extraKm > 0 ? baseFee + extraKm * perKmRate : (numDist <= freeRadius ? 0 : baseFee);
+
+  res.json({
+    success: true,
+    distanceKm: numDist,
+    baseFee,
+    perKmRate,
+    freeDeliveryRadiusKm: freeRadius,
+    deliveryFee: Math.round(deliveryFee),
+    currency: "INR"
+  });
 });
 
 // GET & POST /api/warehouses — PostgreSQL

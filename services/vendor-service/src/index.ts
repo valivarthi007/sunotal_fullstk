@@ -11,7 +11,7 @@ app.use(express.json());
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  max: 20,
+  max: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
@@ -106,7 +106,8 @@ app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], asyn
     const formatted = formatVendor(dbRes.rows[0]);
 
     // Sync to operations service in background
-    fetch('http://127.0.0.1:5002/api/vendors', {
+    const OPERATIONS_SERVICE_URL = process.env.OPERATIONS_SERVICE_URL || 'http://127.0.0.1:5002';
+    fetch(`${OPERATIONS_SERVICE_URL}/api/vendors`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formatted)

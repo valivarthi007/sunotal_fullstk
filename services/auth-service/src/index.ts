@@ -14,7 +14,7 @@ app.use(express.json());
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  max: 20,
+  max: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
@@ -115,11 +115,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     const newUser = normalizeUserRow(insertRes.rows[0]);
 
-    fetch('http://127.0.0.1:5002/api/users/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newUser),
-    }).catch(() => null);
+    syncUserWithOperations(newUser);
 
     const token = signToken({ id: newUser.id, email: newUser.email, name: newUser.name, role: newUser.role });
     return res.status(201).json({ success: true, token, user: newUser });
@@ -127,6 +123,27 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(500).json({ error: 'Registration failed. Please try again.', message: err?.message });
   }
 });
+
+const OPERATIONS_SERVICE_URL = process.env.OPERATIONS_SERVICE_URL || 'http://127.0.0.1:5002';
+
+async function syncUserWithOperations(user: any, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(`${OPERATIONS_SERVICE_URL}/api/users/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(user),
+      });
+      if (res.ok) return;
+    } catch (err: any) {
+      if (attempt === retries) {
+        console.warn(`⚠️ [auth-service] User sync failed after ${retries} attempts:`, err?.message);
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 200));
+      }
+    }
+  }
+}
 
 // Login — DB-only authentication (no password bypass)
 app.post('/api/auth/login', async (req, res) => {
@@ -226,19 +243,51 @@ app.put('/api/users/:id', async (req, res) => {
   const { name, role, phone, city, status, active } = req.body;
   const newActive = active !== undefined ? Boolean(active) : (status ? status === 'active' : undefined);
 
-  try {
-    const dbRes = await pool.query(
-      `UPDATE users SET name = COALESCE($1, name), role = COALESCE($2, role), phone = COALESCE($3, phone), city = COALESCE($4, city)${newActive !== undefined ? ', active = $5' : ''} WHERE id = ${newActive !== undefined ? '$6' : '$5'} RETURNING *`,
-      newActive !== undefined ? [name, role, phone, city, newActive, targetId] : [name, role, phone, city, targetId]
-    );
+  const setClauses: string[] = [];
+  const queryParams: any[] = [];
+  let paramIdx = 1;
 
+  if (name !== undefined) {
+    setClauses.push(`name = $${paramIdx++}`);
+    queryParams.push(name);
+  }
+  if (role !== undefined) {
+    setClauses.push(`role = $${paramIdx++}`);
+    queryParams.push(role);
+  }
+  if (phone !== undefined) {
+    setClauses.push(`phone = $${paramIdx++}`);
+    queryParams.push(phone);
+  }
+  if (city !== undefined) {
+    setClauses.push(`city = $${paramIdx++}`);
+    queryParams.push(city);
+  }
+  if (newActive !== undefined) {
+    setClauses.push(`active = $${paramIdx++}`);
+    queryParams.push(newActive);
+  }
+
+  if (setClauses.length === 0) {
+    try {
+      const existing = await pool.query('SELECT * FROM users WHERE id = $1', [targetId]);
+      if (existing.rows && existing.rows.length > 0) {
+        return res.json(normalizeUserRow(existing.rows[0]));
+      }
+      return res.status(404).json({ error: 'User not found' });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed to fetch user', message: err?.message });
+    }
+  }
+
+  queryParams.push(targetId);
+  const sql = `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING *`;
+
+  try {
+    const dbRes = await pool.query(sql, queryParams);
     if (dbRes.rows && dbRes.rows.length > 0) {
       const updated = normalizeUserRow(dbRes.rows[0]);
-      fetch('http://127.0.0.1:5002/api/users/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      }).catch(() => null);
+      syncUserWithOperations(updated);
       return res.json(updated);
     }
     return res.status(404).json({ error: 'User not found' });
@@ -276,6 +325,39 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
+// POST /api/auth/wallet/deduct — Atomic balance deduction to prevent race conditions & double-spending
+app.post('/api/auth/wallet/deduct', async (req, res) => {
+  const { userId, email, amount } = req.body;
+  const numAmt = Number(amount || 0);
+
+  if (isNaN(numAmt) || numAmt <= 0) {
+    return res.status(400).json({ error: 'Valid positive amount required for deduction' });
+  }
+
+  try {
+    const dbRes = await pool.query(
+      `UPDATE users 
+       SET wallet_balance = wallet_balance - $1 
+       WHERE (id = $2 OR LOWER(email) = $3) AND wallet_balance >= $1 
+       RETURNING id, name, email, wallet_balance`,
+      [numAmt, isNaN(Number(userId)) ? -1 : Number(userId), String(email || '').toLowerCase()]
+    );
+
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      const u = dbRes.rows[0];
+      return res.json({
+        success: true,
+        message: 'Wallet balance deducted successfully',
+        newBalance: Number(u.wallet_balance),
+      });
+    }
+
+    return res.status(400).json({ error: 'Insufficient wallet balance or user not found' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Wallet transaction failed', message: err?.message });
+  }
+});
+
 // GET /api/auth/me
 app.get('/api/auth/me', async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -287,7 +369,11 @@ app.get('/api/auth/me', async (req, res) => {
     const decoded: any = jwt.verify(token, JWT_SECRET);
     const dbRes = await pool.query('SELECT * FROM users WHERE id = $1 OR LOWER(email) = $2', [isNaN(Number(decoded.id)) ? -1 : Number(decoded.id), String(decoded.email || '').toLowerCase()]);
     if (dbRes.rows && dbRes.rows.length > 0) {
-      return res.json({ success: true, user: normalizeUserRow(dbRes.rows[0]) });
+      const userRow = dbRes.rows[0];
+      if (userRow.active === false) {
+        return res.status(401).json({ error: 'Account disabled. Please contact support.' });
+      }
+      return res.json({ success: true, user: normalizeUserRow(userRow) });
     }
     return res.json({ success: true, user: decoded });
   } catch {

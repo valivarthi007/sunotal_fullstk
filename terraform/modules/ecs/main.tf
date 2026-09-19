@@ -70,13 +70,13 @@ locals {
     "auth-service"         = { port = 5001, cpu = 256, memory = 512,  is_public = false }
     "operations-service"   = { port = 5002, cpu = 256, memory = 512,  is_public = false }
     "inventory-service"    = { port = 5003, cpu = 256, memory = 512,  is_public = false }
-    "user-service"         = { port = 5004, cpu = 256, memory = 512,  is_public = false }
+    "delivery-service"     = { port = 5004, cpu = 256, memory = 512,  is_public = false }
     "vendor-service"       = { port = 5005, cpu = 256, memory = 512,  is_public = false }
-    "delivery-service"     = { port = 5006, cpu = 256, memory = 512,  is_public = false }
     "support-service"      = { port = 5007, cpu = 256, memory = 512,  is_public = false }
-    "notification-service" = { port = 5008, cpu = 256, memory = 512,  is_public = false }
+    "user-service"         = { port = 5008, cpu = 256, memory = 512,  is_public = false }
     "catalog-service"      = { port = 5009, cpu = 256, memory = 512,  is_public = false }
     "order-service"        = { port = 5010, cpu = 256, memory = 512,  is_public = false }
+    "notification-service" = { port = 5011, cpu = 256, memory = 512,  is_public = false }
     "user-app"             = { port = 80,   cpu = 256, memory = 512,  is_public = true }
     "admin-app"            = { port = 80,   cpu = 256, memory = 512,  is_public = true }
     "vendor-app"           = { port = 80,   cpu = 256, memory = 512,  is_public = true }

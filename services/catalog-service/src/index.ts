@@ -11,7 +11,7 @@ app.use(express.json());
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  max: 20,
+  max: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });

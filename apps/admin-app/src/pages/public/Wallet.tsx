@@ -17,45 +17,32 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
+import { getApiUrl } from "@/lib/api-client";
+
 export default function Wallet() {
   const [, setLocation] = useLocation();
-  const [balance, setBalance] = useState(350);
+  const [balance, setBalance] = useState(100);
   const [topUpAmount, setTopUpAmount] = useState("500");
+  const [transactions, setTransactions] = useState<any[]>([]);
 
-  const [transactions, setTransactions] = useState([
-    {
-      id: "TXN-9021",
-      type: "credit",
-      title: "Instant Refund - Order #ORD-2026-4821",
-      subtitle: "Item quality resolution for Hydroponic Tomatoes",
-      amount: "+ ₹90.00",
-      date: "08 Sep 2026, 04:15 PM",
-    },
-    {
-      id: "TXN-8812",
-      type: "debit",
-      title: "1-Click Checkout - Order #ORD-2026-4821",
-      subtitle: "Express 10-Min Delivery",
-      amount: "- ₹240.00",
-      date: "08 Sep 2026, 03:50 PM",
-    },
-    {
-      id: "TXN-8104",
-      type: "credit",
-      title: "Weekly Organic Grocery Cashback",
-      subtitle: "Promotional bonus credit",
-      amount: "+ ₹50.00",
-      date: "01 Sep 2026, 10:00 AM",
-    },
-    {
-      id: "TXN-7491",
-      type: "credit",
-      title: "Wallet Top-up via UPI (Razorpay)",
-      subtitle: "Added balance to Sunotal Cash",
-      amount: "+ ₹450.00",
-      date: "28 Aug 2026, 11:30 AM",
-    },
-  ]);
+  React.useEffect(() => {
+    const fetchUserData = async () => {
+      const token = localStorage.getItem("sunotal_admin_token") || localStorage.getItem("sunotal_token");
+      if (!token) return;
+      try {
+        const res = await fetch(getApiUrl("/api/auth/me"), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user && data.user.walletBalance !== undefined) {
+            setBalance(Number(data.user.walletBalance));
+          }
+        }
+      } catch (err) {}
+    };
+    fetchUserData();
+  }, []);
 
   const handleTopUp = () => {
     const amt = Number(topUpAmount);

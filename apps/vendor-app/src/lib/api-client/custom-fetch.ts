@@ -15,18 +15,16 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 // Module-level configuration
 // ---------------------------------------------------------------------------
 
-const DEFAULT_API_URL = "https://api.automateuniverse.space";
-let _baseUrl: string | null =
-  (typeof process !== "undefined" && process.env?.VITE_API_URL) ||
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) ||
-  (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") ? null : DEFAULT_API_URL);
+const DEFAULT_API_URL = (typeof process !== "undefined" && process.env?.VITE_API_URL) ||
+                        (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) ||
+                        "";
+let _baseUrl: string | null = DEFAULT_API_URL;
 let _authTokenGetter: AuthTokenGetter | null = null;
 
 export function getApiUrl(path: string): string {
   if (!path) return path;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-  const base = isLocal ? "" : DEFAULT_API_URL;
+  const base = _baseUrl || "";
   return `${base}${path.startsWith("/") ? "" : "/"}${path}`;
 }
 
