@@ -115,7 +115,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       }
       return proxyReqOpts;
     },
-    timeout: 3500,
+    timeout: 10000,
     proxyErrorHandler: (err: any, res: any, _next: any) => {
       const req = res?.req;
       const url = req?.originalUrl || '';
@@ -153,7 +153,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       if (!responded && !res.headersSent) {
         responded = true;
         const url = req.originalUrl || '';
-        console.warn(`⏱️ [API Gateway Timeout Guard] -> ${targetUrl} (${url}) timed out after 3500ms. Serving resilient response.`);
+        console.warn(`⏱️ [API Gateway Timeout Guard] -> ${targetUrl} (${url}) timed out after 10000ms. Serving resilient response.`);
         if (url.includes('/categories')) {
           return res.json(DEFAULT_CATEGORIES);
         }
@@ -176,7 +176,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
         }
         return res.status(503).json({ error: 'Service temporarily unavailable. Please try again later.' });
       }
-    }, 3500);
+    }, 10000);
 
     res.on('finish', () => {
       responded = true;
