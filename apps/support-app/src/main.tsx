@@ -35,6 +35,8 @@ try {
       }
     }
   }
+} catch (e) {}
+
 // Purge stale mock/fallback tokens — force re-login with real credentials after auth security fix
 try {
   const FAKE_TOKEN = 'mock-jwt-token-sunotal-2026-fallback';
