@@ -316,60 +316,60 @@ async function handleResilientResponse(req: any, res: any) {
 }
 
 const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, res: any) => void) => {
-  const proxyMiddleware = proxy(targetUrl, {
-    proxyReqPathResolver: (req: any) => req.originalUrl,
-    parseReqBody: true,
-    proxyReqOptDecorator: (proxyReqOpts: any, srcReq: any) => {
-      if (srcReq.headers['x-correlation-id']) {
-        proxyReqOpts.headers['x-correlation-id'] = srcReq.headers['x-correlation-id'];
+  return async (req: any, res: any) => {
+    const targetEndpoint = `${targetUrl}${req.originalUrl || req.url}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+    try {
+      const headers: Record<string, string> = {};
+      for (const [key, value] of Object.entries(req.headers || {})) {
+        if (key.toLowerCase() !== 'host' && value) {
+          headers[key] = Array.isArray(value) ? value.join(', ') : String(value);
+        }
       }
-      if (srcReq.body && typeof srcReq.body === 'object' && Object.keys(srcReq.body).length > 0) {
-        const bodyData = JSON.stringify(srcReq.body);
-        proxyReqOpts.headers['content-type'] = 'application/json';
-        proxyReqOpts.headers['content-length'] = Buffer.byteLength(bodyData);
+      headers['x-correlation-id'] = (req.headers['x-correlation-id'] as string) || `sn-${Date.now()}`;
+
+      let body: any = undefined;
+      if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+        if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+          body = JSON.stringify(req.body);
+          headers['content-type'] = 'application/json';
+          headers['content-length'] = String(Buffer.byteLength(body));
+        } else if (req.body && typeof req.body === 'string') {
+          body = req.body;
+        }
       }
-      return proxyReqOpts;
-    },
-    proxyReqBodyDecorator: (bodyContent: any, srcReq: any) => {
-      if (srcReq.body && typeof srcReq.body === 'object' && Object.keys(srcReq.body).length > 0) {
-        return JSON.stringify(srcReq.body);
-      }
-      return bodyContent;
-    },
-    timeout: 3500,
-    proxyErrorHandler: (err: any, res: any, _next: any) => {
-      const req = res?.req;
-      const url = req?.originalUrl || '';
-      console.warn(`⚠️ [API Gateway Proxy Warning] -> ${targetUrl} (${url}) unavailable (${err?.message || 'timeout'}). Serving resilient response.`);
+
+      const response = await fetch(targetEndpoint, {
+        method: req.method,
+        headers,
+        body,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
       if (res.headersSent) return;
+
+      res.status(response.status);
+      response.headers.forEach((val, key) => {
+        if (!['content-encoding', 'transfer-encoding', 'content-length'].includes(key.toLowerCase())) {
+          res.setHeader(key, val);
+        }
+      });
+
+      const responseText = await response.text();
+      res.send(responseText);
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (res.headersSent) return;
+      console.warn(`⚠️ [API Gateway Proxy Warning] -> ${targetEndpoint} unavailable (${err?.message || 'timeout'}). Serving resilient response.`);
       if (fallbackHandler) {
         return fallbackHandler(req, res);
       }
       return handleResilientResponse(req, res);
     }
-  });
-
-  return (req: any, res: any, next: any) => {
-    let responded = false;
-    const timer = setTimeout(() => {
-      if (!responded && !res.headersSent) {
-        responded = true;
-        const url = req.originalUrl || '';
-        console.warn(`⏱️ [API Gateway Timeout Guard] -> ${targetUrl} (${url}) timed out after 3500ms. Serving resilient response.`);
-        return handleResilientResponse(req, res);
-      }
-    }, 3500);
-
-    res.on('finish', () => {
-      responded = true;
-      clearTimeout(timer);
-    });
-    res.on('close', () => {
-      responded = true;
-      clearTimeout(timer);
-    });
-
-    return proxyMiddleware(req, res, next);
   };
 };
 
