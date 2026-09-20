@@ -236,9 +236,21 @@ async function handleResilientResponse(req: any, res: any) {
           }
         } catch {}
       }
-      return res.status(503).json({ error: 'Failed to create product definition. Database unavailable.' });
+      return res.status(503).json({ error: 'Failed to create product definition.' });
     }
-    return res.status(503).json({ error: 'Catalog service is temporarily unavailable.' });
+    if (method === 'DELETE') {
+      try {
+        const idMatch = url.match(/\/product-definitions\/(\d+)/);
+        if (idMatch) {
+          const targetId = Number(idMatch[1]);
+          await gatewayPgPool.query('DELETE FROM product_definitions WHERE id = $1', [targetId]);
+          return res.json({ success: true, message: 'Product definition deleted successfully' });
+        }
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Failed to delete product definition', message: err?.message });
+      }
+    }
+    return res.status(503).json({ error: 'Product definition service unavailable.' });
   }
 
   // Categories
@@ -253,7 +265,33 @@ async function handleResilientResponse(req: any, res: any) {
       return res.json([]);
     }
     if (method === 'POST') {
-      return res.status(503).json({ error: 'Category creation service unavailable.' });
+      const { name, icon } = req.body || {};
+      if (name) {
+        try {
+          const dbRes = await gatewayPgPool.query(
+            `INSERT INTO categories (name, icon, active) VALUES ($1, $2, $3)
+             ON CONFLICT (name) DO UPDATE SET icon = EXCLUDED.icon RETURNING *`,
+            [String(name).trim(), icon || '📦', true]
+          );
+          if (dbRes.rows && dbRes.rows[0]) {
+            const c = dbRes.rows[0];
+            return res.status(201).json({ id: c.id, name: c.name, icon: c.icon, active: c.active });
+          }
+        } catch {}
+      }
+      return res.status(503).json({ error: 'Failed to create category.' });
+    }
+    if (method === 'DELETE') {
+      try {
+        const idMatch = url.match(/\/categories\/(\d+)/);
+        if (idMatch) {
+          const targetId = Number(idMatch[1]);
+          await gatewayPgPool.query('DELETE FROM categories WHERE id = $1', [targetId]);
+          return res.json({ success: true, message: 'Category deleted successfully' });
+        }
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Failed to delete category', message: err?.message });
+      }
     }
     return res.status(503).json({ error: 'Category service unavailable.' });
   }
