@@ -16,3 +16,5 @@ coverage/
 *.test.ts
 *.spec.ts
 __tests__/
+package-lock.json
+pnpm-lock.yaml

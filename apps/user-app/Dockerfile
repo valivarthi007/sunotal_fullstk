@@ -1,12 +1,12 @@
 # ─── Stage 1: Build ───────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm install --legacy-peer-deps
+COPY package.json ./
+RUN npm install --legacy-peer-deps --no-package-lock
 COPY . .
 RUN npm run build
 
-# ─── Stage 2: Production nginx ────────────────────────────────────────────────
+# ─── Stage 2: nginx ───────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine
 RUN apk add --no-cache wget
 COPY nginx.conf /etc/nginx/conf.d/default.conf

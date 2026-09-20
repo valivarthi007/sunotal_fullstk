@@ -12,3 +12,5 @@ npm-debug.log*
 *.md
 README*
 coverage/
+package-lock.json
+pnpm-lock.yaml

@@ -1,8 +1,8 @@
 # ─── Stage 1: Builder ─────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm install --legacy-peer-deps
+COPY package.json ./
+RUN npm install --legacy-peer-deps --no-package-lock
 COPY . .
 RUN npm run build
 
@@ -10,8 +10,8 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 RUN apk add --no-cache wget
-COPY package.json package-lock.json ./
-RUN npm install --omit=dev --legacy-peer-deps
+COPY package.json ./
+RUN npm install --omit=dev --legacy-peer-deps --no-package-lock
 COPY --from=builder /app/dist ./dist
 RUN chown -R node:node /app
 USER node
