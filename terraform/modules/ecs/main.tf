@@ -95,7 +95,35 @@ resource "aws_cloudwatch_log_group" "ecs" {
 
 variable "database_url" {
   type    = string
-  default = "postgresql://sunotal_admin:SunotalPostgres2026SecurePass!@sunotal-postgres-db.c2d668wu0n34.us-east-1.rds.amazonaws.com:5432/sunotal"
+  default = "postgresql://sunotal_admin:SunotalPostgres2026SecurePass!@sunotal-postgres-db.c2d668wu0n34.us-east-1.rds.amazonaws.com:5432/sunotal?sslmode=no-verify"
+}
+
+# ─── AWS CloudMap Private DNS Namespace for Inter-Service Communication ───────────
+resource "aws_service_discovery_private_dns_namespace" "sunotal" {
+  name        = "sunotal.local"
+  description = "Sunotal Microservices Private DNS Namespace"
+  vpc         = var.vpc_id
+  tags        = var.tags
+}
+
+resource "aws_service_discovery_service" "services" {
+  for_each = local.microservices
+  name     = "sunotal-${each.key}"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.sunotal.id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
 }
 
 resource "aws_ecs_task_definition" "tasks" {
@@ -121,16 +149,16 @@ resource "aws_ecs_task_definition" "tasks" {
       { name = "DATABASE_URL", value = var.database_url },
       { name = "PORT", value = tostring(each.value.port) },
       { name = "JWT_SECRET", value = "sunotal_jwt_secret_2026_super_secure" },
-      { name = "AUTH_SERVICE_URL", value = "http://localhost:5001" },
-      { name = "OPERATIONS_SERVICE_URL", value = "http://localhost:5002" },
-      { name = "INVENTORY_SERVICE_URL", value = "http://localhost:5003" },
-      { name = "DELIVERY_SERVICE_URL", value = "http://localhost:5004" },
-      { name = "VENDOR_SERVICE_URL", value = "http://localhost:5005" },
-      { name = "SUPPORT_SERVICE_URL", value = "http://localhost:5007" },
-      { name = "USER_SERVICE_URL", value = "http://localhost:5008" },
-      { name = "CATALOG_SERVICE_URL", value = "http://localhost:5009" },
-      { name = "ORDER_SERVICE_URL", value = "http://localhost:5010" },
-      { name = "NOTIFICATION_SERVICE_URL", value = "http://localhost:5011" }
+      { name = "AUTH_SERVICE_URL", value = "http://sunotal-auth-service.sunotal.local:5001" },
+      { name = "OPERATIONS_SERVICE_URL", value = "http://sunotal-operations-service.sunotal.local:5002" },
+      { name = "INVENTORY_SERVICE_URL", value = "http://sunotal-inventory-service.sunotal.local:5003" },
+      { name = "DELIVERY_SERVICE_URL", value = "http://sunotal-delivery-service.sunotal.local:5004" },
+      { name = "VENDOR_SERVICE_URL", value = "http://sunotal-vendor-service.sunotal.local:5005" },
+      { name = "SUPPORT_SERVICE_URL", value = "http://sunotal-support-service.sunotal.local:5007" },
+      { name = "USER_SERVICE_URL", value = "http://sunotal-user-service.sunotal.local:5008" },
+      { name = "CATALOG_SERVICE_URL", value = "http://sunotal-catalog-service.sunotal.local:5009" },
+      { name = "ORDER_SERVICE_URL", value = "http://sunotal-order-service.sunotal.local:5010" },
+      { name = "NOTIFICATION_SERVICE_URL", value = "http://sunotal-notification-service.sunotal.local:5011" }
     ]
     logConfiguration = {
       logDriver = "awslogs"
@@ -160,6 +188,10 @@ resource "aws_ecs_service" "services" {
     subnets          = var.private_subnet_ids
     security_groups  = [var.ecs_security_group_id]
     assign_public_ip = false
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.services[each.key].arn
   }
 
 

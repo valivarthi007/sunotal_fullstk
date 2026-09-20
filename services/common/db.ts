@@ -14,11 +14,13 @@ export function getPgPool(options: PgDbConnectOptions = {}): Pool {
   } = options;
 
   if (!pool) {
+    const isRds = connectionString.includes('amazonaws.com') || connectionString.includes('rds') || connectionString.includes('sslmode=');
     pool = new Pool({
       connectionString,
       max: 5,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
+      ssl: isRds ? { rejectUnauthorized: false } : undefined,
     });
 
     pool.on('error', (err) => {

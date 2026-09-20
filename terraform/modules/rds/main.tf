@@ -65,6 +65,6 @@ output "rds_endpoint" {
 
 output "database_url" {
   description = "Full PostgreSQL Connection URL"
-  value       = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
+  value       = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.endpoint}/${var.db_name}?sslmode=no-verify"
   sensitive   = true
 }
