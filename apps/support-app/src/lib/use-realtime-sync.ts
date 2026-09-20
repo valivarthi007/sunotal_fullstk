@@ -44,14 +44,9 @@ export function useRealtimeSync(onMutation?: (event: any) => void) {
 
     connectSSE();
 
-    const pollInterval = setInterval(() => {
-      queryClient.invalidateQueries();
-    }, 5000);
-
     return () => {
       if (eventSource) eventSource.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      clearInterval(pollInterval);
     };
   }, [queryClient, onMutation]);
 }

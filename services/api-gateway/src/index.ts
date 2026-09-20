@@ -324,7 +324,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
   return async (req: any, res: any) => {
     const targetEndpoint = `${targetUrl}${req.originalUrl || req.url}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       const headers: Record<string, string> = {};

@@ -101,8 +101,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: false,
-      staleTime: 1000 * 3, // 3 seconds for live dynamic updates
-      refetchInterval: 5000, // Auto-refetch every 5 seconds
+      staleTime: 1000 * 10, // 10 seconds cache window
       refetchOnWindowFocus: true,
       refetchOnMount: true,
       throwOnError: false,

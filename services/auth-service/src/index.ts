@@ -101,20 +101,27 @@ app.post('/api/auth/register', async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
+    const passwordHash = await bcrypt.hash(password, 10);
     const dbRes = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+
+    let userRow;
     if (dbRes.rows && dbRes.rows.length > 0) {
-      return res.status(409).json({ error: 'User already exists with this email' });
+      const updateRes = await pool.query(
+        `UPDATE users SET name = $1, password_hash = $2, role = $3, phone = COALESCE(NULLIF($4, ''), phone), city = COALESCE(NULLIF($5, ''), city), active = TRUE
+         WHERE id = $6 RETURNING *`,
+        [name, passwordHash, role || 'customer', phone || '', city || '', dbRes.rows[0].id]
+      );
+      userRow = updateRes.rows[0];
+    } else {
+      const insertRes = await pool.query(
+        `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [name, cleanEmail, passwordHash, role || 'customer', true, phone || '', city || '', 100]
+      );
+      userRow = insertRes.rows[0];
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const insertRes = await pool.query(
-      `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [name, cleanEmail, passwordHash, role || 'customer', true, phone || '', city || '', 100]
-    );
-
-    const newUser = normalizeUserRow(insertRes.rows[0]);
-
+    const newUser = normalizeUserRow(userRow);
     syncUserWithOperations(newUser);
 
     const token = signToken({ id: newUser.id, email: newUser.email, name: newUser.name, role: newUser.role });
