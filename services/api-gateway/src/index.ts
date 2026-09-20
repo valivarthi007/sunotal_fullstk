@@ -398,6 +398,137 @@ async function handleResilientResponse(req: any, res: any) {
     return handleInProcessVendors(req, res);
   }
 
+  // Warehouses
+  if (url.includes('warehouses')) {
+    try {
+      await gatewayPgPool.query(`
+        CREATE TABLE IF NOT EXISTS warehouses (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          address TEXT,
+          city VARCHAR(100),
+          latitude NUMERIC(10, 6),
+          longitude NUMERIC(10, 6),
+          free_delivery_radius_km NUMERIC(5,2) DEFAULT 30,
+          max_service_radius_km NUMERIC(5,2) DEFAULT 70,
+          base_delivery_fee NUMERIC(10,2) DEFAULT 50,
+          per_km_rate NUMERIC(10,2) DEFAULT 8,
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+    } catch {}
+
+    if (method === 'GET') {
+      try {
+        const dbRes = await gatewayPgPool.query('SELECT * FROM warehouses ORDER BY id DESC');
+        return res.json((dbRes.rows || []).map((w: any) => ({
+          id: w.id,
+          name: w.name,
+          address: w.address,
+          city: w.city,
+          latitude: Number(w.latitude || 12.9716),
+          longitude: Number(w.longitude || 77.5946),
+          freeDeliveryRadiusKm: Number(w.free_delivery_radius_km || 30),
+          maxServiceRadiusKm: Number(w.max_service_radius_km || 70),
+          baseDeliveryFee: Number(w.base_delivery_fee || 50),
+          perKmRate: Number(w.per_km_rate || 8),
+          isActive: w.is_active ?? true,
+          createdAt: w.created_at || new Date().toISOString()
+        })));
+      } catch (err: any) {
+        return res.json([]);
+      }
+    }
+
+    if (method === 'POST') {
+      const { name, address, city, latitude, longitude, freeDeliveryRadiusKm, maxServiceRadiusKm, baseDeliveryFee, perKmRate } = req.body || {};
+      if (!name || !address || !city) {
+        return res.status(400).json({ error: 'Name, address, and city are required' });
+      }
+      try {
+        const dbRes = await gatewayPgPool.query(
+          `INSERT INTO warehouses (name, address, city, latitude, longitude, free_delivery_radius_km, max_service_radius_km, base_delivery_fee, per_km_rate, is_active)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+          [
+            String(name).trim(),
+            String(address).trim(),
+            String(city).trim(),
+            Number(latitude || 12.9716),
+            Number(longitude || 77.5946),
+            Number(freeDeliveryRadiusKm || 30),
+            Number(maxServiceRadiusKm || 70),
+            Number(baseDeliveryFee || 50),
+            Number(perKmRate || 8),
+            true
+          ]
+        );
+        if (dbRes.rows && dbRes.rows[0]) {
+          const w = dbRes.rows[0];
+          return res.status(201).json({
+            id: w.id,
+            name: w.name,
+            address: w.address,
+            city: w.city,
+            latitude: Number(w.latitude),
+            longitude: Number(w.longitude),
+            freeDeliveryRadiusKm: Number(w.free_delivery_radius_km),
+            maxServiceRadiusKm: Number(w.max_service_radius_km),
+            baseDeliveryFee: Number(w.base_delivery_fee),
+            perKmRate: Number(w.per_km_rate),
+            isActive: w.is_active ?? true,
+            createdAt: w.created_at
+          });
+        }
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Failed to create warehouse', message: err?.message });
+      }
+      return res.status(503).json({ error: 'Failed to create warehouse' });
+    }
+
+    if (method === 'PUT' || method === 'PATCH') {
+      try {
+        const idFromParams = req.params?.id;
+        const idFromUrl = (url.match(/\/(\d+)(?:\?.*)?$/) || [])[1];
+        const targetId = Number(idFromParams || idFromUrl);
+        const { name, address, city, freeDeliveryRadiusKm, maxServiceRadiusKm, baseDeliveryFee, perKmRate, isActive } = req.body || {};
+        if (targetId && !isNaN(targetId)) {
+          const dbRes = await gatewayPgPool.query(
+            `UPDATE warehouses SET
+              name = COALESCE($1, name), address = COALESCE($2, address), city = COALESCE($3, city),
+              free_delivery_radius_km = COALESCE($4, free_delivery_radius_km),
+              max_service_radius_km = COALESCE($5, max_service_radius_km),
+              base_delivery_fee = COALESCE($6, base_delivery_fee),
+              per_km_rate = COALESCE($7, per_km_rate),
+              is_active = COALESCE($8, is_active)
+             WHERE id = $9 RETURNING *`,
+            [name, address, city, freeDeliveryRadiusKm, maxServiceRadiusKm, baseDeliveryFee, perKmRate, isActive, targetId]
+          );
+          if (dbRes.rows && dbRes.rows[0]) {
+            const w = dbRes.rows[0];
+            return res.json({ id: w.id, name: w.name, address: w.address, city: w.city, isActive: w.is_active ?? true });
+          }
+        }
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Failed to update warehouse', message: err?.message });
+      }
+    }
+
+    if (method === 'DELETE') {
+      try {
+        const idFromParams = req.params?.id;
+        const idFromUrl = (url.match(/\/(\d+)(?:\?.*)?$/) || [])[1];
+        const targetId = Number(idFromParams || idFromUrl);
+        if (targetId && !isNaN(targetId)) {
+          await gatewayPgPool.query('DELETE FROM warehouses WHERE id = $1', [targetId]);
+          return res.json({ success: true, message: 'Warehouse deleted successfully', deletedId: targetId });
+        }
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Failed to delete warehouse', message: err?.message });
+      }
+    }
+  }
+
   // Generic Service Unavailable Response
   if (method === 'GET') {
     return res.status(503).json({ error: 'Requested service is temporarily unavailable. Please try again later.' });
@@ -671,7 +802,7 @@ app.get('/api/healthz', async (_req: any, res: any) => {
   });
 });
 
-// Admin Stats Endpoint (Aggregates stats from Catalog, Order, Auth, Delivery, Vendor, Operations)
+// Admin Stats Endpoint (Aggregates stats from Catalog, Order, Auth, Delivery, Vendor, Operations, and PostgreSQL)
 app.get('/api/admin/stats', async (_req: any, res: any) => {
   try {
     const fetchWithTimeout = (url: string, ms = 800) => {
@@ -692,35 +823,93 @@ app.get('/api/admin/stats', async (_req: any, res: any) => {
       fetchWithTimeout(`${SERVICES.OPERATIONS}/api/users`),
     ]);
 
+    // Query PostgreSQL directly for robust fallbacks
+    let dbUsers: any[] = [];
+    let dbProducts: any[] = [];
+    let dbVendors: any[] = [];
+    let dbOrders: any[] = [];
+    let dbWarehouses: any[] = [];
+
+    try {
+      const uRes = await gatewayPgPool.query('SELECT * FROM users ORDER BY id DESC');
+      dbUsers = uRes.rows || [];
+    } catch {}
+
+    try {
+      const pRes = await gatewayPgPool.query('SELECT * FROM products ORDER BY id DESC');
+      dbProducts = pRes.rows || [];
+    } catch {}
+
+    try {
+      const vRes = await gatewayPgPool.query('SELECT * FROM vendors ORDER BY id DESC');
+      dbVendors = vRes.rows || [];
+    } catch {}
+
+    try {
+      const oRes = await gatewayPgPool.query('SELECT * FROM orders ORDER BY id DESC');
+      dbOrders = oRes.rows || [];
+    } catch {}
+
+    try {
+      const wRes = await gatewayPgPool.query('SELECT * FROM warehouses WHERE is_active = true');
+      dbWarehouses = wRes.rows || [];
+    } catch {}
+
     const authUsers = Array.isArray(usersRes) ? usersRes : [];
     const opsUsers = Array.isArray(opsUsersRes) ? opsUsersRes : (Array.isArray(opsStatsRes?.recentUsers) ? opsStatsRes.recentUsers : []);
 
     const userMap = new Map();
-    [...authUsers, ...opsUsers].forEach((u) => {
+    // Include dbUsers first so newly created users in PostgreSQL are always present
+    [...dbUsers, ...authUsers, ...opsUsers].forEach((u) => {
       if (u && (u.email || u.id)) {
-        const key = (u.email || String(u.id)).toLowerCase();
+        const key = String(u.email || u.id).toLowerCase();
         if (!userMap.has(key)) {
           userMap.set(key, {
-            id: u.id || key,
+            id: String(u.id || key),
             name: u.name || "User",
             email: u.email || key,
             role: u.role || "customer",
             city: u.city || "",
-            status: u.status || "active",
-            createdAt: u.createdAt || new Date().toISOString(),
+            status: u.active === false ? "inactive" : (u.status || "active"),
+            createdAt: u.created_at || u.createdAt || new Date().toISOString(),
           });
         }
       }
     });
 
     const combinedUsers = Array.from(userMap.values());
-    const totalUsers = Math.max(combinedUsers.length, opsStatsRes?.totalUsers || 0, authUsers.length);
-    const totalProducts = Array.isArray(productsRes) ? productsRes.length : (opsStatsRes?.totalProducts || 0);
-    const totalOrders = Array.isArray(ordersRes) ? ordersRes.length : (opsStatsRes?.totalOrders || 0);
-    const totalVendors = Array.isArray(vendorsRes) ? vendorsRes.length : (opsStatsRes?.totalVendors || 0);
-    const totalRevenue = Array.isArray(ordersRes) ? ordersRes.reduce((sum: number, o: any) => sum + (o.finalAmount || o.totalAmount || 0), 0) : (opsStatsRes?.totalRevenue || 0);
+    const totalUsers = Math.max(combinedUsers.length, dbUsers.length, opsStatsRes?.totalUsers || 0, authUsers.length);
+    const totalProducts = Array.isArray(productsRes) ? productsRes.length : Math.max(dbProducts.length, opsStatsRes?.totalProducts || 0);
+    const totalOrders = Array.isArray(ordersRes) ? ordersRes.length : Math.max(dbOrders.length, opsStatsRes?.totalOrders || 0);
+    const totalVendors = Array.isArray(vendorsRes) ? vendorsRes.length : Math.max(dbVendors.length, opsStatsRes?.totalVendors || 0);
+    const totalRevenue = Array.isArray(ordersRes)
+      ? ordersRes.reduce((sum: number, o: any) => sum + (o.finalAmount || o.totalAmount || 0), 0)
+      : (opsStatsRes?.totalRevenue || dbOrders.reduce((sum: number, o: any) => sum + Number(o.total_amount || 0), 0));
 
-    const categoryBreakdown = opsStatsRes?.categoryBreakdown || [];
+    let categoryBreakdown = opsStatsRes?.categoryBreakdown || [];
+    if (!Array.isArray(categoryBreakdown) || categoryBreakdown.length === 0) {
+      const catCounts: Record<string, number> = {};
+      dbProducts.forEach((p: any) => {
+        const cat = p.category || 'General';
+        catCounts[cat] = (catCounts[cat] || 0) + 1;
+      });
+      categoryBreakdown = Object.entries(catCounts).map(([name, count]) => ({ name, count }));
+    }
+
+    const recentVendors = Array.isArray(vendorsRes) && vendorsRes.length > 0
+      ? vendorsRes.slice(0, 5)
+      : dbVendors.slice(0, 5).map(v => ({
+          id: v.id,
+          name: v.name || v.vendor_name,
+          vendorName: v.vendor_name || v.name,
+          email: v.email,
+          category: v.category,
+          status: v.status || 'approved'
+        }));
+
+    const recentOrders = Array.isArray(ordersRes) && ordersRes.length > 0
+      ? ordersRes.slice(0, 5)
+      : dbOrders.slice(0, 5);
 
     res.json({
       totalProducts,
@@ -731,11 +920,11 @@ app.get('/api/admin/stats', async (_req: any, res: any) => {
       totalRevenue,
       totalOrders,
       onlineRiders: 0,
-      activeDarkStores: opsStatsRes?.activeDarkStores || 0,
+      activeDarkStores: opsStatsRes?.activeDarkStores || dbWarehouses.length,
       categoryBreakdown: Array.isArray(categoryBreakdown) ? categoryBreakdown : [],
-      recentOrders: Array.isArray(ordersRes) ? ordersRes.slice(0, 5) : [],
+      recentOrders,
       recentUsers: combinedUsers.slice(0, 5),
-      recentVendors: Array.isArray(vendorsRes) ? vendorsRes.slice(0, 5) : []
+      recentVendors
     });
   } catch (err: any) {
     res.status(200).json({
