@@ -21,12 +21,14 @@ const pool = new Pool({
   ssl: isRds ? { rejectUnauthorized: false } : undefined,
 });
 
-const DEFAULT_DEMO_USERS = [
-  { id: "1", name: "Sunotal Admin", email: "admin@sunotal.com", role: "admin", status: "active", active: true, phone: "9876543210", city: "Bengaluru", walletBalance: 1000, createdAt: new Date().toISOString() },
-  { id: "2", name: "Sunotal Customer", email: "user@sunotal.com", role: "customer", status: "active", active: true, phone: "9876543211", city: "Bengaluru", walletBalance: 500, createdAt: new Date().toISOString() },
-  { id: "3", name: "Green Farms Vendor", email: "vendor@sunotal.com", role: "vendor", status: "active", active: true, phone: "9876543212", city: "Mysuru", walletBalance: 2500, createdAt: new Date().toISOString() },
-  { id: "4", name: "Express Rider", email: "rider@sunotal.com", role: "rider", status: "active", active: true, phone: "9876543213", city: "Bengaluru", walletBalance: 300, createdAt: new Date().toISOString() }
-];
+const INITIAL_ADMIN_USER = {
+  name: "Sunotal Admin",
+  email: "admin@sunotal.com",
+  role: "admin",
+  phone: "9876543210",
+  city: "Bengaluru",
+  walletBalance: 1000,
+};
 
 async function initDb() {
   try {
@@ -45,20 +47,16 @@ async function initDb() {
       );
     `);
 
-    // Ensure default users exist
+    // Inject initial admin credentials into PostgreSQL RDS
     const adminHash = await bcrypt.hash('admin123', 10);
-    const passHash = await bcrypt.hash('password123', 10);
+    await pool.query(
+      `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (email) DO NOTHING`,
+      [INITIAL_ADMIN_USER.name, INITIAL_ADMIN_USER.email, adminHash, INITIAL_ADMIN_USER.role, true, INITIAL_ADMIN_USER.phone, INITIAL_ADMIN_USER.city, INITIAL_ADMIN_USER.walletBalance]
+    );
 
-    for (const u of DEFAULT_DEMO_USERS) {
-      await pool.query(
-        `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (email) DO NOTHING`,
-        [u.name, u.email, u.role === 'admin' ? adminHash : passHash, u.role, true, u.phone, u.city, u.walletBalance]
-      );
-    }
-
-    console.log('🐘 [auth-service] PostgreSQL database tables and demo users ready.');
+    console.log('🐘 [auth-service] PostgreSQL database schema and initial admin account ready.');
   } catch (err: any) {
     console.warn('⚠️ [auth-service] DB init warning:', err?.message || err);
   }

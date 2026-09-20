@@ -101,7 +101,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: false,
-      staleTime: 1000 * 60, // 1 minute
+      staleTime: 1000 * 3, // 3 seconds for live dynamic updates
+      refetchInterval: 5000, // Auto-refetch every 5 seconds
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
       throwOnError: false,
     },
     mutations: {
