@@ -313,11 +313,282 @@ async function handleResilientResponse(req: any, res: any) {
     return res.status(503).json({ error: 'Catalog service unavailable.' });
   }
 
+  // Users
+  if (url.includes('users')) {
+    if (method === 'GET') {
+      return handleInProcessUsers(req, res);
+    }
+    if (method === 'PUT' || method === 'PATCH') {
+      try {
+        const idFromParams = req.params?.id;
+        const idFromUrl = (url.match(/\/(\d+)(?:\?.*)?$/) || [])[1];
+        const targetId = Number(idFromParams || idFromUrl);
+        const { name, phone, city, role, active } = req.body || {};
+        if (targetId && !isNaN(targetId)) {
+          const dbRes = await gatewayPgPool.query(
+            `UPDATE users SET name = COALESCE($1, name), phone = COALESCE($2, phone), city = COALESCE($3, city), role = COALESCE($4, role), active = COALESCE($5, active) WHERE id = $6 RETURNING *`,
+            [name, phone, city, role, active, targetId]
+          );
+          if (dbRes.rows && dbRes.rows[0]) {
+            const u = dbRes.rows[0];
+            return res.json({ id: String(u.id), name: u.name, email: u.email, role: u.role, active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '', city: u.city || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at });
+          }
+        }
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Failed to update user', message: err?.message });
+      }
+    }
+    if (method === 'DELETE') {
+      try {
+        const idFromParams = req.params?.id;
+        const idFromUrl = (url.match(/\/(\d+)(?:\?.*)?$/) || [])[1];
+        const targetId = Number(idFromParams || idFromUrl);
+        if (targetId && !isNaN(targetId)) {
+          await gatewayPgPool.query('DELETE FROM users WHERE id = $1', [targetId]);
+          return res.json({ success: true, message: 'User deleted successfully', deletedId: targetId });
+        }
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Failed to delete user', message: err?.message });
+      }
+    }
+    return handleInProcessUsers(req, res);
+  }
+
+  // Vendors
+  if (url.includes('vendors')) {
+    if (method === 'GET') {
+      return handleInProcessVendors(req, res);
+    }
+    if (method === 'POST') {
+      return handleInProcessVendorRegister(req, res);
+    }
+    if (method === 'PUT' || method === 'PATCH') {
+      try {
+        const idFromParams = req.params?.id;
+        const idFromUrl = (url.match(/\/(\d+)(?:\?.*)?$/) || [])[1];
+        const targetId = Number(idFromParams || idFromUrl);
+        const { name, vendorName, email, phone, category, address, city, status, active } = req.body || {};
+        if (targetId && !isNaN(targetId)) {
+          const dbRes = await gatewayPgPool.query(
+            `UPDATE vendors SET name = COALESCE($1, name), vendor_name = COALESCE($2, vendor_name), email = COALESCE($3, email), phone = COALESCE($4, phone), category = COALESCE($5, category), address = COALESCE($6, address), city = COALESCE($7, city), status = COALESCE($8, status), active = COALESCE($9, active) WHERE id = $10 RETURNING *`,
+            [name, vendorName || name, email, phone, category, address, city, status, active, targetId]
+          );
+          if (dbRes.rows && dbRes.rows[0]) {
+            const v = dbRes.rows[0];
+            return res.json({ id: v.id, name: v.name || v.vendor_name, vendorName: v.vendor_name || v.name, email: v.email, phone: v.phone, category: v.category, address: v.address, city: v.city, status: v.status, active: v.active, createdAt: v.created_at });
+          }
+        }
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Failed to update vendor', message: err?.message });
+      }
+    }
+    if (method === 'DELETE') {
+      try {
+        const idFromParams = req.params?.id;
+        const idFromUrl = (url.match(/\/(\d+)(?:\?.*)?$/) || [])[1];
+        const targetId = Number(idFromParams || idFromUrl);
+        if (targetId && !isNaN(targetId)) {
+          await gatewayPgPool.query('DELETE FROM vendors WHERE id = $1', [targetId]);
+          return res.json({ success: true, message: 'Vendor deleted successfully', deletedId: targetId });
+        }
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Failed to delete vendor', message: err?.message });
+      }
+    }
+    return handleInProcessVendors(req, res);
+  }
+
   // Generic Service Unavailable Response
   if (method === 'GET') {
     return res.status(503).json({ error: 'Requested service is temporarily unavailable. Please try again later.' });
   }
   return res.status(503).json({ error: 'Requested service is temporarily unavailable. Please try again later.' });
+}
+
+async function handleInProcessUsers(_req: any, res: any) {
+  try {
+    const dbRes = await gatewayPgPool.query('SELECT * FROM users ORDER BY id DESC');
+    const users = (dbRes.rows || []).map((u: any) => ({
+      id: String(u.id),
+      name: u.name,
+      email: u.email,
+      role: u.role || 'customer',
+      active: u.active ?? true,
+      status: u.active === false ? 'inactive' : 'active',
+      phone: u.phone || '',
+      city: u.city || '',
+      walletBalance: Number(u.wallet_balance || 0),
+      createdAt: u.created_at || new Date().toISOString()
+    }));
+    return res.json(users);
+  } catch (err: any) {
+    console.error('⚠️ [handleInProcessUsers err]:', err?.message);
+    return res.json(DEFAULT_DEMO_USERS);
+  }
+}
+
+async function handleInProcessVendors(_req: any, res: any) {
+  try {
+    const dbRes = await gatewayPgPool.query('SELECT * FROM vendors ORDER BY id DESC');
+    const vendors = (dbRes.rows || []).map((v: any) => ({
+      id: v.id,
+      name: v.name || v.vendor_name,
+      vendorName: v.vendor_name || v.name,
+      email: v.email,
+      phone: v.phone,
+      category: v.category,
+      address: v.address,
+      city: v.city,
+      status: v.status || 'approved',
+      active: v.active ?? true,
+      createdAt: v.created_at || new Date().toISOString()
+    }));
+    return res.json(vendors);
+  } catch (err: any) {
+    console.error('⚠️ [handleInProcessVendors err]:', err?.message);
+    return res.json([]);
+  }
+}
+
+async function handleInProcessVendorRegister(req: any, res: any) {
+  const { name, firstName, lastName, vendorName, email, password, phone, category, address, city, location } = req.body || {};
+  const vName = vendorName || (firstName && lastName ? `${firstName} ${lastName}` : name) || 'New Vendor';
+  const cEmail = (email || '').trim().toLowerCase();
+  const cPhone = phone || '';
+  const cCategory = category || 'Fresh Produce';
+  const cAddress = address || location || city || '';
+  const cCity = city || location || '';
+  const url = req.originalUrl || req.url || '';
+  const isSelfRegister = url.includes('register') || url.includes('onboard');
+  const initialStatus = isSelfRegister ? 'pending' : 'approved';
+
+  try {
+    await gatewayPgPool.query(`
+      CREATE TABLE IF NOT EXISTS vendors (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        vendor_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        category VARCHAR(100),
+        address TEXT,
+        city VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'pending',
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    let dbRes;
+    if (cEmail) {
+      const existing = await gatewayPgPool.query('SELECT * FROM vendors WHERE LOWER(email) = $1', [cEmail]);
+      if (existing.rows && existing.rows.length > 0) {
+        dbRes = await gatewayPgPool.query(
+          `UPDATE vendors SET name = $1, vendor_name = $2, phone = $3, category = $4, address = $5, city = $6, status = $7, active = $8 WHERE id = $9 RETURNING *`,
+          [vName, vName, cPhone, cCategory, cAddress, cCity, initialStatus, true, existing.rows[0].id]
+        );
+      }
+    }
+
+    if (!dbRes || !dbRes.rows || dbRes.rows.length === 0) {
+      dbRes = await gatewayPgPool.query(
+        `INSERT INTO vendors (name, vendor_name, email, phone, category, address, city, status, active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [vName, vName, cEmail, cPhone, cCategory, cAddress, cCity, initialStatus, true]
+      );
+    }
+
+    const vRow = dbRes.rows[0];
+    const formattedVendor = {
+      id: vRow.id,
+      name: vRow.name || vRow.vendor_name,
+      vendorName: vRow.vendor_name || vRow.name,
+      email: vRow.email,
+      phone: vRow.phone,
+      category: vRow.category,
+      address: vRow.address,
+      city: vRow.city,
+      status: vRow.status,
+      active: vRow.active,
+      createdAt: vRow.created_at
+    };
+
+    if (cEmail) {
+      try {
+        const pwdHash = await bcrypt.hash(password || 'vendor123', 10);
+        await gatewayPgPool.query(
+          `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
+           VALUES ($1, $2, $3, 'vendor', true, $4, $5, 100)
+           ON CONFLICT (email) DO UPDATE SET
+             name = EXCLUDED.name,
+             password_hash = EXCLUDED.password_hash,
+             role = 'vendor',
+             phone = EXCLUDED.phone,
+             city = EXCLUDED.city,
+             active = true`,
+          [vName, cEmail, pwdHash, cPhone, cCity]
+        );
+      } catch (uErr: any) {
+        console.warn('⚠️ [vendor user creation warning]:', uErr?.message);
+      }
+    }
+
+    broadcastRealtimeEvent({
+      type: 'VENDOR_REGISTERED',
+      path: url,
+      method: 'POST',
+      data: formattedVendor
+    });
+
+    return res.status(201).json(formattedVendor);
+  } catch (err: any) {
+    console.error('⚠️ [handleInProcessVendorRegister err]:', err?.message);
+    return res.status(500).json({ error: 'Failed to register vendor', message: err?.message });
+  }
+}
+
+async function handleInProcessUserRegister(req: any, res: any) {
+  const { name, email, password, role, phone, city } = req.body || {};
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail || !password) {
+    return res.status(400).json({ error: 'Email and password required' });
+  }
+  const uName = name || cleanEmail.split('@')[0];
+  const uRole = role || 'customer';
+  try {
+    const pwdHash = await bcrypt.hash(password, 10);
+    const dbRes = await gatewayPgPool.query(
+      `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
+       VALUES ($1, $2, $3, $4, true, $5, $6, 500)
+       ON CONFLICT (email) DO UPDATE SET
+         name = EXCLUDED.name,
+         password_hash = EXCLUDED.password_hash,
+         role = EXCLUDED.role,
+         phone = EXCLUDED.phone,
+         city = EXCLUDED.city,
+         active = true
+       RETURNING *`,
+      [uName, cleanEmail, pwdHash, uRole, phone || '', city || '']
+    );
+    const userRow = dbRes.rows[0];
+    const normUser = {
+      id: String(userRow.id),
+      name: userRow.name,
+      email: userRow.email,
+      role: userRow.role,
+      status: 'active',
+      active: true,
+      phone: userRow.phone || '',
+      city: userRow.city || '',
+      walletBalance: Number(userRow.wallet_balance || 0),
+      createdAt: userRow.created_at || new Date().toISOString()
+    };
+    const token = signJwtNative({ id: normUser.id, email: normUser.email, name: normUser.name, role: normUser.role }, JWT_SECRET);
+    return res.status(201).json({ success: true, token, user: normUser });
+  } catch (err: any) {
+    console.error('⚠️ [handleInProcessUserRegister err]:', err?.message);
+    return res.status(500).json({ error: 'Failed to register user', message: err?.message });
+  }
 }
 
 const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, res: any) => void) => {
@@ -499,6 +770,7 @@ app.use('/api/delivery/calculate', createResilientProxy(SERVICES.OPERATIONS));
 app.post('/api/admin/login', handleInProcessAuth);
 app.post('/api/auth/login', handleInProcessAuth);
 app.post('/api/auth/admin/login', handleInProcessAuth);
+app.post('/api/auth/register', handleInProcessUserRegister);
 app.use('/api/admin/users', createResilientProxy(SERVICES.AUTH));
 app.use('/api/users', createResilientProxy(SERVICES.AUTH));
 
@@ -518,6 +790,8 @@ app.use('/api/delivery', createResilientProxy(SERVICES.DELIVERY));
 app.use('/api/rider', createResilientProxy(SERVICES.DELIVERY));
 
 // Vendors & Procurement
+app.post('/api/vendors/register', handleInProcessVendorRegister);
+app.post('/api/vendors/onboard', handleInProcessVendorRegister);
 app.use('/api/procurement', createResilientProxy(SERVICES.VENDOR));
 app.use('/api/vendors', createResilientProxy(SERVICES.VENDOR));
 

@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import bcrypt from 'bcryptjs';
 import { Pool } from 'pg';
 
 const app = express();
@@ -123,21 +124,25 @@ app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], asyn
 
     const formatted = formatVendor(dbRes.rows[0]);
 
-    // Also register user record in auth-service so vendor shows up in /admin/users and can log in
+    // Direct PostgreSQL user creation in RDS users table so vendor appears in /admin/users & can log in
     if (cEmail) {
-      const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://127.0.0.1:5001';
-      fetch(`${AUTH_SERVICE_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: vName,
-          email: cEmail,
-          password: password || 'password123',
-          role: 'vendor',
-          phone: cPhone,
-          city: cCity,
-        }),
-      }).catch((e) => console.warn('⚠️ Sync vendor to auth-service failed:', e?.message));
+      try {
+        const passwordHash = await bcrypt.hash(password || 'password123', 10);
+        await pool.query(
+          `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
+           VALUES ($1, $2, $3, 'vendor', true, $4, $5, 100)
+           ON CONFLICT (email) DO UPDATE SET
+             name = EXCLUDED.name,
+             password_hash = EXCLUDED.password_hash,
+             role = 'vendor',
+             phone = EXCLUDED.phone,
+             city = EXCLUDED.city,
+             active = true`,
+          [vName, cEmail, passwordHash, cPhone, cCity]
+        );
+      } catch (e: any) {
+        console.warn('⚠️ Direct PostgreSQL vendor user creation warning:', e?.message);
+      }
     }
 
     // Sync to operations service in background
