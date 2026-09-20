@@ -301,14 +301,15 @@ export default function ProductsAdmin() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    deleteProduct.mutate({ id }, {
+  const handleDelete = (id: any) => {
+    const numId = Number(id);
+    deleteProduct.mutate({ id: numId }, {
       onSuccess: () => {
-        toast.success("Product deleted");
+        toast.success("Product deleted successfully");
         queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
         setDeletingProduct(null);
       },
-      onError: () => toast.error("Failed to delete product")
+      onError: (err: any) => toast.error(err?.data?.error || err?.message || "Failed to delete product")
     });
   };
   // Find all inactive products that have stock in the inventory:
@@ -746,8 +747,7 @@ export default function ProductsAdmin() {
                       </Badge>
                     </td>
                     <td className="px-6 py-3">
-                      {/* Fixed: Set fallback display configurations so touch actions display correctly */}
-                      <div className="flex items-center justify-end gap-2 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-2">
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleEdit(product)}>
                           <Edit2 className="w-4 h-4" />
                         </Button>

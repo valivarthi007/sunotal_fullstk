@@ -262,7 +262,9 @@ async function handleResilientResponse(req: any, res: any) {
   if (url.includes('/products') || url.includes('/storefront')) {
     if (method === 'GET') {
       try {
-        const dbRes = await gatewayPgPool.query('SELECT * FROM products WHERE active = true ORDER BY id DESC');
+        const showAll = url.includes('all=true') || url.includes('all=1');
+        const sql = showAll ? 'SELECT * FROM products ORDER BY id DESC' : 'SELECT * FROM products WHERE active = true ORDER BY id DESC';
+        const dbRes = await gatewayPgPool.query(sql);
         if (dbRes.rows) {
           return res.json(dbRes.rows.map(p => ({
             id: String(p.id),
@@ -274,11 +276,24 @@ async function handleResilientResponse(req: any, res: any) {
             image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
             isOrganic: p.is_organic,
             stock: p.stock,
-            rating: Number(p.rating || 5.0)
+            rating: Number(p.rating || 5.0),
+            active: p.active ?? true
           })));
         }
       } catch {}
       return res.json([]);
+    }
+    if (method === 'DELETE') {
+      try {
+        const idMatch = url.match(/\/products\/(\d+)/);
+        if (idMatch) {
+          const targetId = Number(idMatch[1]);
+          await gatewayPgPool.query('DELETE FROM products WHERE id = $1', [targetId]);
+          return res.json({ success: true, message: 'Product deleted successfully' });
+        }
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Failed to delete product', message: err?.message });
+      }
     }
     if (method === 'POST') {
       return res.status(503).json({ error: 'Product creation service unavailable.' });

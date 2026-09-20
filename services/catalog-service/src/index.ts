@@ -139,9 +139,10 @@ app.get('/api/healthz', (_req, res) => {
 
 // Products Listing with Filter/Search/Sort — Direct PostgreSQL SQL Querying
 app.get('/api/products', async (req, res) => {
-  const { category, search, sort } = req.query;
+  const { category, search, sort, all } = req.query;
   try {
-    let queryStr = 'SELECT * FROM products WHERE active = true';
+    const showAll = all === 'true' || all === '1';
+    let queryStr = showAll ? 'SELECT * FROM products WHERE 1=1' : 'SELECT * FROM products WHERE active = true';
     const params: any[] = [];
 
     if (category && typeof category === 'string' && category !== 'All') {
@@ -170,7 +171,8 @@ app.get('/api/products', async (req, res) => {
       image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
       isOrganic: p.is_organic,
       stock: p.stock,
-      rating: Number(p.rating || 5.0)
+      rating: Number(p.rating || 5.0),
+      active: p.active ?? true
     }));
     return res.json(formatted);
   } catch (err: any) {
