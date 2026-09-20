@@ -72,7 +72,11 @@ export default function ProductsAdmin() {
   const queryClient = useQueryClient();
   
   const { data: rawProducts, isLoading } = useListProducts({ all: true }, {
-    query: { refetchInterval: 10000, retry: 1 }
+    query: { 
+      queryKey: getListProductsQueryKey({ all: true }),
+      refetchInterval: 10000, 
+      retry: 1 
+    }
   });
   const products = Array.isArray(rawProducts) ? rawProducts : (Array.isArray((rawProducts as any)?.products) ? (rawProducts as any).products : []);
 
