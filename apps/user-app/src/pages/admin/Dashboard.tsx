@@ -10,8 +10,8 @@ export default function Dashboard() {
   const { data: stats, isLoading } = useGetAdminStats({
     query: {
       queryKey: ['adminStats'],
-      refetchInterval: 30000,
-      retry: false,
+      refetchInterval: 10000,
+      retry: 1,
       throwOnError: false,
     },
   });

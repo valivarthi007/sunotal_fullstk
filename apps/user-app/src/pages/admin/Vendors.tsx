@@ -87,6 +87,8 @@ export default function VendorsAdmin() {
   const { data: rawVendors, isLoading } = useListVendors({
     status: activeTab !== "All" ? activeTab.toLowerCase() : undefined,
     search: search.length > 2 ? search : undefined,
+  }, {
+    query: { refetchInterval: 10000, retry: 1 }
   });
   const vendors = Array.isArray(rawVendors) ? rawVendors : (Array.isArray((rawVendors as any)?.vendors) ? (rawVendors as any).vendors : []);
   const { data: rawProducts } = useListProducts();

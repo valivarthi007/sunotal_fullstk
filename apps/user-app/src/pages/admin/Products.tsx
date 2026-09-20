@@ -71,7 +71,9 @@ export default function ProductsAdmin() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   
-  const { data: rawProducts, isLoading } = useListProducts({ all: true });
+  const { data: rawProducts, isLoading } = useListProducts({ all: true }, {
+    query: { refetchInterval: 10000, retry: 1 }
+  });
   const products = Array.isArray(rawProducts) ? rawProducts : (Array.isArray((rawProducts as any)?.products) ? (rawProducts as any).products : []);
 
   const { data: rawCategories = [] } = useListCategories();
@@ -79,7 +81,7 @@ export default function ProductsAdmin() {
   const createCategory = useCreateCategory();
   const deleteCategory = useDeleteCategory();
   
-  const { data: rawInventory = [] } = useListInventory({}, { retry: false, throwOnError: false });
+  const { data: rawInventory = [] } = useListInventory({}, { retry: 1, throwOnError: false, refetchInterval: 10000 });
   const inventory = Array.isArray(rawInventory) ? rawInventory : [];
   const { data: rawProductDefs = [] } = useListProductDefinitions();
   const productDefs = Array.isArray(rawProductDefs) ? rawProductDefs : [];

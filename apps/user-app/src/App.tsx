@@ -101,9 +101,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: false,
-      staleTime: 1000 * 10, // 10 seconds cache window
-      refetchOnWindowFocus: true,
+      retry: 1,
+      staleTime: 1000 * 60, // 60 seconds — SSE invalidates on mutations
+      refetchOnWindowFocus: false, // SSE handles real-time updates
       refetchOnMount: true,
       throwOnError: false,
     },

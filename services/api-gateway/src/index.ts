@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Pool } from 'pg';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal_admin:SunotalPostgres2026SecurePass!@sunotal-postgres-db.c2d668wu0n34.us-east-1.rds.amazonaws.com:5432/sunotal?sslmode=no-verify';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal';
 const JWT_SECRET = process.env.JWT_SECRET || 'sunotal_jwt_secret_2026_super_secure';
 
 function signJwtNative(payload: object, secret: string): string {
@@ -595,7 +595,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
   return async (req: any, res: any) => {
     const targetEndpoint = `${targetUrl}${req.originalUrl || req.url}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
 
     try {
       const headers: Record<string, string> = {};

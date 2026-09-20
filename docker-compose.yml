@@ -49,6 +49,7 @@ services:
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
       - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
+      - OPERATIONS_SERVICE_URL=http://operations-service:5002
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +74,7 @@ services:
       - PORT=5008
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
+      - AUTH_SERVICE_URL=http://auth-service:5001
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,6 +102,7 @@ services:
       - PORT=5009
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
+      - OPERATIONS_SERVICE_URL=http://operations-service:5002
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,6 +129,7 @@ services:
       - PORT=5003
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
+      - CATALOG_SERVICE_URL=http://catalog-service:5009
     depends_on:
       postgres:
         condition: service_healthy
@@ -153,6 +157,10 @@ services:
       - PORT=5010
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
+      - AUTH_SERVICE_URL=http://auth-service:5001
+      - INVENTORY_SERVICE_URL=http://inventory-service:5003
+      - CATALOG_SERVICE_URL=http://catalog-service:5009
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5011
     depends_on:
       postgres:
         condition: service_healthy
@@ -180,6 +188,10 @@ services:
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
       - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
+      - AUTH_SERVICE_URL=http://auth-service:5001
+      - CATALOG_SERVICE_URL=http://catalog-service:5009
+      - ORDER_SERVICE_URL=http://order-service:5010
+      - VENDOR_SERVICE_URL=http://vendor-service:5005
     depends_on:
       postgres:
         condition: service_healthy
@@ -206,6 +218,8 @@ services:
       - PORT=5005
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
+      - OPERATIONS_SERVICE_URL=http://operations-service:5002
+      - AUTH_SERVICE_URL=http://auth-service:5001
     depends_on:
       postgres:
         condition: service_healthy
@@ -228,8 +242,14 @@ services:
       - "5004:5004"
     environment:
       - PORT=5004
+      - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
+      - ORDER_SERVICE_URL=http://order-service:5010
+      - AUTH_SERVICE_URL=http://auth-service:5001
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5011
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       order-service:
@@ -252,6 +272,8 @@ services:
     environment:
       - PORT=5007
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
+      - AUTH_SERVICE_URL=http://auth-service:5001
+      - ORDER_SERVICE_URL=http://order-service:5010
     depends_on:
       postgres:
         condition: service_healthy
@@ -273,6 +295,7 @@ services:
     environment:
       - PORT=5011
       - REDIS_HOST=redis
+      - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
     depends_on:
       redis:
         condition: service_healthy
@@ -294,6 +317,18 @@ services:
       - "5000:5000"
     environment:
       - PORT=5000
+      - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
+      - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
+      - AUTH_SERVICE_URL=http://auth-service:5001
+      - USER_SERVICE_URL=http://user-service:5008
+      - CATALOG_SERVICE_URL=http://catalog-service:5009
+      - INVENTORY_SERVICE_URL=http://inventory-service:5003
+      - ORDER_SERVICE_URL=http://order-service:5010
+      - DELIVERY_SERVICE_URL=http://delivery-service:5004
+      - OPERATIONS_SERVICE_URL=http://operations-service:5002
+      - VENDOR_SERVICE_URL=http://vendor-service:5005
+      - SUPPORT_SERVICE_URL=http://support-service:5007
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5011
     depends_on:
       auth-service:
         condition: service_healthy

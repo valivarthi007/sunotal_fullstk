@@ -68,7 +68,8 @@ export default function UsersAdmin() {
   const queryClient = useQueryClient();
   
   const { data: rawUsers, isLoading } = useListUsers( 
-    search.length > 2 ? { search } : undefined 
+    search.length > 2 ? { search } : undefined,
+    { query: { refetchInterval: 10000, retry: 1 } }
   );
   const users = Array.isArray(rawUsers) ? rawUsers : (Array.isArray((rawUsers as any)?.users) ? (rawUsers as any).users : []);
   

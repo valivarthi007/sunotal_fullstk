@@ -7,8 +7,8 @@ export function useRealtimeSync(onMutation?: (event: any) => void) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-    const streamUrl = isLocal ? "http://localhost:5000/api/realtime/stream" : "https://api.automateuniverse.space/api/realtime/stream";
+    // Always use relative URL — nginx proxies /api/* to api-gateway in all envs
+    const streamUrl = "/api/realtime/stream";
 
     let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;

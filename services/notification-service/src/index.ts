@@ -4,7 +4,7 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 
 const app = express();
-const PORT = process.env.PORT || 5006;
+const PORT = process.env.PORT || 5011;
 
 app.use(cors());
 app.use(express.json());
@@ -16,6 +16,10 @@ const io = new Server(server, {
 
 app.get('/healthz', (_req, res) => {
   res.json({ service: 'notification-service', status: 'OK', socketClients: io.engine.clientsCount, timestamp: new Date().toISOString() });
+});
+
+app.get('/api/healthz', (_req, res) => {
+  res.json({ status: 'ok', service: 'notification-service', socketClients: io.engine.clientsCount });
 });
 
 // Event Notification Push API
