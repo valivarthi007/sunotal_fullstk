@@ -152,13 +152,6 @@ export default function VendorDashboard() {
         list.push(p.name);
       }
     }
-    if (list.length === 0) {
-      if (selectedCategory === "Vegetables") return ["Organic Tomatoes", "Farm Fresh Potatoes", "Fresh Onions", "Green Capsicum", "Organic Spinach"];
-      if (selectedCategory === "Fruits") return ["Shimla Apples", "Robusta Bananas", "Nagpur Oranges", "Alphonso Mangoes"];
-      if (selectedCategory === "Dairy") return ["A2 Desi Cow Milk", "Fresh Paneer", "Amul Butter 500g", "Fresh Curd"];
-      if (selectedCategory === "Grains") return ["Sona Masoori Rice", "Whole Wheat Atta", "Toor Dal", "Basmati Rice"];
-      return ["Sona Masoori Rice", "Organic Tomatoes", "A2 Desi Cow Milk", "Shimla Apples", "Amul Butter 500g"];
-    }
     return list;
   }, [productDefs, products, selectedCategory]);
 

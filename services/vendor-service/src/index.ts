@@ -9,11 +9,13 @@ const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_p
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
+const isRds = DATABASE_URL.includes('amazonaws.com') || DATABASE_URL.includes('rds') || DATABASE_URL.includes('sslmode=');
 const pool = new Pool({
   connectionString: DATABASE_URL,
   max: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
+  ssl: isRds ? { rejectUnauthorized: false } : undefined,
 });
 
 // Initialize PostgreSQL database schema

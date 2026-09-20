@@ -16,11 +16,13 @@ export function getPgPool(options: PgDbConnectOptions = {}): any {
       const pgModule = typeof require !== 'undefined' ? require('pg') : null;
       if (pgModule) {
         const Pool = pgModule.Pool || pgModule.default?.Pool;
+        const isRds = connectionString.includes('amazonaws.com') || connectionString.includes('rds') || connectionString.includes('sslmode=');
         pool = new Pool({
           connectionString,
           max: 50,
           idleTimeoutMillis: 30000,
           connectionTimeoutMillis: 5000,
+          ssl: isRds ? { rejectUnauthorized: false } : undefined,
         });
         pool.on('error', (err: any) => {
           console.error(`❌ [${serviceName}] PostgreSQL Pool Error:`, err);

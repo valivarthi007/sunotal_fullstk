@@ -149,7 +149,7 @@ export default function Checkout() {
         price: i.product.price,
       }));
 
-      let orderNumber = `ORD-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      let orderNumber = "";
       try {
         const res = await createOrderCheckout({
           items: checkoutItems,
@@ -164,9 +164,13 @@ export default function Checkout() {
         });
         if (res?.order?.orderNumber) {
           orderNumber = res.order.orderNumber;
+        } else {
+          throw new Error("Invalid order response from server");
         }
       } catch (err: any) {
-        console.warn("Backend order API offline/unauthenticated, proceeding with client order confirmation:", err);
+        toast.error("Order creation failed: " + (err?.message || "Please try again later."));
+        setIsSubmitting(false);
+        return;
       }
 
       const generatedPaymentId = `PAY-${Date.now()}`;

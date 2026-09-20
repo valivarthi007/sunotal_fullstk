@@ -263,17 +263,11 @@ export default function DeliveryDashboard() {
 
   const handleAcceptOrder = () => {
     setHasAlert(false);
-    const targetOrder = currentAlertOrder || {
-      id: "ORD-9842",
-      customerName: "Ananya Roy",
-      address: `Flat 402, Green Glen Layout, ${userLoc?.city || "Electronic City"}`,
-      items: ["Fresh Tomatoes 1kg", "Amul Butter 500g", "Toned Milk 2L"],
-      distanceKm: 3.4,
-      pay: 64, // 30 base + (3.4 * 10) distance + 0 tip
-      lat: userLoc?.latitude || 16.5062,
-      lng: userLoc?.longitude || 80.6480,
-    };
-    setAcceptedOrder(targetOrder);
+    if (!currentAlertOrder) {
+      toast.error("No active order available to accept.");
+      return;
+    }
+    setAcceptedOrder(currentAlertOrder);
     setOrderStage("accepted");
   };
 

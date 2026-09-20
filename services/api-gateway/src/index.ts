@@ -52,10 +52,6 @@ async function handleInProcessAuth(req: any, res: any) {
           isMatch = false;
         }
       }
-      if (!isMatch) {
-        isMatch = (password === 'admin123' || password === 'admin' || password === 'password123' || password === 'password');
-      }
-
       if (isMatch) {
         const normUser = {
           id: String(userRow.id),
@@ -75,25 +71,9 @@ async function handleInProcessAuth(req: any, res: any) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    const demo = DEFAULT_DEMO_USERS.find((u) => u.email.toLowerCase() === cleanEmail);
-    if (demo) {
-      const isCorrectPass = (demo.role === 'admin' && (password === 'admin123' || password === 'admin')) || (password === 'password123' || password === 'password');
-      if (isCorrectPass) {
-        const token = signJwtNative({ id: demo.id, email: demo.email, name: demo.name, role: demo.role }, JWT_SECRET);
-        return res.status(200).json({ success: true, token, user: demo });
-      }
-    }
     return res.status(401).json({ error: 'Invalid email or password' });
   } catch (err: any) {
     console.error('⚠️ [gateway handleInProcessAuth err]:', err?.message || err);
-    const demo = DEFAULT_DEMO_USERS.find((u) => u.email.toLowerCase() === cleanEmail);
-    if (demo) {
-      const isCorrectPass = (demo.role === 'admin' && (password === 'admin123' || password === 'admin')) || (password === 'password123' || password === 'password');
-      if (isCorrectPass) {
-        const token = signJwtNative({ id: demo.id, email: demo.email, name: demo.name, role: demo.role }, JWT_SECRET);
-        return res.status(200).json({ success: true, token, user: demo });
-      }
-    }
     return res.status(503).json({ error: 'Authentication service is temporarily unavailable. Please try again.' });
   }
 }
@@ -231,16 +211,16 @@ async function handleResilientResponse(req: any, res: any) {
     return handleInProcessAuth(req, res);
   }
 
-  // Product Definitions Fallback
+  // Product Definitions
   if (url.includes('product-definitions')) {
     if (method === 'GET') {
       try {
         const dbRes = await gatewayPgPool.query('SELECT * FROM product_definitions ORDER BY id ASC');
-        if (dbRes.rows && dbRes.rows.length > 0) {
+        if (dbRes.rows) {
           return res.json(dbRes.rows.map(d => ({ id: d.id, name: d.name, category: d.category, defaultUnit: d.default_unit })));
         }
       } catch {}
-      return res.json(DEFAULT_PRODUCT_DEFINITIONS);
+      return res.json([]);
     }
     if (method === 'POST') {
       const { name, category, defaultUnit } = req.body || {};
@@ -256,35 +236,34 @@ async function handleResilientResponse(req: any, res: any) {
           }
         } catch {}
       }
-      return res.status(201).json({ id: Date.now(), name: name || 'New Item', category: category || 'Vegetables', defaultUnit: defaultUnit || '1 kg' });
+      return res.status(503).json({ error: 'Failed to create product definition. Database unavailable.' });
     }
-    return res.json({ success: true });
+    return res.status(503).json({ error: 'Catalog service is temporarily unavailable.' });
   }
 
-  // Categories Fallback
+  // Categories
   if (url.includes('/categories')) {
     if (method === 'GET') {
       try {
         const dbRes = await gatewayPgPool.query('SELECT * FROM categories WHERE active = true ORDER BY id ASC');
-        if (dbRes.rows && dbRes.rows.length > 0) {
+        if (dbRes.rows) {
           return res.json(dbRes.rows.map(c => ({ id: c.id, name: c.name, icon: c.icon || '📦', active: c.active ?? true })));
         }
       } catch {}
-      return res.json(DEFAULT_CATEGORIES);
+      return res.json([]);
     }
     if (method === 'POST') {
-      const { name, icon } = req.body || {};
-      return res.status(201).json({ id: Date.now(), name: name || 'Category', icon: icon || '📦', active: true });
+      return res.status(503).json({ error: 'Category creation service unavailable.' });
     }
-    return res.json({ success: true });
+    return res.status(503).json({ error: 'Category service unavailable.' });
   }
 
-  // Products & Storefront Fallback
+  // Products & Storefront
   if (url.includes('/products') || url.includes('/storefront')) {
     if (method === 'GET') {
       try {
         const dbRes = await gatewayPgPool.query('SELECT * FROM products WHERE active = true ORDER BY id DESC');
-        if (dbRes.rows && dbRes.rows.length > 0) {
+        if (dbRes.rows) {
           return res.json(dbRes.rows.map(p => ({
             id: String(p.id),
             name: p.name,
@@ -299,20 +278,19 @@ async function handleResilientResponse(req: any, res: any) {
           })));
         }
       } catch {}
-      return res.json(DEFAULT_PRODUCTS);
+      return res.json([]);
     }
     if (method === 'POST') {
-      const p = req.body || {};
-      return res.status(201).json({ id: String(Date.now()), name: p.name || 'Product', category: p.category || 'General', price: Number(p.price || 50), originalPrice: Number(p.originalPrice || 50), unit: p.unit || '1 kg', image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400', isOrganic: true, stock: 100, rating: 5.0 });
+      return res.status(503).json({ error: 'Product creation service unavailable.' });
     }
-    return res.json({ success: true });
+    return res.status(503).json({ error: 'Catalog service unavailable.' });
   }
 
-  // Generic Array GET or Mutative JSON Fallback
+  // Generic Service Unavailable Response
   if (method === 'GET') {
-    return res.json([]);
+    return res.status(503).json({ error: 'Requested service is temporarily unavailable. Please try again later.' });
   }
-  return res.json({ success: true, message: 'Operation processed cleanly' });
+  return res.status(503).json({ error: 'Requested service is temporarily unavailable. Please try again later.' });
 }
 
 const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, res: any) => void) => {

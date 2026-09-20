@@ -31,46 +31,11 @@ export const AdminLedger: React.FC = () => {
           if (data.summary) setLedgerSummary(data.summary);
           if (Array.isArray(data.transactions)) setDailyTransactions(data.transactions);
         } else {
-          // Fallback calculation from local user orders
-          const stored = localStorage.getItem("sunotal_user_orders");
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              let rev = 0, online = 0, upi = 0, po = 0;
-              const txs = parsed.map((o: any, idx: number) => {
-                const amt = Number(o.finalAmount || o.totalPrice || 0);
-                rev += amt;
-                if (o.paymentMethod === "upi") upi += amt;
-                else if (o.paymentMethod === "po" || o.paymentMethod === "corporate_po") po += amt;
-                else online += amt;
-
-                return {
-                  id: `TXN-${1000 + idx}`,
-                  orderId: o.orderNumber || o.orderId || o.id,
-                  time: o.date || "10:30 AM",
-                  customer: o.deliveryAddress ? `${o.city || "Client"} (${o.deliveryAddress.slice(0, 15)}...)` : "Customer",
-                  type: o.paymentMethod || "card",
-                  VPA: o.paymentId || "PAY-ONLINE",
-                  amount: amt,
-                  status: o.paymentStatus === "paid" ? "Captured" : "Pending",
-                  payoutStatus: o.status === "delivered" ? "Settled" : "Processing",
-                };
-              });
-
-              setLedgerSummary({
-                totalRevenue: rev,
-                onlineCollections: online,
-                upiCollections: upi,
-                poReceivables: po,
-                completedSettlements: Math.round(rev * 0.85),
-                pendingVendorPayouts: Math.round(rev * 0.15),
-              });
-              setDailyTransactions(txs);
-            }
-          }
+          setDailyTransactions([]);
         }
       } catch (e) {
         console.error("Ledger load error:", e);
+        setDailyTransactions([]);
       }
     };
 

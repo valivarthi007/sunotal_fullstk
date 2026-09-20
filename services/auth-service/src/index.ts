@@ -166,30 +166,14 @@ app.post('/api/auth/login', async (req, res) => {
       }
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-    const demo = DEFAULT_DEMO_USERS.find(u => u.email.toLowerCase() === cleanEmail);
-    if (demo) {
-      const isCorrectPass = (demo.role === 'admin' && (password === 'admin123' || password === 'admin')) || (password === 'password123' || password === 'password');
-      if (isCorrectPass) {
-        const token = signToken({ id: demo.id, email: demo.email, name: demo.name, role: demo.role });
-        return res.json({ success: true, token, user: demo });
-      }
-    }
     return res.status(401).json({ error: 'Invalid email or password' });
   } catch (err: any) {
     console.error('❌ [auth-service login error]:', err?.message || err);
-    const demo = DEFAULT_DEMO_USERS.find(u => u.email.toLowerCase() === cleanEmail);
-    if (demo) {
-      const isCorrectPass = (demo.role === 'admin' && (password === 'admin123' || password === 'admin')) || (password === 'password123' || password === 'password');
-      if (isCorrectPass) {
-        const token = signToken({ id: demo.id, email: demo.email, name: demo.name, role: demo.role });
-        return res.json({ success: true, token, user: demo });
-      }
-    }
     return res.status(503).json({ error: 'Authentication service temporarily unavailable. Please try again.', message: err?.message });
   }
 });
 
-// Role-based Login Handlers — DB authentication with resilient demo fallback
+// Role-based Login Handlers — DB authentication
 const loginRoleHandler = (roles: string[]) => async (req: express.Request, res: express.Response) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -211,31 +195,9 @@ const loginRoleHandler = (roles: string[]) => async (req: express.Request, res: 
       }
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-    const demo = DEFAULT_DEMO_USERS.find(u => u.email.toLowerCase() === cleanEmail);
-    if (demo) {
-      const isCorrectPass = (demo.role === 'admin' && (password === 'admin123' || password === 'admin')) || (password === 'password123' || password === 'password');
-      if (isCorrectPass) {
-        if (!roles.includes(demo.role) && demo.role !== 'admin') {
-          return res.status(403).json({ error: 'Unauthorized role access' });
-        }
-        const token = signToken({ id: demo.id, email: demo.email, name: demo.name, role: demo.role });
-        return res.json({ success: true, token, user: demo });
-      }
-    }
     return res.status(401).json({ error: 'Invalid email or password' });
   } catch (err: any) {
     console.error('❌ [auth-service loginRoleHandler error]:', err?.message || err);
-    const demo = DEFAULT_DEMO_USERS.find(u => u.email.toLowerCase() === cleanEmail);
-    if (demo) {
-      const isCorrectPass = (demo.role === 'admin' && (password === 'admin123' || password === 'admin')) || (password === 'password123' || password === 'password');
-      if (isCorrectPass) {
-        if (!roles.includes(demo.role) && demo.role !== 'admin') {
-          return res.status(403).json({ error: 'Unauthorized role access' });
-        }
-        const token = signToken({ id: demo.id, email: demo.email, name: demo.name, role: demo.role });
-        return res.json({ success: true, token, user: demo });
-      }
-    }
     return res.status(503).json({ error: 'Authentication service temporarily unavailable. Please try again.', message: err?.message });
   }
 };

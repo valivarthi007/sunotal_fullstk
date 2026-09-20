@@ -10,11 +10,13 @@ const OPERATIONS_SERVICE_URL = process.env.OPERATIONS_SERVICE_URL || 'http://127
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
+const isRds = DATABASE_URL.includes('amazonaws.com') || DATABASE_URL.includes('rds') || DATABASE_URL.includes('sslmode=');
 const pool = new Pool({
   connectionString: DATABASE_URL,
   max: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
+  ssl: isRds ? { rejectUnauthorized: false } : undefined,
 });
 
 const DEFAULT_CATEGORIES = [
