@@ -240,11 +240,12 @@ async function handleResilientResponse(req: any, res: any) {
     }
     if (method === 'DELETE') {
       try {
-        const idMatch = url.match(/\/product-definitions\/(\d+)/);
-        if (idMatch) {
-          const targetId = Number(idMatch[1]);
+        const idFromParams = req.params?.id;
+        const idFromUrl = (url.match(/\/(\d+)(?:\?.*)?$/) || [])[1] || (url.match(/\/(?:categories|product-definitions|products)\/(\d+)/) || [])[1];
+        const targetId = Number(idFromParams || idFromUrl);
+        if (targetId && !isNaN(targetId)) {
           await gatewayPgPool.query('DELETE FROM product_definitions WHERE id = $1', [targetId]);
-          return res.json({ success: true, message: 'Product definition deleted successfully' });
+          return res.json({ success: true, message: 'Product definition deleted successfully', deletedId: targetId });
         }
       } catch (err: any) {
         return res.status(500).json({ error: 'Failed to delete product definition', message: err?.message });
@@ -254,7 +255,7 @@ async function handleResilientResponse(req: any, res: any) {
   }
 
   // Categories
-  if (url.includes('/categories')) {
+  if (url.includes('categories')) {
     if (method === 'GET') {
       try {
         const dbRes = await gatewayPgPool.query('SELECT * FROM categories WHERE active = true ORDER BY id ASC');
@@ -283,11 +284,12 @@ async function handleResilientResponse(req: any, res: any) {
     }
     if (method === 'DELETE') {
       try {
-        const idMatch = url.match(/\/categories\/(\d+)/);
-        if (idMatch) {
-          const targetId = Number(idMatch[1]);
+        const idFromParams = req.params?.id;
+        const idFromUrl = (url.match(/\/(\d+)(?:\?.*)?$/) || [])[1] || (url.match(/\/(?:categories|product-definitions|products)\/(\d+)/) || [])[1];
+        const targetId = Number(idFromParams || idFromUrl);
+        if (targetId && !isNaN(targetId)) {
           await gatewayPgPool.query('DELETE FROM categories WHERE id = $1', [targetId]);
-          return res.json({ success: true, message: 'Category deleted successfully' });
+          return res.json({ success: true, message: 'Category deleted successfully', deletedId: targetId });
         }
       } catch (err: any) {
         return res.status(500).json({ error: 'Failed to delete category', message: err?.message });
@@ -297,7 +299,7 @@ async function handleResilientResponse(req: any, res: any) {
   }
 
   // Products & Storefront
-  if (url.includes('/products') || url.includes('/storefront')) {
+  if (url.includes('products') || url.includes('storefront')) {
     if (method === 'GET') {
       try {
         const showAll = url.includes('all=true') || url.includes('all=1');
@@ -323,11 +325,12 @@ async function handleResilientResponse(req: any, res: any) {
     }
     if (method === 'DELETE') {
       try {
-        const idMatch = url.match(/\/products\/(\d+)/);
-        if (idMatch) {
-          const targetId = Number(idMatch[1]);
+        const idFromParams = req.params?.id;
+        const idFromUrl = (url.match(/\/(\d+)(?:\?.*)?$/) || [])[1] || (url.match(/\/(?:categories|product-definitions|products)\/(\d+)/) || [])[1];
+        const targetId = Number(idFromParams || idFromUrl);
+        if (targetId && !isNaN(targetId)) {
           await gatewayPgPool.query('DELETE FROM products WHERE id = $1', [targetId]);
-          return res.json({ success: true, message: 'Product deleted successfully' });
+          return res.json({ success: true, message: 'Product deleted successfully', deletedId: targetId });
         }
       } catch (err: any) {
         return res.status(500).json({ error: 'Failed to delete product', message: err?.message });
