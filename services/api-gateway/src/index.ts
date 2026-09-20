@@ -205,7 +205,7 @@ const DEFAULT_CATEGORIES = [
 const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, res: any) => void) => {
   const proxyMiddleware = proxy(targetUrl, {
     proxyReqPathResolver: (req: any) => req.originalUrl,
-    parseReqBody: false,
+    parseReqBody: true,
     proxyReqOptDecorator: (proxyReqOpts: any, srcReq: any) => {
       if (srcReq.headers['x-correlation-id']) {
         proxyReqOpts.headers['x-correlation-id'] = srcReq.headers['x-correlation-id'];
@@ -217,11 +217,11 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
       }
       return proxyReqOpts;
     },
-    proxyReqBodyDecorator: (_bodyContent: any, srcReq: any) => {
+    proxyReqBodyDecorator: (bodyContent: any, srcReq: any) => {
       if (srcReq.body && typeof srcReq.body === 'object' && Object.keys(srcReq.body).length > 0) {
         return JSON.stringify(srcReq.body);
       }
-      return '';
+      return bodyContent;
     },
     timeout: 2500,
     proxyErrorHandler: (err: any, res: any, _next: any) => {
@@ -417,7 +417,9 @@ app.use('/api/admin/banners', createResilientProxy(SERVICES.OPERATIONS));
 app.use('/api/delivery/calculate', createResilientProxy(SERVICES.OPERATIONS));
 
 // Auth & Users
-app.use('/api/admin/login', createResilientProxy(SERVICES.AUTH));
+app.post('/api/admin/login', handleInProcessAuth);
+app.post('/api/auth/login', handleInProcessAuth);
+app.post('/api/auth/admin/login', handleInProcessAuth);
 app.use('/api/admin/users', createResilientProxy(SERVICES.AUTH));
 app.use('/api/users', createResilientProxy(SERVICES.AUTH));
 
