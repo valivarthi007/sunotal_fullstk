@@ -91,21 +91,54 @@ app.get('/api/vendors', async (_req, res) => {
 
 // Create / Register Vendor
 app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], async (req, res) => {
-  const { name, vendorName, email, phone, category, address, city, location } = req.body;
-  const vName = vendorName || name || 'New Vendor';
-  const cEmail = (email || '').toLowerCase();
+  const { name, firstName, lastName, vendorName, email, password, phone, category, address, city, location } = req.body;
+  const vName = vendorName || (firstName && lastName ? `${firstName} ${lastName}` : name) || 'New Vendor';
+  const cEmail = (email || '').trim().toLowerCase();
   const cPhone = phone || '';
   const cCategory = category || 'Fresh Produce';
   const cAddress = address || location || city || '';
   const cCity = city || location || '';
+  const isSelfRegister = req.path.includes('register') || req.path.includes('onboard');
+  const initialStatus = isSelfRegister ? 'pending' : 'approved';
 
   try {
-    const dbRes = await pool.query(
-      `INSERT INTO vendors (name, vendor_name, email, phone, category, address, city, status, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [vName, vName, cEmail, cPhone, cCategory, cAddress, cCity, 'approved', true]
-    );
+    let dbRes;
+    if (cEmail) {
+      const existing = await pool.query('SELECT * FROM vendors WHERE LOWER(email) = $1', [cEmail]);
+      if (existing.rows && existing.rows.length > 0) {
+        dbRes = await pool.query(
+          `UPDATE vendors SET name = $1, vendor_name = $2, phone = $3, category = $4, address = $5, city = $6, status = $7, active = $8 WHERE id = $9 RETURNING *`,
+          [vName, vName, cPhone, cCategory, cAddress, cCity, initialStatus, true, existing.rows[0].id]
+        );
+      }
+    }
+
+    if (!dbRes || !dbRes.rows || dbRes.rows.length === 0) {
+      dbRes = await pool.query(
+        `INSERT INTO vendors (name, vendor_name, email, phone, category, address, city, status, active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [vName, vName, cEmail, cPhone, cCategory, cAddress, cCity, initialStatus, true]
+      );
+    }
+
     const formatted = formatVendor(dbRes.rows[0]);
+
+    // Also register user record in auth-service so vendor shows up in /admin/users and can log in
+    if (cEmail) {
+      const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://127.0.0.1:5001';
+      fetch(`${AUTH_SERVICE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: vName,
+          email: cEmail,
+          password: password || 'password123',
+          role: 'vendor',
+          phone: cPhone,
+          city: cCity,
+        }),
+      }).catch((e) => console.warn('⚠️ Sync vendor to auth-service failed:', e?.message));
+    }
 
     // Sync to operations service in background
     const OPERATIONS_SERVICE_URL = process.env.OPERATIONS_SERVICE_URL || 'http://127.0.0.1:5002';
