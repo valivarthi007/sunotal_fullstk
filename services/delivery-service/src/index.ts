@@ -62,21 +62,56 @@ async function initDb() {
         phone VARCHAR(50) UNIQUE,
         email VARCHAR(255) UNIQUE,
         city VARCHAR(100),
-        vehicle VARCHAR(100),
+        vehicle VARCHAR(100) DEFAULT 'Bike',
         status VARCHAR(50) DEFAULT 'ONLINE',
         wallet_balance NUMERIC(10, 2) DEFAULT 0.00,
+        aadhar VARCHAR(50),
+        license_number VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS rider_payouts (
         id SERIAL PRIMARY KEY,
         rider_id VARCHAR(255),
+        rider_name VARCHAR(255),
+        phone VARCHAR(50),
+        email VARCHAR(255),
+        upi_id VARCHAR(255),
         amount NUMERIC(10, 2) NOT NULL,
-        transaction_id VARCHAR(255) NOT NULL,
+        completed_deliveries INT DEFAULT 0,
+        total_distance_km NUMERIC(10,2) DEFAULT 0,
+        transaction_id VARCHAR(255),
         status VARCHAR(50) DEFAULT 'COMPLETED',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Safe migrations
+    const safeAlters = [
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS rider_name VARCHAR(255)`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS email VARCHAR(255)`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS upi_id VARCHAR(255)`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS completed_deliveries INT DEFAULT 0`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS total_distance_km NUMERIC(10,2) DEFAULT 0`,
+      `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS aadhar VARCHAR(50)`,
+      `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS license_number VARCHAR(100)`,
+    ];
+    for (const sql of safeAlters) {
+      try { await pool.query(sql); } catch {}
+    }
+
+    // Indexes
+    const indexes = [
+      `CREATE INDEX IF NOT EXISTS idx_delivery_riders_phone ON delivery_riders(phone)`,
+      `CREATE INDEX IF NOT EXISTS idx_delivery_riders_email ON delivery_riders(email)`,
+      `CREATE INDEX IF NOT EXISTS idx_rider_payouts_rider_id ON rider_payouts(rider_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_delivery_orders_status ON delivery_orders(status)`,
+    ];
+    for (const idx of indexes) {
+      try { await pool.query(idx); } catch {}
+    }
+
     console.log('🐘 [delivery-service] PostgreSQL database tables ready.');
   } catch (err: any) {
     console.warn('⚠️ [delivery-service] DB init warning:', err?.message || err);
@@ -385,7 +420,7 @@ app.post('/api/delivery/login', async (req, res) => {
 
 // Rider Registration Endpoint — Direct PostgreSQL SQL Mutation
 app.post('/api/delivery/register', async (req, res) => {
-  const { name, phone, email, city, vehicle } = req.body;
+  const { name, phone, email, city, vehicle, aadhar, licenseNumber } = req.body;
   if (!name || (!phone && !email)) {
     return res.status(400).json({ error: 'Name and phone or email required' });
   }
@@ -399,9 +434,9 @@ app.post('/api/delivery/register', async (req, res) => {
 
   try {
     await pool.query(
-      `INSERT INTO delivery_riders (id, name, phone, email, city, vehicle, status, wallet_balance)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [riderId, rName, rPhone, rEmail, rCity, rVehicle, 'APPROVED', 0.00]
+      `INSERT INTO delivery_riders (id, name, phone, email, city, vehicle, status, wallet_balance, aadhar, license_number)
+       VALUES ($1, $2, $3, $4, $5, $6, 'APPROVED', 0.00, $7, $8)`,
+      [riderId, rName, rPhone || null, rEmail || null, rCity, rVehicle, aadhar || null, licenseNumber || null]
     );
 
     return res.status(201).json({
@@ -420,13 +455,35 @@ app.post('/api/delivery/register', async (req, res) => {
       }
     });
   } catch (err: any) {
-    return res.status(409).json({ error: 'Phone or email already registered' });
+    return res.status(409).json({ error: 'Phone or email already registered', message: err?.message });
+  }
+});
+
+// Admin: List All Registered Riders
+app.get(['/api/delivery/riders', '/api/rider/list'], async (_req, res) => {
+  try {
+    const dbRes = await pool.query('SELECT * FROM delivery_riders ORDER BY created_at DESC');
+    return res.json(dbRes.rows.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      phone: r.phone || '',
+      email: r.email || '',
+      city: r.city || '',
+      vehicle: r.vehicle || 'Bike',
+      status: r.status || 'APPROVED',
+      walletBalance: Number(r.wallet_balance || 0),
+      aadhar: r.aadhar || '',
+      licenseNumber: r.license_number || '',
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+    })));
+  } catch (err: any) {
+    return res.json([]);
   }
 });
 
 // Rider Payout Request — Direct PostgreSQL SQL Mutation
 app.post('/api/delivery/payout', async (req, res) => {
-  const { amount, riderId } = req.body;
+  const { amount, riderId, upiId } = req.body;
   const payoutAmt = Number(amount || 0);
 
   if (payoutAmt <= 0) {
@@ -436,10 +493,21 @@ app.post('/api/delivery/payout', async (req, res) => {
   const txnId = 'TXN-' + Math.floor(100000 + Math.random() * 900000);
 
   try {
+    // Fetch rider info for enriched payout record
+    let riderName = '', riderPhone = '', riderEmail = '';
+    if (riderId) {
+      const riderRes = await pool.query('SELECT name, phone, email FROM delivery_riders WHERE id = $1', [String(riderId)]).catch(() => null);
+      if (riderRes?.rows?.[0]) {
+        riderName = riderRes.rows[0].name || '';
+        riderPhone = riderRes.rows[0].phone || '';
+        riderEmail = riderRes.rows[0].email || '';
+      }
+    }
+
     await pool.query(
-      `INSERT INTO rider_payouts (rider_id, amount, transaction_id, status)
-       VALUES ($1, $2, $3, 'COMPLETED')`,
-      [String(riderId || ''), payoutAmt, txnId]
+      `INSERT INTO rider_payouts (rider_id, rider_name, phone, email, upi_id, amount, transaction_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'COMPLETED')`,
+      [String(riderId || ''), riderName, riderPhone, riderEmail, upiId || '', payoutAmt, txnId]
     );
 
     if (riderId) {

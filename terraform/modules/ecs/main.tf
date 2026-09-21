@@ -13,6 +13,18 @@ variable "alb_listener_arn" {
 variable "aws_region" { type = string }
 variable "tags" { type = map(string) }
 
+variable "database_url" {
+  type      = string
+  sensitive = true
+  default   = "postgresql://sunotal_admin:SunotalPostgres2026SecurePass!@sunotal-postgres-db.c2d668wu0n34.us-east-1.rds.amazonaws.com:5432/sunotal?sslmode=require"
+}
+
+variable "jwt_secret" {
+  type      = string
+  sensitive = true
+  default   = "sunotal_jwt_secret_2026_super_secure"
+}
+
 data "aws_caller_identity" "current" {}
 
 # ─── 1. ECS Cluster ───────────────────────────────────────────────────────────
@@ -48,6 +60,23 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Allow ECS execution role to read Secrets Manager (for future secrets)
+resource "aws_iam_role_policy" "ecs_execution_secrets" {
+  name = "sunotal-ecs-secrets-access"
+  role = aws_iam_role.ecs_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue", "ssm:GetParameters", "kms:Decrypt"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:sunotal/*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role" "ecs_task_role" {
   name = "sunotal-ecs-task-role"
 
@@ -63,42 +92,54 @@ resource "aws_iam_role" "ecs_task_role" {
   tags = var.tags
 }
 
-# ─── 3. Fargate Task Definitions & Services ───────────────────────────────────
+# Allow tasks to publish to SQS/SNS for event-driven workflows
+resource "aws_iam_role_policy" "ecs_task_messaging" {
+  name = "sunotal-ecs-task-messaging"
+  role = aws_iam_role.ecs_task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sns:Publish"]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# ─── 3. CloudWatch Log Groups ─────────────────────────────────────────────────
 locals {
   microservices = {
-    "api-gateway"          = { port = 5000, cpu = 256, memory = 512,  is_public = true }
-    "auth-service"         = { port = 5001, cpu = 256, memory = 512,  is_public = false }
-    "operations-service"   = { port = 5002, cpu = 256, memory = 512,  is_public = false }
-    "inventory-service"    = { port = 5003, cpu = 256, memory = 512,  is_public = false }
-    "delivery-service"     = { port = 5004, cpu = 256, memory = 512,  is_public = false }
-    "vendor-service"       = { port = 5005, cpu = 256, memory = 512,  is_public = false }
-    "support-service"      = { port = 5007, cpu = 256, memory = 512,  is_public = false }
-    "user-service"         = { port = 5008, cpu = 256, memory = 512,  is_public = false }
-    "catalog-service"      = { port = 5009, cpu = 256, memory = 512,  is_public = false }
-    "order-service"        = { port = 5010, cpu = 256, memory = 512,  is_public = false }
-    "notification-service" = { port = 5011, cpu = 256, memory = 512,  is_public = false }
-    "user-app"             = { port = 80,   cpu = 256, memory = 512,  is_public = true }
-    "admin-app"            = { port = 80,   cpu = 256, memory = 512,  is_public = true }
-    "vendor-app"           = { port = 80,   cpu = 256, memory = 512,  is_public = true }
-    "delivery-app"         = { port = 80,   cpu = 256, memory = 512,  is_public = true }
-    "support-app"          = { port = 80,   cpu = 256, memory = 512,  is_public = true }
-    "monitoring-app"       = { port = 80,   cpu = 256, memory = 512,  is_public = true }
+    "api-gateway"          = { port = 5000, cpu = 512, memory = 1024, is_public = true,  health_path = "/healthz" }
+    "auth-service"         = { port = 5001, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "operations-service"   = { port = 5002, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "inventory-service"    = { port = 5003, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "delivery-service"     = { port = 5004, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "vendor-service"       = { port = 5005, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "support-service"      = { port = 5007, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "user-service"         = { port = 5008, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "catalog-service"      = { port = 5009, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "order-service"        = { port = 5010, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "notification-service" = { port = 5011, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "user-app"             = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
+    "admin-app"            = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
+    "vendor-app"           = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
+    "delivery-app"         = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
+    "support-app"          = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
+    "monitoring-app"       = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
   }
 }
 
 resource "aws_cloudwatch_log_group" "ecs" {
   for_each          = local.microservices
   name              = "/ecs/sunotal-${each.key}"
-  retention_in_days = 7
+  retention_in_days = 30
   tags              = var.tags
 }
 
-variable "database_url" {
-  type    = string
-  default = "postgresql://sunotal_admin:SunotalPostgres2026SecurePass!@sunotal-postgres-db.c2d668wu0n34.us-east-1.rds.amazonaws.com:5432/sunotal?sslmode=no-verify"
-}
-
-# ─── AWS CloudMap Private DNS Namespace for Inter-Service Communication ───────────
+# ─── 4. AWS CloudMap Private DNS for Inter-Service Communication ──────────────
 resource "aws_service_discovery_private_dns_namespace" "sunotal" {
   name        = "sunotal.local"
   description = "Sunotal Microservices Private DNS Namespace"
@@ -126,6 +167,7 @@ resource "aws_service_discovery_service" "services" {
   }
 }
 
+# ─── 5. ECS Task Definitions ──────────────────────────────────────────────────
 resource "aws_ecs_task_definition" "tasks" {
   for_each                 = local.microservices
   family                   = "sunotal-${each.key}"
@@ -140,26 +182,39 @@ resource "aws_ecs_task_definition" "tasks" {
     name      = "sunotal-${each.key}"
     image     = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/sunotal-${each.key}:latest"
     essential = true
+
     portMappings = [{
       containerPort = each.value.port
       hostPort      = each.value.port
       protocol      = "tcp"
     }]
+
+    # Container-level health check (independent of ALB health check)
+    healthCheck = {
+      command     = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${each.value.port}${each.value.health_path} || exit 1"]
+      interval    = 30
+      timeout     = 5
+      retries     = 3
+      startPeriod = 60  # Allow 60s for Node.js cold start + DB init
+    }
+
     environment = [
-      { name = "DATABASE_URL", value = var.database_url },
-      { name = "PORT", value = tostring(each.value.port) },
-      { name = "JWT_SECRET", value = "sunotal_jwt_secret_2026_super_secure" },
-      { name = "AUTH_SERVICE_URL", value = "http://sunotal-auth-service.sunotal.local:5001" },
-      { name = "OPERATIONS_SERVICE_URL", value = "http://sunotal-operations-service.sunotal.local:5002" },
-      { name = "INVENTORY_SERVICE_URL", value = "http://sunotal-inventory-service.sunotal.local:5003" },
-      { name = "DELIVERY_SERVICE_URL", value = "http://sunotal-delivery-service.sunotal.local:5004" },
-      { name = "VENDOR_SERVICE_URL", value = "http://sunotal-vendor-service.sunotal.local:5005" },
-      { name = "SUPPORT_SERVICE_URL", value = "http://sunotal-support-service.sunotal.local:5007" },
-      { name = "USER_SERVICE_URL", value = "http://sunotal-user-service.sunotal.local:5008" },
-      { name = "CATALOG_SERVICE_URL", value = "http://sunotal-catalog-service.sunotal.local:5009" },
-      { name = "ORDER_SERVICE_URL", value = "http://sunotal-order-service.sunotal.local:5010" },
-      { name = "NOTIFICATION_SERVICE_URL", value = "http://sunotal-notification-service.sunotal.local:5011" }
+      { name = "DATABASE_URL",             value = var.database_url },
+      { name = "PORT",                      value = tostring(each.value.port) },
+      { name = "NODE_ENV",                  value = "production" },
+      { name = "JWT_SECRET",                value = var.jwt_secret },
+      { name = "AUTH_SERVICE_URL",          value = "http://sunotal-auth-service.sunotal.local:5001" },
+      { name = "OPERATIONS_SERVICE_URL",    value = "http://sunotal-operations-service.sunotal.local:5002" },
+      { name = "INVENTORY_SERVICE_URL",     value = "http://sunotal-inventory-service.sunotal.local:5003" },
+      { name = "DELIVERY_SERVICE_URL",      value = "http://sunotal-delivery-service.sunotal.local:5004" },
+      { name = "VENDOR_SERVICE_URL",        value = "http://sunotal-vendor-service.sunotal.local:5005" },
+      { name = "SUPPORT_SERVICE_URL",       value = "http://sunotal-support-service.sunotal.local:5007" },
+      { name = "USER_SERVICE_URL",          value = "http://sunotal-user-service.sunotal.local:5008" },
+      { name = "CATALOG_SERVICE_URL",       value = "http://sunotal-catalog-service.sunotal.local:5009" },
+      { name = "ORDER_SERVICE_URL",         value = "http://sunotal-order-service.sunotal.local:5010" },
+      { name = "NOTIFICATION_SERVICE_URL",  value = "http://sunotal-notification-service.sunotal.local:5011" }
     ]
+
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -173,16 +228,21 @@ resource "aws_ecs_task_definition" "tasks" {
   tags = merge(var.tags, { Name = "sunotal-${each.key}-task" })
 }
 
+# ─── 6. ECS Fargate Services ──────────────────────────────────────────────────
 resource "aws_ecs_service" "services" {
   for_each        = local.microservices
   name            = "sunotal-${each.key}"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.tasks[each.key].arn
-  desired_count                      = 1
-  launch_type                        = "FARGATE"
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  # Rolling deployment: keep 100% min, allow 200% max (zero-downtime deploy)
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
-  health_check_grace_period_seconds  = contains(keys(var.target_group_arns), each.key) ? 30 : null
+
+  # Give 90 seconds for Node.js cold start + DB schema init before ALB health checks kick in
+  health_check_grace_period_seconds = contains(keys(var.target_group_arns), each.key) ? 90 : null
 
   network_configuration {
     subnets          = var.private_subnet_ids
@@ -194,8 +254,6 @@ resource "aws_ecs_service" "services" {
     registry_arn = aws_service_discovery_service.services[each.key].arn
   }
 
-
-
   dynamic "load_balancer" {
     for_each = contains(keys(var.target_group_arns), each.key) ? [1] : []
     content {
@@ -205,9 +263,16 @@ resource "aws_ecs_service" "services" {
     }
   }
 
+  # Trigger re-deploy when task definition changes
+  force_new_deployment = true
+
   depends_on = [aws_iam_role_policy_attachment.ecs_execution, var.alb_listener_arn]
 
   tags = merge(var.tags, { Name = "sunotal-${each.key}-service" })
+
+  lifecycle {
+    ignore_changes = [desired_count] # Allow autoscaling to manage count
+  }
 }
 
 output "cluster_id" { value = aws_ecs_cluster.main.id }

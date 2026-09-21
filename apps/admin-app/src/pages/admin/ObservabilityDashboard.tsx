@@ -58,9 +58,10 @@ export const ObservabilityDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchClusterHealth();
+    // Reduced from 3s to 60s — health endpoint doesn't need sub-second polling
     const timer = setInterval(() => {
       fetchClusterHealth();
-    }, 3000);
+    }, 60000);
     return () => clearInterval(timer);
   }, []);
 

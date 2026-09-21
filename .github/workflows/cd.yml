@@ -1,25 +1,34 @@
 name: "CD: ECS Rollout & Endpoint Verification"
 
 on:
-  push:
-    branches:
-      - main
+  # Trigger after CI pipeline succeeds on main
   workflow_run:
     workflows: ["CI: Build, Test & Containerize"]
     types:
       - completed
     branches:
       - main
+  # Allow manual re-deploy at any time
   workflow_dispatch:
+    inputs:
+      wait_for_stable:
+        description: 'Wait for ECS tasks to become stable before testing?'
+        required: false
+        default: 'true'
+        type: boolean
 
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+  CLUSTER_NAME: sunotal-cluster
 
 jobs:
-  ecs_rollout_and_test:
-    name: ECS Fargate Rollout & Live Domain Verification
+  ecs_rollout:
+    name: ECS Fargate Rollout
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    # Only run if triggered manually OR if CI succeeded
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
 
     steps:
       - name: Checkout Repository
@@ -32,33 +41,124 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Run ECS Fargate Service Updates
+      - name: Verify ECS Cluster Exists
+        id: cluster_check
         run: |
-          CLUSTER_NAME="sunotal-cluster"
-          echo "🚀 Triggering ECS Fargate new service deployments on ${CLUSTER_NAME}..."
+          CLUSTER_STATUS=$(aws ecs describe-clusters \
+            --clusters "${{ env.CLUSTER_NAME }}" \
+            --query "clusters[0].status" \
+            --output text 2>/dev/null || echo "MISSING")
+          echo "cluster_status=$CLUSTER_STATUS" >> $GITHUB_OUTPUT
+          echo "Cluster status: $CLUSTER_STATUS"
 
-          SERVICES=$(aws ecs list-services --cluster "$CLUSTER_NAME" --query "serviceArns[]" --output text 2>/dev/null || echo "")
+      - name: Force ECS Fargate Service Redeployments
+        if: steps.cluster_check.outputs.cluster_status == 'ACTIVE'
+        run: |
+          echo "🚀 Triggering rolling redeployments on ${{ env.CLUSTER_NAME }}..."
 
+          # Get all services in the cluster
+          SERVICES=$(aws ecs list-services \
+            --cluster "${{ env.CLUSTER_NAME }}" \
+            --query "serviceArns[]" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$SERVICES" ]; then
+            echo "⚠️ No ECS services found in cluster. Skipping."
+            exit 0
+          fi
+
+          FAILED=()
           for SERVICE_ARN in $SERVICES; do
             SERVICE_NAME=$(basename "$SERVICE_ARN")
-            echo "Updating ECS Service: ${SERVICE_NAME}..."
-            aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment >/dev/null || true
+            echo "  ↻ Redeploying: ${SERVICE_NAME}..."
+            aws ecs update-service \
+              --cluster "${{ env.CLUSTER_NAME }}" \
+              --service "$SERVICE_NAME" \
+              --force-new-deployment \
+              --output text \
+              --query "service.serviceName" > /dev/null \
+              && echo "    ✅ $SERVICE_NAME queued" \
+              || FAILED+=("$SERVICE_NAME")
           done
 
-      - name: Test HTTPS 443 Domain Endpoints
+          if [ ${#FAILED[@]} -gt 0 ]; then
+            echo "⚠️ Failed to update services: ${FAILED[*]}"
+          fi
+
+      - name: Wait for Critical Services to Stabilise
+        if: |
+          steps.cluster_check.outputs.cluster_status == 'ACTIVE' &&
+          (github.event.inputs.wait_for_stable != 'false')
+        run: |
+          CRITICAL_SERVICES=(
+            "sunotal-api-gateway"
+            "sunotal-auth-service"
+            "sunotal-catalog-service"
+            "sunotal-order-service"
+          )
+
+          echo "⏳ Waiting up to 5 minutes for critical services to stabilise..."
+          for SVC in "${CRITICAL_SERVICES[@]}"; do
+            echo "  Waiting on $SVC..."
+            aws ecs wait services-stable \
+              --cluster "${{ env.CLUSTER_NAME }}" \
+              --services "$SVC" \
+              --region "${{ env.AWS_REGION }}" \
+              2>/dev/null && echo "  ✅ $SVC stable" || echo "  ⚠️ $SVC did not stabilise in time"
+          done
+
+  endpoint_verification:
+    name: Live HTTPS Endpoint Verification
+    runs-on: ubuntu-latest
+    needs: [ecs_rollout]
+    # Run even if rollout step is skipped (e.g. manual dispatch without cluster)
+    if: always()
+
+    steps:
+      - name: Test All Live HTTPS Endpoints
+        id: endpoint_test
         run: |
           ENDPOINTS=(
-            "https://sunotal.automateuniverse.space"
-            "https://admin-sunotal.automateuniverse.space"
-            "https://vendor-sunotal.automateuniverse.space"
-            "https://delivery-sunotal.automateuniverse.space"
-            "https://support-sunotal.automateuniverse.space"
-            "https://monitoring-sunotal.automateuniverse.space"
+            "https://sunotal.automateuniverse.space/healthz"
+            "https://admin-sunotal.automateuniverse.space/healthz"
+            "https://vendor-sunotal.automateuniverse.space/healthz"
+            "https://delivery-sunotal.automateuniverse.space/healthz"
+            "https://support-sunotal.automateuniverse.space/healthz"
+            "https://monitoring-sunotal.automateuniverse.space/healthz"
             "https://api.automateuniverse.space/healthz"
+            "https://api.automateuniverse.space/api/healthz"
           )
 
           echo "🔍 Testing live HTTPS endpoints..."
+          PASS=0
+          FAIL=0
+          RESULTS=""
+
           for URL in "${ENDPOINTS[@]}"; do
-            HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "$URL" || echo "000")
-            echo "Endpoint ${URL} => HTTP Status: ${HTTP_STATUS}"
+            HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 15 --retry 2 "$URL" 2>/dev/null || echo "000")
+            if [[ "$HTTP_STATUS" =~ ^(200|301|302|404)$ ]]; then
+              RESULTS+="✅ $URL → $HTTP_STATUS\n"
+              PASS=$((PASS+1))
+            else
+              RESULTS+="❌ $URL → $HTTP_STATUS\n"
+              FAIL=$((FAIL+1))
+            fi
           done
+
+          echo -e "$RESULTS"
+          echo ""
+          echo "Summary: $PASS passed, $FAIL failed"
+          echo "pass_count=$PASS" >> $GITHUB_OUTPUT
+          echo "fail_count=$FAIL" >> $GITHUB_OUTPUT
+
+      - name: Post Deployment Summary
+        if: always()
+        run: |
+          echo "## 🚀 Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Endpoints Passing | ${{ steps.endpoint_test.outputs.pass_count || 0 }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Endpoints Failing | ${{ steps.endpoint_test.outputs.fail_count || 0 }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggered By | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY

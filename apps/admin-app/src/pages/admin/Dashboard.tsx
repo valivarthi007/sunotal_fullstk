@@ -7,6 +7,17 @@ import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { format } from "date-fns";
 
+const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
+  if (!dateVal) return fallback;
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+};
+
 export default function Dashboard() {
   const { data: stats, isLoading } = useGetAdminStats({
     query: {
@@ -137,7 +148,7 @@ export default function Dashboard() {
                       <td className="px-6 py-4 font-medium">{vendor.firstName} {vendor.lastName}</td>
                       <td className="px-6 py-4 text-muted-foreground">{vendor.location}</td>
                       <td className="px-6 py-4">{vendor.produce}</td>
-                      <td className="px-6 py-4 text-muted-foreground">{format(new Date(vendor.createdAt), 'MMM d, yyyy')}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{safeFormatDate(vendor.createdAt, 'MMM d, yyyy')}</td>
                       <td className="px-6 py-4">
                         <Badge variant="secondary" className={
                           vendor.status === 'approved' ? 'bg-green-100 text-green-700 hover:bg-green-100' :

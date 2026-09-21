@@ -63,12 +63,12 @@ resource "aws_lb" "main" {
 # ─── 3. Target Groups ─────────────────────────────────────────────────────────
 locals {
   services = {
-    "user-app"       = { port = 80,   path = "/healthz", host = "sunotal.${var.domain_name}" }
-    "admin-app"      = { port = 80,   path = "/healthz", host = "admin-sunotal.${var.domain_name}" }
-    "vendor-app"     = { port = 80,   path = "/healthz", host = "vendor-sunotal.${var.domain_name}" }
-    "delivery-app"   = { port = 80,   path = "/healthz", host = "delivery-sunotal.${var.domain_name}" }
-    "support-app"    = { port = 80,   path = "/healthz", host = "support-sunotal.${var.domain_name}" }
-    "monitoring-app" = { port = 80,   path = "/healthz", host = "monitoring-sunotal.${var.domain_name}" }
+    "user-app"       = { port = 80, path = "/healthz", host = "sunotal.${var.domain_name}" }
+    "admin-app"      = { port = 80, path = "/healthz", host = "admin-sunotal.${var.domain_name}" }
+    "vendor-app"     = { port = 80, path = "/healthz", host = "vendor-sunotal.${var.domain_name}" }
+    "delivery-app"   = { port = 80, path = "/healthz", host = "delivery-sunotal.${var.domain_name}" }
+    "support-app"    = { port = 80, path = "/healthz", host = "support-sunotal.${var.domain_name}" }
+    "monitoring-app" = { port = 80, path = "/healthz", host = "monitoring-sunotal.${var.domain_name}" }
     "api-gateway"    = { port = 5000, path = "/healthz", host = "api.${var.domain_name}" }
   }
 }

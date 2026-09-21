@@ -1064,6 +1064,9 @@ importers:
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
+      bcryptjs:
+        specifier: ^2.4.3
+        version: 2.4.3
       cors:
         specifier: ^2.8.5
         version: 2.8.6
@@ -1076,10 +1079,16 @@ importers:
       express-http-proxy:
         specifier: ^2.0.0
         version: 2.1.2
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
       pg:
         specifier: ^8.23.0
         version: 8.23.0
     devDependencies:
+      '@types/bcryptjs':
+        specifier: ^2.4.6
+        version: 2.4.6
       '@types/cors':
         specifier: ^2.8.17
         version: 2.8.19
@@ -1089,6 +1098,9 @@ importers:
       '@types/express-http-proxy':
         specifier: ^1.6.6
         version: 1.6.7
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
       '@types/node':
         specifier: ^20.11.24
         version: 20.19.43
@@ -1491,6 +1503,9 @@ importers:
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
+      bcryptjs:
+        specifier: ^2.4.3
+        version: 2.4.3
       cors:
         specifier: ^2.8.5
         version: 2.8.6
@@ -1504,6 +1519,9 @@ importers:
         specifier: ^8.23.0
         version: 8.23.0
     devDependencies:
+      '@types/bcryptjs':
+        specifier: ^2.4.6
+        version: 2.4.6
       '@types/cors':
         specifier: ^2.8.17
         version: 2.8.19

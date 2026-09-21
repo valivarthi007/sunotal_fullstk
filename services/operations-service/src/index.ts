@@ -35,10 +35,19 @@ async function initDb() {
         id SERIAL PRIMARY KEY,
         name VARCHAR(255),
         vendor_name VARCHAR(255),
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
         email VARCHAR(255) UNIQUE,
         phone VARCHAR(50),
+        location TEXT,
+        produce VARCHAR(255),
+        farm_size VARCHAR(100),
+        aadhar VARCHAR(50),
+        gstin VARCHAR(50),
         category VARCHAR(100) DEFAULT 'General',
-        status VARCHAR(50) DEFAULT 'active',
+        status VARCHAR(50) DEFAULT 'pending',
+        active BOOLEAN DEFAULT TRUE,
+        notes TEXT,
         address TEXT,
         city VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -53,11 +62,13 @@ async function initDb() {
         unit VARCHAR(50) DEFAULT '1 kg',
         image TEXT,
         is_organic BOOLEAN DEFAULT TRUE,
+        badge VARCHAR(100),
         stock INT DEFAULT 100,
         rating NUMERIC(3, 2) DEFAULT 5.0,
         status VARCHAR(50) DEFAULT 'active',
         active BOOLEAN DEFAULT TRUE,
         description TEXT,
+        product_id VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -72,18 +83,22 @@ async function initDb() {
       CREATE TABLE IF NOT EXISTS inventory (
         id SERIAL PRIMARY KEY,
         product_id INT,
+        vendor_id INT,
         product_name VARCHAR(255) NOT NULL,
         vendor_name VARCHAR(255),
         warehouse_name VARCHAR(255) DEFAULT 'Central Dark Store Hub',
+        warehouse_city VARCHAR(255),
         quantity NUMERIC(10, 2) DEFAULT 100,
         unit VARCHAR(50) DEFAULT 'kg',
         status VARCHAR(50) DEFAULT 'in_stock',
         notes TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS quotations (
         id SERIAL PRIMARY KEY,
+        name VARCHAR(255),
         vendor_name VARCHAR(255),
         produce VARCHAR(255),
         crop_name VARCHAR(255),
@@ -97,6 +112,8 @@ async function initDb() {
         notes TEXT,
         phone VARCHAR(50),
         address TEXT,
+        aadhar VARCHAR(50),
+        gstin VARCHAR(50),
         status VARCHAR(50) DEFAULT 'pending',
         payment_status VARCHAR(50) DEFAULT 'processing',
         invoice_generated BOOLEAN DEFAULT FALSE,
@@ -108,6 +125,12 @@ async function initDb() {
       CREATE TABLE IF NOT EXISTS rider_payouts (
         id SERIAL PRIMARY KEY,
         rider_id VARCHAR(255),
+        rider_name VARCHAR(255),
+        phone VARCHAR(50),
+        email VARCHAR(255),
+        upi_id VARCHAR(255),
+        completed_deliveries INT DEFAULT 0,
+        total_distance_km NUMERIC(10,2) DEFAULT 0,
         amount NUMERIC(10, 2) NOT NULL,
         transaction_id VARCHAR(255),
         status VARCHAR(50) DEFAULT 'pending',
@@ -137,6 +160,36 @@ async function initDb() {
       );
     `);
 
+    // Safe migrations — add missing columns to existing tables without dropping data
+    const safeAlters = [
+      `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS first_name VARCHAR(255)`,
+      `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS last_name VARCHAR(255)`,
+      `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS location TEXT`,
+      `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS produce VARCHAR(255)`,
+      `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS farm_size VARCHAR(100)`,
+      `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS aadhar VARCHAR(50)`,
+      `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS gstin VARCHAR(50)`,
+      `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE`,
+      `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS notes TEXT`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS badge VARCHAR(100)`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS product_id VARCHAR(100)`,
+      `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS vendor_id INT`,
+      `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS warehouse_city VARCHAR(255)`,
+      `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+      `ALTER TABLE quotations ADD COLUMN IF NOT EXISTS name VARCHAR(255)`,
+      `ALTER TABLE quotations ADD COLUMN IF NOT EXISTS aadhar VARCHAR(50)`,
+      `ALTER TABLE quotations ADD COLUMN IF NOT EXISTS gstin VARCHAR(50)`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS rider_name VARCHAR(255)`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS email VARCHAR(255)`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS upi_id VARCHAR(255)`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS completed_deliveries INT DEFAULT 0`,
+      `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS total_distance_km NUMERIC(10,2) DEFAULT 0`,
+    ];
+    for (const sql of safeAlters) {
+      try { await pgPool.query(sql); } catch {}
+    }
+
     // Seed default business settings into PostgreSQL RDS if empty
     await pgPool.query(`
       INSERT INTO business_settings (setting_key, setting_value, description)
@@ -152,9 +205,9 @@ async function initDb() {
         ('surge_pricing_multiplier', '1.00', 'Surge pricing multiplier'),
         ('avg_rider_speed_kmh', '25.00', 'Average rider speed in km/h for ETA calculation')
       ON CONFLICT (setting_key) DO NOTHING;
-    `);
+    `).catch(() => {});
 
-    console.log('🐘 [operations-service] All PostgreSQL tables & business_settings ready.');
+    console.log('🐘 [operations-service] All PostgreSQL tables & migrations ready.');
   } catch (err: any) {
     console.warn('⚠️ [operations-service] DB init warning:', err?.message || err);
   }
@@ -244,12 +297,18 @@ app.get("/api/admin/stats", async (_req, res) => {
       })),
       recentVendors: vendors.map((v: any) => ({
         id: v.id,
+        firstName: v.first_name || (v.name || v.vendor_name || '').split(' ')[0] || '',
+        lastName: v.last_name || (v.name || v.vendor_name || '').split(' ').slice(1).join(' ') || '',
         name: v.name || v.vendor_name,
         vendorName: v.vendor_name || v.name,
         email: v.email,
         phone: v.phone,
+        location: v.location || v.address || v.city || '',
+        produce: v.produce || v.category || 'Fresh Produce',
+        farmSize: v.farm_size || '',
         category: v.category,
-        status: v.status,
+        status: v.status || 'pending',
+        createdAt: v.created_at ? new Date(v.created_at).toISOString() : new Date().toISOString(),
       })),
     });
   } catch (err: any) {
@@ -679,18 +738,31 @@ app.delete("/api/inventory/:id", async (req: any, res: any) => {
 app.get(["/api/vendors", "/api/admin/vendors"], async (_req: any, res: any) => {
   try {
     const dbRes = await pgPool.query("SELECT * FROM vendors ORDER BY id DESC");
-    return res.json(dbRes.rows.map((v: any) => ({
-      id: v.id,
-      name: v.name || v.vendor_name,
-      vendorName: v.vendor_name || v.name,
-      email: v.email,
-      phone: v.phone,
-      category: v.category || "Fresh Produce",
-      address: v.address || v.city || "Mandi Sourcing Hub",
-      city: v.city || "Bengaluru",
-      status: v.status || "approved",
-      createdAt: v.created_at
-    })));
+    return res.json(dbRes.rows.map((v: any) => {
+      const firstName = v.first_name || (v.name || v.vendor_name || '').split(' ')[0] || '';
+      const lastName = v.last_name || (v.name || v.vendor_name || '').split(' ').slice(1).join(' ') || '';
+      return {
+        id: v.id,
+        firstName,
+        lastName,
+        name: v.name || v.vendor_name || `${firstName} ${lastName}`.trim(),
+        vendorName: v.vendor_name || v.name,
+        email: v.email || '',
+        phone: v.phone || '',
+        location: v.location || v.address || v.city || '',
+        produce: v.produce || v.category || 'Fresh Produce',
+        farmSize: v.farm_size || '',
+        aadhar: v.aadhar || '',
+        gstin: v.gstin || '',
+        category: v.category || 'Fresh Produce',
+        address: v.address || v.location || v.city || '',
+        city: v.city || '',
+        status: v.status || 'pending',
+        active: v.active !== false,
+        notes: v.notes || '',
+        createdAt: v.created_at ? new Date(v.created_at).toISOString() : new Date().toISOString(),
+      };
+    }));
   } catch {
     return res.json([]);
   }
@@ -710,34 +782,47 @@ app.get("/api/vendors/:id", async (req: any, res: any) => {
 
 const handleCreateVendor = async (req: any, res: any) => {
   try {
-    const { firstName, lastName, phone, location, produce, email, password, status } = req.body;
-    if (!firstName || !phone || !email) {
-      return res.status(400).json({ error: "First name, phone, and email are required" });
+    const { firstName, lastName, phone, location, produce, farmSize, aadhar, gstin, email, password, status, notes, name, vendorName } = req.body;
+    const fName = firstName || (name || vendorName || '').split(' ')[0] || 'Vendor';
+    const lName = lastName || (name || vendorName || '').split(' ').slice(1).join(' ') || '';
+    if (!phone && !email) {
+      return res.status(400).json({ error: "Phone or email is required" });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const vName = `${firstName} ${lastName || ""}`.trim();
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const vName = name || vendorName || `${fName} ${lName}`.trim();
 
     const dbRes = await pgPool.query(
-      `INSERT INTO vendors (name, vendor_name, email, phone, category, status, address, city)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (email) DO UPDATE SET status = EXCLUDED.status RETURNING *`,
-      [vName, vName, cleanEmail, phone, produce || 'Fresh Produce', status || 'approved', location || 'Sourcing Hub', location || 'Bengaluru']
+      `INSERT INTO vendors (name, vendor_name, first_name, last_name, email, phone, location, produce, farm_size, aadhar, gstin, category, status, active, notes, address, city)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, $14, $7, $15)
+       ON CONFLICT (email) DO UPDATE SET
+         name = EXCLUDED.name, first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name,
+         phone = EXCLUDED.phone, location = EXCLUDED.location, produce = EXCLUDED.produce,
+         farm_size = EXCLUDED.farm_size, status = COALESCE($13, vendors.status), notes = EXCLUDED.notes
+       RETURNING *`,
+      [vName, vName, fName, lName, cleanEmail || null, phone || '', location || '', produce || 'Fresh Produce', farmSize || '', aadhar || '', gstin || '', produce || 'Fresh Produce', status || 'pending', notes || '', location ? location.split(',')[0].trim() : '']
     );
     const v = dbRes.rows[0];
 
     // Create corresponding user account for login persistence
-    const passwordHash = await bcrypt.hash(password || "vendor123", 10);
-    await pgPool.query(
-      `INSERT INTO users (name, email, password_hash, role, active, phone, city)
-       VALUES ($1, $2, $3, 'vendor', true, $4, $5) ON CONFLICT (email) DO NOTHING`,
-      [vName, cleanEmail, passwordHash, phone, location || 'Bengaluru']
-    );
+    if (cleanEmail) {
+      const passwordHash = await bcrypt.hash(password || 'vendor123', 10);
+      await pgPool.query(
+        `INSERT INTO users (name, email, password_hash, role, active, phone, city)
+         VALUES ($1, $2, $3, 'vendor', true, $4, $5) ON CONFLICT (email) DO NOTHING`,
+        [vName, cleanEmail, passwordHash, phone || '', location || '']
+      );
+    }
 
-    return res.status(201).json({ id: v.id, name: v.name, email: v.email, status: v.status });
+    return res.status(201).json({
+      id: v.id, firstName: v.first_name, lastName: v.last_name,
+      name: v.name, email: v.email, phone: v.phone,
+      location: v.location, produce: v.produce, farmSize: v.farm_size,
+      status: v.status, createdAt: v.created_at
+    });
   } catch (err: any) {
-    console.error("Error creating vendor:", err);
-    return res.status(500).json({ error: err.message || "Failed to create vendor" });
+    console.error('Error creating vendor:', err);
+    return res.status(500).json({ error: err.message || 'Failed to create vendor' });
   }
 };
 
@@ -748,21 +833,37 @@ app.post("/api/vendors/onboard", handleCreateVendor);
 app.put("/api/vendors/:id", async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
-    const { status, name, phone, category } = req.body;
+    const { status, name, firstName, lastName, phone, location, produce, farmSize, aadhar, gstin, email, category, notes, active } = req.body;
+    const vName = name || (firstName && lastName ? `${firstName} ${lastName}` : undefined);
     const dbRes = await pgPool.query(
       `UPDATE vendors SET
         status = COALESCE($1, status),
         name = COALESCE($2, name),
-        phone = COALESCE($3, phone),
-        category = COALESCE($4, category)
-       WHERE id = $5 RETURNING *`,
-      [status, name, phone, category, id]
+        vendor_name = COALESCE($2, vendor_name),
+        first_name = COALESCE($3, first_name),
+        last_name = COALESCE($4, last_name),
+        phone = COALESCE($5, phone),
+        location = COALESCE($6, location),
+        produce = COALESCE($7, produce),
+        farm_size = COALESCE($8, farm_size),
+        email = COALESCE($9, email),
+        category = COALESCE($10, category),
+        notes = COALESCE($11, notes),
+        active = COALESCE($12, active)
+       WHERE id = $13 RETURNING *`,
+      [status, vName, firstName, lastName, phone, location, produce, farmSize, email, category, notes, active, id]
     );
-    if (!dbRes.rows || dbRes.rows.length === 0) return res.status(404).json({ error: "Vendor not found" });
+    if (!dbRes.rows || dbRes.rows.length === 0) return res.status(404).json({ error: 'Vendor not found' });
     const v = dbRes.rows[0];
-    return res.json({ id: v.id, name: v.name, status: v.status });
+    return res.json({
+      id: v.id, firstName: v.first_name, lastName: v.last_name,
+      name: v.name, email: v.email, phone: v.phone,
+      location: v.location, produce: v.produce, farmSize: v.farm_size,
+      status: v.status, active: v.active, notes: v.notes,
+      createdAt: v.created_at
+    });
   } catch (err: any) {
-    return res.status(500).json({ error: "Failed to update vendor" });
+    return res.status(500).json({ error: 'Failed to update vendor', message: err?.message });
   }
 });
 

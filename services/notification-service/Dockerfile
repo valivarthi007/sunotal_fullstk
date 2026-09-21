@@ -13,7 +13,6 @@ RUN apk add --no-cache wget
 COPY package.json ./
 RUN npm install --omit=dev --legacy-peer-deps --no-package-lock
 COPY --from=builder /app/dist ./dist
-RUN chown -R node:node /app
 USER node
 EXPOSE 5011
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \

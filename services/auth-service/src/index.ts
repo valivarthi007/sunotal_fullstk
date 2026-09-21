@@ -47,6 +47,16 @@ async function initDb() {
       );
     `);
 
+    // Indexes for fast queries
+    const indexes = [
+      `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
+      `CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`,
+      `CREATE INDEX IF NOT EXISTS idx_users_active ON users(active)`,
+    ];
+    for (const idx of indexes) {
+      try { await pool.query(idx); } catch {}
+    }
+
     // Inject initial admin credentials into PostgreSQL RDS
     const adminHash = await bcrypt.hash('admin123', 10);
     await pool.query(
@@ -61,6 +71,7 @@ async function initDb() {
     console.warn('⚠️ [auth-service] DB init warning:', err?.message || err);
   }
 }
+
 
 initDb();
 

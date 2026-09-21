@@ -59,7 +59,7 @@ export default function QuotationsAdmin() {
   const { data: rawProducts } = useListProducts();
   const products = Array.isArray(rawProducts) ? rawProducts : (Array.isArray((rawProducts as any)?.products) ? (rawProducts as any).products : []);
 
-  const fetchQuotations = async () => {
+  const fetchQuotations = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("sunotal_admin_token");
@@ -69,7 +69,8 @@ export default function QuotationsAdmin() {
         return;
       }
       const res = await fetch(getApiUrl("/api/admin/quotations"), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        signal,
       });
       if (res.ok) {
         const data = await res.json();
@@ -84,6 +85,7 @@ export default function QuotationsAdmin() {
         }
       }
     } catch (err: any) {
+      if ((err as any)?.name === "AbortError") return;
       console.error("Failed to load quotations", err);
       setQuotations([]);
     } finally {
@@ -92,11 +94,16 @@ export default function QuotationsAdmin() {
   };
 
   useEffect(() => {
-    fetchQuotations();
+    const controller = new AbortController();
+    fetchQuotations(controller.signal);
+    // Reduced from 4s to 30s to reduce backend load and latency
     const timer = setInterval(() => {
       fetchQuotations();
-    }, 4000);
-    return () => clearInterval(timer);
+    }, 30000);
+    return () => {
+      clearInterval(timer);
+      controller.abort();
+    };
   }, []);
 
   const handleUpdateStatus = async (id: number, status: string, productId?: string) => {

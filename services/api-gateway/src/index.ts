@@ -561,19 +561,31 @@ async function handleInProcessUsers(_req: any, res: any) {
 async function handleInProcessVendors(_req: any, res: any) {
   try {
     const dbRes = await gatewayPgPool.query('SELECT * FROM vendors ORDER BY id DESC');
-    const vendors = (dbRes.rows || []).map((v: any) => ({
-      id: v.id,
-      name: v.name || v.vendor_name,
-      vendorName: v.vendor_name || v.name,
-      email: v.email,
-      phone: v.phone,
-      category: v.category,
-      address: v.address,
-      city: v.city,
-      status: v.status || 'approved',
-      active: v.active ?? true,
-      createdAt: v.created_at || new Date().toISOString()
-    }));
+    const vendors = (dbRes.rows || []).map((v: any) => {
+      const firstName = v.first_name || (v.name || v.vendor_name || '').split(' ')[0] || '';
+      const lastName = v.last_name || (v.name || v.vendor_name || '').split(' ').slice(1).join(' ') || '';
+      return {
+        id: v.id,
+        firstName,
+        lastName,
+        name: v.name || v.vendor_name || `${firstName} ${lastName}`.trim(),
+        vendorName: v.vendor_name || v.name,
+        email: v.email || '',
+        phone: v.phone || '',
+        location: v.location || v.address || v.city || '',
+        produce: v.produce || v.category || 'Fresh Produce',
+        farmSize: v.farm_size || '',
+        aadhar: v.aadhar || '',
+        gstin: v.gstin || '',
+        category: v.category || 'Fresh Produce',
+        address: v.address || v.location || v.city || '',
+        city: v.city || '',
+        status: v.status || 'pending',
+        active: v.active !== false,
+        notes: v.notes || '',
+        createdAt: v.created_at ? new Date(v.created_at).toISOString() : new Date().toISOString(),
+      };
+    });
     return res.json(vendors);
   } catch (err: any) {
     console.error('⚠️ [handleInProcessVendors err]:', err?.message);
@@ -726,7 +738,7 @@ const createResilientProxy = (targetUrl: string, fallbackHandler?: (req: any, re
   return async (req: any, res: any) => {
     const targetEndpoint = `${targetUrl}${req.originalUrl || req.url}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     try {
       const headers: Record<string, string> = {};
@@ -897,15 +909,40 @@ app.get('/api/admin/stats', async (_req: any, res: any) => {
     }
 
     const recentVendors = Array.isArray(vendorsRes) && vendorsRes.length > 0
-      ? vendorsRes.slice(0, 5)
-      : dbVendors.slice(0, 5).map(v => ({
+      ? vendorsRes.slice(0, 5).map((v: any) => ({
           id: v.id,
-          name: v.name || v.vendor_name,
-          vendorName: v.vendor_name || v.name,
+          firstName: v.firstName || v.first_name || (v.name || '').split(' ')[0] || '',
+          lastName: v.lastName || v.last_name || (v.name || '').split(' ').slice(1).join(' ') || '',
+          name: v.name || v.vendorName,
+          vendorName: v.vendorName || v.name,
           email: v.email,
+          phone: v.phone,
+          location: v.location || v.address || '',
+          produce: v.produce || v.category || 'Fresh Produce',
+          farmSize: v.farmSize || v.farm_size || '',
           category: v.category,
-          status: v.status || 'approved'
-        }));
+          status: v.status || 'pending',
+          createdAt: v.createdAt || v.created_at || new Date().toISOString(),
+        }))
+      : dbVendors.slice(0, 5).map((v: any) => {
+          const firstName = v.first_name || (v.name || v.vendor_name || '').split(' ')[0] || '';
+          const lastName = v.last_name || (v.name || v.vendor_name || '').split(' ').slice(1).join(' ') || '';
+          return {
+            id: v.id,
+            firstName,
+            lastName,
+            name: v.name || v.vendor_name,
+            vendorName: v.vendor_name || v.name,
+            email: v.email,
+            phone: v.phone,
+            location: v.location || v.address || v.city || '',
+            produce: v.produce || v.category || 'Fresh Produce',
+            farmSize: v.farm_size || '',
+            category: v.category,
+            status: v.status || 'pending',
+            createdAt: v.created_at ? new Date(v.created_at).toISOString() : new Date().toISOString(),
+          };
+        });
 
     const recentOrders = Array.isArray(ordersRes) && ordersRes.length > 0
       ? ordersRes.slice(0, 5)

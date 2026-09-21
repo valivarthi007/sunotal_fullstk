@@ -13,12 +13,8 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.89.0"
     }
-    mongodbatlas = {
-      source  = "mongodb/mongodbatlas"
-      version = "~> 1.14.0"
-    }
+    # mongodbatlas removed — platform uses AWS RDS PostgreSQL exclusively
   }
-
 
   backend "s3" {
     bucket         = "jcs-raju-sunotal-tfstate"
@@ -87,6 +83,7 @@ module "ecs" {
   alb_listener_arn      = module.acm_alb.alb_listener_arn
   aws_region            = var.aws_region
   database_url          = module.rds.database_url
+  jwt_secret            = var.jwt_secret
   tags                  = local.common_tags
 }
 

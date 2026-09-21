@@ -83,12 +83,33 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <p className="text-xs text-muted-foreground">
               An unexpected error occurred. Please reload the page to restore your session.
             </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs"
-            >
-              Reload Application
-            </button>
+            {this.state.error && (
+              <p className="text-[11px] font-mono bg-destructive/10 text-destructive px-3 py-2 rounded-xl text-left break-all">
+                {this.state.error.message}
+              </p>
+            )}
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  window.history.pushState({}, "", "/");
+                  window.location.reload();
+                }}
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs"
+              >
+                Reload Application
+              </button>
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  window.history.pushState({}, "", "/dashboard");
+                  window.location.reload();
+                }}
+                className="px-6 py-2.5 bg-slate-600 hover:bg-slate-700 text-white font-bold rounded-xl text-xs"
+              >
+                Go to Dashboard
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -101,8 +122,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: false,
-      staleTime: 1000 * 10, // 10 seconds cache window
-      refetchOnWindowFocus: true,
+      staleTime: 1000 * 60, // 60 seconds — reduces redundant background re-fetches
+      gcTime: 1000 * 60 * 5, // 5 minutes garbage collection window
+      refetchOnWindowFocus: false, // prevents re-fetch storm when user switches tabs
       refetchOnMount: true,
       throwOnError: false,
     },

@@ -24,12 +24,13 @@ export function RiderPayoutsAdmin() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<string>("All");
 
-  const fetchRiderPayouts = async () => {
+  const fetchRiderPayouts = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("sunotal_admin_token") || localStorage.getItem("sunotal_token");
       const res = await fetch(getApiUrl("/api/admin/rider-payouts"), {
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        signal,
       });
       if (res.ok) {
         const data = await res.json();
@@ -37,7 +38,8 @@ export function RiderPayoutsAdmin() {
       } else {
         setPayouts([]);
       }
-    } catch {
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
       setPayouts([]);
     } finally {
       setLoading(false);
@@ -45,11 +47,16 @@ export function RiderPayoutsAdmin() {
   };
 
   useEffect(() => {
-    fetchRiderPayouts();
+    const controller = new AbortController();
+    fetchRiderPayouts(controller.signal);
+    // Reduced from 4s to 30s to reduce backend load and latency
     const timer = setInterval(() => {
       fetchRiderPayouts();
-    }, 4000);
-    return () => clearInterval(timer);
+    }, 30000);
+    return () => {
+      clearInterval(timer);
+      controller.abort();
+    };
   }, []);
 
   const handleApprovePayout = async (id: number) => {

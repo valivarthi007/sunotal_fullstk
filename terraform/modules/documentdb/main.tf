@@ -41,15 +41,15 @@ resource "aws_docdb_subnet_group" "docdb" {
 }
 
 resource "aws_docdb_cluster" "docdb" {
-  count                   = var.enable_docdb ? 1 : 0
-  cluster_identifier      = "sunotal-docdb-cluster"
-  engine                  = "docdb"
-  master_username         = "sunotal_admin"
-  master_password         = "SunotalDocDB2026SecurePass!"
-  db_subnet_group_name    = aws_docdb_subnet_group.docdb[0].name
-  vpc_security_group_ids  = [var.db_security_group_id]
-  skip_final_snapshot     = true
-  deletion_protection     = false
+  count                  = var.enable_docdb ? 1 : 0
+  cluster_identifier     = "sunotal-docdb-cluster"
+  engine                 = "docdb"
+  master_username        = "sunotal_admin"
+  master_password        = "SunotalDocDB2026SecurePass!"
+  db_subnet_group_name   = aws_docdb_subnet_group.docdb[0].name
+  vpc_security_group_ids = [var.db_security_group_id]
+  skip_final_snapshot    = true
+  deletion_protection    = false
 
   tags = merge(var.tags, { Name = "sunotal-docdb-cluster" })
 }
@@ -65,13 +65,13 @@ resource "aws_docdb_cluster_instance" "docdb_instance" {
 
 # ─── 2. MongoDB Atlas Integration ─────────────────────────────────────────────
 resource "mongodbatlas_cluster" "atlas" {
-  count                        = var.mongodb_atlas_project_id != "" ? 1 : 0
-  project_id                   = var.mongodb_atlas_project_id
-  name                         = "sunotal-atlas-cluster"
-  provider_name                = "TENANT"
-  backing_provider_name        = "AWS"
+  count                       = var.mongodb_atlas_project_id != "" ? 1 : 0
+  project_id                  = var.mongodb_atlas_project_id
+  name                        = "sunotal-atlas-cluster"
+  provider_name               = "TENANT"
+  backing_provider_name       = "AWS"
   provider_region_name        = "US_EAST_1"
-  provider_instance_size_name  = "M0"
+  provider_instance_size_name = "M0"
 }
 
 # ─── 3. Outputs ───────────────────────────────────────────────────────────────
