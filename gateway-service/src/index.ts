@@ -32,6 +32,12 @@ async function initDatabase() {
     console.log('🐘 Initializing clean PostgreSQL database schema and tables...');
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) UNIQUE NOT NULL,
+        executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Users Table
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -183,17 +189,6 @@ async function initDatabase() {
         status VARCHAR(50) DEFAULT 'completed',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
-
-      -- Banners Table
-      CREATE TABLE IF NOT EXISTS banners (
-        id SERIAL PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        subtitle TEXT,
-        image_url TEXT,
-        target_url TEXT,
-        active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
     `);
 
     // Safe Column Alterations
@@ -205,6 +200,10 @@ async function initDatabase() {
       `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS account_holder_name VARCHAR(255)`,
       `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100)`,
     ];
+    for (const sql of alters) {
+      try { await client.query(sql); } catch {}
+    }
+
     // High-Performance Retrieval Indexes
     const indexes = [
       `CREATE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email))`,
@@ -223,41 +222,46 @@ async function initDatabase() {
       try { await client.query(idx); } catch {}
     }
 
-    // Default DB Seeds for clean initial state
-    const adminPassHash = await bcrypt.hash('admin123', 10);
-    const vendorPassHash = await bcrypt.hash('vendor123', 10);
+    // Initial Seeds — EXECUTED EXACTLY ONCE (prevents re-populating deleted items)
+    const seedCheck = await client.query(`SELECT name FROM schema_migrations WHERE name = 'initial_seeds_v1'`);
+    if (!seedCheck.rows || seedCheck.rows.length === 0) {
+      const adminPassHash = await bcrypt.hash('admin123', 10);
+      const vendorPassHash = await bcrypt.hash('vendor123', 10);
 
-    await client.query(`
-      INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
-      VALUES 
-        ('Sunotal Admin', 'admin@sunotal.com', '${adminPassHash}', 'admin', true, '9876543210', 'Bengaluru', 5000),
-        ('Farm Vendor', 'vendor@sunotal.com', '${vendorPassHash}', 'vendor', true, '9876543212', 'Vijayawada', 2500)
-      ON CONFLICT (email) DO NOTHING;
+      await client.query(`
+        INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
+        VALUES 
+          ('Sunotal Admin', 'admin@sunotal.com', '${adminPassHash}', 'admin', true, '9876543210', 'Bengaluru', 5000),
+          ('Farm Vendor', 'vendor@sunotal.com', '${vendorPassHash}', 'vendor', true, '9876543212', 'Vijayawada', 2500)
+        ON CONFLICT (email) DO NOTHING;
 
-      INSERT INTO vendors (name, vendor_name, first_name, last_name, email, phone, category, address, city, location, produce, farm_size, status, active, bank_name, account_number, ifsc_code, branch_name, account_holder_name, upi_id)
-      VALUES 
-        ('Ramesh Kumar Farms', 'Ramesh Farms', 'Ramesh', 'Kumar', 'vendor@sunotal.com', '9876543212', 'Fresh Vegetables', 'Urmilanagar', 'Vijayawada', 'Vijayawada Mandal', 'Organic Tomatoes', '10 Acres', 'approved', true, 'HDFC Bank Ltd', '501004892156', 'HDFC0001234', 'Vijayawada Main Branch', 'Ramesh Kumar', 'ramesh@okhdfc')
-      ON CONFLICT (email) DO NOTHING;
+        INSERT INTO vendors (name, vendor_name, first_name, last_name, email, phone, category, address, city, location, produce, farm_size, status, active, bank_name, account_number, ifsc_code, branch_name, account_holder_name, upi_id)
+        VALUES 
+          ('Ramesh Kumar Farms', 'Ramesh Farms', 'Ramesh', 'Kumar', 'vendor@sunotal.com', '9876543212', 'Fresh Vegetables', 'Urmilanagar', 'Vijayawada', 'Vijayawada Mandal', 'Organic Tomatoes', '10 Acres', 'approved', true, 'HDFC Bank Ltd', '501004892156', 'HDFC0001234', 'Vijayawada Main Branch', 'Ramesh Kumar', 'ramesh@okhdfc')
+        ON CONFLICT (email) DO NOTHING;
 
-      INSERT INTO warehouses (name, address, city, latitude, longitude, free_delivery_radius_km, max_service_radius_km, base_delivery_fee, per_km_rate, is_active)
-      SELECT 'Vijayawada Central Hub', 'Urmilanagar Main Road', 'Vijayawada', 16.5447, 80.6037, 30.00, 70.00, 50.00, 8.00, true
-      WHERE NOT EXISTS (SELECT 1 FROM warehouses WHERE name = 'Vijayawada Central Hub');
+        INSERT INTO warehouses (name, address, city, latitude, longitude, free_delivery_radius_km, max_service_radius_km, base_delivery_fee, per_km_rate, is_active)
+        SELECT 'Vijayawada Central Hub', 'Urmilanagar Main Road', 'Vijayawada', 16.5447, 80.6037, 30.00, 70.00, 50.00, 8.00, true
+        WHERE NOT EXISTS (SELECT 1 FROM warehouses WHERE name = 'Vijayawada Central Hub');
 
-      INSERT INTO categories (name, icon, active) VALUES
-        ('Vegetables', '🥦', true),
-        ('Fruits', '🍎', true),
-        ('Dairy & Eggs', '🥛', true),
-        ('Grains & Staples', '🌾', true)
-      ON CONFLICT (name) DO NOTHING;
+        INSERT INTO categories (name, icon, active) VALUES
+          ('Vegetables', '🥦', true),
+          ('Fruits', '🍎', true),
+          ('Dairy & Eggs', '🥛', true),
+          ('Grains & Staples', '🌾', true)
+        ON CONFLICT (name) DO NOTHING;
 
-      INSERT INTO products (name, category, price, original_price, unit, image, is_organic, stock, rating, active)
-      SELECT 'Organic Farm Tomatoes', 'Vegetables', 45.00, 60.00, '1 kg', 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400', true, 150, 4.90, true
-      WHERE NOT EXISTS (SELECT 1 FROM products WHERE name = 'Organic Farm Tomatoes');
+        INSERT INTO products (name, category, price, original_price, unit, image, is_organic, stock, rating, active)
+        SELECT 'Organic Farm Tomatoes', 'Vegetables', 45.00, 60.00, '1 kg', 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400', true, 150, 4.90, true
+        WHERE NOT EXISTS (SELECT 1 FROM products WHERE name = 'Organic Farm Tomatoes');
 
-      INSERT INTO quotations (vendor_name, produce, crop_name, quantity, price, category, unit, quality_grade, expected_harvest_date, dark_store_allocation, notes, phone, address, status, payment_status)
-      SELECT 'Ramesh Farms', 'Fresh Red Tomatoes', 'Fresh Red Tomatoes', 25.00, 32.00, 'Vegetables', 'Quintal', 'Grade A (Organic / Premium)', '2026-09-25', 'Vijayawada Central Hub', 'Direct farm harvest from Urmilanagar', 'pending', 'processing'
-      WHERE NOT EXISTS (SELECT 1 FROM quotations WHERE vendor_name = 'Ramesh Farms');
-    `);
+        INSERT INTO quotations (vendor_name, produce, crop_name, quantity, price, category, unit, quality_grade, expected_harvest_date, dark_store_allocation, notes, phone, address, status, payment_status)
+        SELECT 'Ramesh Farms', 'Fresh Red Tomatoes', 'Fresh Red Tomatoes', 25.00, 32.00, 'Vegetables', 'Quintal', 'Grade A (Organic / Premium)', '2026-09-25', 'Vijayawada Central Hub', 'Direct farm harvest from Urmilanagar', 'pending', 'processing'
+        WHERE NOT EXISTS (SELECT 1 FROM quotations WHERE vendor_name = 'Ramesh Farms');
+
+        INSERT INTO schema_migrations (name) VALUES ('initial_seeds_v1');
+      `);
+    }
 
     console.log('✅ PostgreSQL clean database initialization & seeds ready.');
   } catch (err: any) {
@@ -447,10 +451,27 @@ app.delete(['/api/users/:id', '/api/admin/users/:id'], async (req, res) => {
   }
 });
 
-// VENDORS & BANK DETAILS
-app.get(['/api/vendors', '/api/procurement/vendors'], async (_req, res) => {
+// VENDORS & BANK DETAILS (supports status query filter: ?status=pending, ?status=approved)
+app.get(['/api/vendors', '/api/procurement/vendors', '/api/admin/vendors'], async (req, res) => {
   try {
-    const dbRes = await gatewayPgPool.query('SELECT * FROM vendors ORDER BY id DESC');
+    const statusQuery = req.query.status ? String(req.query.status).toLowerCase() : null;
+    const searchQuery = req.query.search ? String(req.query.search).toLowerCase() : null;
+
+    let sql = 'SELECT * FROM vendors WHERE 1=1';
+    const params: any[] = [];
+
+    if (statusQuery && statusQuery !== 'all') {
+      params.push(statusQuery);
+      sql += ` AND LOWER(status) = $${params.length}`;
+    }
+
+    if (searchQuery) {
+      params.push(`%${searchQuery}%`);
+      sql += ` AND (LOWER(name) LIKE $${params.length} OR LOWER(email) LIKE $${params.length} OR LOWER(produce) LIKE $${params.length})`;
+    }
+
+    sql += ' ORDER BY id DESC';
+    const dbRes = await gatewayPgPool.query(sql, params);
     return res.json(dbRes.rows.map(formatVendorRow));
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch vendors', message: err?.message });
@@ -497,9 +518,30 @@ app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], asyn
       } catch {}
     }
 
-    return res.status(201).json(formatVendorRow(dbRes.rows[0]));
+    const formatted = formatVendorRow(dbRes.rows[0]);
+    broadcastRealtimeEvent({ type: 'VENDOR_REGISTERED', path: req.originalUrl || req.url, method: 'POST', data: formatted });
+    return res.status(201).json(formatted);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to save vendor', message: err?.message });
+  }
+});
+
+app.post(['/api/vendors/:id/status', '/api/admin/vendors/:id/status'], async (req, res) => {
+  const targetId = Number(req.params.id);
+  const { status, active } = req.body || {};
+  try {
+    const dbRes = await gatewayPgPool.query(
+      `UPDATE vendors SET status = COALESCE($1, status), active = COALESCE($2, active) WHERE id = $3 RETURNING *`,
+      [status, active, targetId]
+    );
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      const v = formatVendorRow(dbRes.rows[0]);
+      broadcastRealtimeEvent({ type: 'VENDOR_STATUS_UPDATED', path: req.originalUrl || req.url, method: 'POST', data: v });
+      return res.json(v);
+    }
+    return res.status(404).json({ error: 'Vendor not found' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update vendor status', message: err?.message });
   }
 });
 
@@ -727,9 +769,11 @@ app.post(['/api/products', '/api/admin/products'], async (req, res) => {
       [name, category, Number(price), Number(originalPrice || price), unit || '1 kg', image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400', isOrganic !== false, Number(stock || 100)]
     );
     const p = dbRes.rows[0];
-    return res.status(201).json({
+    const formattedProduct = {
       id: String(p.id), name: p.name, category: p.category, price: Number(p.price), originalPrice: Number(p.original_price), unit: p.unit, image: p.image, isOrganic: p.is_organic, stock: p.stock, rating: 4.8, active: true
-    });
+    };
+    broadcastRealtimeEvent({ type: 'PRODUCT_CREATED', path: req.originalUrl || req.url, method: 'POST', data: formattedProduct });
+    return res.status(201).json(formattedProduct);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to create product', message: err?.message });
   }
@@ -739,6 +783,7 @@ app.delete(['/api/products/:id', '/api/admin/products/:id'], async (req, res) =>
   const targetId = Number(req.params.id);
   try {
     await gatewayPgPool.query('DELETE FROM products WHERE id = $1', [targetId]);
+    broadcastRealtimeEvent({ type: 'PRODUCT_DELETED', path: req.originalUrl || req.url, method: 'DELETE', data: { deletedId: targetId } });
     return res.json({ success: true, message: 'Product deleted successfully', deletedId: targetId });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to delete product', message: err?.message });
@@ -767,6 +812,16 @@ app.post('/api/categories', async (req, res) => {
     return res.status(201).json({ id: c.id, name: c.name, icon: c.icon, active: true });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to create category', message: err?.message });
+  }
+});
+
+app.delete('/api/categories/:id', async (req, res) => {
+  const targetId = Number(req.params.id);
+  try {
+    await gatewayPgPool.query('DELETE FROM categories WHERE id = $1', [targetId]);
+    return res.json({ success: true, message: 'Category deleted successfully', deletedId: targetId });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to delete category', message: err?.message });
   }
 });
 
