@@ -464,23 +464,27 @@ export default function VendorsAdmin() {
               <div className="bg-accent/40 p-4 rounded-2xl border space-y-2 text-xs">
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground font-semibold">Account Holder Name:</span>
-                  <strong className="text-foreground font-bold">{bankModalVendor.accountHolderName || `${bankModalVendor.firstName} ${bankModalVendor.lastName}`}</strong>
+                  <strong className="text-foreground font-bold">{bankModalVendor.accountHolderName || `${bankModalVendor.firstName || ''} ${bankModalVendor.lastName || ''}`.trim() || bankModalVendor.name || "N/A"}</strong>
                 </div>
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground font-semibold">Bank Name:</span>
-                  <strong className="text-foreground font-bold">{bankModalVendor.bankName || "State Bank of India"}</strong>
+                  <strong className="text-foreground font-bold">{bankModalVendor.bankName || "Not Provided"}</strong>
                 </div>
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground font-semibold">Account Number:</span>
-                  <strong className="text-emerald-700 font-mono font-bold">{bankModalVendor.accountNumber || "30987654321"}</strong>
+                  <strong className="text-emerald-700 font-mono font-bold">{bankModalVendor.accountNumber || "Not Provided"}</strong>
                 </div>
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground font-semibold">IFSC Code:</span>
-                  <strong className="text-foreground font-mono font-bold">{bankModalVendor.ifscCode || "SBIN0004123"}</strong>
+                  <strong className="text-foreground font-mono font-bold">{bankModalVendor.ifscCode || "Not Provided"}</strong>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-muted-foreground font-semibold">Branch Name:</span>
+                  <strong className="text-foreground">{bankModalVendor.branchName || "Not Provided"}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground font-semibold">Branch Name:</span>
-                  <strong className="text-foreground">{bankModalVendor.branchName || "Main Agricultural Branch"}</strong>
+                  <span className="text-muted-foreground font-semibold">UPI ID:</span>
+                  <strong className="text-foreground font-mono">{bankModalVendor.upiId || "Not Provided"}</strong>
                 </div>
               </div>
 
