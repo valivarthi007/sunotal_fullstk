@@ -1,22 +1,17 @@
 locals {
   targets = [
-    "sunotal-api-gateway",
-    "sunotal-auth-service",
-    "sunotal-catalog-service",
-    "sunotal-delivery-service",
-    "sunotal-inventory-service",
-    "sunotal-notification-service",
-    "sunotal-operations-service",
-    "sunotal-order-service",
-    "sunotal-support-service",
-    "sunotal-user-service",
-    "sunotal-vendor-service",
-    "sunotal-admin-app",
-    "sunotal-delivery-app",
-    "sunotal-monitoring-app",
-    "sunotal-support-app",
-    "sunotal-user-app",
-    "sunotal-vendor-app"
+    "sunotal-gateway-service",
+    "sunotal-public-backend",
+    "sunotal-public-frontend",
+    "sunotal-admin-backend",
+    "sunotal-admin-frontend",
+    "sunotal-vendor-backend",
+    "sunotal-vendor-frontend",
+    "sunotal-delivery-backend",
+    "sunotal-delivery-frontend",
+    "sunotal-support-monitoring-backend",
+    "sunotal-support-frontend",
+    "sunotal-monitoring-frontend"
   ]
 }
 

@@ -91,10 +91,12 @@ jobs:
           (github.event.inputs.wait_for_stable != 'false')
         run: |
           CRITICAL_SERVICES=(
-            "sunotal-api-gateway"
-            "sunotal-auth-service"
-            "sunotal-catalog-service"
-            "sunotal-order-service"
+            "sunotal-gateway-service"
+            "sunotal-public-backend"
+            "sunotal-admin-backend"
+            "sunotal-vendor-backend"
+            "sunotal-delivery-backend"
+            "sunotal-support-monitoring-backend"
           )
 
           echo "⏳ Waiting up to 5 minutes for critical services to stabilise..."

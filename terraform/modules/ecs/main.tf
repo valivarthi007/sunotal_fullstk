@@ -112,23 +112,18 @@ resource "aws_iam_role_policy" "ecs_task_messaging" {
 # ─── 3. CloudWatch Log Groups ─────────────────────────────────────────────────
 locals {
   microservices = {
-    "api-gateway"          = { port = 5000, cpu = 512, memory = 1024, is_public = true,  health_path = "/healthz" }
-    "auth-service"         = { port = 5001, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "operations-service"   = { port = 5002, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "inventory-service"    = { port = 5003, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "delivery-service"     = { port = 5004, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "vendor-service"       = { port = 5005, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "support-service"      = { port = 5007, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "user-service"         = { port = 5008, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "catalog-service"      = { port = 5009, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "order-service"        = { port = 5010, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "notification-service" = { port = 5011, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "user-app"             = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
-    "admin-app"            = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
-    "vendor-app"           = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
-    "delivery-app"         = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
-    "support-app"          = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
-    "monitoring-app"       = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/healthz" }
+    "gateway-service"            = { port = 5000, cpu = 512, memory = 1024, is_public = true,  health_path = "/api/healthz" }
+    "public-backend"             = { port = 5009, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "admin-backend"              = { port = 5002, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "vendor-backend"             = { port = 5005, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "delivery-backend"           = { port = 5004, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "support-monitoring-backend" = { port = 5007, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
+    "public-frontend"            = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
+    "admin-frontend"             = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
+    "vendor-frontend"            = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
+    "delivery-frontend"          = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
+    "support-frontend"           = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
+    "monitoring-frontend"        = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
   }
 }
 
