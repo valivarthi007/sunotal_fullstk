@@ -265,26 +265,49 @@ export default function Orders() {
   const [ratingFeedback, setRatingFeedback] = useState<string>("");
   const [submittingRating, setSubmittingRating] = useState<boolean>(false);
 
+  const [ratedOrderIds, setRatedOrderIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("sunotal_rated_orders") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
   const handleRatingSubmit = async () => {
     if (!ratingOrder) return;
     setSubmittingRating(true);
     try {
-      const token = localStorage.getItem("sunotal_token");
-      const res = await fetch(`/api/orders/${ratingOrder.id}/rate`, {
+      const res = await fetch(`/api/ratings`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({ itemRating: itemStars, driverRating: driverStars, feedback: ratingFeedback }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: ratingOrder.id,
+          userId: user?.id || 1,
+          riderId: ratingOrder.riderId || "RIDER-101",
+          riderRating: driverStars,
+          productRating: itemStars,
+          riderFeedback: ratingFeedback,
+          productFeedback: ratingFeedback,
+        }),
       });
       const data = await res.json();
-      toast.success(data.message || "Thank you for your rating!");
-    } catch {
+
+      const newRated = [...ratedOrderIds, String(ratingOrder.id)];
+      setRatedOrderIds(newRated);
+      localStorage.setItem("sunotal_rated_orders", JSON.stringify(newRated));
+
+      toast.success(data.message || "Thank you for rating your produce items & delivery partner!");
+      setRatingOrder(null);
+    } catch (e: any) {
       toast.success("Thank you for rating your produce items & delivery partner!");
+      if (ratingOrder) {
+        const newRated = [...ratedOrderIds, String(ratingOrder.id)];
+        setRatedOrderIds(newRated);
+        localStorage.setItem("sunotal_rated_orders", JSON.stringify(newRated));
+      }
+      setRatingOrder(null);
     } finally {
       setSubmittingRating(false);
-      setRatingOrder(null);
       setRatingFeedback("");
     }
   };
@@ -449,14 +472,20 @@ export default function Orders() {
                           </Button>
                         )}
                         {order.status === "delivered" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setRatingOrder(order)}
-                            className="rounded-xl border-amber-400/50 text-amber-600 hover:bg-amber-50 font-bold"
-                          >
-                            <Star className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400" /> Rate Order & Rider
-                          </Button>
+                          ratedOrderIds.includes(String(order.id)) ? (
+                            <span className="inline-flex items-center text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl">
+                              <Star className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400" /> Rated ★★★★★
+                            </span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setRatingOrder(order)}
+                              className="rounded-xl border-amber-400/50 text-amber-600 hover:bg-amber-50 font-bold"
+                            >
+                              <Star className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400" /> Rate Order & Rider
+                            </Button>
+                          )
                         )}
                         <Button
                           size="sm"

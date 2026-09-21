@@ -72,6 +72,19 @@ variable "enable_s3_public_policy" {
   default     = false
 }
 
+variable "dev_mode" {
+  description = "Enable Free Trial / Cost-Optimization Dev Mode (runs single EC2 t3.medium with docker-compose instead of ECS Fargate)"
+  type        = bool
+  default     = true
+}
+
+variable "use_ec2_single_instance" {
+  description = "Deploy all 11 containers on a single t3.medium EC2 instance ($30/month) for free trial period"
+  type        = bool
+  default     = true
+}
+
+
 
 
 

@@ -31,7 +31,17 @@ output "live_subdomains" {
 
 output "ecs_cluster_name" {
   description = "ECS Fargate cluster name"
-  value       = module.ecs.cluster_name
+  value       = length(module.ecs) > 0 ? module.ecs[0].cluster_name : "N/A (Single EC2 Dev Mode Active)"
+}
+
+output "ec2_dev_public_ip" {
+  description = "Single EC2 t3.medium ($30/month) public IP address for free trial workspace"
+  value       = length(module.ec2_dev) > 0 ? module.ec2_dev[0].public_ip : "N/A"
+}
+
+output "single_instance_cost_target" {
+  description = "Estimated infrastructure cost for dev mode workspace"
+  value       = var.use_ec2_single_instance ? "~$30/month (t3.medium + docker-compose)" : "Production multi-AZ ECS Fargate"
 }
 
 output "sns_topic_arn" {
@@ -43,3 +53,4 @@ output "sqs_orders_url" {
   description = "SQS Orders queue URL"
   value       = module.sqs_sns.sqs_queue_url
 }
+

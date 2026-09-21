@@ -12,6 +12,11 @@ variable "private_subnet_ids" { type = list(string) }
 variable "db_security_group_id" { type = string }
 variable "tags" { type = map(string) }
 
+variable "dev_mode" {
+  type    = bool
+  default = false
+}
+
 variable "db_name" {
   type    = string
   default = "sunotal"
@@ -73,7 +78,7 @@ resource "aws_db_instance" "postgres" {
   storage_encrypted      = true
   engine                 = "postgres"
   engine_version         = "16.3"
-  instance_class         = "db.t4g.micro"
+  instance_class         = var.dev_mode ? "db.t3.micro" : "db.t4g.micro"
   db_name                = var.db_name
   username               = var.db_username
   password               = var.db_password

@@ -36,6 +36,10 @@ const RiderPayoutsAdmin = lazy(() => import("@/pages/admin/RiderPayouts").then((
 const WarehouseManager = lazy(() => import("@/pages/admin/WarehouseManager").then((m) => ({ default: m.WarehouseManager })));
 const ObservabilityDashboard = lazy(() => import("@/pages/admin/ObservabilityDashboard").then((m) => ({ default: m.ObservabilityDashboard })));
 const AdminLedger = lazy(() => import("@/pages/admin/Ledger").then((m) => ({ default: m.AdminLedger })));
+const OrdersBoard = lazy(() => import("@/pages/admin/OrdersBoard"));
+const DeliveryPartners = lazy(() => import("@/pages/admin/DeliveryPartners"));
+const AnalyticsAdmin = lazy(() => import("@/pages/admin/Analytics"));
+const CouponManager = lazy(() => import("@/pages/admin/CouponManager"));
 
 // Vendor & Delivery Portal Pages (Lazy Loaded)
 const VendorDashboard = lazy(() => import("@/pages/vendor/VendorDashboard"));
@@ -269,6 +273,14 @@ function SubdomainRouter() {
           <Route path="/admin/riders" component={RiderPayoutsAdmin} />
           <Route path="/users" component={UsersAdmin} />
           <Route path="/admin/users" component={UsersAdmin} />
+          <Route path="/orders-board" component={OrdersBoard} />
+          <Route path="/admin/orders-board" component={OrdersBoard} />
+          <Route path="/delivery-partners" component={DeliveryPartners} />
+          <Route path="/admin/delivery-partners" component={DeliveryPartners} />
+          <Route path="/analytics" component={AnalyticsAdmin} />
+          <Route path="/admin/analytics" component={AnalyticsAdmin} />
+          <Route path="/coupons" component={CouponManager} />
+          <Route path="/admin/coupons" component={CouponManager} />
           <Route path="/" component={AdminRouteGuard} />
           <Route component={AdminRouteGuard} />
         </Switch>

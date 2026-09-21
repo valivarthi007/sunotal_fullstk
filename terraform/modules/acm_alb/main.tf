@@ -54,6 +54,7 @@ resource "aws_lb" "main" {
   load_balancer_type = "application"
   security_groups    = [var.alb_security_group_id]
   subnets            = var.public_subnet_ids
+  idle_timeout       = 3600
 
   enable_deletion_protection = false
 
@@ -81,6 +82,12 @@ resource "aws_lb_target_group" "targets" {
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
+
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 86400
+    enabled         = true
+  }
 
   health_check {
     enabled             = true

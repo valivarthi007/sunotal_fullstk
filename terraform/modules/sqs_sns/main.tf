@@ -50,12 +50,54 @@ resource "aws_sqs_queue_policy" "orders_queue_policy" {
   })
 }
 
+# Rider Assignment Queue
+resource "aws_sqs_queue" "rider_assignment_queue" {
+  name                       = "sunotal-rider-assignment-queue"
+  message_retention_seconds  = 86400
+  visibility_timeout_seconds = 30
+  receive_wait_time_seconds  = 20
+  tags                       = merge(var.tags, { Name = "sunotal-rider-assignment-queue" })
+}
+
+# Rating Events Queue
+resource "aws_sqs_queue" "rating_events_queue" {
+  name                       = "sunotal-rating-events-queue"
+  message_retention_seconds  = 86400
+  visibility_timeout_seconds = 30
+  receive_wait_time_seconds  = 20
+  tags                       = merge(var.tags, { Name = "sunotal-rating-events-queue" })
+}
+
+# Notification Queue
+resource "aws_sqs_queue" "notification_queue" {
+  name                       = "sunotal-notification-queue"
+  message_retention_seconds  = 86400
+  visibility_timeout_seconds = 30
+  receive_wait_time_seconds  = 20
+  tags                       = merge(var.tags, { Name = "sunotal-notification-queue" })
+}
+
 resource "aws_sns_topic_subscription" "orders_sub" {
   topic_arn = aws_sns_topic.events.arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.orders_queue.arn
 }
 
+resource "aws_sns_topic_subscription" "rider_sub" {
+  topic_arn = aws_sns_topic.events.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.rider_assignment_queue.arn
+}
+
+resource "aws_sns_topic_subscription" "rating_sub" {
+  topic_arn = aws_sns_topic.events.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.rating_events_queue.arn
+}
+
 output "sns_topic_arn" { value = aws_sns_topic.events.arn }
 output "sqs_queue_url" { value = aws_sqs_queue.orders_queue.url }
 output "sqs_dlq_url"   { value = aws_sqs_queue.orders_dlq.url }
+output "rider_queue_url" { value = aws_sqs_queue.rider_assignment_queue.url }
+output "rating_queue_url" { value = aws_sqs_queue.rating_events_queue.url }
+output "notification_queue_url" { value = aws_sqs_queue.notification_queue.url }

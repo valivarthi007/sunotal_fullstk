@@ -1,0 +1,28 @@
+name: Database Migration Runner
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'gateway-service/src/index.ts'
+      - '.github/workflows/db-migrate.yml'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run Schema Migration Check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd gateway-service
+          npm install --no-audit
+          npm run build

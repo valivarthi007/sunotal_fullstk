@@ -20,37 +20,7 @@ const pool = new pg_1.Pool({
     connectionTimeoutMillis: 5000,
     ssl: isRds ? { rejectUnauthorized: false } : undefined,
 });
-const DEFAULT_CATEGORIES = [
-    { id: 1, name: "Vegetables", icon: "🥦", active: true },
-    { id: 2, name: "Fruits", icon: "🍎", active: true },
-    { id: 3, name: "Dairy", icon: "🥛", active: true },
-    { id: 4, name: "Dry Fruits", icon: "🥜", active: true },
-    { id: 5, name: "Grains", icon: "🌾", active: true },
-    { id: 6, name: "Organic Herbs", icon: "🌿", active: true },
-    { id: 7, name: "Cold Pressed Oils", icon: "🫒", active: true },
-    { id: 8, name: "Fresh Bakery", icon: "🍞", active: true }
-];
-const DEFAULT_PRODUCTS = [
-    { id: 1, name: "Fresh Spinach", category: "Vegetables", price: 40, originalPrice: 50, unit: "1 kg", image: "https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=400", isOrganic: true, stock: 100, rating: 4.8, active: true },
-    { id: 2, name: "Organic Tomatoes", category: "Vegetables", price: 35, originalPrice: 45, unit: "1 kg", image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400", isOrganic: true, stock: 150, rating: 4.9, active: true },
-    { id: 3, name: "Alphonso Mangoes", category: "Fruits", price: 350, originalPrice: 450, unit: "1 Dozen", image: "https://images.unsplash.com/photo-1553279768-865429fa0078?w=400", isOrganic: true, stock: 50, rating: 5.0, active: true },
-    { id: 4, name: "Fresh Milk", category: "Dairy", price: 60, originalPrice: 65, unit: "1 L", image: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400", isOrganic: false, stock: 200, rating: 4.7, active: true },
-    { id: 5, name: "Whole Almonds", category: "Dry Fruits", price: 450, originalPrice: 550, unit: "500g", image: "https://images.unsplash.com/photo-1508061252966-173859dbab0b?w=400", isOrganic: true, stock: 80, rating: 4.9, active: true },
-    { id: 6, name: "Basmati Rice", category: "Grains", price: 120, originalPrice: 150, unit: "1 kg", image: "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400", isOrganic: true, stock: 120, rating: 4.9, active: true },
-    { id: 7, name: "Cold Pressed Coconut Oil", category: "Cold Pressed Oils", price: 280, originalPrice: 350, unit: "500ml", image: "https://images.unsplash.com/photo-1612198188258-038202970591?w=400", isOrganic: true, stock: 60, rating: 5.0, active: true },
-    { id: 8, name: "Multigrain Bread", category: "Fresh Bakery", price: 50, originalPrice: 60, unit: "400g", image: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400", isOrganic: true, stock: 90, rating: 4.8, active: true }
-];
-const DEFAULT_PRODUCT_DEFINITIONS = [
-    { id: 1, name: "Fresh Spinach", category: "Vegetables", defaultUnit: "1 kg" },
-    { id: 2, name: "Organic Tomatoes", category: "Vegetables", defaultUnit: "1 kg" },
-    { id: 3, name: "Alphonso Mangoes", category: "Fruits", defaultUnit: "1 Dozen" },
-    { id: 4, name: "Fresh Milk", category: "Dairy", defaultUnit: "1 L" },
-    { id: 5, name: "Whole Almonds", category: "Dry Fruits", defaultUnit: "500g" },
-    { id: 6, name: "Basmati Rice", category: "Grains", defaultUnit: "1 kg" },
-    { id: 7, name: "Cold Pressed Coconut Oil", category: "Cold Pressed Oils", defaultUnit: "500ml" },
-    { id: 8, name: "Multigrain Bread", category: "Fresh Bakery", defaultUnit: "400g" }
-];
-// Auto-initialize PostgreSQL Database Schema
+// Auto-initialize PostgreSQL Database Schema (No static seed overrides)
 async function initDb() {
     try {
         await pool.query(`
@@ -58,7 +28,7 @@ async function initDb() {
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL UNIQUE,
         slug VARCHAR(255),
-        icon VARCHAR(255),
+        icon VARCHAR(255) DEFAULT '📦',
         description TEXT,
         active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -76,38 +46,54 @@ async function initDb() {
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         category VARCHAR(255) NOT NULL,
-        price NUMERIC(10, 2) NOT NULL,
+        price NUMERIC(10, 2) NOT NULL DEFAULT 0,
         original_price NUMERIC(10, 2),
         unit VARCHAR(50) DEFAULT '1 kg',
         image TEXT,
         is_organic BOOLEAN DEFAULT TRUE,
+        badge VARCHAR(100),
+        description TEXT,
+        vendor_id VARCHAR(255),
+        product_code VARCHAR(100),
         stock INT DEFAULT 100,
         rating NUMERIC(3, 2) DEFAULT 5.0,
+        status VARCHAR(50) DEFAULT 'active',
         active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-        for (const cat of DEFAULT_CATEGORIES) {
-            await pool.query(`INSERT INTO categories (id, name, icon, active) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (name) DO NOTHING`, [cat.id, cat.name, cat.icon, true]).catch(() => null);
+        // Safe migrations — add missing columns without dropping existing data
+        const safeAlters = [
+            `ALTER TABLE products ADD COLUMN IF NOT EXISTS badge VARCHAR(100)`,
+            `ALTER TABLE products ADD COLUMN IF NOT EXISTS description TEXT`,
+            `ALTER TABLE products ADD COLUMN IF NOT EXISTS vendor_id VARCHAR(255)`,
+            `ALTER TABLE products ADD COLUMN IF NOT EXISTS product_code VARCHAR(100)`,
+            `ALTER TABLE products ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`,
+            `ALTER TABLE categories ADD COLUMN IF NOT EXISTS description TEXT`,
+            `ALTER TABLE categories ADD COLUMN IF NOT EXISTS slug VARCHAR(255)`,
+        ];
+        for (const sql of safeAlters) {
+            try {
+                await pool.query(sql);
+            }
+            catch { }
         }
-        for (const def of DEFAULT_PRODUCT_DEFINITIONS) {
-            await pool.query(`INSERT INTO product_definitions (id, name, category, default_unit) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (id) DO NOTHING`, [def.id, def.name, def.category, def.defaultUnit]).catch(() => null);
+        // Add indexes for fast queries
+        const indexes = [
+            `CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)`,
+            `CREATE INDEX IF NOT EXISTS idx_products_active ON products(active)`,
+            `CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)`,
+            `CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name)`,
+        ];
+        for (const idx of indexes) {
+            try {
+                await pool.query(idx);
+            }
+            catch { }
         }
         const pCountRes = await pool.query('SELECT COUNT(*) FROM products').catch(() => null);
         const existingCount = Number(pCountRes?.rows?.[0]?.count || 0);
-        if (existingCount === 0) {
-            for (const p of DEFAULT_PRODUCTS) {
-                await pool.query(`INSERT INTO products (id, name, category, price, original_price, unit, image, is_organic, stock, rating, active)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-           ON CONFLICT (id) DO NOTHING`, [p.id, p.name, p.category, p.price, p.originalPrice, p.unit, p.image, p.isOrganic, p.stock, p.rating, true]).catch(() => null);
-            }
-            console.log('🐘 [catalog-service] PostgreSQL database initialized with seed products.');
-        }
-        else {
-            console.log(`🐘 [catalog-service] PostgreSQL database connected with ${existingCount} live product records.`);
-        }
+        console.log(`🐘 [catalog-service] PostgreSQL database ready with ${existingCount} live product records.`);
     }
     catch (err) {
         console.warn('⚠️ [catalog-service] DB init warning:', err?.message || err);
@@ -150,12 +136,18 @@ app.get('/api/products', async (req, res) => {
             category: p.category,
             price: Number(p.price),
             originalPrice: Number(p.original_price || p.price),
-            unit: p.unit,
+            unit: p.unit || '1 kg',
             image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
-            isOrganic: p.is_organic,
-            stock: p.stock,
+            isOrganic: p.is_organic ?? true,
+            badge: p.badge || null,
+            description: p.description || '',
+            vendorId: p.vendor_id || null,
+            productCode: p.product_code || null,
+            stock: p.stock ?? 100,
             rating: Number(p.rating || 5.0),
-            active: p.active ?? true
+            status: p.status || 'active',
+            active: p.active ?? true,
+            createdAt: p.created_at ? new Date(p.created_at).toISOString() : new Date().toISOString(),
         }));
         return res.json(formatted);
     }
@@ -191,30 +183,47 @@ app.get('/api/products/:id', async (req, res) => {
     }
 });
 // Create Product — Direct PostgreSQL SQL Querying
-app.post('/api/products', async (req, res) => {
-    const { name, category, price, originalPrice, unit, image } = req.body;
+app.post(['/api/products', '/api/admin/products'], async (req, res) => {
+    const { name, category, price, originalPrice, unit, image, isOrganic, badge, description, vendorId, productCode, stock, rating, status } = req.body;
     if (!name || !category || price === undefined) {
         return res.status(400).json({ error: 'Name, category, and price required' });
     }
-    const numPrice = Number(price);
-    const numOrigPrice = Number(originalPrice || price);
-    const prodUnit = unit || '1 kg';
-    const prodImg = image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400';
     try {
-        const dbRes = await pool.query(`INSERT INTO products (name, category, price, original_price, unit, image, is_organic, stock, rating, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`, [name, category, numPrice, numOrigPrice, prodUnit, prodImg, true, 100, 5.0, true]);
-        const newP = dbRes.rows[0];
+        const dbRes = await pool.query(`INSERT INTO products (name, category, price, original_price, unit, image, is_organic, badge, description, vendor_id, product_code, stock, rating, status, active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true) RETURNING *`, [
+            String(name).trim(),
+            String(category).trim(),
+            Number(price),
+            Number(originalPrice || price),
+            unit || '1 kg',
+            image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
+            isOrganic !== false,
+            badge || null,
+            description || null,
+            vendorId || null,
+            productCode || null,
+            Number(stock || 100),
+            Number(rating || 5.0),
+            status || 'active',
+        ]);
+        const p = dbRes.rows[0];
         return res.status(201).json({
-            id: String(newP.id),
-            name: newP.name,
-            category: newP.category,
-            price: Number(newP.price),
-            originalPrice: Number(newP.original_price),
-            unit: newP.unit,
-            image: newP.image,
-            isOrganic: true,
-            stock: 100,
-            rating: 5.0
+            id: String(p.id),
+            name: p.name,
+            category: p.category,
+            price: Number(p.price),
+            originalPrice: Number(p.original_price || p.price),
+            unit: p.unit,
+            image: p.image,
+            isOrganic: p.is_organic,
+            badge: p.badge,
+            description: p.description,
+            vendorId: p.vendor_id,
+            stock: p.stock,
+            rating: Number(p.rating),
+            status: p.status,
+            active: true,
+            createdAt: p.created_at ? new Date(p.created_at).toISOString() : new Date().toISOString(),
         });
     }
     catch (err) {
@@ -319,7 +328,7 @@ app.delete('/api/product-definitions/:id', async (req, res) => {
 // Update Product — Direct PostgreSQL SQL Querying
 app.put(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
     const targetId = Number(req.params.id);
-    const { name, category, price, originalPrice, unit, image, active } = req.body;
+    const { name, category, price, originalPrice, unit, image, isOrganic, badge, description, vendorId, stock, rating, status, active } = req.body;
     try {
         const dbRes = await pool.query(`UPDATE products SET
         name = COALESCE($1, name),
@@ -328,12 +337,25 @@ app.put(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
         original_price = COALESCE($4, original_price),
         unit = COALESCE($5, unit),
         image = COALESCE($6, image),
-        active = COALESCE($7, active)
-       WHERE id = $8 RETURNING *`, [name, category, price !== undefined ? Number(price) : null, originalPrice !== undefined ? Number(originalPrice) : null, unit, image, active, targetId]);
+        is_organic = COALESCE($7, is_organic),
+        badge = COALESCE($8, badge),
+        description = COALESCE($9, description),
+        vendor_id = COALESCE($10, vendor_id),
+        stock = COALESCE($11, stock),
+        rating = COALESCE($12, rating),
+        status = COALESCE($13, status),
+        active = COALESCE($14, active)
+       WHERE id = $15 RETURNING *`, [name, category, price !== undefined ? Number(price) : null, originalPrice !== undefined ? Number(originalPrice) : null, unit, image, isOrganic, badge, description, vendorId, stock !== undefined ? Number(stock) : null, rating !== undefined ? Number(rating) : null, status, active, targetId]);
         if (!dbRes.rows || dbRes.rows.length === 0)
             return res.status(404).json({ error: 'Product not found' });
         const p = dbRes.rows[0];
-        return res.json({ id: String(p.id), name: p.name, category: p.category, price: Number(p.price), active: p.active });
+        return res.json({
+            id: String(p.id), name: p.name, category: p.category,
+            price: Number(p.price), originalPrice: Number(p.original_price || p.price),
+            unit: p.unit, image: p.image, isOrganic: p.is_organic,
+            badge: p.badge, description: p.description, vendorId: p.vendor_id,
+            stock: p.stock, rating: Number(p.rating), status: p.status, active: p.active,
+        });
     }
     catch (err) {
         return res.status(500).json({ error: 'Failed to update product', message: err?.message });

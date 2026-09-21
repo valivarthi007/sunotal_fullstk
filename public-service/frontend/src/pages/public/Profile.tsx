@@ -36,6 +36,7 @@ import {
 import { useLocationState } from "@/lib/location-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { getApiUrl } from "@/lib/api-client";
 
 interface Address {
   id: string;
@@ -115,40 +116,99 @@ export default function Profile() {
 
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Load user data, orders & grievances
+  // Load user data, addresses, orders & grievances
   useEffect(() => {
     if (!user) return;
 
-    // Load addresses
-    try {
-      const raw = localStorage.getItem(`user_addresses_${user.id}`) || "[]";
-      setAddresses(JSON.parse(raw));
-    } catch {
-      setAddresses([]);
-    }
+    // Fetch addresses from backend API
+    const fetchAddresses = async () => {
+      try {
+        const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+        const res = await fetch(getApiUrl(`/api/users/${user.id}/addresses`), {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            const mapped: Address[] = data.map((a: any) => ({
+              id: String(a.id),
+              label: a.label || "Home",
+              line1: a.streetAddress || "",
+              line2: a.landmark || "",
+              city: a.city || "",
+              phone: a.phone || ""
+            }));
+            setAddresses(mapped);
+            localStorage.setItem(`user_addresses_${user.id}`, JSON.stringify(mapped));
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Backend address fetch failed, using local storage", e);
+      }
+      try {
+        const raw = localStorage.getItem(`user_addresses_${user.id}`) || "[]";
+        setAddresses(JSON.parse(raw));
+      } catch {
+        setAddresses([]);
+      }
+    };
+    fetchAddresses();
 
-    // Load orders
-    try {
-      const storedOrders = localStorage.getItem(STORAGE_ORDERS_KEY);
-      if (storedOrders) {
-        const parsed = JSON.parse(storedOrders);
-        setOrders(Array.isArray(parsed) ? parsed : []);
-      } else {
+    // Fetch user orders from backend API
+    const fetchOrders = async () => {
+      try {
+        const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+        const res = await fetch(getApiUrl(`/api/orders/user/${user.id}`), {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : (data.orders || []);
+          if (list.length > 0) {
+            const mappedOrders: Order[] = list.map((o: any) => ({
+              id: String(o.id || o.orderId || `ORD-${o.id}`),
+              date: o.created_at ? new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "Recently",
+              items: (o.items || []).map((item: any, idx: number) => ({
+                id: item.id || idx,
+                name: item.name || item.product_name || "Farm Produce",
+                unit: item.unit || "kg",
+                price: Number(item.price || item.unit_price || 0),
+                quantity: Number(item.quantity || 1)
+              })),
+              totalPrice: Number(o.total_amount || o.totalPrice || 0),
+              status: (o.status || "placed").toLowerCase().replace(/ /g, "_"),
+              estimatedDelivery: o.estimated_delivery || "15 mins",
+              deliveryAddress: o.delivery_address || o.deliveryAddress || "Home Destination",
+              city: o.city || "Bengaluru",
+              state: o.state || "Karnataka",
+              pincode: o.pincode || "560001",
+              paymentMethod: o.payment_method || "UPI",
+              driverName: o.driver_name || o.driverName,
+              driverPhone: o.driver_phone || o.driverPhone
+            }));
+            setOrders(mappedOrders);
+            localStorage.setItem(STORAGE_ORDERS_KEY, JSON.stringify(mappedOrders));
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Backend orders fetch failed, using local storage", err);
+      }
+      try {
+        const storedOrders = localStorage.getItem(STORAGE_ORDERS_KEY);
+        setOrders(storedOrders ? JSON.parse(storedOrders) : []);
+      } catch {
         setOrders([]);
-        localStorage.setItem(STORAGE_ORDERS_KEY, JSON.stringify([]));
       }
+    };
+    fetchOrders();
 
-      // Load grievances
+    // Load grievances
+    try {
       const storedGrievances = localStorage.getItem(STORAGE_GRIEVANCES_KEY);
-      if (storedGrievances) {
-        const parsedG = JSON.parse(storedGrievances);
-        setGrievances(Array.isArray(parsedG) ? parsedG : []);
-      } else {
-        setGrievances([]);
-      }
-    } catch (e) {
-      console.error(e);
-      setOrders([]);
+      setGrievances(storedGrievances ? JSON.parse(storedGrievances) : []);
+    } catch {
       setGrievances([]);
     }
   }, [user]);
@@ -159,7 +219,7 @@ export default function Profile() {
     setAddresses(list);
   }
 
-  const handleSaveAddr = (addr: Address) => {
+  const handleSaveAddr = async (addr: Address) => {
     if (!addr.label || addr.label.trim().length < 2) {
       toast.error("Address label is required (e.g. Home, Office)");
       return;
@@ -177,6 +237,45 @@ export default function Profile() {
       return;
     }
 
+    if (addresses.length >= 10 && !addresses.some((a) => a.id === addr.id)) {
+      toast.error("Maximum limit of 10 addresses reached. Please delete an existing address.");
+      return;
+    }
+
+    // Try backend sync if user exists
+    if (user) {
+      const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+      const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const isExisting = addresses.some((a) => a.id === addr.id) && !isNaN(Number(addr.id));
+
+      try {
+        const url = isExisting
+          ? getApiUrl(`/api/users/${user.id}/addresses/${addr.id}`)
+          : getApiUrl(`/api/users/${user.id}/addresses`);
+        const method = isExisting ? "PUT" : "POST";
+        const body = JSON.stringify({
+          label: addr.label,
+          receiverName: user.name || "Customer",
+          phone: addr.phone || user.phone || "9999999999",
+          streetAddress: addr.line1,
+          landmark: addr.line2 || "",
+          city: addr.city,
+          state: "State",
+          pincode: "560001"
+        });
+
+        const res = await fetch(url, { method, headers, body });
+        if (res.ok) {
+          const created = await res.json();
+          if (created.id) {
+            addr.id = String(created.id);
+          }
+        }
+      } catch (err) {
+        console.warn("Backend address save failed, fallback to local state", err);
+      }
+    }
+
     const next = addresses.some((a) => a.id === addr.id)
       ? addresses.map((a) => (a.id === addr.id ? addr : a))
       : [...addresses, addr];
@@ -185,7 +284,18 @@ export default function Profile() {
     toast.success("Address saved successfully");
   };
 
-  const handleDeleteAddr = (id: string) => {
+  const handleDeleteAddr = async (id: string) => {
+    if (user && !isNaN(Number(id))) {
+      try {
+        const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+        await fetch(getApiUrl(`/api/users/${user.id}/addresses/${id}`), {
+          method: "DELETE",
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+      } catch (err) {
+        console.warn("Backend address delete failed", err);
+      }
+    }
     const next = addresses.filter((a) => a.id !== id);
     persistAddresses(next);
     toast.success("Address removed");

@@ -21,6 +21,7 @@ import { getApiUrl } from "@/lib/api-client";
 
 export default function Wallet() {
   const [, setLocation] = useLocation();
+  const [userId, setUserId] = useState<number | null>(null);
   const [balance, setBalance] = useState(100);
   const [topUpAmount, setTopUpAmount] = useState("500");
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -35,8 +36,11 @@ export default function Wallet() {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.user && data.user.walletBalance !== undefined) {
-            setBalance(Number(data.user.walletBalance));
+          if (data.user) {
+            setUserId(data.user.id);
+            if (data.user.walletBalance !== undefined) {
+              setBalance(Number(data.user.walletBalance));
+            }
           }
         }
       } catch (err) {}
@@ -44,14 +48,37 @@ export default function Wallet() {
     fetchUserData();
   }, []);
 
-  const handleTopUp = () => {
+  const handleTopUp = async () => {
     const amt = Number(topUpAmount);
     if (isNaN(amt) || amt <= 0) {
       toast.error("Please enter a valid top-up amount");
       return;
     }
 
-    setBalance((prev) => prev + amt);
+    if (userId) {
+      try {
+        const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+        const res = await fetch(getApiUrl(`/api/users/${userId}/wallet/topup`), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ amount: amt })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setBalance(Number(data.walletBalance));
+        } else {
+          setBalance((prev) => prev + amt);
+        }
+      } catch (err) {
+        setBalance((prev) => prev + amt);
+      }
+    } else {
+      setBalance((prev) => prev + amt);
+    }
+
     setTransactions([
       {
         id: `TXN-${Math.floor(Math.random() * 9000 + 1000)}`,

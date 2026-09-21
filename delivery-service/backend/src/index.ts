@@ -96,6 +96,16 @@ async function initDb() {
       `ALTER TABLE rider_payouts ADD COLUMN IF NOT EXISTS total_distance_km NUMERIC(10,2) DEFAULT 0`,
       `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS aadhar VARCHAR(50)`,
       `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS license_number VARCHAR(100)`,
+      `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS avg_rating NUMERIC(3,2) DEFAULT 5.0`,
+      `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS total_ratings INT DEFAULT 0`,
+      `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS total_deliveries INT DEFAULT 0`,
+      `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS bank_name VARCHAR(255)`,
+      `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS account_number VARCHAR(100)`,
+      `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS ifsc_code VARCHAR(50)`,
+      `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS account_holder_name VARCHAR(255)`,
+      `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100)`,
+      `ALTER TABLE delivery_orders ADD COLUMN IF NOT EXISTS delivery_otp VARCHAR(10)`,
+      `ALTER TABLE delivery_orders ADD COLUMN IF NOT EXISTS order_id INT`,
     ];
     for (const sql of safeAlters) {
       try { await pool.query(sql); } catch {}
@@ -314,7 +324,7 @@ app.post('/api/delivery/orders/:id/accept', async (req, res) => {
   }
 });
 
-// Rider Stage Progression — Direct PostgreSQL SQL Mutation
+// Rider Stage Progression — Direct PostgreSQL SQL Mutation & Automatic Inventory Deduction
 app.put('/api/delivery/orders/:id/stage', async (req, res) => {
   const { stage } = req.body;
   const orderId = req.params.id;
@@ -327,6 +337,33 @@ app.put('/api/delivery/orders/:id/stage', async (req, res) => {
 
     if (!dbRes.rows || dbRes.rows.length === 0) {
       return res.status(404).json({ error: 'Delivery order not found' });
+    }
+
+    // Automatic product and warehouse inventory deduction when rider picks up produce from dark store
+    if (stage === 'picked_up' || stage === 'at_warehouse' || stage === 'accepted') {
+      try {
+        const itemsRes = await pool.query(
+          `SELECT product_id, product_name, quantity FROM order_items WHERE order_id = $1 OR order_id = (SELECT id FROM orders WHERE id::text = $1 OR order_number = $1 LIMIT 1)`,
+          [orderId]
+        );
+        for (const item of itemsRes.rows || []) {
+          const qty = Number(item.quantity || 1);
+          const pId = item.product_id;
+          const pName = item.product_name;
+          if (pId || pName) {
+            await pool.query(
+              `UPDATE inventory SET quantity = GREATEST(0, quantity - $1), status = CASE WHEN (quantity - $1) <= 0 THEN 'out_of_stock' ELSE 'in_stock' END, updated_at = NOW() WHERE product_id = $2 OR LOWER(product_name) = LOWER($3)`,
+              [qty, pId || 0, (pName || '').toLowerCase()]
+            );
+            await pool.query(
+              `UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2 OR LOWER(name) = LOWER($3)`,
+              [qty, pId || 0, (pName || '').toLowerCase()]
+            );
+          }
+        }
+      } catch (invErr: any) {
+        console.warn('⚠️ Inventory deduction on rider stage update warning:', invErr?.message);
+      }
     }
 
     const r = dbRes.rows[0];
@@ -420,7 +457,7 @@ app.post('/api/delivery/login', async (req, res) => {
 
 // Rider Registration Endpoint — Direct PostgreSQL SQL Mutation
 app.post('/api/delivery/register', async (req, res) => {
-  const { name, phone, email, city, vehicle, aadhar, licenseNumber } = req.body;
+  const { name, phone, email, city, vehicle, aadhar, licenseNumber, bankName, accountNumber, ifscCode, accountHolderName, upiId } = req.body;
   if (!name || (!phone && !email)) {
     return res.status(400).json({ error: 'Name and phone or email required' });
   }
@@ -434,9 +471,13 @@ app.post('/api/delivery/register', async (req, res) => {
 
   try {
     await pool.query(
-      `INSERT INTO delivery_riders (id, name, phone, email, city, vehicle, status, wallet_balance, aadhar, license_number)
-       VALUES ($1, $2, $3, $4, $5, $6, 'APPROVED', 0.00, $7, $8)`,
-      [riderId, rName, rPhone || null, rEmail || null, rCity, rVehicle, aadhar || null, licenseNumber || null]
+      `INSERT INTO delivery_riders (id, name, phone, email, city, vehicle, status, wallet_balance, aadhar, license_number, bank_name, account_number, ifsc_code, account_holder_name, upi_id)
+       VALUES ($1, $2, $3, $4, $5, $6, 'APPROVED', 0.00, $7, $8, $9, $10, $11, $12, $13)`,
+      [
+        riderId, rName, rPhone || null, rEmail || null, rCity, rVehicle,
+        aadhar || null, licenseNumber || null,
+        bankName || null, accountNumber || null, ifscCode || null, accountHolderName || null, upiId || null
+      ]
     );
 
     return res.status(201).json({
@@ -451,7 +492,12 @@ app.post('/api/delivery/register', async (req, res) => {
         city: rCity,
         vehicle: rVehicle,
         status: 'APPROVED',
-        walletBalance: 0.00
+        walletBalance: 0.00,
+        bankName,
+        accountNumber,
+        ifscCode,
+        accountHolderName,
+        upiId
       }
     });
   } catch (err: any) {
@@ -528,6 +574,22 @@ app.post('/api/delivery/payout', async (req, res) => {
   }
 });
 
+// Generate Handover OTP Code
+app.post('/api/delivery/otp/generate', async (req, res) => {
+  const { orderId } = req.body;
+  if (!orderId) {
+    return res.status(400).json({ error: 'orderId is required' });
+  }
+  const otp = Math.floor(1000 + Math.random() * 9000).toString();
+  try {
+    await pool.query('UPDATE delivery_orders SET delivery_otp = $1 WHERE id = $2 OR order_number = $2', [otp, String(orderId)]);
+    await pool.query('UPDATE orders SET delivery_otp = $1 WHERE id::text = $2 OR order_number = $2', [otp, String(orderId)]).catch(() => {});
+    return res.json({ success: true, orderId, otp });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to generate OTP', message: err?.message });
+  }
+});
+
 // Handover OTP Verification & Rider Payout Credit
 app.post('/api/rider/verify-handover-otp', async (req, res) => {
   const { orderId, inputOtp, expectedOtp, riderId } = req.body;
@@ -557,22 +619,28 @@ app.get('/api/delivery/stats', async (req, res) => {
   const riderId = String(req.query.riderId || '');
 
   try {
-    const dbRes = await pool.query("SELECT COUNT(*) as total_deliveries, COALESCE(SUM(payout_credit), 0) as total_earnings FROM delivery_orders WHERE status = 'delivered' AND ($1 = '' OR rider_id = $1)", [riderId]);
-    const row = dbRes.rows[0];
+    const [dRes, rRes] = await Promise.all([
+      pool.query("SELECT COUNT(*) as total_deliveries, COALESCE(SUM(payout_credit), 0) as total_earnings FROM delivery_orders WHERE status = 'delivered' AND ($1 = '' OR rider_id = $1)", [riderId]),
+      riderId ? pool.query('SELECT avg_rating, status FROM delivery_riders WHERE id = $1', [riderId]) : Promise.resolve({ rows: [] })
+    ]);
+    const row = dRes.rows[0];
+    const riderRow = rRes.rows[0];
+    const rating = riderRow?.avg_rating ? Number(riderRow.avg_rating) : 5.0;
+    const onlineStatus = riderRow?.status || 'ONLINE';
 
     return res.json({
       success: true,
       totalDeliveries: Number(row.total_deliveries || 0),
       todayEarnings: Number(row.total_earnings || 0),
-      rating: 4.9,
-      onlineStatus: 'ONLINE'
+      rating,
+      onlineStatus
     });
   } catch (err: any) {
     return res.json({
       success: true,
       totalDeliveries: 0,
       todayEarnings: 0,
-      rating: 4.9,
+      rating: 5.0,
       onlineStatus: 'ONLINE'
     });
   }

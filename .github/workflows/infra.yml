@@ -25,6 +25,14 @@ on:
           - plan
           - apply
           - destroy
+      deployment_mode:
+        description: 'Target Infrastructure Architecture (EC2 vs ECS Fargate)'
+        required: true
+        default: 'ec2_single_instance'
+        type: choice
+        options:
+          - ec2_single_instance
+          - ecs_fargate_production
 
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
@@ -35,7 +43,7 @@ env:
 
 jobs:
   terraform_provision:
-    name: Terraform ${{ github.event.inputs.action || 'plan' }}
+    name: Terraform ${{ github.event.inputs.action || 'plan' }} (${{ github.event.inputs.deployment_mode || 'ec2_single_instance' }})
     runs-on: ubuntu-latest
     # Protect destroy from accidental runs — only allow via workflow_dispatch
     if: |
@@ -86,10 +94,20 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
+          USE_EC2="true"
+          DEV_MODE="true"
+          if [ "${{ github.event.inputs.deployment_mode }}" = "ecs_fargate_production" ]; then
+            USE_EC2="false"
+            DEV_MODE="false"
+          fi
+
+          echo "🚀 Planning for deployment mode: ${{ github.event.inputs.deployment_mode || 'ec2_single_instance' }} (use_ec2_single_instance=${USE_EC2})"
           terraform plan \
             -input=false \
             -no-color \
             -lock-timeout=60s \
+            -var="use_ec2_single_instance=${USE_EC2}" \
+            -var="dev_mode=${DEV_MODE}" \
             -var="jwt_secret=${{ secrets.JWT_SECRET || 'sunotal_jwt_secret_2026_super_secure' }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
             -out=tfplan
@@ -111,6 +129,7 @@ jobs:
             | Init   | ${{ steps.init.outcome }} |
             | Validate | ${{ steps.validate.outcome }} |
             | Plan | ${{ steps.plan.outcome }} |
+            | Target Mode | \`${{ github.event.inputs.deployment_mode || 'ec2_single_instance' }}\` |
 
             > Pushed by @${{ github.actor }} — Merge to \`main\` and run **workflow_dispatch → apply** to provision.`;
 
@@ -128,7 +147,7 @@ jobs:
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.action == 'apply'
         run: |
-          echo "🏗️ Applying Terraform plan to AWS..."
+          echo "🏗️ Applying Terraform plan (${{ github.event.inputs.deployment_mode || 'ec2_single_instance' }}) to AWS..."
           terraform apply \
             -input=false \
             -auto-approve \
@@ -144,11 +163,20 @@ jobs:
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.action == 'destroy'
         run: |
-          echo "💥 Destroying ALL infrastructure — this is irreversible!"
+          USE_EC2="true"
+          DEV_MODE="true"
+          if [ "${{ github.event.inputs.deployment_mode }}" = "ecs_fargate_production" ]; then
+            USE_EC2="false"
+            DEV_MODE="false"
+          fi
+
+          echo "💥 Destroying infrastructure (${{ github.event.inputs.deployment_mode || 'ec2_single_instance' }}) — this is irreversible!"
           terraform destroy \
             -input=false \
             -auto-approve \
             -lock-timeout=120s \
+            -var="use_ec2_single_instance=${USE_EC2}" \
+            -var="dev_mode=${DEV_MODE}" \
             -var="jwt_secret=${{ secrets.JWT_SECRET || 'sunotal_jwt_secret_2026_super_secure' }}"
         env:
           TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
@@ -166,3 +194,4 @@ jobs:
           echo "| Validate | ${{ steps.validate.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Plan | ${{ steps.plan.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Action | ${{ github.event.inputs.action || 'plan-only' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployment Mode | ${{ github.event.inputs.deployment_mode || 'ec2_single_instance' }} |" >> $GITHUB_STEP_SUMMARY

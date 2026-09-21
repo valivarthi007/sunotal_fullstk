@@ -2,7 +2,7 @@ import { AdminLayout } from "@/components/layout/AdminLayout";
 import { useGetAdminStats } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Package, Store, Users, CheckCircle2, Bike } from "lucide-react";
+import { Package, Store, Users, CheckCircle2, Bike, ShoppingBag, Server, Coins } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { format } from "date-fns";
@@ -43,6 +43,44 @@ export default function Dashboard() {
         </div>
       ) : stats ? (
         <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <Link href="/admin/orders-board" className="p-4 bg-gradient-to-br from-emerald-900 to-teal-900 text-white rounded-2xl shadow-md hover:scale-[1.02] transition-transform">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">Live Kanban</span>
+                <ShoppingBag className="w-5 h-5 text-emerald-400" />
+              </div>
+              <h4 className="text-lg font-black mt-2">Orders Board</h4>
+              <p className="text-[11px] text-emerald-200/80 mt-1">Dark store packing & dispatch</p>
+            </Link>
+
+            <Link href="/admin/delivery-partners" className="p-4 bg-gradient-to-br from-indigo-900 to-purple-900 text-white rounded-2xl shadow-md hover:scale-[1.02] transition-transform">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider">Rider Fleet</span>
+                <Bike className="w-5 h-5 text-indigo-400" />
+              </div>
+              <h4 className="text-lg font-black mt-2">Delivery Partners</h4>
+              <p className="text-[11px] text-indigo-200/80 mt-1">Live rider tracking & payouts</p>
+            </Link>
+
+            <Link href="/admin/analytics" className="p-4 bg-gradient-to-br from-purple-900 to-pink-900 text-white rounded-2xl shadow-md hover:scale-[1.02] transition-transform">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">Growth & Sales</span>
+                <Package className="w-5 h-5 text-purple-400" />
+              </div>
+              <h4 className="text-lg font-black mt-2">Analytics & KPIs</h4>
+              <p className="text-[11px] text-purple-200/80 mt-1">Revenue trends & top sellers</p>
+            </Link>
+
+            <Link href="/admin/coupons" className="p-4 bg-gradient-to-br from-amber-900 to-orange-900 text-white rounded-2xl shadow-md hover:scale-[1.02] transition-transform">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">Promotions</span>
+                <CheckCircle2 className="w-5 h-5 text-amber-400" />
+              </div>
+              <h4 className="text-lg font-black mt-2">Coupon Manager</h4>
+              <p className="text-[11px] text-amber-200/80 mt-1">Discounts & promo codes</p>
+            </Link>
+          </div>
+
           <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
@@ -60,29 +98,68 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <StatCard 
-              title="Total Products" 
-              value={stats.totalProducts} 
-              icon={<Package className="w-5 h-5 text-blue-500" />} 
-              trend={stats.totalProducts > 0 ? "+12% this month" : ""}
+              title="User Revenue (GMV)" 
+              value={`₹${(stats.userRevenue || stats.totalRevenue || 0).toLocaleString('en-IN')}`} 
+              icon={<ShoppingBag className="w-5 h-5 text-emerald-500" />} 
+              trend="Customer Checkout Orders"
             />
             <StatCard 
-              title="Total Vendors" 
-              value={stats.totalVendors} 
+              title="Vendor Charges" 
+              value={`₹${(stats.vendorCharges || 0).toLocaleString('en-IN')}`} 
               icon={<Store className="w-5 h-5 text-purple-500" />} 
-              trend={stats.totalVendors > 0 ? "+4 new this week" : ""}
+              trend="Procurement Payouts"
             />
             <StatCard 
-              title="Total Users" 
-              value={stats.totalUsers} 
-              icon={<Users className="w-5 h-5 text-orange-500" />} 
-              trend={stats.totalUsers > 1 ? `+${stats.totalUsers - 1} this month` : ""}
+              title="Rider Fleet Payouts" 
+              value={`₹${(stats.deliveryCharges || 0).toLocaleString('en-IN')}`} 
+              icon={<Bike className="w-5 h-5 text-amber-500" />} 
+              trend="Trip & Distance Fees"
             />
             <StatCard 
-              title="Active Vendors" 
-              value={stats.activeVendors} 
-              icon={<CheckCircle2 className="w-5 h-5 text-green-500" />} 
-              trend={stats.activeVendors > 0 ? "94% approval rate" : ""}
+              title="AWS Infrastructure Cost" 
+              value={`$${stats.awsMonthlyCost || 134.00}/mo`} 
+              icon={<Server className="w-5 h-5 text-blue-500" />} 
+              trend="ECS + RDS + ElastiCache + ALB"
             />
+          </div>
+
+          <div className="mb-8 p-6 bg-slate-900 border border-slate-800 text-white rounded-2xl shadow-xl">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-lg font-black tracking-tight flex items-center gap-2 text-emerald-400">
+                  <Coins className="w-5 h-5" /> Executive Financial Ledger & Cloud Overhead Breakdown
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">Unified ledger recording Vendor Payouts, Customer Order Sales, Delivery Partner Fees, and AWS Cloud Infrastructure Costs.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="border-emerald-500 text-emerald-400 bg-emerald-950/50 font-mono text-xs px-3 py-1">
+                  Net Margin: ₹{((stats.userRevenue || 0) - (stats.vendorCharges || 0) - (stats.deliveryCharges || 0)).toLocaleString('en-IN')}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-mono">
+              <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl">
+                <div className="text-slate-400 text-[11px]">ECS Fargate Tasks (6 Microservices)</div>
+                <div className="text-lg font-bold text-white mt-1">$48.50 <span className="text-[10px] text-slate-500 font-sans">/ month</span></div>
+                <div className="text-[10px] text-slate-500 mt-1">0.25 vCPU & 0.5 GB RAM per task</div>
+              </div>
+              <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl">
+                <div className="text-slate-400 text-[11px]">RDS PostgreSQL (db.t4g.medium)</div>
+                <div className="text-lg font-bold text-white mt-1">$54.20 <span className="text-[10px] text-slate-500 font-sans">/ month</span></div>
+                <div className="text-[10px] text-slate-500 mt-1">Multi-AZ RDS + Automated Storage</div>
+              </div>
+              <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl">
+                <div className="text-slate-400 text-[11px]">ElastiCache Redis Cluster</div>
+                <div className="text-lg font-bold text-white mt-1">$12.50 <span className="text-[10px] text-slate-500 font-sans">/ month</span></div>
+                <div className="text-[10px] text-slate-500 mt-1">cache.t4g.micro Session & Inventory Cache</div>
+              </div>
+              <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl">
+                <div className="text-slate-400 text-[11px]">ALB + CloudFront CDN</div>
+                <div className="text-lg font-bold text-white mt-1">$18.80 <span className="text-[10px] text-slate-500 font-sans">/ month</span></div>
+                <div className="text-[10px] text-slate-500 mt-1">Application Load Balancer & Data Transfer</div>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">

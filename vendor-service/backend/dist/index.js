@@ -26,15 +26,23 @@ async function initDb() {
         await pool.query(`
       CREATE TABLE IF NOT EXISTS vendors (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
+        name VARCHAR(255),
         vendor_name VARCHAR(255),
-        email VARCHAR(255),
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
+        email VARCHAR(255) UNIQUE,
         phone VARCHAR(50),
-        category VARCHAR(100),
+        location TEXT,
+        produce VARCHAR(255),
+        farm_size VARCHAR(100),
+        aadhar VARCHAR(50),
+        gstin VARCHAR(50),
+        category VARCHAR(100) DEFAULT 'Fresh Produce',
         address TEXT,
         city VARCHAR(100),
-        status VARCHAR(50) DEFAULT 'approved',
+        status VARCHAR(50) DEFAULT 'pending',
         active BOOLEAN DEFAULT TRUE,
+        notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -49,6 +57,34 @@ async function initDb() {
         submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+        // Safe migrations
+        const safeAlters = [
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS first_name VARCHAR(255)`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS last_name VARCHAR(255)`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS location TEXT`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS produce VARCHAR(255)`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS farm_size VARCHAR(100)`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS aadhar VARCHAR(50)`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS gstin VARCHAR(50)`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS notes TEXT`,
+        ];
+        for (const sql of safeAlters) {
+            try {
+                await pool.query(sql);
+            }
+            catch { }
+        }
+        // Indexes
+        const indexes = [
+            `CREATE INDEX IF NOT EXISTS idx_vendors_email ON vendors(email)`,
+            `CREATE INDEX IF NOT EXISTS idx_vendors_status ON vendors(status)`,
+        ];
+        for (const idx of indexes) {
+            try {
+                await pool.query(idx);
+            }
+            catch { }
+        }
         console.log('🐘 [vendor-service] PostgreSQL database tables ready.');
     }
     catch (err) {
@@ -57,18 +93,28 @@ async function initDb() {
 }
 initDb();
 function formatVendor(row) {
+    const firstName = row.first_name || (row.name || row.vendor_name || '').split(' ')[0] || '';
+    const lastName = row.last_name || (row.name || row.vendor_name || '').split(' ').slice(1).join(' ') || '';
     return {
         id: row.id,
-        name: row.name || row.vendor_name,
+        firstName,
+        lastName,
+        name: row.name || row.vendor_name || `${firstName} ${lastName}`.trim(),
         vendorName: row.vendor_name || row.name,
-        email: row.email,
-        phone: row.phone,
-        category: row.category,
-        address: row.address,
-        city: row.city,
-        status: row.status,
-        active: row.active,
-        createdAt: row.created_at
+        email: row.email || '',
+        phone: row.phone || '',
+        location: row.location || row.address || row.city || '',
+        produce: row.produce || row.category || 'Fresh Produce',
+        farmSize: row.farm_size || '',
+        aadhar: row.aadhar || '',
+        gstin: row.gstin || '',
+        category: row.category || 'Fresh Produce',
+        address: row.address || row.location || '',
+        city: row.city || '',
+        status: row.status || 'pending',
+        active: row.active !== false,
+        notes: row.notes || '',
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
     };
 }
 app.get('/healthz', (_req, res) => {
@@ -89,13 +135,15 @@ app.get('/api/vendors', async (_req, res) => {
 });
 // Create / Register Vendor
 app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], async (req, res) => {
-    const { name, firstName, lastName, vendorName, email, password, phone, category, address, city, location } = req.body;
-    const vName = vendorName || (firstName && lastName ? `${firstName} ${lastName}` : name) || 'New Vendor';
+    const { name, firstName, lastName, vendorName, email, password, phone, category, address, city, location, produce, farmSize, aadhar, gstin, notes } = req.body;
+    const fName = firstName || (name || vendorName || '').split(' ')[0] || 'Vendor';
+    const lName = lastName || (name || vendorName || '').split(' ').slice(1).join(' ') || '';
+    const vName = vendorName || name || `${fName} ${lName}`.trim();
     const cEmail = (email || '').trim().toLowerCase();
     const cPhone = phone || '';
-    const cCategory = category || 'Fresh Produce';
-    const cAddress = address || location || city || '';
-    const cCity = city || location || '';
+    const cCategory = produce || category || 'Fresh Produce';
+    const cLocation = location || address || city || '';
+    const cCity = city || (location ? location.split(',')[0].trim() : '');
     const isSelfRegister = req.path.includes('register') || req.path.includes('onboard');
     const initialStatus = isSelfRegister ? 'pending' : 'approved';
     try {
@@ -103,39 +151,26 @@ app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], asyn
         if (cEmail) {
             const existing = await pool.query('SELECT * FROM vendors WHERE LOWER(email) = $1', [cEmail]);
             if (existing.rows && existing.rows.length > 0) {
-                dbRes = await pool.query(`UPDATE vendors SET name = $1, vendor_name = $2, phone = $3, category = $4, address = $5, city = $6, status = $7, active = $8 WHERE id = $9 RETURNING *`, [vName, vName, cPhone, cCategory, cAddress, cCity, initialStatus, true, existing.rows[0].id]);
+                dbRes = await pool.query(`UPDATE vendors SET name=$1, vendor_name=$1, first_name=$2, last_name=$3, phone=$4, category=$5, location=$6, produce=$7, farm_size=$8, address=$6, city=$9, status=$10, active=true WHERE id=$11 RETURNING *`, [vName, fName, lName, cPhone, cCategory, cLocation, produce || cCategory, farmSize || '', cCity, initialStatus, existing.rows[0].id]);
             }
         }
         if (!dbRes || !dbRes.rows || dbRes.rows.length === 0) {
-            dbRes = await pool.query(`INSERT INTO vendors (name, vendor_name, email, phone, category, address, city, status, active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [vName, vName, cEmail, cPhone, cCategory, cAddress, cCity, initialStatus, true]);
+            dbRes = await pool.query(`INSERT INTO vendors (name, vendor_name, first_name, last_name, email, phone, category, location, produce, farm_size, aadhar, gstin, address, city, status, active, notes)
+         VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $7, $12, $13, true, $14) RETURNING *`, [vName, fName, lName, cEmail || null, cPhone, cCategory, cLocation, produce || cCategory, farmSize || '', aadhar || '', gstin || '', cCity, initialStatus, notes || '']);
         }
         const formatted = formatVendor(dbRes.rows[0]);
-        // Direct PostgreSQL user creation in RDS users table so vendor appears in /admin/users & can log in
+        // Create user account for login
         if (cEmail) {
             try {
                 const passwordHash = await bcryptjs_1.default.hash(password || 'password123', 10);
                 await pool.query(`INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
            VALUES ($1, $2, $3, 'vendor', true, $4, $5, 100)
-           ON CONFLICT (email) DO UPDATE SET
-             name = EXCLUDED.name,
-             password_hash = EXCLUDED.password_hash,
-             role = 'vendor',
-             phone = EXCLUDED.phone,
-             city = EXCLUDED.city,
-             active = true`, [vName, cEmail, passwordHash, cPhone, cCity]);
+           ON CONFLICT (email) DO UPDATE SET name=EXCLUDED.name, role='vendor', phone=EXCLUDED.phone, city=EXCLUDED.city, active=true`, [vName, cEmail, passwordHash, cPhone, cCity]);
             }
             catch (e) {
-                console.warn('⚠️ Direct PostgreSQL vendor user creation warning:', e?.message);
+                console.warn('⚠️ Vendor user creation warning:', e?.message);
             }
         }
-        // Sync to operations service in background
-        const OPERATIONS_SERVICE_URL = process.env.OPERATIONS_SERVICE_URL || 'http://127.0.0.1:5002';
-        fetch(`${OPERATIONS_SERVICE_URL}/api/vendors`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formatted)
-        }).catch(() => null);
         return res.status(201).json(formatted);
     }
     catch (err) {
@@ -145,9 +180,18 @@ app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], asyn
 // Update Vendor
 app.put(['/api/vendors/:id', '/api/vendors/:id/update'], async (req, res) => {
     const targetId = Number(req.params.id);
-    const { name, vendorName, email, phone, category, address, city, status, active } = req.body;
+    const { name, firstName, lastName, vendorName, email, phone, category, address, city, location, produce, farmSize, aadhar, gstin, status, active, notes } = req.body;
+    const vName = name || vendorName || (firstName && lastName ? `${firstName} ${lastName}` : undefined);
     try {
-        const dbRes = await pool.query(`UPDATE vendors SET name = COALESCE($1, name), vendor_name = COALESCE($2, vendor_name), email = COALESCE($3, email), phone = COALESCE($4, phone), category = COALESCE($5, category), address = COALESCE($6, address), city = COALESCE($7, city), status = COALESCE($8, status), active = COALESCE($9, active) WHERE id = $10 RETURNING *`, [name, vendorName || name, email, phone, category, address, city, status, active, targetId]);
+        const dbRes = await pool.query(`UPDATE vendors SET
+        name = COALESCE($1, name), vendor_name = COALESCE($1, vendor_name),
+        first_name = COALESCE($2, first_name), last_name = COALESCE($3, last_name),
+        email = COALESCE($4, email), phone = COALESCE($5, phone),
+        category = COALESCE($6, category), address = COALESCE($7, address),
+        city = COALESCE($8, city), location = COALESCE($9, location),
+        produce = COALESCE($10, produce), farm_size = COALESCE($11, farm_size),
+        status = COALESCE($12, status), active = COALESCE($13, active), notes = COALESCE($14, notes)
+       WHERE id = $15 RETURNING *`, [vName, firstName, lastName, email, phone, category, address || location, city, location || address, produce, farmSize, status, active, notes, targetId]);
         if (dbRes.rows && dbRes.rows.length > 0) {
             return res.json(formatVendor(dbRes.rows[0]));
         }

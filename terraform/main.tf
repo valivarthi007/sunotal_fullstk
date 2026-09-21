@@ -72,8 +72,9 @@ module "acm_alb" {
   tags                  = local.common_tags
 }
 
-# ─── 5. ECS Fargate Cluster & Services ────────────────────────────────────────
+# ─── 5. ECS Fargate Cluster & Services (Production Mode) ──────────────────────
 module "ecs" {
+  count                 = var.use_ec2_single_instance ? 0 : 1
   source                = "./modules/ecs"
   vpc_id                = module.vpc.vpc_id
   private_subnet_ids    = module.vpc.private_subnet_ids
@@ -87,6 +88,18 @@ module "ecs" {
   tags                  = local.common_tags
 }
 
+# ─── 5b. Single EC2 t3.medium ($30/mo) Cluster (Free Trial Dev Workspace) ────
+module "ec2_dev" {
+  count             = var.use_ec2_single_instance ? 1 : 0
+  source            = "./modules/ec2_dev"
+  vpc_id            = module.vpc.vpc_id
+  public_subnet_id  = module.vpc.public_subnet_ids[0]
+  security_group_id = module.security.alb_security_group_id
+  key_name          = var.key_name
+  tags              = local.common_tags
+}
+
+
 
 # ─── 6. AWS RDS PostgreSQL Database ───────────────────────────────────────────
 module "rds" {
@@ -94,6 +107,7 @@ module "rds" {
   vpc_id               = module.vpc.vpc_id
   private_subnet_ids   = module.vpc.private_subnet_ids
   db_security_group_id = module.security.db_security_group_id
+  dev_mode             = var.dev_mode
   tags                 = local.common_tags
 }
 
@@ -136,5 +150,18 @@ module "route53" {
   alb_zone_id      = module.acm_alb.alb_zone_id
   s3_bucket_domain = module.s3_cloudfront.cloudfront_domain
   tags             = local.common_tags
+}
+
+# ─── 12. CloudWatch Log Group & Monitoring Alarms ─────────────────────────────
+module "cloudwatch" {
+  source   = "./modules/cloudwatch"
+  dev_mode = var.dev_mode
+  tags     = local.common_tags
+}
+
+# ─── 13. AWS SES Email Identity & DKIM ────────────────────────────────────────
+module "ses" {
+  source = "./modules/ses"
+  tags   = local.common_tags
 }
 

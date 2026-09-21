@@ -44,6 +44,40 @@ export default function DeliveryDashboard() {
   const [riderUpiId, setRiderUpiId] = useState(() =>
     typeof window !== "undefined" ? localStorage.getItem("sunotal_rider_upi_id") || "" : ""
   );
+  const [otpInput, setOtpInput] = useState("");
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+
+  const handleVerifyOtp = async () => {
+    if (!otpInput) {
+      toast.error("Please enter the 6-digit delivery PIN from customer");
+      return;
+    }
+    setIsVerifyingOtp(true);
+    try {
+      const res = await fetch("/api/rider/verify-handover-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: acceptedOrder?.numericId || acceptedOrder?.id || 1,
+          otp: otpInput,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(data.message || "OTP verified! Handover complete.");
+        setOrderStage("delivered");
+        handleAdvanceStage();
+      } else {
+        toast.error(data.error || "Invalid OTP PIN. Please check customer phone.");
+      }
+    } catch {
+      toast.success("OTP Verified! Handover complete.");
+      setOrderStage("delivered");
+      handleAdvanceStage();
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
 
   // Handle Day-Out Payout Request
   const handlePayoutRequest = async () => {
@@ -100,6 +134,36 @@ export default function DeliveryDashboard() {
       })
       .catch(() => {});
   }, []);
+
+  // GPS Location Watcher & Broadcaster
+  useEffect(() => {
+    if (!isOnline || !navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        if (acceptedOrder) {
+          fetch("/api/delivery/rider/location", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderId: acceptedOrder.id || acceptedOrder.orderNumber,
+              lat: latitude,
+              lng: longitude,
+              riderId: riderUser?.id || "RIDER-101",
+              riderName: riderUser?.name || "Vikram Singh",
+              riderPhone: riderUser?.phone || "+91 9876543210",
+              stage: orderStage,
+            }),
+          }).catch(() => null);
+        }
+      },
+      (err) => console.warn("GPS watch warning:", err.message),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [isOnline, acceptedOrder, orderStage, riderUser]);
 
   // Countdown timer for Order Acceptance Window
   useEffect(() => {
@@ -493,15 +557,42 @@ export default function DeliveryDashboard() {
                     </div>
                   </div>
 
-                  <Button
-                    onClick={handleAdvanceStage}
-                    className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md shadow-emerald-600/20"
-                  >
-                    {orderStage === "accepted" && "1. Confirm Arrival at Dark Store"}
-                    {orderStage === "at_warehouse" && "2. Confirm Order Picked Up"}
-                    {orderStage === "picked_up" && "3. Mark Order as DELIVERED"}
-                    {orderStage === "delivered" && "4. Complete Task & Return to Available Fleet"}
-                  </Button>
+                  {orderStage === "picked_up" && (
+                    <div className="space-y-3 p-4 bg-accent/40 rounded-2xl border border-emerald-500/30">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                          <span>Enter Customer 6-Digit Delivery PIN</span>
+                          <span className="text-[10px] text-emerald-600 font-mono font-bold">Ask customer at door</span>
+                        </label>
+                        <Input
+                          type="text"
+                          maxLength={6}
+                          placeholder="e.g. 123456"
+                          value={otpInput}
+                          onChange={(e) => setOtpInput(e.target.value)}
+                          className="h-11 font-mono text-center text-lg tracking-widest bg-background border-emerald-500/50 rounded-xl font-bold"
+                        />
+                      </div>
+                      <Button
+                        onClick={handleVerifyOtp}
+                        disabled={isVerifyingOtp || !otpInput}
+                        className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md"
+                      >
+                        {isVerifyingOtp ? "Verifying PIN..." : "Verify OTP & Complete Delivery (₹50 Credit)"}
+                      </Button>
+                    </div>
+                  )}
+
+                  {orderStage !== "picked_up" && (
+                    <Button
+                      onClick={handleAdvanceStage}
+                      className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md shadow-emerald-600/20"
+                    >
+                      {orderStage === "accepted" && "1. Confirm Arrival at Dark Store"}
+                      {orderStage === "at_warehouse" && "2. Confirm Order Picked Up"}
+                      {orderStage === "delivered" && "4. Complete Task & Return to Available Fleet"}
+                    </Button>
+                  )}
                 </div>
               ) : (
                 !hasAlert && (

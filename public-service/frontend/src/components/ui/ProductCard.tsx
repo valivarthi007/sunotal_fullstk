@@ -9,6 +9,7 @@ import { useState } from "react";
 
 export function ProductCard({ product }: { product: Product }) {
   const { items, addItem, removeItem, updateQuantity } = useCart();
+  const [isWishlisted, setIsWishlisted] = useState(false);
   
   // Find current cart quantity for this product
   const cartItem = items.find((i) => i.product.id === product.id);
@@ -37,6 +38,16 @@ export function ProductCard({ product }: { product: Product }) {
     }
   };
 
+  const handleToggleWishlist = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsWishlisted(!isWishlisted);
+    fetch("/api/wishlists", {
+      method: isWishlisted ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: 1, productId: product.id }),
+    }).catch(() => null);
+  };
+
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-2xl bg-card border border-card-border shadow-sm transition-all hover:shadow-md hover:border-primary/20">
       <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
@@ -48,15 +59,27 @@ export function ProductCard({ product }: { product: Product }) {
             <Leaf className="w-3 h-3" /> Organic
           </Badge>
         )}
+        {product.stock > 0 && product.stock <= 5 && (
+          <Badge variant="destructive" className="w-fit text-[10px] bg-amber-500 text-white animate-pulse px-2 py-0.5 shadow-sm">
+            Only {product.stock} left!
+          </Badge>
+        )}
       </div>
 
-      {product.discountPercentage > 0 && (
-        <div className="absolute top-3 right-3 z-10">
-          <Badge variant="secondary" className="bg-red-100 text-red-700 border-transparent hover:bg-red-100 font-bold px-2 py-0.5 shadow-sm font-mono">
-            SAVE ₹{Math.round(product.originalPrice - product.price)} ({product.discountPercentage}% OFF)
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+        <button
+          onClick={handleToggleWishlist}
+          className="w-8 h-8 rounded-full bg-background/80 backdrop-blur-md border border-border/50 flex items-center justify-center text-muted-foreground hover:text-red-500 transition-colors shadow-sm"
+          title="Add to Wishlist"
+        >
+          <span className={isWishlisted ? "text-red-500" : "text-muted-foreground"}>{isWishlisted ? "❤️" : "🤍"}</span>
+        </button>
+        {product.discountPercentage > 0 && (
+          <Badge variant="secondary" className="bg-red-100 text-red-700 border-transparent hover:bg-red-100 font-bold px-2 py-0.5 shadow-sm font-mono text-[10px]">
+            -{product.discountPercentage}%
           </Badge>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="aspect-square overflow-hidden bg-muted/30">
         <img
