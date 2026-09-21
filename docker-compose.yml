@@ -1,5 +1,5 @@
 services:
-  # ─── Layer 1: Infrastructure (Database & Cache) ───────────────────────────
+  # ─── Infrastructure ───────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: sunotal-postgres
@@ -35,66 +35,36 @@ services:
       retries: 3
       start_period: 5s
 
-  # ─── Layer 2: Core Foundation Microservices (Auth & User) ──────────────────
-  auth-service:
+  # ─── 6 Core Micro-Service Backends ────────────────────────────────────────
+  gateway-service:
     build:
-      context: ./services/auth-service
+      context: ./gateway-service
       dockerfile: Dockerfile
-    container_name: sunotal-auth
+    container_name: sunotal-gateway-service
     restart: unless-stopped
     ports:
-      - "5001:5001"
+      - "5000:5000"
     environment:
-      - PORT=5001
+      - PORT=5000
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
-      - REDIS_HOST=redis
       - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
-      - OPERATIONS_SERVICE_URL=http://operations-service:5002
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5001/api/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5000/api/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 20s
 
-  user-service:
+  public-service-backend:
     build:
-      context: ./services/user-service
+      context: ./public-service/backend
       dockerfile: Dockerfile
-    container_name: sunotal-user
-    restart: unless-stopped
-    ports:
-      - "5008:5008"
-    environment:
-      - PORT=5008
-      - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
-      - REDIS_HOST=redis
-      - AUTH_SERVICE_URL=http://auth-service:5001
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      auth-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5008/api/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-
-  # ─── Layer 3: Catalog & Inventory Microservices ────────────────────────────
-  catalog-service:
-    build:
-      context: ./services/catalog-service
-      dockerfile: Dockerfile
-    container_name: sunotal-catalog
+    container_name: sunotal-public-backend
     restart: unless-stopped
     ports:
       - "5009:5009"
@@ -102,13 +72,10 @@ services:
       - PORT=5009
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
-      - OPERATIONS_SERVICE_URL=http://operations-service:5002
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      auth-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5009/api/healthz || exit 1"]
@@ -117,69 +84,11 @@ services:
       retries: 3
       start_period: 20s
 
-  inventory-service:
+  admin-service-backend:
     build:
-      context: ./services/inventory-service
+      context: ./admin-service/backend
       dockerfile: Dockerfile
-    container_name: sunotal-inventory
-    restart: unless-stopped
-    ports:
-      - "5003:5003"
-    environment:
-      - PORT=5003
-      - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
-      - REDIS_HOST=redis
-      - CATALOG_SERVICE_URL=http://catalog-service:5009
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      catalog-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5003/api/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-
-  # ─── Layer 4: Domain & Transaction Microservices ───────────────────────────
-  order-service:
-    build:
-      context: ./services/order-service
-      dockerfile: Dockerfile
-    container_name: sunotal-order
-    restart: unless-stopped
-    ports:
-      - "5010:5010"
-    environment:
-      - PORT=5010
-      - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
-      - REDIS_HOST=redis
-      - AUTH_SERVICE_URL=http://auth-service:5001
-      - INVENTORY_SERVICE_URL=http://inventory-service:5003
-      - CATALOG_SERVICE_URL=http://catalog-service:5009
-      - NOTIFICATION_SERVICE_URL=http://notification-service:5011
-    depends_on:
-      postgres:
-        condition: service_healthy
-      catalog-service:
-        condition: service_healthy
-      inventory-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5010/api/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-
-  operations-service:
-    build:
-      context: ./services/operations-service
-      dockerfile: Dockerfile
-    container_name: sunotal-operations
+    container_name: sunotal-admin-backend
     restart: unless-stopped
     ports:
       - "5002:5002"
@@ -188,16 +97,10 @@ services:
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
       - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
-      - AUTH_SERVICE_URL=http://auth-service:5001
-      - CATALOG_SERVICE_URL=http://catalog-service:5009
-      - ORDER_SERVICE_URL=http://order-service:5010
-      - VENDOR_SERVICE_URL=http://vendor-service:5005
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      auth-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5002/api/healthz || exit 1"]
@@ -206,11 +109,11 @@ services:
       retries: 3
       start_period: 20s
 
-  vendor-service:
+  vendor-service-backend:
     build:
-      context: ./services/vendor-service
+      context: ./vendor-service/backend
       dockerfile: Dockerfile
-    container_name: sunotal-vendor
+    container_name: sunotal-vendor-backend
     restart: unless-stopped
     ports:
       - "5005:5005"
@@ -218,12 +121,10 @@ services:
       - PORT=5005
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
-      - OPERATIONS_SERVICE_URL=http://operations-service:5002
-      - AUTH_SERVICE_URL=http://auth-service:5001
     depends_on:
       postgres:
         condition: service_healthy
-      catalog-service:
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5005/api/healthz || exit 1"]
@@ -232,11 +133,11 @@ services:
       retries: 3
       start_period: 20s
 
-  delivery-service:
+  delivery-service-backend:
     build:
-      context: ./services/delivery-service
+      context: ./delivery-service/backend
       dockerfile: Dockerfile
-    container_name: sunotal-delivery
+    container_name: sunotal-delivery-backend
     restart: unless-stopped
     ports:
       - "5004:5004"
@@ -244,15 +145,10 @@ services:
       - PORT=5004
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
-      - ORDER_SERVICE_URL=http://order-service:5010
-      - AUTH_SERVICE_URL=http://auth-service:5001
-      - NOTIFICATION_SERVICE_URL=http://notification-service:5011
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      order-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5004/api/healthz || exit 1"]
@@ -261,19 +157,17 @@ services:
       retries: 3
       start_period: 20s
 
-  support-service:
+  support-monitoring-backend:
     build:
-      context: ./services/support-service
+      context: ./support-monitoring-service/backend
       dockerfile: Dockerfile
-    container_name: sunotal-support
+    container_name: sunotal-support-monitoring-backend
     restart: unless-stopped
     ports:
       - "5007:5007"
     environment:
       - PORT=5007
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
-      - AUTH_SERVICE_URL=http://auth-service:5001
-      - ORDER_SERVICE_URL=http://order-service:5010
     depends_on:
       postgres:
         condition: service_healthy
@@ -284,84 +178,18 @@ services:
       retries: 3
       start_period: 20s
 
-  notification-service:
+  # ─── 5 Domain Application Frontends ──────────────────────────────────────
+  # Public Domain: sunotal.automateuniverse.space
+  public-service-frontend:
     build:
-      context: ./services/notification-service
+      context: ./public-service/frontend
       dockerfile: Dockerfile
-    container_name: sunotal-notification
-    restart: unless-stopped
-    ports:
-      - "5011:5011"
-    environment:
-      - PORT=5011
-      - REDIS_HOST=redis
-      - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
-    depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5011/api/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-
-  # ─── Layer 5: API Gateway Router ──────────────────────────────────────────
-  api-gateway:
-    build:
-      context: ./services/api-gateway
-      dockerfile: Dockerfile
-    container_name: sunotal-api-gateway
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
-    environment:
-      - PORT=5000
-      - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
-      - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
-      - AUTH_SERVICE_URL=http://auth-service:5001
-      - USER_SERVICE_URL=http://user-service:5008
-      - CATALOG_SERVICE_URL=http://catalog-service:5009
-      - INVENTORY_SERVICE_URL=http://inventory-service:5003
-      - ORDER_SERVICE_URL=http://order-service:5010
-      - DELIVERY_SERVICE_URL=http://delivery-service:5004
-      - OPERATIONS_SERVICE_URL=http://operations-service:5002
-      - VENDOR_SERVICE_URL=http://vendor-service:5005
-      - SUPPORT_SERVICE_URL=http://support-service:5007
-      - NOTIFICATION_SERVICE_URL=http://notification-service:5011
-    depends_on:
-      auth-service:
-        condition: service_healthy
-      user-service:
-        condition: service_healthy
-      catalog-service:
-        condition: service_healthy
-      inventory-service:
-        condition: service_healthy
-      order-service:
-        condition: service_healthy
-      delivery-service:
-        condition: service_healthy
-      operations-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5000/api/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-
-  # ─── Layer 6: Frontend Applications ───────────────────────────────────────
-  user-app:
-    build:
-      context: ./apps/user-app
-      dockerfile: Dockerfile
-    container_name: sunotal-user-app
+    container_name: sunotal-public-frontend
     restart: unless-stopped
     ports:
       - "3000:80"
     depends_on:
-      api-gateway:
+      gateway-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
@@ -370,16 +198,17 @@ services:
       retries: 3
       start_period: 20s
 
-  admin-app:
+  # Admin Domain: admin-sunotal.automateuniverse.space
+  admin-service-frontend:
     build:
-      context: ./apps/admin-app
+      context: ./admin-service/frontend
       dockerfile: Dockerfile
-    container_name: sunotal-admin-app
+    container_name: sunotal-admin-frontend
     restart: unless-stopped
     ports:
       - "3001:80"
     depends_on:
-      api-gateway:
+      gateway-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
@@ -388,16 +217,17 @@ services:
       retries: 3
       start_period: 20s
 
-  vendor-app:
+  # Vendor Domain: vendor-sunotal.automateuniverse.space
+  vendor-service-frontend:
     build:
-      context: ./apps/vendor-app
+      context: ./vendor-service/frontend
       dockerfile: Dockerfile
-    container_name: sunotal-vendor-app
+    container_name: sunotal-vendor-frontend
     restart: unless-stopped
     ports:
       - "3002:80"
     depends_on:
-      api-gateway:
+      gateway-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
@@ -406,16 +236,17 @@ services:
       retries: 3
       start_period: 20s
 
-  delivery-app:
+  # Delivery Domain: delivery-sunotal.automateuniverse.space
+  delivery-service-frontend:
     build:
-      context: ./apps/delivery-app
+      context: ./delivery-service/frontend
       dockerfile: Dockerfile
-    container_name: sunotal-delivery-app
+    container_name: sunotal-delivery-frontend
     restart: unless-stopped
     ports:
       - "3003:80"
     depends_on:
-      api-gateway:
+      gateway-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
@@ -424,16 +255,17 @@ services:
       retries: 3
       start_period: 20s
 
-  support-app:
+  # Support & Monitoring Domains
+  support-service-frontend:
     build:
-      context: ./apps/support-app
+      context: ./support-monitoring-service/frontend/support-app
       dockerfile: Dockerfile
-    container_name: sunotal-support-app
+    container_name: sunotal-support-frontend
     restart: unless-stopped
     ports:
       - "3004:80"
     depends_on:
-      api-gateway:
+      gateway-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
@@ -442,55 +274,19 @@ services:
       retries: 3
       start_period: 20s
 
-  monitoring-app:
+  monitoring-service-frontend:
     build:
-      context: ./apps/monitoring-app
+      context: ./support-monitoring-service/frontend/monitoring-app
       dockerfile: Dockerfile
-    container_name: sunotal-monitoring-app
+    container_name: sunotal-monitoring-frontend
     restart: unless-stopped
     ports:
       - "3006:80"
     depends_on:
-      api-gateway:
+      gateway-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-
-  # ─── Observability ────────────────────────────────────────────────────────
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: sunotal-prometheus
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - sunotal_promdata:/prometheus
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: sunotal-grafana
-    restart: unless-stopped
-    ports:
-      - "3005:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - sunotal_grafanadata:/var/lib/grafana
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -499,5 +295,3 @@ services:
 volumes:
   sunotal_pgdata:
   sunotal_redisdata:
-  sunotal_promdata:
-  sunotal_grafanadata:

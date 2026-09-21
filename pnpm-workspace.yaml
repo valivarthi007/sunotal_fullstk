@@ -1,6 +1,13 @@
 packages:
-  - 'apps/*'
-  - 'services/*'
-allowBuilds:
-  esbuild: set this to true or false
-  protobufjs: set this to true or false
+  - 'public-service/frontend'
+  - 'public-service/backend'
+  - 'admin-service/frontend'
+  - 'admin-service/backend'
+  - 'vendor-service/frontend'
+  - 'vendor-service/backend'
+  - 'delivery-service/frontend'
+  - 'delivery-service/backend'
+  - 'support-monitoring-service/frontend/support-app'
+  - 'support-monitoring-service/frontend/monitoring-app'
+  - 'support-monitoring-service/backend'
+  - 'gateway-service'
