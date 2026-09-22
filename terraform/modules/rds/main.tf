@@ -91,11 +91,11 @@ resource "aws_db_instance" "postgres" {
   deletion_protection    = false
   apply_immediately      = true
 
-  backup_retention_period = 7
+  backup_retention_period = var.dev_mode ? 0 : 7
   backup_window           = "03:00-04:00"
   maintenance_window      = "Mon:04:00-Mon:05:00"
 
-  performance_insights_enabled = true
+  performance_insights_enabled = var.dev_mode ? false : true
   auto_minor_version_upgrade   = true
 
   tags = merge(var.tags, { Name = "sunotal-postgres-db" })
