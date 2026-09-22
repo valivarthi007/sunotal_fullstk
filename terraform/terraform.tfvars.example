@@ -1,8 +1,10 @@
-aws_region          = "us-east-1"
-ami_id              = ""            # leave empty to auto-select latest Amazon Linux 2023
-instance_type       = "t3.small"
-key_name            = "your-ec2-key-pair-name"
-allowed_cidr_blocks = ["0.0.0.0/0"]
-s3_bucket_name      = "jcs-raju-sunotal-final"
-jwt_secret          = "REPLACE_WITH_A_STRONG_RANDOM_SECRET_MIN_32_CHARS"
+# Default Architecture Choice (EC2 Single Instance default, set to false for ECS Fargate)
+use_ec2_single_instance = true
+dev_mode                = true
+
+aws_region              = "ap-south-1"
+key_name                = "your-ec2-key-pair-name"
+allowed_cidr_blocks     = ["0.0.0.0/0"]
+jwt_secret              = "REPLACE_WITH_A_STRONG_RANDOM_SECRET_MIN_32_CHARS"
+
 
