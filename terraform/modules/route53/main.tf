@@ -8,6 +8,10 @@ variable "s3_bucket_domain" {
   type    = string
   default = ""
 }
+variable "enable_cdn_record" {
+  type    = bool
+  default = false
+}
 variable "tags" { type = map(string) }
 
 data "aws_route53_zone" "primary" {
@@ -42,7 +46,7 @@ resource "aws_route53_record" "subdomains" {
 }
 
 resource "aws_route53_record" "cdn" {
-  count   = var.s3_bucket_domain != "" ? 1 : 0
+  count   = var.enable_cdn_record ? 1 : 0
   zone_id = data.aws_route53_zone.primary.zone_id
   name    = "cdn.${var.domain_name}"
   type    = "CNAME"
@@ -51,6 +55,6 @@ resource "aws_route53_record" "cdn" {
 }
 
 output "registered_subdomains" {
-  value = concat([for k, v in aws_route53_record.subdomains : v.fqdn], var.s3_bucket_domain != "" ? [aws_route53_record.cdn[0].fqdn] : [])
+  value = concat([for k, v in aws_route53_record.subdomains : v.fqdn], var.enable_cdn_record ? [aws_route53_record.cdn[0].fqdn] : [])
 }
 
