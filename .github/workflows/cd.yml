@@ -103,11 +103,11 @@ jobs:
         run: |
           echo "🔍 Verifying active microservice health..."
           ENDPOINTS=(
-            "http://127.0.0.1:5000/healthz"
-            "http://127.0.0.1:5002/healthz"
-            "http://127.0.0.1:5004/healthz"
-            "http://127.0.0.1:5005/healthz"
-            "http://127.0.0.1:5009/healthz"
+            "https://sunotal.automateuniverse.space/healthz"
+            "https://admin-sunotal.automateuniverse.space/healthz"
+            "https://vendor-sunotal.automateuniverse.space/healthz"
+            "https://delivery-sunotal.automateuniverse.space/healthz"
+            "https://api.automateuniverse.space/healthz"
           )
 
           PASS=0
