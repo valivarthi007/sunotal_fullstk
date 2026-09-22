@@ -144,8 +144,8 @@ jobs:
       # Never auto-applies on push to main
       - name: Terraform Apply
         if: |
-          github.event_name == 'workflow_dispatch' &&
-          github.event.inputs.action == 'apply'
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
         run: |
           echo "🏗️ Applying Terraform plan (${{ github.event.inputs.deployment_mode || 'ec2_single_instance' }}) to AWS..."
           terraform apply \

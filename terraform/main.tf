@@ -94,7 +94,7 @@ module "ec2_dev" {
   source            = "./modules/ec2_dev"
   vpc_id            = module.vpc.vpc_id
   public_subnet_id  = module.vpc.public_subnet_ids[0]
-  security_group_id = module.security.alb_security_group_id
+  security_group_id = module.security.web_security_group_id
   key_name          = var.key_name
   instance_type     = var.instance_type
   ami_id            = var.ami_id
