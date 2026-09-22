@@ -47,8 +47,9 @@ resource "aws_db_parameter_group" "postgres" {
   description = "Sunotal PostgreSQL 16 parameter group"
 
   parameter {
-    name  = "max_connections"
-    value = "200"
+    name         = "max_connections"
+    value        = "200"
+    apply_method = "pending-reboot"
   }
 
   parameter {

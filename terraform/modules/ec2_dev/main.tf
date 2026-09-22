@@ -14,11 +14,34 @@ variable "key_name" {
   type    = string
   default = "jcs_raju_laptop"
 }
+variable "instance_type" {
+  type    = string
+  default = "c7i-flex.large"
+}
+variable "ami_id" {
+  type    = string
+  default = ""
+}
 variable "tags" { type = map(string) }
 
+data "aws_ami" "amazon_linux_2023" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 resource "aws_instance" "sunotal_single_ec2" {
-  ami                    = "ami-0c7217cdde317cfec" # Amazon Linux 2023 AMI
-  instance_type          = "t3.medium"
+  ami                    = var.ami_id != "" ? var.ami_id : data.aws_ami.amazon_linux_2023.id
+  instance_type          = var.instance_type
   key_name               = var.key_name
   subnet_id              = var.public_subnet_id
   vpc_security_group_ids = [var.security_group_id]
@@ -34,7 +57,7 @@ resource "aws_instance" "sunotal_single_ec2" {
   tags = merge(var.tags, {
     Name        = "sunotal-single-ec2-dev"
     Environment = "local_dev"
-    CostTarget  = "$30/month"
+    CostTarget  = "c4.large"
   })
 }
 

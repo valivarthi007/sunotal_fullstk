@@ -96,6 +96,8 @@ module "ec2_dev" {
   public_subnet_id  = module.vpc.public_subnet_ids[0]
   security_group_id = module.security.alb_security_group_id
   key_name          = var.key_name
+  instance_type     = var.instance_type
+  ami_id            = var.ami_id
   tags              = local.common_tags
 }
 

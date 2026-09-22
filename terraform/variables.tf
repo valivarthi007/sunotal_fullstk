@@ -14,7 +14,7 @@ variable "github_access_token" {
 variable "instance_type" {
   description = "EC2 instance size"
   type        = string
-  default     = "t3.small"
+  default     = "c7i-flex.large"
 }
 
 variable "ami_id" {
