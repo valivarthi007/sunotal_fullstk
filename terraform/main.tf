@@ -101,6 +101,14 @@ module "ec2_dev" {
   tags              = local.common_tags
 }
 
+# ─── 5c. ALB Target Group Attachment for Single EC2 Dev Instance ─────────────
+resource "aws_lb_target_group_attachment" "ec2_dev" {
+  for_each         = var.use_ec2_single_instance ? module.acm_alb.target_group_arns : {}
+  target_group_arn = each.value
+  target_id        = module.ec2_dev[0].private_ip
+  port             = 80
+}
+
 
 
 # ─── 6. AWS RDS PostgreSQL Database ───────────────────────────────────────────

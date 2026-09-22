@@ -296,7 +296,24 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 20s
+  # ─── Nginx Subdomain Router (Port 80 for ALB Routing) ─────────────────────
+  nginx-router:
+    image: nginx:alpine
+    container_name: sunotal-nginx-router
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      public-service-frontend:
+        condition: service_healthy
+      admin-service-frontend:
+        condition: service_healthy
+      vendor-service-frontend:
+        condition: service_healthy
+      delivery-service-frontend:
+        condition: service_healthy
 
 volumes:
   sunotal_pgdata:
