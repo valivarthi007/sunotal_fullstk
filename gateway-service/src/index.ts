@@ -616,7 +616,20 @@ app.post(['/api/vendors/:id/status', '/api/admin/vendors/:id/status'], async (re
       [status, active, targetId]
     );
     if (dbRes.rows && dbRes.rows.length > 0) {
-      const v = formatVendorRow(dbRes.rows[0]);
+      const vRow = dbRes.rows[0];
+      if (vRow.email && (status === 'approved' || vRow.status === 'approved')) {
+        try {
+          const pwdHash = await bcrypt.hash('vendor123', 10);
+          await gatewayPgPool.query(
+            `INSERT INTO users (name, email, password_hash, role, active, phone, city)
+             VALUES ($1, $2, $3, 'vendor', true, $4, $5)
+             ON CONFLICT (email) DO UPDATE SET role = 'vendor', active = true, name = EXCLUDED.name`,
+            [vRow.name || vRow.vendor_name || 'Vendor', vRow.email.toLowerCase(), pwdHash, vRow.phone || '', vRow.location || '']
+          );
+        } catch {}
+      }
+
+      const v = formatVendorRow(vRow);
       broadcastRealtimeEvent({ type: 'VENDOR_STATUS_UPDATED', path: req.originalUrl || req.url, method: 'POST', data: v });
       return res.json(v);
     }
@@ -647,7 +660,21 @@ app.put(['/api/vendors/:id', '/api/admin/vendors/:id'], async (req, res) => {
        WHERE id = $21 RETURNING *`,
       [vName, firstName, lastName, email, phone, category, address || location, city, location || address, produce, farmSize, status, active, notes, bankName, accountNumber, ifscCode, branchName, accountHolderName, upiId, targetId]
     );
-    if (dbRes.rows && dbRes.rows.length > 0) return res.json(formatVendorRow(dbRes.rows[0]));
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      const vRow = dbRes.rows[0];
+      if (vRow.email && (status === 'approved' || vRow.status === 'approved')) {
+        try {
+          const pwdHash = await bcrypt.hash('vendor123', 10);
+          await gatewayPgPool.query(
+            `INSERT INTO users (name, email, password_hash, role, active, phone, city)
+             VALUES ($1, $2, $3, 'vendor', true, $4, $5)
+             ON CONFLICT (email) DO UPDATE SET role = 'vendor', active = true, name = EXCLUDED.name`,
+            [vRow.name || vRow.vendor_name || 'Vendor', vRow.email.toLowerCase(), pwdHash, vRow.phone || '', vRow.location || '']
+          );
+        } catch {}
+      }
+      return res.json(formatVendorRow(vRow));
+    }
     return res.status(404).json({ error: 'Vendor not found' });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to update vendor', message: err?.message });

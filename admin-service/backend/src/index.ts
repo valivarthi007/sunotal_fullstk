@@ -965,7 +965,7 @@ app.post("/api/vendors", handleCreateVendor);
 app.post("/api/vendors/register", handleCreateVendor);
 app.post("/api/vendors/onboard", handleCreateVendor);
 
-app.put("/api/vendors/:id", async (req: any, res: any) => {
+app.put(["/api/vendors/:id", "/api/vendors/:id/status", "/api/admin/vendors/:id/status"], async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
     const { status, name, firstName, lastName, phone, location, produce, farmSize, aadhar, gstin, email, category, notes, active } = req.body;
@@ -990,9 +990,25 @@ app.put("/api/vendors/:id", async (req: any, res: any) => {
     );
     if (!dbRes.rows || dbRes.rows.length === 0) return res.status(404).json({ error: 'Vendor not found' });
     const v = dbRes.rows[0];
+
+    // If status updated to approved, activate corresponding user account for login
+    if (v.email && (status === 'approved' || v.status === 'approved')) {
+      try {
+        const passwordHash = await bcrypt.hash('vendor123', 10);
+        await pgPool.query(
+          `INSERT INTO users (name, email, password_hash, role, active, phone, city)
+           VALUES ($1, $2, $3, 'vendor', true, $4, $5)
+           ON CONFLICT (email) DO UPDATE SET role = 'vendor', active = true, name = EXCLUDED.name`,
+          [v.name || v.vendor_name || 'Vendor', v.email.toLowerCase(), passwordHash, v.phone || '', v.location || '']
+        );
+      } catch (userErr: any) {
+        console.warn('⚠️ User account sync on vendor approval warning:', userErr?.message);
+      }
+    }
+
     return res.json({
       id: v.id, firstName: v.first_name, lastName: v.last_name,
-      name: v.name, email: v.email, phone: v.phone,
+      name: v.name, vendorName: v.vendor_name, email: v.email, phone: v.phone,
       location: v.location, produce: v.produce, farmSize: v.farm_size,
       status: v.status, active: v.active, notes: v.notes,
       createdAt: v.created_at
