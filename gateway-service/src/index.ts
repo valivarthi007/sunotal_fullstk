@@ -280,6 +280,39 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, product_id)
       );
+
+      CREATE TABLE IF NOT EXISTS inventory (
+        id SERIAL PRIMARY KEY,
+        product_id INT,
+        vendor_id INT,
+        product_name VARCHAR(255) NOT NULL,
+        vendor_name VARCHAR(255),
+        warehouse_name VARCHAR(255) DEFAULT 'Central Dark Store Hub',
+        warehouse_city VARCHAR(255),
+        quantity NUMERIC(10, 2) DEFAULT 100,
+        unit VARCHAR(50) DEFAULT 'kg',
+        status VARCHAR(50) DEFAULT 'in_stock',
+        notes TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id SERIAL PRIMARY KEY,
+        ticket_id VARCHAR(100) UNIQUE,
+        role VARCHAR(50) DEFAULT 'user',
+        sender_name VARCHAR(255) NOT NULL,
+        sender_email VARCHAR(255) NOT NULL,
+        sender_phone VARCHAR(50),
+        category VARCHAR(100) NOT NULL,
+        order_id VARCHAR(255),
+        subject VARCHAR(255) NOT NULL,
+        description TEXT NOT NULL,
+        status VARCHAR(50) DEFAULT 'open',
+        resolution TEXT,
+        resolved_by VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // Safe Column Alterations
@@ -764,6 +797,56 @@ app.post(['/api/vendors/quotations', '/api/procurement/quotations'], async (req,
   }
 });
 
+function parseQuotationUnitAndPrice(rawUnit: string, rawQuantity: number, rawPrice: number, category: string = '') {
+  const u = (rawUnit || 'Quintal').toLowerCase().trim();
+  const cat = (category || '').toLowerCase().trim();
+  const isLiquid = cat.includes('dairy') || cat.includes('liquid') || cat.includes('milk') || cat.includes('juice');
+
+  let qtyInBaseUnit = Number(rawQuantity || 1);
+  let baseUnitName = isLiquid ? 'Litre' : 'kg';
+  let vendorPricePerBaseUnit = Number(rawPrice || 0);
+
+  if (u.includes('quintal')) {
+    // 1 Quintal = 100 kg
+    qtyInBaseUnit = Number(rawQuantity || 1) * 100;
+    vendorPricePerBaseUnit = Number(rawPrice || 0) / 100;
+    baseUnitName = 'kg';
+  } else if (u.includes('ton')) {
+    // 1 Metric Ton = 1000 kg
+    qtyInBaseUnit = Number(rawQuantity || 1) * 1000;
+    vendorPricePerBaseUnit = Number(rawPrice || 0) / 1000;
+    baseUnitName = 'kg';
+  } else if (u.includes('ml') || u.includes('milliliter')) {
+    // 1 Litre = 1000 mL
+    qtyInBaseUnit = Number(rawQuantity || 1) / 1000;
+    vendorPricePerBaseUnit = Number(rawPrice || 0) * 1000;
+    baseUnitName = 'Litre';
+  } else if (u.includes('liter') || u.includes('litre')) {
+    qtyInBaseUnit = Number(rawQuantity || 1);
+    vendorPricePerBaseUnit = Number(rawPrice || 0);
+    baseUnitName = 'Litre';
+  } else {
+    // kg or default
+    qtyInBaseUnit = Number(rawQuantity || 1);
+    vendorPricePerBaseUnit = Number(rawPrice || 0);
+    baseUnitName = isLiquid ? 'Litre' : 'kg';
+  }
+
+  // Calculate selling price per 1 kg / 1 Litre with 10% markup per unit
+  const sellingPrice = Number((vendorPricePerBaseUnit * 1.10).toFixed(2));
+  const originalPrice = Number((sellingPrice * 1.25).toFixed(2));
+  const displayUnit = `1 ${baseUnitName}`;
+
+  return {
+    qtyInBaseUnit,
+    baseUnitName,
+    vendorPricePerBaseUnit,
+    sellingPrice,
+    originalPrice,
+    displayUnit,
+  };
+}
+
 app.put(['/api/admin/quotations/:id/status', '/api/admin/quotations/:id'], async (req, res) => {
   const targetId = Number(req.params.id);
   const { status } = req.body || {};
@@ -774,21 +857,399 @@ app.put(['/api/admin/quotations/:id/status', '/api/admin/quotations/:id'], async
     );
     if (dbRes.rows && dbRes.rows.length > 0) {
       const q = dbRes.rows[0];
-      if (status === 'accepted') {
-        try {
-          await gatewayPgPool.query(
-            `INSERT INTO products (name, category, price, original_price, unit, image, is_organic, stock, active)
-             VALUES ($1, $2, $3, $4, '1 kg', 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400', true, 200, true)
-             ON CONFLICT DO NOTHING`,
-            [q.produce, q.category || 'Vegetables', Number(q.price), Number(q.price) * 1.25]
-          );
-        } catch { }
+      if (status === 'accepted' || status === 'approved') {
+        const crop = q.produce || q.crop_name;
+        if (crop) {
+          const cat = q.category || 'Vegetables';
+          const vendorName = q.vendor_name || 'Farm Vendor';
+          const darkStore = q.dark_store_allocation || 'Central Dark Store Hub';
+          const parsed = parseQuotationUnitAndPrice(q.unit, Number(q.quantity), Number(q.price), cat);
+
+          let defaultImg = 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&q=80';
+          if (cat.toLowerCase().includes('fruit')) {
+            defaultImg = 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=500&q=80';
+          } else if (parsed.baseUnitName === 'Litre') {
+            defaultImg = 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=500&q=80';
+          } else if (cat.toLowerCase().includes('grain')) {
+            defaultImg = 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=500&q=80';
+          }
+
+          let targetProdId: number | null = null;
+          try {
+            const existingProd = await gatewayPgPool.query('SELECT id FROM products WHERE LOWER(name) = LOWER($1) LIMIT 1', [crop]);
+            if (existingProd.rows && existingProd.rows.length > 0) {
+              targetProdId = existingProd.rows[0].id;
+              await gatewayPgPool.query(
+                `UPDATE products SET price = $1, original_price = $2, stock = stock + $3, active = true WHERE id = $4`,
+                [parsed.sellingPrice, parsed.originalPrice, parsed.qtyInBaseUnit, targetProdId]
+              );
+            } else {
+              const newProd = await gatewayPgPool.query(
+                `INSERT INTO products (name, category, price, original_price, unit, image, is_organic, stock, active)
+                 VALUES ($1, $2, $3, $4, $5, $6, true, $7, true) RETURNING id`,
+                [crop, cat, parsed.sellingPrice, parsed.originalPrice, parsed.displayUnit, defaultImg, parsed.qtyInBaseUnit]
+              );
+              targetProdId = newProd.rows[0]?.id || null;
+            }
+          } catch (e: any) {
+            console.warn('Product auto-upsert warning:', e?.message);
+          }
+
+          try {
+            await gatewayPgPool.query(
+              `INSERT INTO inventory (product_id, product_name, vendor_name, warehouse_name, quantity, unit, status, notes)
+               VALUES ($1, $2, $3, $4, $5, $6, 'in_stock', $7)`,
+              [targetProdId, crop, vendorName, darkStore, parsed.qtyInBaseUnit, parsed.baseUnitName, `Auto-stocked from approved quotation #${q.id}`]
+            );
+          } catch (e: any) {
+            console.warn('Inventory auto-stock warning:', e?.message);
+          }
+        }
       }
       return res.json({ success: true, message: `Quotation #${targetId} marked as ${status}`, quotation: q });
     }
     return res.status(404).json({ error: 'Quotation not found' });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to update quotation status', message: err?.message });
+  }
+});
+
+// INVOICES & PAYOUTS
+app.all(['/api/admin/quotations/:id/invoice'], async (req, res) => {
+  const id = Number(req.params.id);
+  const invoiceNum = `INV-2026-${id}`;
+  try {
+    const dbRes = await gatewayPgPool.query(
+      `UPDATE quotations SET invoice_generated = TRUE, invoice_number = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [invoiceNum, id]
+    );
+    const q = dbRes.rows && dbRes.rows.length > 0 ? dbRes.rows[0] : null;
+    const totalAmount = Number(q?.quantity || 10) * Number(q?.price || 500);
+    const gst = Math.round(totalAmount * 0.05);
+    const finalTotal = totalAmount + gst;
+
+    return res.json({
+      success: true,
+      invoiceNumber: q?.invoice_number || invoiceNum,
+      quotationId: id,
+      vendorName: q?.vendor_name || 'Local Farmer',
+      cropName: q?.produce || q?.crop_name || 'Produce',
+      quantity: Number(q?.quantity || 10),
+      unit: q?.unit || 'Quintal',
+      price: Number(q?.price || 500),
+      amount: totalAmount,
+      gst,
+      total: finalTotal,
+      status: q?.payment_status || 'processing',
+      paymentStatus: q?.payment_status || 'processing',
+      createdAt: q?.created_at || new Date().toISOString(),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to generate invoice', message: err?.message });
+  }
+});
+
+app.put(['/api/admin/quotations/:id/payout', '/api/admin/quotations/:id/pay'], async (req, res) => {
+  const targetId = Number(req.params.id);
+  const { paymentStatus } = req.body || {};
+  try {
+    const dbRes = await gatewayPgPool.query(
+      `UPDATE quotations SET payment_status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [paymentStatus || 'paid', targetId]
+    );
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      const q = dbRes.rows[0];
+      return res.json({ success: true, message: 'Payout marked as PAID!', quotation: q });
+    }
+    return res.status(404).json({ error: 'Quotation not found' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update payout status', message: err?.message });
+  }
+});
+
+app.get(['/api/vendors/invoices'], async (_req, res) => {
+  try {
+    const dbRes = await gatewayPgPool.query('SELECT * FROM quotations WHERE invoice_generated = true OR status = \'accepted\' ORDER BY id DESC');
+    return res.json(dbRes.rows.map(q => {
+      const amount = Number(q.quantity || 1) * Number(q.price || 0);
+      const gst = Math.round(amount * 0.05);
+      return {
+        id: q.id,
+        invoiceNumber: q.invoice_number || `INV-2026-${q.id}`,
+        quotationId: q.id,
+        vendorName: q.vendor_name,
+        produce: q.produce,
+        cropName: q.crop_name || q.produce,
+        quantity: Number(q.quantity),
+        unit: q.unit,
+        price: Number(q.price),
+        amount,
+        gst,
+        total: amount + gst,
+        paymentStatus: q.payment_status || 'processing',
+        createdAt: q.created_at,
+        updatedAt: q.updated_at
+      };
+    }));
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch invoices', message: err?.message });
+  }
+});
+
+app.get('/api/vendors/invoices/:id/download', async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const dbRes = await gatewayPgPool.query('SELECT * FROM quotations WHERE id = $1', [id]);
+    const q = dbRes.rows && dbRes.rows.length > 0 ? dbRes.rows[0] : null;
+    if (!q) return res.status(404).send('Invoice not found');
+    const amount = Number(q.quantity || 1) * Number(q.price || 0);
+    const gst = Math.round(amount * 0.05);
+    const total = amount + gst;
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Invoice ${q.invoice_number || `INV-2026-${q.id}`}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; color: #1e293b; background: #f8fafc; }
+    .card { max-width: 650px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #10b981; padding-bottom: 16px; }
+    .logo { font-size: 24px; font-weight: 800; color: #059669; }
+    .inv-num { font-size: 14px; font-weight: 700; color: #64748b; font-family: monospace; }
+    .details { margin: 24px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 14px; }
+    th { text-align: left; background: #f1f5f9; padding: 12px; border-radius: 8px; }
+    td { padding: 12px; border-bottom: 1px solid #f1f5f9; }
+    .total-row { font-size: 18px; font-weight: 800; color: #059669; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div>
+        <div class="logo">🌾 Sunotal Farms</div>
+        <div style="font-size: 12px; color: #64748b;">Direct Farm Produce Sourcing Invoice</div>
+      </div>
+      <div style="text-align: right;">
+        <div class="inv-num">${q.invoice_number || `INV-2026-${q.id}`}</div>
+        <div style="font-size: 12px; color: #64748b;">${new Date(q.created_at || Date.now()).toLocaleDateString()}</div>
+      </div>
+    </div>
+    <div class="details">
+      <div>
+        <strong>Vendor / Farmer:</strong><br/>
+        ${q.vendor_name}<br/>
+        ${q.address || ''}<br/>
+        Phone: ${q.phone || 'N/A'}
+      </div>
+      <div style="text-align: right;">
+        <strong>Delivery Destination:</strong><br/>
+        ${q.dark_store_allocation || 'Central Dark Store Hub'}<br/>
+        Quality Grade: ${q.quality_grade || 'Grade A'}
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Item Description</th>
+          <th>Qty & Unit</th>
+          <th>Unit Rate</th>
+          <th style="text-align: right;">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>${q.produce}</strong> (${q.category || 'Produce'})</td>
+          <td>${q.quantity} ${q.unit || 'Quintal'}</td>
+          <td>₹${q.price}</td>
+          <td style="text-align: right;">₹${amount.toLocaleString('en-IN')}</td>
+        </tr>
+        <tr>
+          <td colspan="3" style="text-align: right;">GST (5% Mandi Tax):</td>
+          <td style="text-align: right;">₹${gst.toLocaleString('en-IN')}</td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="3" style="text-align: right;">Final Payout Total:</td>
+          <td style="text-align: right;">₹${total.toLocaleString('en-IN')}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-top: 32px; font-size: 12px; color: #64748b; text-align: center;">
+      Status: <strong>${(q.payment_status || 'PAID').toUpperCase()}</strong> • Thank you for partnering with Sunotal Direct Sourcing Engine.
+    </div>
+  </div>
+</body>
+</html>`;
+    res.setHeader('Content-Type', 'text/html');
+    return res.send(html);
+  } catch (err: any) {
+    return res.status(500).send('Failed to generate invoice document');
+  }
+});
+
+// INVENTORY CRUD & DEDUCT
+app.get(['/api/inventory', '/api/admin/inventory'], async (_req, res) => {
+  try {
+    const dbRes = await gatewayPgPool.query('SELECT * FROM inventory ORDER BY id DESC');
+    return res.json(dbRes.rows.map(i => ({
+      id: i.id,
+      productId: i.product_id,
+      vendorId: i.vendor_id,
+      productName: i.product_name,
+      vendorName: i.vendor_name || 'Farm Vendor',
+      warehouseName: i.warehouse_name || 'Central Dark Store Hub',
+      warehouseCity: i.warehouse_city || '',
+      quantity: Number(i.quantity || 0),
+      unit: i.unit || 'kg',
+      status: i.status || 'in_stock',
+      notes: i.notes || '',
+      updatedAt: i.updated_at,
+      createdAt: i.created_at
+    })));
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch inventory', message: err?.message });
+  }
+});
+
+app.post('/api/inventory', async (req, res) => {
+  const { productId, vendorId, productName, vendorName, warehouseName, warehouseCity, quantity, unit, status, notes } = req.body || {};
+  if (!productName || quantity === undefined) return res.status(400).json({ error: 'Product name and quantity required' });
+  try {
+    const dbRes = await gatewayPgPool.query(
+      `INSERT INTO inventory (product_id, vendor_id, product_name, vendor_name, warehouse_name, warehouse_city, quantity, unit, status, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [productId || null, vendorId || null, productName, vendorName || 'Farm Vendor', warehouseName || 'Central Dark Store Hub', warehouseCity || '', Number(quantity), unit || 'kg', status || 'in_stock', notes || '']
+    );
+    const item = dbRes.rows[0];
+    return res.status(201).json({
+      id: item.id, productId: item.product_id, vendorId: item.vendor_id, productName: item.product_name, vendorName: item.vendor_name, warehouseName: item.warehouse_name, quantity: Number(item.quantity), unit: item.unit, status: item.status, notes: item.notes, createdAt: item.created_at
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to add inventory', message: err?.message });
+  }
+});
+
+app.put('/api/inventory/:id', async (req, res) => {
+  const targetId = Number(req.params.id);
+  const { quantity, status, notes } = req.body || {};
+  try {
+    const dbRes = await gatewayPgPool.query(
+      `UPDATE inventory SET quantity = COALESCE($1, quantity), status = COALESCE($2, status), notes = COALESCE($3, notes), updated_at = NOW() WHERE id = $4 RETURNING *`,
+      [quantity !== undefined ? Number(quantity) : null, status, notes, targetId]
+    );
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      const item = dbRes.rows[0];
+      return res.json({
+        id: item.id, productId: item.product_id, productName: item.product_name, quantity: Number(item.quantity), unit: item.unit, status: item.status, notes: item.notes, updatedAt: item.updated_at
+      });
+    }
+    return res.status(404).json({ error: 'Inventory item not found' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update inventory item', message: err?.message });
+  }
+});
+
+app.delete('/api/inventory/:id', async (req, res) => {
+  const targetId = Number(req.params.id);
+  try {
+    await gatewayPgPool.query('DELETE FROM inventory WHERE id = $1', [targetId]);
+    return res.json({ success: true, message: 'Inventory item deleted successfully', deletedId: targetId });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to delete inventory item', message: err?.message });
+  }
+});
+
+app.post('/api/inventory/deduct', async (req, res) => {
+  const { items } = req.body || {};
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'Items array is required' });
+  try {
+    for (const item of items) {
+      const prodId = Number(item.productId);
+      const qty = Number(item.quantity || 1);
+      if (prodId) {
+        await gatewayPgPool.query('UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2', [qty, prodId]);
+        await gatewayPgPool.query('UPDATE inventory SET quantity = GREATEST(0, quantity - $1) WHERE product_id = $2', [qty, prodId]);
+      }
+    }
+    return res.json({ success: true, message: 'Inventory stock deducted successfully' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to deduct inventory stock', message: err?.message });
+  }
+});
+
+// SUPPORT TICKETS
+app.get('/api/support/tickets', async (req, res) => {
+  try {
+    const { role, category, status, search } = req.query || {};
+    let sql = 'SELECT * FROM support_tickets WHERE 1=1';
+    const params: any[] = [];
+    if (role) { params.push(role); sql += ` AND role = $${params.length}`; }
+    if (category) { params.push(category); sql += ` AND category = $${params.length}`; }
+    if (status) { params.push(status); sql += ` AND status = $${params.length}`; }
+    if (search) { params.push(`%${String(search).toLowerCase()}%`); sql += ` AND (LOWER(subject) LIKE $${params.length} OR LOWER(sender_name) LIKE $${params.length} OR LOWER(ticket_id) LIKE $${params.length})`; }
+    sql += ' ORDER BY id DESC';
+
+    const dbRes = await gatewayPgPool.query(sql, params);
+    return res.json(dbRes.rows.map(t => ({
+      id: t.id,
+      ticketId: t.ticket_id,
+      role: t.role,
+      senderName: t.sender_name,
+      senderEmail: t.sender_email,
+      senderPhone: t.sender_phone,
+      category: t.category,
+      orderId: t.order_id,
+      subject: t.subject,
+      description: t.description,
+      status: t.status,
+      resolution: t.resolution,
+      resolvedBy: t.resolved_by,
+      createdAt: t.created_at
+    })));
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch support tickets', message: err?.message });
+  }
+});
+
+app.post('/api/support/tickets', async (req, res) => {
+  const { role = 'user', senderName, senderEmail, senderPhone, category, orderId, subject, description } = req.body || {};
+  if (!senderName || !senderEmail || !subject || !description || !category) {
+    return res.status(400).json({ error: 'Sender name, email, category, subject, and description are required' });
+  }
+  const timestamp = Date.now().toString().slice(-6);
+  const uniqueNum = Math.floor(100000 + Math.random() * 900000);
+  const ticketId = `TKT-2026-${timestamp}-${uniqueNum}`;
+  try {
+    const dbRes = await gatewayPgPool.query(
+      `INSERT INTO support_tickets (ticket_id, role, sender_name, sender_email, sender_phone, category, order_id, subject, description, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open') RETURNING *`,
+      [ticketId, role, senderName, (senderEmail || '').trim().toLowerCase(), senderPhone || '', category, orderId || '', subject, description]
+    );
+    const t = dbRes.rows[0];
+    return res.status(201).json({
+      id: t.id, ticketId: t.ticket_id, role: t.role, senderName: t.sender_name, senderEmail: t.sender_email, senderPhone: t.sender_phone, category: t.category, orderId: t.order_id, subject: t.subject, description: t.description, status: t.status, createdAt: t.created_at
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to create support ticket', message: err?.message });
+  }
+});
+
+app.put(['/api/support/tickets/:id/status', '/api/support/tickets/:id'], async (req, res) => {
+  const targetId = Number(req.params.id);
+  const { status, resolution, resolvedBy } = req.body || {};
+  try {
+    const dbRes = await gatewayPgPool.query(
+      `UPDATE support_tickets SET status = COALESCE($1, status), resolution = COALESCE($2, resolution), resolved_by = COALESCE($3, resolved_by) WHERE id = $4 RETURNING *`,
+      [status, resolution, resolvedBy, targetId]
+    );
+    if (dbRes.rows && dbRes.rows.length > 0) {
+      const t = dbRes.rows[0];
+      return res.json({ id: t.id, ticketId: t.ticket_id, status: t.status, resolution: t.resolution, resolvedBy: t.resolved_by });
+    }
+    return res.status(404).json({ error: 'Ticket not found' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update support ticket', message: err?.message });
   }
 });
 

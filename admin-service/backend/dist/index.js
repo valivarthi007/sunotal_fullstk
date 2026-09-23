@@ -481,6 +481,55 @@ app.post("/api/vendors/quotations", async (req, res) => {
         return res.status(500).json({ error: err.message || "Failed to create quotation" });
     }
 });
+function parseQuotationUnitAndPrice(rawUnit, rawQuantity, rawPrice, category = '') {
+    const u = (rawUnit || 'Quintal').toLowerCase().trim();
+    const cat = (category || '').toLowerCase().trim();
+    const isLiquid = cat.includes('dairy') || cat.includes('liquid') || cat.includes('milk') || cat.includes('juice');
+    let qtyInBaseUnit = Number(rawQuantity || 1);
+    let baseUnitName = isLiquid ? 'Litre' : 'kg';
+    let vendorPricePerBaseUnit = Number(rawPrice || 0);
+    if (u.includes('quintal')) {
+        // 1 Quintal = 100 kg
+        qtyInBaseUnit = Number(rawQuantity || 1) * 100;
+        vendorPricePerBaseUnit = Number(rawPrice || 0) / 100;
+        baseUnitName = 'kg';
+    }
+    else if (u.includes('ton')) {
+        // 1 Metric Ton = 1000 kg
+        qtyInBaseUnit = Number(rawQuantity || 1) * 1000;
+        vendorPricePerBaseUnit = Number(rawPrice || 0) / 1000;
+        baseUnitName = 'kg';
+    }
+    else if (u.includes('ml') || u.includes('milliliter')) {
+        // 1 Litre = 1000 mL
+        qtyInBaseUnit = Number(rawQuantity || 1) / 1000;
+        vendorPricePerBaseUnit = Number(rawPrice || 0) * 1000;
+        baseUnitName = 'Litre';
+    }
+    else if (u.includes('liter') || u.includes('litre')) {
+        qtyInBaseUnit = Number(rawQuantity || 1);
+        vendorPricePerBaseUnit = Number(rawPrice || 0);
+        baseUnitName = 'Litre';
+    }
+    else {
+        // kg or default
+        qtyInBaseUnit = Number(rawQuantity || 1);
+        vendorPricePerBaseUnit = Number(rawPrice || 0);
+        baseUnitName = isLiquid ? 'Litre' : 'kg';
+    }
+    // Calculate selling price per 1 kg / 1 Litre with 10% markup per unit
+    const sellingPrice = Number((vendorPricePerBaseUnit * 1.10).toFixed(2));
+    const originalPrice = Number((sellingPrice * 1.25).toFixed(2));
+    const displayUnit = `1 ${baseUnitName}`;
+    return {
+        qtyInBaseUnit,
+        baseUnitName,
+        vendorPricePerBaseUnit,
+        sellingPrice,
+        originalPrice,
+        displayUnit,
+    };
+}
 const handleQuotationStatus = async (req, res) => {
     try {
         const id = Number(req.params.id);
@@ -505,25 +554,12 @@ const handleQuotationStatus = async (req, res) => {
             const crop = updated.produce || updated.cropName;
             if (crop) {
                 const cat = (updated.category || "Vegetables").trim();
-                const isLiquid = cat.toLowerCase().includes("dairy") || cat.toLowerCase().includes("liquid") || cat.toLowerCase().includes("milk") || cat.toLowerCase().includes("juice");
-                const rawUnit = (updated.unit || "Quintal").toLowerCase();
-                let qtyInBaseUnit = Number(updated.quantity || 1);
-                const rawPrice = Number(updated.price || 0);
-                let pricePerBaseUnit = rawPrice;
-                if (rawUnit.includes("quintal")) {
-                    qtyInBaseUnit = Number(updated.quantity || 1) * 100;
-                    pricePerBaseUnit = Math.round(rawPrice / 100);
-                }
-                else if (rawUnit.includes("ton")) {
-                    qtyInBaseUnit = Number(updated.quantity || 1) * 1000;
-                    pricePerBaseUnit = Math.round(rawPrice / 1000);
-                }
-                const displayUnit = isLiquid ? "1 Litre" : "1 kg";
+                const parsed = parseQuotationUnitAndPrice(updated.unit, updated.quantity, updated.price, cat);
                 let defaultImg = "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&q=80";
                 if (cat.toLowerCase().includes("fruit")) {
                     defaultImg = "https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=500&q=80";
                 }
-                else if (isLiquid) {
+                else if (parsed.baseUnitName === "Litre") {
                     defaultImg = "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=500&q=80";
                 }
                 else if (cat.toLowerCase().includes("grain")) {
@@ -532,13 +568,25 @@ const handleQuotationStatus = async (req, res) => {
                 else if (cat.toLowerCase().includes("nut") || cat.toLowerCase().includes("dry")) {
                     defaultImg = "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?w=500&q=80";
                 }
-                const prodDbRes = await pgPool.query(`INSERT INTO products (name, category, price, original_price, unit, image, is_organic, active, description)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           ON CONFLICT DO UPDATE SET price = EXCLUDED.price, active = TRUE RETURNING id`, [crop, cat, pricePerBaseUnit, Math.round(pricePerBaseUnit * 1.25), displayUnit, defaultImg, true, true, `Fresh ${cat} direct from ${updated.vendorName}. Quality grade: ${updated.qualityGrade}`]);
-                const targetProdId = prodDbRes.rows[0]?.id;
+                let targetProdId = null;
+                try {
+                    const existingProd = await pgPool.query("SELECT id FROM products WHERE LOWER(name) = LOWER($1) LIMIT 1", [crop]);
+                    if (existingProd.rows && existingProd.rows.length > 0) {
+                        targetProdId = existingProd.rows[0].id;
+                        await pgPool.query(`UPDATE products SET price = $1, original_price = $2, stock = stock + $3, active = TRUE WHERE id = $4`, [parsed.sellingPrice, parsed.originalPrice, parsed.qtyInBaseUnit, targetProdId]);
+                    }
+                    else {
+                        const prodDbRes = await pgPool.query(`INSERT INTO products (name, category, price, original_price, unit, image, is_organic, active, description, stock)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`, [crop, cat, parsed.sellingPrice, parsed.originalPrice, parsed.displayUnit, defaultImg, true, true, `Fresh ${cat} direct from ${updated.vendorName}. Quality grade: ${updated.qualityGrade}`, parsed.qtyInBaseUnit]);
+                        targetProdId = prodDbRes.rows[0]?.id || null;
+                    }
+                }
+                catch (e) {
+                    console.warn("Product auto-upsert warning:", e?.message);
+                }
                 if (targetProdId) {
                     await pgPool.query(`INSERT INTO inventory (product_id, product_name, vendor_name, warehouse_name, quantity, unit, status, notes)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [targetProdId, crop, updated.vendorName || "Farm Vendor", updated.darkStoreAllocation || "Central Dark Store", qtyInBaseUnit, isLiquid ? "Litre" : "kg", "in_stock", `Auto-stocked from approved quotation #${updated.id}`]);
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [targetProdId, crop, updated.vendorName || "Farm Vendor", updated.darkStoreAllocation || "Central Dark Store Hub", parsed.qtyInBaseUnit, parsed.baseUnitName, "in_stock", `Auto-stocked from approved quotation #${updated.id}`]);
                 }
             }
         }
@@ -551,6 +599,22 @@ const handleQuotationStatus = async (req, res) => {
 };
 app.put("/api/admin/quotations/:id/status", handleQuotationStatus);
 app.patch("/api/admin/quotations/:id/status", handleQuotationStatus);
+const handlePayout = async (req, res) => {
+    const targetId = Number(req.params.id);
+    const { paymentStatus } = req.body || {};
+    try {
+        const dbRes = await pgPool.query(`UPDATE quotations SET payment_status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`, [paymentStatus || "paid", targetId]);
+        if (dbRes.rows && dbRes.rows.length > 0) {
+            return res.json({ success: true, message: "Payout marked as PAID!", quotation: dbRes.rows[0] });
+        }
+        return res.status(404).json({ error: "Quotation not found" });
+    }
+    catch (err) {
+        return res.status(500).json({ error: "Failed to update payout status", message: err?.message });
+    }
+};
+app.put("/api/admin/quotations/:id/payout", handlePayout);
+app.patch("/api/admin/quotations/:id/payout", handlePayout);
 const handleGenerateInvoice = async (req, res) => {
     const id = Number(req.params.id);
     const invoiceNum = `INV-2026-${id}`;
