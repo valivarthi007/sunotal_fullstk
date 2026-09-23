@@ -22,11 +22,7 @@ interface DeliveryRider {
 }
 
 export default function DeliveryPartners() {
-  const [riders, setRiders] = useState<DeliveryRider[]>([
-    { id: "RIDER-101", name: "Vikram Singh", phone: "+91 9876543210", email: "vikram@sunotal.com", city: "Bengaluru", vehicle: "Electric Bike", status: "ONLINE", walletBalance: 1450, avgRating: 4.9, totalRatings: 128, totalDeliveries: 154 },
-    { id: "RIDER-102", name: "Suresh Kumar", phone: "+91 9876543211", email: "suresh@sunotal.com", city: "Bengaluru", vehicle: "Scooter", status: "ONLINE", walletBalance: 980, avgRating: 4.8, totalRatings: 94, totalDeliveries: 110 },
-    { id: "RIDER-103", name: "Anand Verma", phone: "+91 9876543212", email: "anand@sunotal.com", city: "Hyderabad", vehicle: "Bike", status: "OFFLINE", walletBalance: 2100, avgRating: 4.7, totalRatings: 210, totalDeliveries: 245 },
-  ]);
+  const [riders, setRiders] = useState<DeliveryRider[]>([]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newRider, setNewRider] = useState({ name: "", phone: "", email: "", city: "Bengaluru", vehicle: "Electric Bike" });
@@ -36,23 +32,29 @@ export default function DeliveryPartners() {
       const res = await fetch("/api/delivery/riders");
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setRiders(data.map((r: any) => ({
             id: r.id || r.riderId || `RIDER-${r.id}`,
             name: r.riderName || r.name || "Delivery Partner",
-            phone: r.phone || "+91 9876543210",
-            email: r.email || `${(r.riderName || r.name || "rider").toLowerCase().replace(/\s+/g, "")}@sunotal.com`,
+            phone: r.phone || "",
+            email: r.email || "",
             city: r.city || "Bengaluru",
             vehicle: r.vehicle || "Electric Bike",
             status: r.status === "completed" || r.status === "ONLINE" ? "ONLINE" : "OFFLINE",
-            walletBalance: Number(r.amount || r.walletBalance || 1200),
-            avgRating: 4.9,
-            totalRatings: r.tripsCompleted ? r.tripsCompleted * 2 : 28,
-            totalDeliveries: r.tripsCompleted || 35,
+            walletBalance: Number(r.amount || r.walletBalance || 0),
+            avgRating: Number(r.avgRating || 5.0),
+            totalRatings: Number(r.totalRatings || 0),
+            totalDeliveries: Number(r.totalDeliveries || r.tripsCompleted || 0),
           })));
+        } else {
+          setRiders([]);
         }
+      } else {
+        setRiders([]);
       }
-    } catch {}
+    } catch {
+      setRiders([]);
+    }
   };
 
   useEffect(() => {

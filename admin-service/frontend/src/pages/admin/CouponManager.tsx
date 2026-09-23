@@ -22,12 +22,7 @@ interface Coupon {
 }
 
 export default function CouponManager() {
-  const [coupons, setCoupons] = useState<Coupon[]>([
-    { id: 1, code: "SUNOTAL50", discountType: "percentage", discountValue: 50, minOrderAmount: 199, maxDiscountAmount: 100, usageLimit: 500, usedCount: 142, active: true },
-    { id: 2, code: "FREESHIP", discountType: "flat", discountValue: 50, minOrderAmount: 149, maxDiscountAmount: 50, usageLimit: 1000, usedCount: 389, active: true },
-    { id: 3, code: "FIRST100", discountType: "flat", discountValue: 100, minOrderAmount: 299, maxDiscountAmount: 100, usageLimit: 200, usedCount: 88, active: true },
-    { id: 4, code: "INSTA20", discountType: "percentage", discountValue: 20, minOrderAmount: 99, maxDiscountAmount: 50, usageLimit: 500, usedCount: 204, active: true },
-  ]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCoupon, setNewCoupon] = useState({
@@ -45,9 +40,11 @@ export default function CouponManager() {
       const data = await res.json();
       if (data.success && Array.isArray(data.coupons)) {
         setCoupons(data.coupons);
+      } else {
+        setCoupons([]);
       }
     } catch {
-      // Use initial state
+      setCoupons([]);
     }
   };
 

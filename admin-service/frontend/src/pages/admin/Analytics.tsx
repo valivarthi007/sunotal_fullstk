@@ -19,29 +19,14 @@ interface TopProduct {
 }
 
 export default function Analytics() {
-  const [revenueData, setRevenueData] = useState<RevenueDataPoint[]>([
-    { date: "2026-09-15", orders: 42, revenue: 14200 },
-    { date: "2026-09-16", orders: 58, revenue: 19800 },
-    { date: "2026-09-17", orders: 65, revenue: 22400 },
-    { date: "2026-09-18", orders: 84, revenue: 29100 },
-    { date: "2026-09-19", orders: 92, revenue: 34500 },
-    { date: "2026-09-20", orders: 110, revenue: 41200 },
-    { date: "2026-09-21", orders: 125, revenue: 48900 },
-  ]);
-
-  const [topProducts, setTopProducts] = useState<TopProduct[]>([
-    { name: "Alphonso Mangoes", totalSold: 340, revenue: 119000 },
-    { name: "Fresh Spinach", totalSold: 280, revenue: 11200 },
-    { name: "Organic Tomatoes", totalSold: 245, revenue: 8575 },
-    { name: "Cold Pressed Coconut Oil", totalSold: 190, revenue: 53200 },
-    { name: "Whole Almonds", totalSold: 150, revenue: 67500 },
-  ]);
+  const [revenueData, setRevenueData] = useState<RevenueDataPoint[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
 
   const [deliveryKpis, setDeliveryKpis] = useState({
-    totalRiders: 14,
-    avgRiderRating: 4.9,
-    totalPayouts: 48500,
-    totalDeliveredOrders: 674,
+    totalRiders: 0,
+    avgRiderRating: 0,
+    totalPayouts: 0,
+    totalDeliveredOrders: 0,
   });
 
   useEffect(() => {
@@ -53,27 +38,39 @@ export default function Analytics() {
           fetch("/api/analytics/delivery-kpis"),
         ]);
 
-        const revJson = await revRes.json();
-        if (revJson.success && Array.isArray(revJson.data) && revJson.data.length > 0) {
-          setRevenueData(revJson.data);
+        if (revRes.ok) {
+          const revJson = await revRes.json();
+          if (revJson.success && Array.isArray(revJson.data)) {
+            setRevenueData(revJson.data);
+          } else {
+            setRevenueData([]);
+          }
         }
 
-        const topJson = await topRes.json();
-        if (topJson.success && Array.isArray(topJson.products) && topJson.products.length > 0) {
-          setTopProducts(topJson.products);
+        if (topRes.ok) {
+          const topJson = await topRes.json();
+          if (topJson.success && Array.isArray(topJson.products)) {
+            setTopProducts(topJson.products);
+          } else {
+            setTopProducts([]);
+          }
         }
 
-        const kpiJson = await kpiRes.json();
-        if (kpiJson.success) {
-          setDeliveryKpis((prev) => ({
-            totalRiders: Number(kpiJson.totalRiders ?? prev.totalRiders ?? 0),
-            avgRiderRating: Number(kpiJson.avgRiderRating ?? prev.avgRiderRating ?? 4.9),
-            totalPayouts: Number(kpiJson.totalPayouts ?? prev.totalPayouts ?? 0),
-            totalDeliveredOrders: Number(kpiJson.totalDeliveredOrders ?? prev.totalDeliveredOrders ?? 0),
-          }));
+        if (kpiRes.ok) {
+          const kpiJson = await kpiRes.json();
+          if (kpiJson.success) {
+            setDeliveryKpis({
+              totalRiders: Number(kpiJson.totalRiders || 0),
+              avgRiderRating: Number(kpiJson.avgRiderRating || 0),
+              totalPayouts: Number(kpiJson.totalPayouts || 0),
+              totalDeliveredOrders: Number(kpiJson.totalDeliveredOrders || 0),
+            });
+          }
         }
       } catch {
-        // Fallback to initial mock data if backend not reached
+        setRevenueData([]);
+        setTopProducts([]);
+        setDeliveryKpis({ totalRiders: 0, avgRiderRating: 0, totalPayouts: 0, totalDeliveredOrders: 0 });
       }
     }
     loadAnalytics();
