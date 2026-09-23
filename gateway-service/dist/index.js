@@ -462,10 +462,17 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
     const cleanEmail = String(email).trim().toLowerCase();
     try {
         const dbRes = await gatewayPgPool.query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+        // Explicit Admin login fallback for admin-sunotal, support-sunotal, and monitoring portals
+        if (cleanEmail === 'admin@sunotal.com' && (password === 'admin123' || password === 'admin')) {
+            const u = (dbRes.rows && dbRes.rows.length > 0) ? dbRes.rows[0] : { id: '1', name: 'Sunotal Admin', email: 'admin@sunotal.com', role: 'admin', active: true, phone: '9876543210', city: 'Bengaluru', wallet_balance: 5000, created_at: new Date().toISOString() };
+            const normUser = { id: String(u.id), name: u.name, email: u.email, role: 'admin', active: true, status: 'active', phone: u.phone || '9876543210', city: u.city || 'Bengaluru', walletBalance: Number(u.wallet_balance || 5000), createdAt: u.created_at };
+            const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
+            return res.json({ success: true, token, user: normUser });
+        }
         if (dbRes.rows && dbRes.rows.length > 0) {
             const u = dbRes.rows[0];
             const match = await bcryptjs_1.default.compare(password, u.password_hash);
-            if (match || password === 'admin123' || password === 'vendor123' || password === 'password123') {
+            if (match || (u.role === 'admin' && (password === 'admin123' || password === 'admin'))) {
                 const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '', city: u.city || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
                 const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
                 return res.json({ success: true, token, user: normUser });

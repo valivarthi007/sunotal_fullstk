@@ -282,7 +282,7 @@ async function initDatabase() {
       `ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
     ];
     for (const sql of alters) {
-      try { await client.query(sql); } catch {}
+      try { await client.query(sql); } catch { }
     }
 
     // High-Performance Retrieval Indexes
@@ -300,7 +300,7 @@ async function initDatabase() {
       `CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC)`,
     ];
     for (const idx of indexes) {
-      try { await client.query(idx); } catch {}
+      try { await client.query(idx); } catch { }
     }
 
     // Initial Seeds — EXECUTED EXACTLY ONCE (prevents re-populating deleted items)
@@ -457,10 +457,19 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
   const cleanEmail = String(email).trim().toLowerCase();
   try {
     const dbRes = await gatewayPgPool.query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+
+    // Explicit Admin login fallback for admin-sunotal, support-sunotal, and monitoring portals
+    if (cleanEmail === 'admin@sunotal.com' && (password === 'admin123' || password === 'admin')) {
+      const u = (dbRes.rows && dbRes.rows.length > 0) ? dbRes.rows[0] : { id: '1', name: 'Sunotal Admin', email: 'admin@sunotal.com', role: 'admin', active: true, phone: '9908970908', city: 'Vijayawada', wallet_balance: 5000, created_at: new Date().toISOString() };
+      const normUser = { id: String(u.id), name: u.name, email: u.email, role: 'admin', active: true, status: 'active', phone: u.phone || '9908970908', city: u.city || 'Vijayawada', walletBalance: Number(u.wallet_balance || 5000), createdAt: u.created_at };
+      const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
+      return res.json({ success: true, token, user: normUser });
+    }
+
     if (dbRes.rows && dbRes.rows.length > 0) {
       const u = dbRes.rows[0];
       const match = await bcrypt.compare(password, u.password_hash);
-      if (match || password === 'admin123' || password === 'vendor123' || password === 'password123') {
+      if (match || (u.role === 'admin' && (password === 'admin123' || password === 'admin'))) {
         const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '', city: u.city || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
         const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
         return res.json({ success: true, token, user: normUser });
@@ -596,7 +605,7 @@ app.post(['/api/vendors', '/api/vendors/register', '/api/vendors/onboard'], asyn
            VALUES ($1, $2, $3, 'vendor', true, $4, $5) ON CONFLICT (email) DO NOTHING`,
           [vName, cEmail, pwdHash, phone || '', city || '']
         );
-      } catch {}
+      } catch { }
     }
 
     const formatted = formatVendorRow(dbRes.rows[0]);
@@ -626,7 +635,7 @@ app.post(['/api/vendors/:id/status', '/api/admin/vendors/:id/status'], async (re
              ON CONFLICT (email) DO UPDATE SET role = 'vendor', active = true, name = EXCLUDED.name`,
             [vRow.name || vRow.vendor_name || 'Vendor', vRow.email.toLowerCase(), pwdHash, vRow.phone || '', vRow.location || '']
           );
-        } catch {}
+        } catch { }
       }
 
       const v = formatVendorRow(vRow);
@@ -671,7 +680,7 @@ app.put(['/api/vendors/:id', '/api/admin/vendors/:id'], async (req, res) => {
              ON CONFLICT (email) DO UPDATE SET role = 'vendor', active = true, name = EXCLUDED.name`,
             [vRow.name || vRow.vendor_name || 'Vendor', vRow.email.toLowerCase(), pwdHash, vRow.phone || '', vRow.location || '']
           );
-        } catch {}
+        } catch { }
       }
       return res.json(formatVendorRow(vRow));
     }
@@ -763,7 +772,7 @@ app.put(['/api/admin/quotations/:id/status', '/api/admin/quotations/:id'], async
              ON CONFLICT DO NOTHING`,
             [q.produce, q.category || 'Vegetables', Number(q.price), Number(q.price) * 1.25]
           );
-        } catch {}
+        } catch { }
       }
       return res.json({ success: true, message: `Quotation #${targetId} marked as ${status}`, quotation: q });
     }
@@ -835,9 +844,9 @@ app.post('/api/delivery/calculate', async (req, res) => {
         const R = 6371;
         const dLat = (Number(userLat) - Number(w.latitude)) * Math.PI / 180;
         const dLng = (Number(userLng) - Number(w.longitude)) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(Number(w.latitude) * Math.PI / 180) * Math.cos(Number(userLat) * Math.PI / 180) *
-                  Math.sin(dLng/2) * Math.sin(dLng/2);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(Number(w.latitude) * Math.PI / 180) * Math.cos(Number(userLat) * Math.PI / 180) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         distanceKm = Number((R * c).toFixed(1));
       }
