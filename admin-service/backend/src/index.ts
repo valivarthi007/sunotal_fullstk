@@ -3,12 +3,84 @@ import express from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getPgPool } from "./lib/db.js";
 
 export const app = express();
 const PORT = Number(process.env.PORT ?? 5002);
 const DATABASE_URL = process.env.DATABASE_URL || "postgresql://sunotal:sunotal_pass_dev@127.0.0.1:5432/sunotal";
 const JWT_SECRET = process.env.JWT_SECRET || "sunotal-jwt-secret";
+const AWS_REGION = process.env.AWS_REGION || "ap-south-1";
+const AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || "jcs-raju-sunotal-final";
+const AWS_CLOUDFRONT_DOMAIN = process.env.AWS_CLOUDFRONT_DOMAIN || "";
+
+let s3Client: S3Client | null = null;
+try {
+  s3Client = new S3Client({
+    region: AWS_REGION,
+    credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    } : undefined
+  });
+} catch (err) {
+  console.warn("⚠️ Could not initialize AWS S3 client in operations-service:", err);
+}
+
+export async function uploadToS3(params: {
+  filename: string;
+  data: string | Buffer;
+  contentType?: string;
+  folder?: string;
+}): Promise<string> {
+  const { filename, data, folder = "images" } = params;
+  let buffer: Buffer;
+  let contentType = params.contentType || "image/png";
+
+  if (typeof data === "string") {
+    if (data.startsWith("data:")) {
+      const match = data.match(/^data:(.+?);base64,(.+)$/);
+      if (match) {
+        contentType = match[1];
+        buffer = Buffer.from(match[2], "base64");
+      } else {
+        buffer = Buffer.from(data, "base64");
+      }
+    } else {
+      buffer = Buffer.from(data, "base64");
+    }
+  } else {
+    buffer = data;
+  }
+
+  const sanitized = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const key = `${folder.replace(/^\/+|\/+$/g, "")}/${Date.now()}-${sanitized}`;
+
+  if (s3Client) {
+    try {
+      const command = new PutObjectCommand({
+        Bucket: AWS_S3_BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+        ACL: "public-read"
+      });
+      await s3Client.send(command);
+
+      if (AWS_CLOUDFRONT_DOMAIN) {
+        return `https://${AWS_CLOUDFRONT_DOMAIN.replace(/^https?:\/\//, "")}/${key}`;
+      }
+      return `https://${AWS_S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+    } catch (err: any) {
+      console.warn("⚠️ AWS S3 Upload Warning in operations-service:", err?.message || err);
+    }
+  }
+
+  if (AWS_CLOUDFRONT_DOMAIN) {
+    return `https://${AWS_CLOUDFRONT_DOMAIN.replace(/^https?:\/\//, "")}/${key}`;
+  }
+  return `https://${AWS_S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+}
 const pgPool = getPgPool({ serviceName: "operations-service" });
 
 app.use(cors({ origin: true, credentials: true }));
@@ -630,6 +702,30 @@ const handleQuotationStatus = async (req: any, res: any) => {
 app.put("/api/admin/quotations/:id/status", handleQuotationStatus);
 app.patch("/api/admin/quotations/:id/status", handleQuotationStatus);
 
+// S3 FILE UPLOAD ENDPOINT FOR PHOTOS & DOCUMENTS
+app.post("/api/upload", async (req: any, res: any) => {
+  try {
+    const { filename, data, folder } = req.body || {};
+    if (!filename || !data) {
+      return res.status(400).json({ error: "Filename and base64 file data are required" });
+    }
+    const s3Url = await uploadToS3({
+      filename: String(filename),
+      data: String(data),
+      folder: folder ? String(folder) : "images"
+    });
+    return res.json({
+      success: true,
+      url: s3Url,
+      key: s3Url.split(".com/")[1] || filename,
+      bucket: AWS_S3_BUCKET
+    });
+  } catch (err: any) {
+    console.error("Upload endpoint error:", err);
+    return res.status(500).json({ error: "Failed to upload file to S3", message: err?.message });
+  }
+});
+
 const handlePayout = async (req: any, res: any) => {
   const targetId = Number(req.params.id);
   const { paymentStatus } = req.body || {};
@@ -658,31 +754,132 @@ const handleGenerateInvoice = async (req: any, res: any) => {
   ).catch(() => null);
   const q = dbRes?.rows?.[0] ? {
     invoiceNumber: dbRes.rows[0].invoice_number,
-    quantity: dbRes.rows[0].quantity,
-    price: dbRes.rows[0].price,
+    quantity: Number(dbRes.rows[0].quantity),
+    price: Number(dbRes.rows[0].price),
     vendorName: dbRes.rows[0].vendor_name,
     produce: dbRes.rows[0].produce,
     unit: dbRes.rows[0].unit,
     qualityGrade: dbRes.rows[0].quality_grade,
+    darkStore: dbRes.rows[0].dark_store_allocation,
     paymentStatus: dbRes.rows[0].payment_status,
     createdAt: dbRes.rows[0].created_at
   } : null;
 
-  const totalAmount = Number(q?.quantity || 10) * Number(q?.price || 500);
+  const vendorName = q?.vendorName || "Local Farmer";
+  const cropName = q?.produce || "Produce";
+  const quantity = q?.quantity || 10;
+  const unit = q?.unit || "Quintal";
+  const price = q?.price || 500;
+  const totalAmount = quantity * price;
   const gst = Math.round(totalAmount * 0.05);
   const finalTotal = totalAmount + gst;
 
+  const invoiceHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>GST Tax Invoice ${invoiceNum}</title>
+  <style>
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1f2937; padding: 40px; background: #f9fafb; }
+    .invoice-card { max-width: 800px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e5e7eb; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #10b981; padding-bottom: 20px; margin-bottom: 24px; }
+    .logo { font-size: 28px; font-weight: 800; color: #059669; }
+    .inv-title { text-align: right; font-size: 20px; font-weight: 700; color: #374151; }
+    .meta-table, .items-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    .meta-table td { padding: 8px 0; font-size: 14px; }
+    .items-table th { background: #f3f4f6; color: #374151; padding: 12px; text-align: left; font-size: 13px; text-transform: uppercase; }
+    .items-table td { padding: 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+    .total-box { margin-left: auto; width: 300px; padding: 16px; background: #ecfdf5; border-radius: 12px; border: 1px solid #a7f3d0; text-align: right; }
+    .total-box div { padding: 4px 0; font-size: 15px; }
+    .grand-total { font-size: 20px; font-weight: 800; color: #047857; margin-top: 8px; border-top: 1px solid #6ee7b7; padding-top: 8px; }
+    .footer { text-align: center; font-size: 12px; color: #9ca3af; margin-top: 32px; }
+  </style>
+</head>
+<body>
+  <div class="invoice-card">
+    <div class="header">
+      <div>
+        <div class="logo">Sunotal Direct</div>
+        <div style="font-size: 12px; color: #6b7280;">Direct Farm Sourcing & Logistics Platform</div>
+      </div>
+      <div class="inv-title">
+        GST TAX INVOICE<br>
+        <span style="font-size: 14px; color: #10b981;">${invoiceNum}</span>
+      </div>
+    </div>
+
+    <table class="meta-table">
+      <tr>
+        <td><strong>Vendor / Farmer Name:</strong> ${vendorName}</td>
+        <td style="text-align: right;"><strong>Date:</strong> ${new Date().toISOString().split('T')[0]}</td>
+      </tr>
+      <tr>
+        <td><strong>Dark Store Destination:</strong> ${q?.darkStore || 'Vijayawada Central Hub'}</td>
+        <td style="text-align: right;"><strong>Payment Status:</strong> <span style="text-transform: uppercase; color: #047857;">${q?.paymentStatus || 'paid'}</span></td>
+      </tr>
+    </table>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>Item / Produce Description</th>
+          <th>Unit</th>
+          <th style="text-align: right;">Quantity</th>
+          <th style="text-align: right;">Unit Price (₹)</th>
+          <th style="text-align: right;">Amount (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>${cropName}</strong> (${q?.qualityGrade || 'Grade A Organic'})</td>
+          <td>${unit}</td>
+          <td style="text-align: right;">${quantity}</td>
+          <td style="text-align: right;">₹${price.toLocaleString('en-IN')}</td>
+          <td style="text-align: right;">₹${totalAmount.toLocaleString('en-IN')}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="total-box">
+      <div>Subtotal: ₹${totalAmount.toLocaleString('en-IN')}</div>
+      <div>GST (5% Agricultural Sourcing): ₹${gst.toLocaleString('en-IN')}</div>
+      <div class="grand-total">Total Payable: ₹${finalTotal.toLocaleString('en-IN')}</div>
+    </div>
+
+    <div class="footer">
+      Generated automatically by Sunotal Procurement Engine | Stored securely in AWS S3 (${AWS_S3_BUCKET})
+    </div>
+  </div>
+</body>
+</html>`;
+
+  let s3Url = "";
+  try {
+    s3Url = await uploadToS3({
+      filename: `invoice-${invoiceNum}.html`,
+      data: Buffer.from(invoiceHtml, "utf-8"),
+      contentType: "text/html",
+      folder: "invoices"
+    });
+  } catch (err: any) {
+    console.warn("S3 Invoice upload warning in operations-service:", err?.message);
+  }
+
   return res.json({
     success: true,
-    invoiceNumber: q?.invoiceNumber || `INV-2026-${id}`,
+    invoiceNumber: q?.invoiceNumber || invoiceNum,
     quotationId: id,
-    vendorName: q?.vendorName || "Local Farmer",
-    cropName: q?.produce || "Produce",
-    quantity: q?.quantity || 10,
-    unit: q?.unit || "Quintal",
-    price: q?.price || 500,
+    vendorName,
+    cropName,
+    quantity,
+    unit,
+    price,
+    amount: totalAmount,
     gst,
     total: finalTotal,
+    s3Url,
+    pdfUrl: s3Url,
+    invoiceUrl: s3Url,
     status: q?.paymentStatus || "processing",
     createdAt: new Date().toISOString(),
   });
