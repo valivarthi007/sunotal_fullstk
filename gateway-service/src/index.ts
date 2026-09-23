@@ -1879,6 +1879,104 @@ app.get(['/api/storefront/search', '/api/products/search'], async (req, res) => 
   }
 });
 
+// GROQ AI CUSTOMER SUPPORT & ASSISTANT API
+app.post(['/api/support/ai-chat', '/api/ai/chat'], async (req, res) => {
+  const { message, customerName, orderId } = req.body || {};
+  const userMessage = String(message || '').trim();
+  if (!userMessage) return res.status(400).json({ error: 'Message is required' });
+
+  const apiKey = process.env.GROQ_API_KEY || '';
+
+  // 1. Fetch Dynamic Context from PostgreSQL Database
+  let dbContext = '';
+  let activeProducts: any[] = [];
+  try {
+    const [pRes, oRes, wRes] = await Promise.all([
+      gatewayPgPool.query('SELECT id, name, category, price, unit FROM products WHERE active = true ORDER BY RANDOM() LIMIT 8'),
+      gatewayPgPool.query('SELECT id, order_number, status, final_amount, created_at FROM orders ORDER BY id DESC LIMIT 3'),
+      gatewayPgPool.query('SELECT id, name, city FROM warehouses WHERE is_active = true LIMIT 3')
+    ]);
+
+    activeProducts = pRes.rows || [];
+    const productsContext = activeProducts.map(p => `- ${p.name} (${p.category}): ₹${p.price}/${p.unit || '1 kg'}`).join('\n');
+    const ordersContext = (oRes.rows || []).map(o => `- Order #${o.order_number || o.id}: ${o.status.toUpperCase()} (₹${o.final_amount})`).join('\n');
+    const storesContext = (wRes.rows || []).map(w => `- ${w.name} (${w.city})`).join('\n');
+
+    dbContext = `
+LIVE STOREFRONT CONTEXT FROM POSTGRESQL DATABASE:
+Products in Stock:
+${productsContext || 'None'}
+
+Recent Customer Orders:
+${ordersContext || 'No active orders'}
+
+Active Dark Store Hubs:
+${storesContext || 'Central Dark Store'}
+    `.trim();
+  } catch (err) {
+    console.warn('⚠️ Error fetching DB context for AI Chat:', err);
+  }
+
+  // 2. Call Groq Llama 3.1 8B Instant LLM API if key is present
+  if (apiKey && apiKey.startsWith('gsk_')) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.1-8b-instant',
+          messages: [
+            {
+              role: 'system',
+              content: `You are SunoBot, the AI assistant for Sunotal 10-minute organic grocery app. Use the dynamic database context provided below to answer questions about products, orders, refunds, and dark stores. Be friendly, concise, and helpful. Do not make up fake order numbers or fake dark store IDs. Keep answers under 3 sentences.\n\n${dbContext}`,
+            },
+            {
+              role: 'user',
+              content: userMessage,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 300,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const replyText = data.choices?.[0]?.message?.content;
+        if (replyText) {
+          return res.json({ success: true, response: replyText.trim() });
+        }
+      }
+    } catch (e: any) {
+      console.warn('⚠️ Groq API call error:', e?.message);
+    }
+  }
+
+  // 3. Dynamic Fallback strictly constructed from PostgreSQL Database rows (No hardcoding)
+  let botText = `I'm SunoBot AI! How can I help with your 10-minute grocery order today?`;
+  let suggestedAction: any = undefined;
+
+  if (activeProducts.length > 0) {
+    const matchedProd = activeProducts.find(p => userMessage.toLowerCase().includes(p.name.toLowerCase()) || userMessage.toLowerCase().includes(p.category.toLowerCase())) || activeProducts[0];
+    if (matchedProd) {
+      suggestedAction = {
+        label: `Add ${matchedProd.name} (₹${matchedProd.price}) to Cart`,
+        productName: matchedProd.name,
+        price: Number(matchedProd.price)
+      };
+    }
+  }
+
+  return res.json({
+    success: true,
+    response: `${botText}\n\n${dbContext ? `DB Snapshot:\n${dbContext}` : ''}`,
+    suggestedAction
+  });
+});
+
 // Global Fallback for Unhandled API Routes (returns JSON instead of Express HTML 404)
 app.use('/api/*', (req, res) => {
   return res.status(404).json({ error: `API endpoint ${req.method} ${req.originalUrl || req.url} not found`, path: req.originalUrl || req.url });

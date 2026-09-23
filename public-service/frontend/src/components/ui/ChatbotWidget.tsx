@@ -42,7 +42,7 @@ export const ChatbotWidget: React.FC = () => {
     }
   }, [messages, isOpen]);
 
-  const handleSendMessage = (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string) => {
     const query = textToSend || inputMessage.trim();
     if (!query) return;
 
@@ -57,26 +57,43 @@ export const ChatbotWidget: React.FC = () => {
     if (!textToSend) setInputMessage('');
     setIsTyping(true);
 
-    // Simulate AI response delay
+    try {
+      const res = await fetch('/api/support/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: query }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const botMsg: ChatMessage = {
+          id: String(Date.now() + 1),
+          sender: 'bot',
+          text: data.response || "I'm here to assist with 10-minute grocery delivery, active orders, or recipe ideas!",
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          suggestedAction: data.suggestedAction
+        };
+        setMessages((prev) => [...prev, botMsg]);
+        setIsTyping(false);
+        return;
+      }
+    } catch {}
+
+    // Fallback if network error occurs
     setTimeout(() => {
-      let botText = "I'm here to assist! You can check your active orders, browse 10-minute fresh delivery products, or request recipe recommendations.";
+      let botText = "I'm SunoBot AI! You can check your active orders, 10-minute delivery status, or recipe recommendations.";
       let suggestedAction: ChatMessage['suggestedAction'] | undefined = undefined;
 
       const lower = query.toLowerCase();
 
       if (lower.includes('track') || lower.includes('order') || lower.includes('status')) {
-        botText = "📦 Order #1002 is OUT FOR DELIVERY! Rider Vikram is 1.2 km away and estimated to arrive in 3 minutes (10-minute guarantee active).";
+        botText = "📦 Your order is processing at the nearest Sunotal Dark Store Hub and is on track for 10-minute express delivery!";
       } else if (lower.includes('recipe') || lower.includes('cook') || lower.includes('paneer') || lower.includes('spinach')) {
-        botText = "🥗 Great choice! For Palak Paneer, I recommend fresh organic spinach, fresh cottage cheese, garlic, and heavy cream.";
+        botText = "🥗 For Palak Paneer, I recommend fresh organic spinach, fresh cottage cheese, garlic, and heavy cream.";
         suggestedAction = {
           label: "Add Fresh Paneer (200g - ₹90) to Cart",
           productName: "Fresh Organic Paneer 200g",
           price: 90
         };
-      } else if (lower.includes('refund') || lower.includes('missing') || lower.includes('damage')) {
-        botText = "🛡️ We apologize if an item was missing or damaged. Refunds are instantly credited to your Sunotal Wallet within 2 minutes of claim submit.";
-      } else if (lower.includes('store') || lower.includes('delivery') || lower.includes('area') || lower.includes('fast')) {
-        botText = "⚡ Your location is within 1.8km of Dark Store #DS-HYD-04. All orders placed now qualify for 10-minute express delivery!";
       }
 
       const botMsg: ChatMessage = {
@@ -89,7 +106,7 @@ export const ChatbotWidget: React.FC = () => {
 
       setMessages((prev) => [...prev, botMsg]);
       setIsTyping(false);
-    }, 900);
+    }, 600);
   };
 
   const handleAddSuggested = (action: NonNullable<ChatMessage['suggestedAction']>) => {
