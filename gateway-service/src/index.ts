@@ -914,7 +914,67 @@ app.get('/api/product-definitions', async (_req, res) => {
 });
 
 // RIDER FLEET & PAYOUTS
-app.get(['/api/delivery/riders', '/api/delivery/payouts', '/api/admin/rider-payouts'], async (_req, res) => {
+app.get('/api/delivery/riders', async (_req, res) => {
+  try {
+    const usersRes = await gatewayPgPool.query(`
+      SELECT id, name, email, phone, city, role, active, wallet_balance, created_at 
+      FROM users 
+      WHERE LOWER(role) IN ('delivery', 'rider', 'delivery_partner', 'driver')
+      ORDER BY id DESC
+    `);
+
+    let ridersFromDb: any[] = [];
+    try {
+      const ridersRes = await gatewayPgPool.query('SELECT * FROM delivery_riders ORDER BY id DESC');
+      ridersFromDb = ridersRes.rows || [];
+    } catch {}
+
+    const usersRiders = (usersRes.rows || []).map(u => ({
+      id: `RIDER-${u.id}`,
+      riderId: `RIDER-${u.id}`,
+      name: u.name,
+      phone: u.phone || '',
+      email: u.email || '',
+      city: u.city || 'Vijayawada',
+      vehicle: 'Electric Bike',
+      status: u.active ? 'ONLINE' : 'OFFLINE',
+      walletBalance: Number(u.wallet_balance || 0),
+      avgRating: 5.0,
+      totalRatings: 0,
+      totalDeliveries: 0,
+      createdAt: u.created_at
+    }));
+
+    const otherRiders = ridersFromDb.map(r => ({
+      id: r.id || r.rider_id || `RIDER-${r.id}`,
+      riderId: r.rider_id || `RIDER-${r.id}`,
+      name: r.name || r.rider_name || 'Delivery Partner',
+      phone: r.phone || '',
+      email: r.email || '',
+      city: r.city || 'Bengaluru',
+      vehicle: r.vehicle || 'Electric Bike',
+      status: r.status === 'completed' || r.status === 'ONLINE' || r.status === 'APPROVED' ? 'ONLINE' : 'OFFLINE',
+      walletBalance: Number(r.wallet_balance || r.amount || 0),
+      avgRating: Number(r.avg_rating || 5.0),
+      totalRatings: Number(r.total_ratings || 0),
+      totalDeliveries: Number(r.trips_completed || r.total_deliveries || 0),
+      createdAt: r.created_at
+    }));
+
+    const combined = [...usersRiders];
+    for (const r of otherRiders) {
+      if (!combined.some(c => (c.email && c.email === r.email) || (c.phone && c.phone === r.phone))) {
+        combined.push(r);
+      }
+    }
+
+    return res.json(combined);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch delivery riders', message: err?.message });
+  }
+});
+
+app.get(['/api/delivery/payouts', '/api/admin/rider-payouts'], async (_req, res) => {
   try {
     const dbRes = await gatewayPgPool.query('SELECT * FROM rider_payouts ORDER BY id DESC');
     return res.json(dbRes.rows.map(r => ({
