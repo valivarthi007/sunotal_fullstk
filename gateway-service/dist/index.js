@@ -872,6 +872,35 @@ app.get('/api/product-definitions', async (_req, res) => {
         return res.status(500).json({ error: 'Failed to fetch product definitions', message: err?.message });
     }
 });
+app.post('/api/product-definitions', async (req, res) => {
+    const { name, category, defaultUnit } = req.body || {};
+    if (!name || !category) {
+        return res.status(400).json({ error: 'Product name and category are required' });
+    }
+    try {
+        const dbRes = await gatewayPgPool.query(`INSERT INTO product_definitions (name, category, default_unit) VALUES ($1, $2, $3) RETURNING *`, [String(name).trim(), String(category).trim(), defaultUnit || '1 kg']);
+        const d = dbRes.rows[0];
+        const formatted = { id: d.id, name: d.name, category: d.category, defaultUnit: d.default_unit };
+        broadcastRealtimeEvent({ type: 'PRODUCT_DEFINITION_CREATED', path: req.originalUrl || req.url, method: 'POST', data: formatted });
+        return res.status(201).json(formatted);
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to create product definition', message: err?.message });
+    }
+});
+app.delete('/api/product-definitions/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    try {
+        const dbRes = await gatewayPgPool.query('DELETE FROM product_definitions WHERE id = $1 RETURNING id', [id]);
+        if (!dbRes.rows || dbRes.rows.length === 0)
+            return res.status(404).json({ error: 'Product definition not found' });
+        broadcastRealtimeEvent({ type: 'PRODUCT_DEFINITION_DELETED', path: req.originalUrl || req.url, method: 'DELETE', data: { id } });
+        return res.json({ success: true, message: 'Product definition deleted', deletedId: id });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to delete product definition', message: err?.message });
+    }
+});
 // RIDER FLEET & PAYOUTS
 app.get('/api/delivery/riders', async (_req, res) => {
     try {

@@ -12,7 +12,65 @@ importers:
         specifier: ^5.2.2
         version: 5.9.3
 
-  apps/admin-app:
+  admin-service/backend:
+    dependencies:
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      bcryptjs:
+        specifier: ^3.0.2
+        version: 3.0.3
+      cors:
+        specifier: ^2.8.6
+        version: 2.8.6
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      ioredis:
+        specifier: ^5.4.1
+        version: 5.11.1
+      jsonwebtoken:
+        specifier: ^9.0.2
+        version: 9.0.3
+      pg:
+        specifier: ^8.23.0
+        version: 8.23.0
+      prom-client:
+        specifier: ^15.1.3
+        version: 15.1.3
+      tsx:
+        specifier: ^4.21.0
+        version: 4.23.13
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/bcryptjs':
+        specifier: ^2.4.6
+        version: 2.4.6
+      '@types/cors':
+        specifier: ^2.8.19
+        version: 2.8.19
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/jsonwebtoken':
+        specifier: ^9.0.9
+        version: 9.0.10
+      '@types/node':
+        specifier: ^20.19.43
+        version: 20.19.43
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
+
+  admin-service/frontend:
     dependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -211,7 +269,41 @@ importers:
         specifier: ^3.0.5
         version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
 
-  apps/delivery-app:
+  delivery-service/backend:
+    dependencies:
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
+      express:
+        specifier: ^4.19.2
+        version: 4.22.3
+      pg:
+        specifier: ^8.23.0
+        version: 8.23.0
+    devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.19
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      '@types/node':
+        specifier: ^20.11.24
+        version: 20.19.43
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@20.19.43)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
+  delivery-service/frontend:
     dependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -410,255 +502,93 @@ importers:
         specifier: ^3.0.5
         version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
 
-  apps/monitoring-app:
+  gateway-service:
     dependencies:
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
-      lucide-react:
-        specifier: ^0.545.0
-        version: 0.545.0(react@19.1.0)
-      react:
-        specifier: 19.1.0
-        version: 19.1.0
-      react-dom:
-        specifier: 19.1.0
-        version: 19.1.0(react@19.1.0)
-      tailwind-merge:
-        specifier: ^3.3.1
-        version: 3.7.0
-      wouter:
-        specifier: ^3.3.5
-        version: 3.11.0(react@19.1.0)
+      bcryptjs:
+        specifier: ^2.4.3
+        version: 2.4.3
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
+      express:
+        specifier: ^4.19.2
+        version: 4.22.3
+      express-http-proxy:
+        specifier: ^2.0.0
+        version: 2.1.2
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
+      pg:
+        specifier: ^8.23.0
+        version: 8.23.0
     devDependencies:
-      '@tailwindcss/vite':
-        specifier: ^4.1.14
-        version: 4.3.3(vite@7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13))
+      '@types/bcryptjs':
+        specifier: ^2.4.6
+        version: 2.4.6
+      '@types/cors':
+        specifier: ^2.8.19
+        version: 2.8.19
+      '@types/express':
+        specifier: ^4.17.25
+        version: 4.17.25
+      '@types/express-http-proxy':
+        specifier: ^1.6.6
+        version: 1.6.7
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
       '@types/node':
-        specifier: ^20.0.0
+        specifier: ^20.19.43
         version: 20.19.43
-      '@types/react':
-        specifier: ^19.2.0
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19.2.0
-        version: 19.3.0(@types/react@19.3.0)
-      '@vitejs/plugin-react':
-        specifier: ^5.0.4
-        version: 5.2.0(vite@7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13))
-      tailwindcss:
-        specifier: ^4.1.14
-        version: 4.3.3
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@20.19.43)(typescript@5.9.3)
       typescript:
-        specifier: ^5.8.3
+        specifier: ^5.9.3
         version: 5.9.3
-      vite:
-        specifier: ^7.3.2
-        version: 7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
-      vitest:
-        specifier: ^3.0.5
-        version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
 
-  apps/support-app:
+  public-service/backend:
     dependencies:
-      '@hookform/resolvers':
-        specifier: ^3.10.0
-        version: 3.10.0(react-hook-form@7.88.0(react@19.1.0))
-      '@radix-ui/react-accordion':
-        specifier: ^1.2.4
-        version: 1.2.20(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-alert-dialog':
-        specifier: ^1.1.7
-        version: 1.1.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-aspect-ratio':
-        specifier: ^1.1.3
-        version: 1.1.15(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-avatar':
-        specifier: ^1.1.4
-        version: 1.2.6(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-checkbox':
-        specifier: ^1.1.5
-        version: 1.3.11(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-collapsible':
-        specifier: ^1.1.4
-        version: 1.1.20(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-context-menu':
-        specifier: ^2.2.7
-        version: 2.3.7(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-dialog':
-        specifier: ^1.1.7
-        version: 1.1.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-dropdown-menu':
-        specifier: ^2.1.7
-        version: 2.1.24(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-hover-card':
-        specifier: ^1.1.7
-        version: 1.1.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-label':
-        specifier: ^2.1.3
-        version: 2.1.15(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-menubar':
-        specifier: ^1.1.7
-        version: 1.1.24(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-navigation-menu':
-        specifier: ^1.2.6
-        version: 1.2.22(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-popover':
-        specifier: ^1.1.7
-        version: 1.1.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-progress':
-        specifier: ^1.1.3
-        version: 1.1.16(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-radio-group':
-        specifier: ^1.2.4
-        version: 1.4.7(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-scroll-area':
-        specifier: ^1.2.4
-        version: 1.2.18(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-select':
-        specifier: ^2.1.7
-        version: 2.3.7(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-separator':
-        specifier: ^1.1.3
-        version: 1.1.15(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-slider':
-        specifier: ^1.2.4
-        version: 1.4.7(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-slot':
-        specifier: ^1.2.0
-        version: 1.3.3(@types/react@19.3.0)(react@19.1.0)
-      '@radix-ui/react-switch':
-        specifier: ^1.1.4
-        version: 1.3.7(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-tabs':
-        specifier: ^1.1.4
-        version: 1.1.21(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-toast':
-        specifier: ^1.2.7
-        version: 1.2.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-toggle':
-        specifier: ^1.1.3
-        version: 1.1.18(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-toggle-group':
-        specifier: ^1.1.3
-        version: 1.1.19(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@radix-ui/react-tooltip':
-        specifier: ^1.2.0
-        version: 1.2.16(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@tanstack/react-query':
-        specifier: ^5.90.21
-        version: 5.103.1(react@19.1.0)
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
-      cmdk:
-        specifier: ^1.1.1
-        version: 1.1.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      date-fns:
-        specifier: ^3.6.0
-        version: 3.6.0
-      embla-carousel-react:
-        specifier: ^8.6.0
-        version: 8.6.0(react@19.1.0)
-      framer-motion:
-        specifier: ^12.23.24
-        version: 12.43.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      input-otp:
-        specifier: ^1.4.2
-        version: 1.5.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      lucide-react:
-        specifier: ^0.545.0
-        version: 0.545.0(react@19.1.0)
-      next-themes:
-        specifier: ^0.4.6
-        version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      react:
-        specifier: 19.1.0
-        version: 19.1.0
-      react-day-picker:
-        specifier: ^9.11.1
-        version: 9.14.0(react@19.1.0)
-      react-dom:
-        specifier: 19.1.0
-        version: 19.1.0(react@19.1.0)
-      react-hook-form:
-        specifier: ^7.55.0
-        version: 7.88.0(react@19.1.0)
-      react-icons:
-        specifier: ^5.4.0
-        version: 5.7.0(react@19.1.0)
-      react-resizable-panels:
-        specifier: ^2.1.7
-        version: 2.1.9(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      recharts:
-        specifier: ^2.15.2
-        version: 2.15.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      sonner:
-        specifier: ^2.0.7
-        version: 2.0.8(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      tailwind-merge:
-        specifier: ^3.3.1
-        version: 3.7.0
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
-      vaul:
-        specifier: ^1.1.2
-        version: 1.1.2(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      wouter:
-        specifier: ^3.3.5
-        version: 3.11.0(react@19.1.0)
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
+      express:
+        specifier: ^4.19.2
+        version: 4.22.3
+      pg:
+        specifier: ^8.23.0
+        version: 8.23.0
     devDependencies:
-      '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.63.0
-      '@tailwindcss/typography':
-        specifier: ^0.5.15
-        version: 0.5.20(tailwindcss@4.3.3)
-      '@tailwindcss/vite':
-        specifier: ^4.1.14
-        version: 4.3.3(vite@7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13))
-      '@testing-library/dom':
-        specifier: ^10.4.1
-        version: 10.4.2
-      '@testing-library/react':
-        specifier: ^16.3.2
-        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.19
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
       '@types/node':
-        specifier: ^20.0.0
+        specifier: ^20.11.24
         version: 20.19.43
-      '@types/react':
-        specifier: ^19.2.0
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19.2.0
-        version: 19.3.0(@types/react@19.3.0)
-      '@vitejs/plugin-react':
-        specifier: ^5.0.4
-        version: 5.2.0(vite@7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13))
-      happy-dom:
-        specifier: ^17.1.0
-        version: 17.6.3
-      tailwindcss:
-        specifier: ^4.1.14
-        version: 4.3.3
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@20.19.43)(typescript@5.9.3)
       typescript:
-        specifier: ^5.8.3
+        specifier: ^5.3.3
         version: 5.9.3
-      vite:
-        specifier: ^7.3.2
-        version: 7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
-      vitest:
-        specifier: ^3.0.5
-        version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
 
-  apps/user-app:
+  public-service/frontend:
     dependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -860,7 +790,108 @@ importers:
         specifier: ^3.0.5
         version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
 
-  apps/vendor-app:
+  support-monitoring-service/backend:
+    dependencies:
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      bcryptjs:
+        specifier: ^3.0.2
+        version: 3.0.3
+      cors:
+        specifier: ^2.8.6
+        version: 2.8.6
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      jsonwebtoken:
+        specifier: ^9.0.2
+        version: 9.0.3
+      pg:
+        specifier: ^8.23.0
+        version: 8.23.0
+      prom-client:
+        specifier: ^15.1.3
+        version: 15.1.3
+      tsx:
+        specifier: ^4.21.0
+        version: 4.23.13
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/cors':
+        specifier: ^2.8.19
+        version: 2.8.19
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/jsonwebtoken':
+        specifier: ^9.0.9
+        version: 9.0.10
+      '@types/node':
+        specifier: ^20.19.43
+        version: 20.19.43
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
+
+  support-monitoring-service/frontend/monitoring-app:
+    dependencies:
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-react:
+        specifier: ^0.545.0
+        version: 0.545.0(react@19.1.0)
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-dom:
+        specifier: 19.1.0
+        version: 19.1.0(react@19.1.0)
+      tailwind-merge:
+        specifier: ^3.3.1
+        version: 3.7.0
+      wouter:
+        specifier: ^3.3.5
+        version: 3.11.0(react@19.1.0)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.1.14
+        version: 4.3.3(vite@7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13))
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^5.0.4
+        version: 5.2.0(vite@7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13))
+      tailwindcss:
+        specifier: ^4.1.14
+        version: 4.3.3
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.3.2
+        version: 7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
+
+  support-monitoring-service/frontend/support-app:
     dependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -1059,446 +1090,7 @@ importers:
         specifier: ^3.0.5
         version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
 
-  services/api-gateway:
-    dependencies:
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      bcryptjs:
-        specifier: ^2.4.3
-        version: 2.4.3
-      cors:
-        specifier: ^2.8.5
-        version: 2.8.6
-      dotenv:
-        specifier: ^16.4.5
-        version: 16.6.1
-      express:
-        specifier: ^4.19.2
-        version: 4.22.3
-      express-http-proxy:
-        specifier: ^2.0.0
-        version: 2.1.2
-      jsonwebtoken:
-        specifier: ^9.0.3
-        version: 9.0.3
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
-    devDependencies:
-      '@types/bcryptjs':
-        specifier: ^2.4.6
-        version: 2.4.6
-      '@types/cors':
-        specifier: ^2.8.17
-        version: 2.8.19
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/express-http-proxy':
-        specifier: ^1.6.6
-        version: 1.6.7
-      '@types/jsonwebtoken':
-        specifier: ^9.0.10
-        version: 9.0.10
-      '@types/node':
-        specifier: ^20.11.24
-        version: 20.19.43
-      ts-node-dev:
-        specifier: ^2.0.0
-        version: 2.0.0(@types/node@20.19.43)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-
-  services/auth-service:
-    dependencies:
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      bcryptjs:
-        specifier: ^2.4.3
-        version: 2.4.3
-      cors:
-        specifier: ^2.8.5
-        version: 2.8.6
-      dotenv:
-        specifier: ^16.4.5
-        version: 16.6.1
-      express:
-        specifier: ^4.19.2
-        version: 4.22.3
-      jsonwebtoken:
-        specifier: ^9.0.2
-        version: 9.0.3
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
-    devDependencies:
-      '@types/bcryptjs':
-        specifier: ^2.4.6
-        version: 2.4.6
-      '@types/cors':
-        specifier: ^2.8.17
-        version: 2.8.19
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/jsonwebtoken':
-        specifier: ^9.0.6
-        version: 9.0.10
-      '@types/node':
-        specifier: ^20.11.24
-        version: 20.19.43
-      ts-node-dev:
-        specifier: ^2.0.0
-        version: 2.0.0(@types/node@20.19.43)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-
-  services/catalog-service:
-    dependencies:
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      cors:
-        specifier: ^2.8.5
-        version: 2.8.6
-      dotenv:
-        specifier: ^16.4.5
-        version: 16.6.1
-      express:
-        specifier: ^4.19.2
-        version: 4.22.3
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
-    devDependencies:
-      '@types/cors':
-        specifier: ^2.8.17
-        version: 2.8.19
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/node':
-        specifier: ^20.11.24
-        version: 20.19.43
-      ts-node-dev:
-        specifier: ^2.0.0
-        version: 2.0.0(@types/node@20.19.43)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-
-  services/delivery-service:
-    dependencies:
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      cors:
-        specifier: ^2.8.5
-        version: 2.8.6
-      dotenv:
-        specifier: ^16.4.5
-        version: 16.6.1
-      express:
-        specifier: ^4.19.2
-        version: 4.22.3
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
-    devDependencies:
-      '@types/cors':
-        specifier: ^2.8.17
-        version: 2.8.19
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/node':
-        specifier: ^20.11.24
-        version: 20.19.43
-      ts-node-dev:
-        specifier: ^2.0.0
-        version: 2.0.0(@types/node@20.19.43)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-
-  services/inventory-service:
-    dependencies:
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      cors:
-        specifier: ^2.8.6
-        version: 2.8.6
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      express:
-        specifier: ^5.2.1
-        version: 5.2.1
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
-      prom-client:
-        specifier: ^15.1.3
-        version: 15.1.3
-      tsx:
-        specifier: ^4.21.0
-        version: 4.23.13
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/cors':
-        specifier: ^2.8.19
-        version: 2.8.19
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
-      '@types/node':
-        specifier: ^20.19.43
-        version: 20.19.43
-      vitest:
-        specifier: ^3.0.5
-        version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
-
-  services/notification-service:
-    dependencies:
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      cors:
-        specifier: ^2.8.5
-        version: 2.8.6
-      dotenv:
-        specifier: ^16.4.5
-        version: 16.6.1
-      express:
-        specifier: ^4.19.2
-        version: 4.22.3
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
-      socket.io:
-        specifier: ^4.7.4
-        version: 4.8.3
-    devDependencies:
-      '@types/cors':
-        specifier: ^2.8.17
-        version: 2.8.19
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/node':
-        specifier: ^20.11.24
-        version: 20.19.43
-      ts-node-dev:
-        specifier: ^2.0.0
-        version: 2.0.0(@types/node@20.19.43)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-
-  services/operations-service:
-    dependencies:
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      bcryptjs:
-        specifier: ^3.0.2
-        version: 3.0.3
-      cors:
-        specifier: ^2.8.6
-        version: 2.8.6
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      express:
-        specifier: ^5.2.1
-        version: 5.2.1
-      ioredis:
-        specifier: ^5.4.1
-        version: 5.11.1
-      jsonwebtoken:
-        specifier: ^9.0.2
-        version: 9.0.3
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
-      prom-client:
-        specifier: ^15.1.3
-        version: 15.1.3
-      tsx:
-        specifier: ^4.21.0
-        version: 4.23.13
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/bcryptjs':
-        specifier: ^2.4.6
-        version: 2.4.6
-      '@types/cors':
-        specifier: ^2.8.19
-        version: 2.8.19
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
-      '@types/jsonwebtoken':
-        specifier: ^9.0.9
-        version: 9.0.10
-      '@types/node':
-        specifier: ^20.19.43
-        version: 20.19.43
-      vitest:
-        specifier: ^3.0.5
-        version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
-
-  services/order-service:
-    dependencies:
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      cors:
-        specifier: ^2.8.5
-        version: 2.8.6
-      dotenv:
-        specifier: ^16.4.5
-        version: 16.6.1
-      express:
-        specifier: ^4.19.2
-        version: 4.22.3
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
-    devDependencies:
-      '@types/cors':
-        specifier: ^2.8.17
-        version: 2.8.19
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/node':
-        specifier: ^20.11.24
-        version: 20.19.43
-      ts-node-dev:
-        specifier: ^2.0.0
-        version: 2.0.0(@types/node@20.19.43)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-
-  services/support-service:
-    dependencies:
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      bcryptjs:
-        specifier: ^3.0.2
-        version: 3.0.3
-      cors:
-        specifier: ^2.8.6
-        version: 2.8.6
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      express:
-        specifier: ^5.2.1
-        version: 5.2.1
-      jsonwebtoken:
-        specifier: ^9.0.2
-        version: 9.0.3
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
-      prom-client:
-        specifier: ^15.1.3
-        version: 15.1.3
-      tsx:
-        specifier: ^4.21.0
-        version: 4.23.13
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/cors':
-        specifier: ^2.8.19
-        version: 2.8.19
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
-      '@types/jsonwebtoken':
-        specifier: ^9.0.9
-        version: 9.0.10
-      '@types/node':
-        specifier: ^20.19.43
-        version: 20.19.43
-      vitest:
-        specifier: ^3.0.5
-        version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
-
-  services/user-service:
-    dependencies:
-      '@types/bcryptjs':
-        specifier: ^3.0.0
-        version: 3.0.0
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      bcryptjs:
-        specifier: ^3.0.3
-        version: 3.0.3
-      cors:
-        specifier: ^2.8.6
-        version: 2.8.6
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      express:
-        specifier: ^5.2.1
-        version: 5.2.1
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
-      prom-client:
-        specifier: ^15.1.3
-        version: 15.1.3
-      tsx:
-        specifier: ^4.21.0
-        version: 4.23.13
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/cors':
-        specifier: ^2.8.19
-        version: 2.8.19
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
-      '@types/node':
-        specifier: ^20.19.43
-        version: 20.19.43
-      vitest:
-        specifier: ^3.0.5
-        version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
-
-  services/vendor-service:
+  vendor-service/backend:
     dependencies:
       '@types/pg':
         specifier: ^8.23.1
@@ -1537,6 +1129,205 @@ importers:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
+
+  vendor-service/frontend:
+    dependencies:
+      '@hookform/resolvers':
+        specifier: ^3.10.0
+        version: 3.10.0(react-hook-form@7.88.0(react@19.1.0))
+      '@radix-ui/react-accordion':
+        specifier: ^1.2.4
+        version: 1.2.20(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-alert-dialog':
+        specifier: ^1.1.7
+        version: 1.1.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-aspect-ratio':
+        specifier: ^1.1.3
+        version: 1.1.15(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-avatar':
+        specifier: ^1.1.4
+        version: 1.2.6(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-checkbox':
+        specifier: ^1.1.5
+        version: 1.3.11(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-collapsible':
+        specifier: ^1.1.4
+        version: 1.1.20(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-context-menu':
+        specifier: ^2.2.7
+        version: 2.3.7(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-dialog':
+        specifier: ^1.1.7
+        version: 1.1.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-dropdown-menu':
+        specifier: ^2.1.7
+        version: 2.1.24(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-hover-card':
+        specifier: ^1.1.7
+        version: 1.1.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-label':
+        specifier: ^2.1.3
+        version: 2.1.15(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-menubar':
+        specifier: ^1.1.7
+        version: 1.1.24(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-navigation-menu':
+        specifier: ^1.2.6
+        version: 1.2.22(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-popover':
+        specifier: ^1.1.7
+        version: 1.1.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-progress':
+        specifier: ^1.1.3
+        version: 1.1.16(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-radio-group':
+        specifier: ^1.2.4
+        version: 1.4.7(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-scroll-area':
+        specifier: ^1.2.4
+        version: 1.2.18(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-select':
+        specifier: ^2.1.7
+        version: 2.3.7(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-separator':
+        specifier: ^1.1.3
+        version: 1.1.15(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-slider':
+        specifier: ^1.2.4
+        version: 1.4.7(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-slot':
+        specifier: ^1.2.0
+        version: 1.3.3(@types/react@19.3.0)(react@19.1.0)
+      '@radix-ui/react-switch':
+        specifier: ^1.1.4
+        version: 1.3.7(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-tabs':
+        specifier: ^1.1.4
+        version: 1.1.21(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-toast':
+        specifier: ^1.2.7
+        version: 1.2.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-toggle':
+        specifier: ^1.1.3
+        version: 1.1.18(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-toggle-group':
+        specifier: ^1.1.3
+        version: 1.1.19(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-tooltip':
+        specifier: ^1.2.0
+        version: 1.2.16(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@tanstack/react-query':
+        specifier: ^5.90.21
+        version: 5.103.1(react@19.1.0)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      cmdk:
+        specifier: ^1.1.1
+        version: 1.1.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      date-fns:
+        specifier: ^3.6.0
+        version: 3.6.0
+      embla-carousel-react:
+        specifier: ^8.6.0
+        version: 8.6.0(react@19.1.0)
+      framer-motion:
+        specifier: ^12.23.24
+        version: 12.43.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      input-otp:
+        specifier: ^1.4.2
+        version: 1.5.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      lucide-react:
+        specifier: ^0.545.0
+        version: 0.545.0(react@19.1.0)
+      next-themes:
+        specifier: ^0.4.6
+        version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-day-picker:
+        specifier: ^9.11.1
+        version: 9.14.0(react@19.1.0)
+      react-dom:
+        specifier: 19.1.0
+        version: 19.1.0(react@19.1.0)
+      react-hook-form:
+        specifier: ^7.55.0
+        version: 7.88.0(react@19.1.0)
+      react-icons:
+        specifier: ^5.4.0
+        version: 5.7.0(react@19.1.0)
+      react-resizable-panels:
+        specifier: ^2.1.7
+        version: 2.1.9(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      recharts:
+        specifier: ^2.15.2
+        version: 2.15.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      sonner:
+        specifier: ^2.0.7
+        version: 2.0.8(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      tailwind-merge:
+        specifier: ^3.3.1
+        version: 3.7.0
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      vaul:
+        specifier: ^1.1.2
+        version: 1.1.2(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      wouter:
+        specifier: ^3.3.5
+        version: 3.11.0(react@19.1.0)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@playwright/test':
+        specifier: ^1.50.1
+        version: 1.63.0
+      '@tailwindcss/typography':
+        specifier: ^0.5.15
+        version: 0.5.20(tailwindcss@4.3.3)
+      '@tailwindcss/vite':
+        specifier: ^4.1.14
+        version: 4.3.3(vite@7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13))
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.2
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^5.0.4
+        version: 5.2.0(vite@7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13))
+      happy-dom:
+        specifier: ^17.1.0
+        version: 17.6.3
+      tailwindcss:
+        specifier: ^4.1.14
+        version: 4.3.3
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.3.2
+        version: 7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@20.19.43)(happy-dom@17.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
 
 packages:
 
@@ -2835,9 +2626,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@socket.io/component-emitter@3.1.2':
-    resolution: {integrity: sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA==}
-
   '@tabby_ai/hijri-converter@1.0.5':
     resolution: {integrity: sha512-r5bClKrcIusDoo049dSL8CawnHR6mRdDwhlQuIgZRNty68q0x8k3Lf1BtPAMxRf/GgnHBnIO4ujd3+GQdLWzxQ==}
     engines: {node: '>=16.0.0'}
@@ -2998,10 +2786,6 @@ packages:
   '@types/bcryptjs@2.4.6':
     resolution: {integrity: sha512-9xlo6R2qDs5uixm0bcIqCeMCE6HiQsIyel9KQySStiyqNl2tnj2mP3DX1Nf56MD6KMenNNlBBsy3LJ7gUEQPXQ==}
 
-  '@types/bcryptjs@3.0.0':
-    resolution: {integrity: sha512-WRZOuCuaz8UcZZE4R5HXTco2goQSI2XxjGY3hbM/xDvwmqFWd4ivooImsMx65OKM6CtNKbnZ5YL+YwAwK7c1dg==}
-    deprecated: This is a stub types definition. bcryptjs provides its own type definitions, so you do not need this installed.
-
   '@types/body-parser@1.19.6':
     resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
 
@@ -3112,9 +2896,6 @@ packages:
   '@types/strip-json-comments@0.0.30':
     resolution: {integrity: sha512-7NQmHra/JILCd1QqpSzl8+mJRc8ZHz3uDm8YV1Ks9IhK0epEiTw8aIErbvH9PI+6XbqhyIQy3462nEsn7UVzjQ==}
 
-  '@types/ws@8.18.1':
-    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
-
   '@vitejs/plugin-react@5.2.0':
     resolution: {integrity: sha512-YmKkfhOAi3wsB1PhJq5Scj3GXMn3WvtQ/JC0xoopuHoXSdmtdStOpFrYaT1kie2YgFBcIe64ROzMYRjCrYOdYw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -3202,10 +2983,6 @@ packages:
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
-
-  base64id@2.0.0:
-    resolution: {integrity: sha512-lGe34o6EHj9y3Kts9R4ZYs/Gr+6N7MCaMlIFA3F1R2O5/m7K06AxfSeO5530PEERE6/WyEg3lsuyw4GHlPZHog==}
-    engines: {node: ^4.5.0 || >= 5.9}
 
   baseline-browser-mapping@2.11.25:
     resolution: {integrity: sha512-gMmEShwwq7FJqMwvfRwvCl00v4kN+KOfJqXn+f4nrufak5gNHJOksd/60Dvjuz7sI8Y5WiSFBa8FEYr+zoyqCw==}
@@ -3520,14 +3297,6 @@ packages:
   encodeurl@2.0.0:
     resolution: {integrity: sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg==}
     engines: {node: '>= 0.8'}
-
-  engine.io-parser@5.2.3:
-    resolution: {integrity: sha512-HqD3yTBfnBxIrbnM1DoD6Pcq8NECnh8d4As1Qgh0z5Gg3jRRIqijury0CL3ghu/edArpUYiYqQiDUQBIs4np3Q==}
-    engines: {node: '>=10.0.0'}
-
-  engine.io@6.6.10:
-    resolution: {integrity: sha512-9/lX2bdlizlCXMHRMOIm03VBQHQYC7VvydcxtTAUJRxNW1QzM/2PMFSmr6h/lCiMHcyCP6abK+t9Q+j4vekk8Q==}
-    engines: {node: '>=10.2.0'}
 
   enhanced-resolve@5.25.1:
     resolution: {integrity: sha512-nGXts5znJzmWPu+mIE9izCOzdg63oJca2mDzGWWTth7sr4aCToKcoyFVBQwN75Ij5Pf6p510EwkTqViTRzDV+w==}
@@ -4379,17 +4148,6 @@ packages:
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
 
-  socket.io-adapter@2.5.8:
-    resolution: {integrity: sha512-6Oy52pbg+kvdCVvjcN+FnY7BvxZ7cIHNScbvztT/It5d0vbwoJoVZmF2gjJmnV0/4WlXRfG15zc45ySk9Ah8bw==}
-
-  socket.io-parser@4.2.7:
-    resolution: {integrity: sha512-IH/iSeO9T6gz1KkFleGDWkG9N3dl4jXVYUtMhIqH10Md0ttMer8nUNWiP1DKuNrybD2xBrixLJdCC9J6ECoYkg==}
-    engines: {node: '>=10.0.0'}
-
-  socket.io@4.8.3:
-    resolution: {integrity: sha512-2Dd78bqzzjE6KPkD5fHZmDAKRNe3J15q+YHDrIsy9WEkqttc7GY+kT9OBLSMaPbQaEd0x1BjcmtMtXkfpc+T5A==}
-    engines: {node: '>=10.2.0'}
-
   sonner@2.0.8:
     resolution: {integrity: sha512-UM/ByIoFra8yzV75n1o0Puu0bw5U/9UNnDacrJNspekBewIfsQ3D6ez1nvlWpt7aTsO6rujQtifBpycwIivqlg==}
     peerDependencies:
@@ -4723,18 +4481,6 @@ packages:
 
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
-
-  ws@8.21.3:
-    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
 
   xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
@@ -6115,8 +5861,6 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.63.3':
     optional: true
 
-  '@socket.io/component-emitter@3.1.2': {}
-
   '@tabby_ai/hijri-converter@1.0.5': {}
 
   '@tailwindcss/node@4.3.3':
@@ -6253,10 +5997,6 @@ snapshots:
 
   '@types/bcryptjs@2.4.6': {}
 
-  '@types/bcryptjs@3.0.0':
-    dependencies:
-      bcryptjs: 3.0.3
-
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
@@ -6391,10 +6131,6 @@ snapshots:
 
   '@types/strip-json-comments@0.0.30': {}
 
-  '@types/ws@8.18.1':
-    dependencies:
-      '@types/node': 20.19.43
-
   '@vitejs/plugin-react@5.2.0(vite@7.3.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13))':
     dependencies:
       '@babel/core': 7.29.7
@@ -6493,8 +6229,6 @@ snapshots:
   assertion-error@2.0.1: {}
 
   balanced-match@1.0.2: {}
-
-  base64id@2.0.0: {}
 
   baseline-browser-mapping@2.11.25: {}
 
@@ -6777,24 +6511,6 @@ snapshots:
   emoji-regex@8.0.0: {}
 
   encodeurl@2.0.0: {}
-
-  engine.io-parser@5.2.3: {}
-
-  engine.io@6.6.10:
-    dependencies:
-      '@types/cors': 2.8.19
-      '@types/node': 20.19.43
-      '@types/ws': 8.18.1
-      accepts: 1.3.8
-      cookie: 0.7.2
-      cors: 2.8.6
-      debug: 4.4.3
-      engine.io-parser: 5.2.3
-      ws: 8.21.3
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
 
   enhanced-resolve@5.25.1:
     dependencies:
@@ -7742,36 +7458,6 @@ snapshots:
 
   siginfo@2.0.0: {}
 
-  socket.io-adapter@2.5.8:
-    dependencies:
-      debug: 4.4.3
-      ws: 8.21.3
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-
-  socket.io-parser@4.2.7:
-    dependencies:
-      '@socket.io/component-emitter': 3.1.2
-      debug: 4.4.3
-    transitivePeerDependencies:
-      - supports-color
-
-  socket.io@4.8.3:
-    dependencies:
-      accepts: 1.3.8
-      base64id: 2.0.0
-      cors: 2.8.6
-      debug: 4.4.3
-      engine.io: 6.6.10
-      socket.io-adapter: 2.5.8
-      socket.io-parser: 4.2.7
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-
   sonner@2.0.8(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       react: 19.1.0
@@ -8092,8 +7778,6 @@ snapshots:
       strip-ansi: 6.0.1
 
   wrappy@1.0.2: {}
-
-  ws@8.21.3: {}
 
   xtend@4.0.2: {}
 

@@ -3,7 +3,6 @@ import { Route, Switch, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Toaster as Sonner } from "sonner";
 import { CartProvider } from "@/lib/cart-context";
 import { ShieldAlert, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -326,8 +325,7 @@ function App() {
                     <SubdomainRouter />
                   </WouterRouter>
                 </ApiStatusProvider>
-                <Toaster />
-                <Sonner richColors position="top-right" />
+                <Toaster richColors position="top-right" />
               </CartProvider>
             </LocationProvider>
           </TooltipProvider>

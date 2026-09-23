@@ -11,3 +11,6 @@ packages:
   - 'support-monitoring-service/frontend/monitoring-app'
   - 'support-monitoring-service/backend'
   - 'gateway-service'
+allowBuilds:
+  esbuild: set this to true or false
+  protobufjs: set this to true or false

@@ -119,7 +119,7 @@ export default function VendorDashboard() {
   const form = useForm<z.infer<typeof quotationSchema>>({
     resolver: zodResolver(quotationSchema),
     defaultValues: {
-      category: "Grains",
+      category: "",
       produce: "",
       unit: "Quintal",
       quantity: 10,
@@ -130,6 +130,12 @@ export default function VendorDashboard() {
       notes: "",
     },
   });
+
+  useEffect(() => {
+    if (categories && categories.length > 0 && !form.getValues("category")) {
+      form.setValue("category", categories[0].name);
+    }
+  }, [categories, form]);
 
   const selectedCategory = form.watch("category");
   const quantity = form.watch("quantity") || 0;
@@ -332,13 +338,9 @@ export default function VendorDashboard() {
                                   </SelectItem>
                                 ))
                               ) : (
-                                <>
-                                  <SelectItem value="Grains">🌾 Grains, Atta & Rice</SelectItem>
-                                  <SelectItem value="Vegetables">🥦 Fresh Vegetables</SelectItem>
-                                  <SelectItem value="Fruits">🍎 Fresh Fruits</SelectItem>
-                                  <SelectItem value="Dairy">🥛 Dairy & Fresh Milk</SelectItem>
-                                  <SelectItem value="Dry Fruits">🥜 Dry Fruits & Nuts</SelectItem>
-                                </>
+                                <SelectItem value="none" disabled>
+                                  No active categories created in DB. Please create a category in Admin Panel first.
+                                </SelectItem>
                               )}
                             </SelectContent>
                           </Select>
