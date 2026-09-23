@@ -112,18 +112,18 @@ resource "aws_iam_role_policy" "ecs_task_messaging" {
 # ─── 3. CloudWatch Log Groups ─────────────────────────────────────────────────
 locals {
   microservices = {
-    "gateway-service"            = { port = 5000, cpu = 512, memory = 1024, is_public = true,  health_path = "/api/healthz" }
-    "public-backend"             = { port = 5009, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "admin-backend"              = { port = 5002, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "vendor-backend"             = { port = 5005, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "delivery-backend"           = { port = 5004, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "support-monitoring-backend" = { port = 5007, cpu = 256, memory = 512,  is_public = false, health_path = "/api/healthz" }
-    "public-frontend"            = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
-    "admin-frontend"             = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
-    "vendor-frontend"            = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
-    "delivery-frontend"          = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
-    "support-frontend"           = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
-    "monitoring-frontend"        = { port = 80,   cpu = 256, memory = 512,  is_public = true,  health_path = "/" }
+    "gateway-service"            = { port = 5000, cpu = 512, memory = 1024, is_public = true, health_path = "/api/healthz" }
+    "public-backend"             = { port = 5009, cpu = 256, memory = 512, is_public = false, health_path = "/api/healthz" }
+    "admin-backend"              = { port = 5002, cpu = 256, memory = 512, is_public = false, health_path = "/api/healthz" }
+    "vendor-backend"             = { port = 5005, cpu = 256, memory = 512, is_public = false, health_path = "/api/healthz" }
+    "delivery-backend"           = { port = 5004, cpu = 256, memory = 512, is_public = false, health_path = "/api/healthz" }
+    "support-monitoring-backend" = { port = 5007, cpu = 256, memory = 512, is_public = false, health_path = "/api/healthz" }
+    "public-frontend"            = { port = 80, cpu = 256, memory = 512, is_public = true, health_path = "/" }
+    "admin-frontend"             = { port = 80, cpu = 256, memory = 512, is_public = true, health_path = "/" }
+    "vendor-frontend"            = { port = 80, cpu = 256, memory = 512, is_public = true, health_path = "/" }
+    "delivery-frontend"          = { port = 80, cpu = 256, memory = 512, is_public = true, health_path = "/" }
+    "support-frontend"           = { port = 80, cpu = 256, memory = 512, is_public = true, health_path = "/" }
+    "monitoring-frontend"        = { port = 80, cpu = 256, memory = 512, is_public = true, health_path = "/" }
   }
 }
 
@@ -190,24 +190,24 @@ resource "aws_ecs_task_definition" "tasks" {
       interval    = 30
       timeout     = 5
       retries     = 3
-      startPeriod = 60  # Allow 60s for Node.js cold start + DB init
+      startPeriod = 60 # Allow 60s for Node.js cold start + DB init
     }
 
     environment = [
-      { name = "DATABASE_URL",             value = var.database_url },
-      { name = "PORT",                      value = tostring(each.value.port) },
-      { name = "NODE_ENV",                  value = "production" },
-      { name = "JWT_SECRET",                value = var.jwt_secret },
-      { name = "AUTH_SERVICE_URL",          value = "http://sunotal-auth-service.sunotal.local:5001" },
-      { name = "OPERATIONS_SERVICE_URL",    value = "http://sunotal-operations-service.sunotal.local:5002" },
-      { name = "INVENTORY_SERVICE_URL",     value = "http://sunotal-inventory-service.sunotal.local:5003" },
-      { name = "DELIVERY_SERVICE_URL",      value = "http://sunotal-delivery-service.sunotal.local:5004" },
-      { name = "VENDOR_SERVICE_URL",        value = "http://sunotal-vendor-service.sunotal.local:5005" },
-      { name = "SUPPORT_SERVICE_URL",       value = "http://sunotal-support-service.sunotal.local:5007" },
-      { name = "USER_SERVICE_URL",          value = "http://sunotal-user-service.sunotal.local:5008" },
-      { name = "CATALOG_SERVICE_URL",       value = "http://sunotal-catalog-service.sunotal.local:5009" },
-      { name = "ORDER_SERVICE_URL",         value = "http://sunotal-order-service.sunotal.local:5010" },
-      { name = "NOTIFICATION_SERVICE_URL",  value = "http://sunotal-notification-service.sunotal.local:5011" }
+      { name = "DATABASE_URL", value = var.database_url },
+      { name = "PORT", value = tostring(each.value.port) },
+      { name = "NODE_ENV", value = "production" },
+      { name = "JWT_SECRET", value = var.jwt_secret },
+      { name = "AUTH_SERVICE_URL", value = "http://sunotal-auth-service.sunotal.local:5001" },
+      { name = "OPERATIONS_SERVICE_URL", value = "http://sunotal-operations-service.sunotal.local:5002" },
+      { name = "INVENTORY_SERVICE_URL", value = "http://sunotal-inventory-service.sunotal.local:5003" },
+      { name = "DELIVERY_SERVICE_URL", value = "http://sunotal-delivery-service.sunotal.local:5004" },
+      { name = "VENDOR_SERVICE_URL", value = "http://sunotal-vendor-service.sunotal.local:5005" },
+      { name = "SUPPORT_SERVICE_URL", value = "http://sunotal-support-service.sunotal.local:5007" },
+      { name = "USER_SERVICE_URL", value = "http://sunotal-user-service.sunotal.local:5008" },
+      { name = "CATALOG_SERVICE_URL", value = "http://sunotal-catalog-service.sunotal.local:5009" },
+      { name = "ORDER_SERVICE_URL", value = "http://sunotal-order-service.sunotal.local:5010" },
+      { name = "NOTIFICATION_SERVICE_URL", value = "http://sunotal-notification-service.sunotal.local:5011" }
     ]
 
     logConfiguration = {

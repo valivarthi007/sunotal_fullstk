@@ -116,6 +116,11 @@ export interface AdminStats {
   recentVendors: Vendor[];
   recentUsers: User[];
   categoryBreakdown: CategoryCount[];
+  userRevenue?: number;
+  totalRevenue?: number;
+  vendorCharges?: number;
+  deliveryCharges?: number;
+  awsMonthlyCost?: number;
 }
 
 export type ProductCategory = typeof ProductCategory[keyof typeof ProductCategory];

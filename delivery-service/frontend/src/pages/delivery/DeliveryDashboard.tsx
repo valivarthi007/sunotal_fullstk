@@ -49,7 +49,7 @@ export default function DeliveryDashboard() {
 
   const handleVerifyOtp = async () => {
     if (!otpInput) {
-      toast.error("Please enter the 6-digit delivery PIN from customer");
+      toast.error("Please enter the delivery PIN from customer");
       return;
     }
     setIsVerifyingOtp(true);
@@ -59,7 +59,9 @@ export default function DeliveryDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId: acceptedOrder?.numericId || acceptedOrder?.id || 1,
+          inputOtp: otpInput,
           otp: otpInput,
+          riderId: riderUser?.id,
         }),
       });
       const data = await res.json();
@@ -71,9 +73,7 @@ export default function DeliveryDashboard() {
         toast.error(data.error || "Invalid OTP PIN. Please check customer phone.");
       }
     } catch {
-      toast.success("OTP Verified! Handover complete.");
-      setOrderStage("delivered");
-      handleAdvanceStage();
+      toast.error("Network error during OTP verification.");
     } finally {
       setIsVerifyingOtp(false);
     }
@@ -93,18 +93,21 @@ export default function DeliveryDashboard() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ upiId: riderUpiId }),
+        body: JSON.stringify({
+          upiId: riderUpiId,
+          amount: stats.totalPayout || riderUser?.walletBalance || 0,
+          riderId: riderUser?.id,
+        }),
       });
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
         setPayoutRequested(true);
-        toast.success(`Payout request submitted successfully for UPI ID: ${riderUpiId}`);
+        toast.success(data.message || `Payout request submitted successfully for UPI ID: ${riderUpiId}`);
       } else {
-        setPayoutRequested(true);
-        toast.success(`Payout request submitted for UPI ID: ${riderUpiId}`);
+        toast.error(data.error || "Payout request failed");
       }
     } catch {
-      setPayoutRequested(true);
-      toast.success(`Payout request submitted for UPI ID: ${riderUpiId}`);
+      toast.error("Network error submitting payout request");
     }
   };
 

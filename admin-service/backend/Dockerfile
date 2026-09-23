@@ -9,6 +9,7 @@ RUN npm run build
 # ─── Stage 2: Production Runner ───────────────────────────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
+ENV NODE_ENV=production
 RUN apk add --no-cache wget
 COPY package.json ./
 # Install prod deps as root (avoids slow chown on node_modules)

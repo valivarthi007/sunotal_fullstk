@@ -59,7 +59,7 @@ export function ProductCard({ product }: { product: Product }) {
             <Leaf className="w-3 h-3" /> Organic
           </Badge>
         )}
-        {product.stock > 0 && product.stock <= 5 && (
+        {(product.stock ?? 0) > 0 && (product.stock ?? 0) <= 5 && (
           <Badge variant="destructive" className="w-fit text-[10px] bg-amber-500 text-white animate-pulse px-2 py-0.5 shadow-sm">
             Only {product.stock} left!
           </Badge>

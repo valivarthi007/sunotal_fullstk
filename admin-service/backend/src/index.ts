@@ -363,6 +363,25 @@ async function initDb() {
       try { await pgPool.query(sql); } catch {}
     }
 
+    // High-Performance Retrieval Indexes for operations-service
+    const indexes = [
+      `CREATE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email))`,
+      `CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`,
+      `CREATE INDEX IF NOT EXISTS idx_vendors_email ON vendors(LOWER(email))`,
+      `CREATE INDEX IF NOT EXISTS idx_vendors_status ON vendors(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)`,
+      `CREATE INDEX IF NOT EXISTS idx_products_active ON products(active)`,
+      `CREATE INDEX IF NOT EXISTS idx_quotations_status ON quotations(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_quotations_created ON quotations(created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory(product_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_user_addresses_user ON user_addresses(user_id)`,
+    ];
+    for (const idx of indexes) {
+      try { await pgPool.query(idx); } catch {}
+    }
+
     console.log('🐘 [operations-service] All PostgreSQL tables & migrations ready.');
   } catch (err: any) {
     console.warn('⚠️ [operations-service] DB init warning:', err?.message || err);
@@ -392,13 +411,26 @@ app.put("/api/admin/settings", async (req, res) => {
       return res.status(400).json({ error: "Invalid settings payload" });
     }
 
-    for (const [key, value] of Object.entries(settingsObj)) {
-      await pgPool.query(
-        `INSERT INTO business_settings (setting_key, setting_value, updated_at)
-         VALUES ($1, $2, NOW())
-         ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
-        [key, String(value)]
-      );
+    const entries = Object.entries(settingsObj);
+    if (entries.length > 0) {
+      const client = await pgPool.connect();
+      try {
+        await client.query("BEGIN");
+        for (const [key, value] of entries) {
+          await client.query(
+            `INSERT INTO business_settings (setting_key, setting_value, updated_at)
+             VALUES ($1, $2, NOW())
+             ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+            [key, String(value)]
+          );
+        }
+        await client.query("COMMIT");
+      } catch (err: any) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
     }
 
     return res.json({ success: true, message: "Business settings updated in PostgreSQL RDS" });

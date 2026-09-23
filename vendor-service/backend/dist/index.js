@@ -67,6 +67,12 @@ async function initDb() {
             `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS aadhar VARCHAR(50)`,
             `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS gstin VARCHAR(50)`,
             `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS notes TEXT`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS bank_name VARCHAR(255) DEFAULT 'State Bank of India'`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS account_number VARCHAR(100)`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS ifsc_code VARCHAR(50)`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS branch_name VARCHAR(255)`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS account_holder_name VARCHAR(255)`,
+            `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100)`,
         ];
         for (const sql of safeAlters) {
             try {
@@ -78,6 +84,9 @@ async function initDb() {
         const indexes = [
             `CREATE INDEX IF NOT EXISTS idx_vendors_email ON vendors(email)`,
             `CREATE INDEX IF NOT EXISTS idx_vendors_status ON vendors(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_vendors_phone ON vendors(phone)`,
+            `CREATE INDEX IF NOT EXISTS idx_farmer_quotations_status ON farmer_quotations(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_farmer_quotations_vendor ON farmer_quotations(vendor_id)`,
         ];
         for (const idx of indexes) {
             try {
@@ -114,6 +123,12 @@ function formatVendor(row) {
         status: row.status || 'pending',
         active: row.active !== false,
         notes: row.notes || '',
+        bankName: row.bank_name || 'State Bank of India',
+        accountNumber: row.account_number || '',
+        ifscCode: row.ifsc_code || '',
+        branchName: row.branch_name || '',
+        accountHolderName: row.account_holder_name || `${firstName} ${lastName}`.trim(),
+        upiId: row.upi_id || `${(row.email || 'vendor').split('@')[0]}@upi`,
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
     };
 }

@@ -154,7 +154,7 @@ resource "aws_vpc_endpoint" "ecr_api" {
   service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = [aws_subnet.private_1.id, aws_subnet.private_2.id]
-  security_group_ids = [aws_security_group.vpc_endpoints.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
 
   tags = merge(var.tags, { Name = "${var.vpc_name}-ecr-api-endpoint" })
@@ -166,7 +166,7 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
   service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = [aws_subnet.private_1.id, aws_subnet.private_2.id]
-  security_group_ids = [aws_security_group.vpc_endpoints.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
 
   tags = merge(var.tags, { Name = "${var.vpc_name}-ecr-dkr-endpoint" })
@@ -178,7 +178,7 @@ resource "aws_vpc_endpoint" "logs" {
   service_name        = "com.amazonaws.${var.aws_region}.logs"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = [aws_subnet.private_1.id, aws_subnet.private_2.id]
-  security_group_ids = [aws_security_group.vpc_endpoints.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
 
   tags = merge(var.tags, { Name = "${var.vpc_name}-logs-endpoint" })

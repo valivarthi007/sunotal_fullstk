@@ -14,7 +14,8 @@ export const getListInventoryQueryKey = (params?: ListInventoryParams) => {
 };
 
 export const listInventory = async (params?: ListInventoryParams) => {
-  const url = new URL('/api/inventory', 'http://localhost:5000');
+  const baseOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000';
+  const url = new URL('/api/inventory', baseOrigin);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined) {

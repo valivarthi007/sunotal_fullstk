@@ -90,6 +90,10 @@ async function initDb() {
             `ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100)`,
             `ALTER TABLE delivery_orders ADD COLUMN IF NOT EXISTS delivery_otp VARCHAR(10)`,
             `ALTER TABLE delivery_orders ADD COLUMN IF NOT EXISTS order_id INT`,
+            `ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_id VARCHAR(255)`,
+            `ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_name VARCHAR(255)`,
+            `ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_phone VARCHAR(50)`,
+            `ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_otp VARCHAR(10)`,
         ];
         for (const sql of safeAlters) {
             try {
@@ -103,6 +107,8 @@ async function initDb() {
             `CREATE INDEX IF NOT EXISTS idx_delivery_riders_email ON delivery_riders(email)`,
             `CREATE INDEX IF NOT EXISTS idx_rider_payouts_rider_id ON rider_payouts(rider_id)`,
             `CREATE INDEX IF NOT EXISTS idx_delivery_orders_status ON delivery_orders(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_delivery_orders_rider_id ON delivery_orders(rider_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_delivery_orders_order_number ON delivery_orders(order_number)`,
         ];
         for (const idx of indexes) {
             try {
@@ -135,22 +141,57 @@ app.get('/healthz', (_req, res) => {
 app.get('/api/healthz', (_req, res) => {
     res.json({ status: 'ok', service: 'delivery-service' });
 });
-// GET Active Delivery Orders — Direct PostgreSQL SQL Querying
+// GET Active Delivery Orders — Join orders table & delivery_orders
 app.get('/api/delivery/orders/active', async (_req, res) => {
     try {
-        const dbRes = await pool.query("SELECT * FROM delivery_orders WHERE status != 'delivered' ORDER BY updated_at DESC");
-        const dbOrders = (dbRes.rows || []).map((r) => ({
+        const dbRes = await pool.query(`
+      SELECT 
+        COALESCE(d.id, o.id::text, o.order_number) as id,
+        COALESCE(d.order_number, o.order_number, o.id::text) as order_number,
+        d.rider_id,
+        d.rider_name,
+        d.rider_phone,
+        COALESCE(d.stage, 'placed') as stage,
+        COALESCE(d.status, o.status, 'placed') as status,
+        COALESCE(d.current_lat, 12.9716) as current_lat,
+        COALESCE(d.current_lng, 77.5946) as current_lng,
+        COALESCE(d.dest_lat, 12.9816) as dest_lat,
+        COALESCE(d.dest_lng, 77.6046) as dest_lng,
+        COALESCE(d.updated_at, o.updated_at, NOW()) as updated_at,
+        o.total_amount,
+        o.shipping_address,
+        u.name as customer_name
+      FROM orders o
+      LEFT JOIN delivery_orders d ON (d.id = o.id::text OR d.order_number = o.order_number OR d.id = o.order_number)
+      LEFT JOIN users u ON u.id = o.user_id
+      WHERE COALESCE(d.status, o.status) NOT IN ('delivered', 'cancelled')
+      ORDER BY COALESCE(d.updated_at, o.updated_at) DESC
+      LIMIT 100
+    `).catch(() => ({ rows: [] }));
+        const standaloneRes = await pool.query(`
+      SELECT * FROM delivery_orders 
+      WHERE status NOT IN ('delivered', 'cancelled')
+        AND id NOT IN (SELECT COALESCE(id::text, order_number) FROM orders)
+        AND order_number NOT IN (SELECT COALESCE(order_number, id::text) FROM orders)
+      ORDER BY updated_at DESC
+    `).catch(() => ({ rows: [] }));
+        const combinedRows = [...(dbRes.rows || []), ...(standaloneRes.rows || [])];
+        const dbOrders = combinedRows.map((r) => ({
             id: r.id,
+            numericId: r.id,
             orderNumber: r.order_number || r.id,
-            riderId: r.rider_id,
-            riderName: r.rider_name,
-            riderPhone: r.rider_phone,
-            stage: r.stage,
-            status: r.status,
-            currentLat: Number(r.current_lat),
-            currentLng: Number(r.current_lng),
-            destLat: Number(r.dest_lat),
-            destLng: Number(r.dest_lng),
+            riderId: r.rider_id || '',
+            riderName: r.rider_name || '',
+            riderPhone: r.rider_phone || '',
+            stage: r.stage || 'placed',
+            status: r.status || 'placed',
+            currentLat: Number(r.current_lat || 12.9716),
+            currentLng: Number(r.current_lng || 77.5946),
+            destLat: Number(r.dest_lat || 12.9816),
+            destLng: Number(r.dest_lng || 77.6046),
+            totalAmount: Number(r.total_amount || 0),
+            address: r.shipping_address || 'Delivery Address',
+            customerName: r.customer_name || 'Customer',
             updatedAt: r.updated_at
         }));
         return res.json(dbOrders);
@@ -262,11 +303,20 @@ app.get(['/api/delivery/stream/:orderId', '/api/delivery/tracking/:orderId/strea
 app.post('/api/delivery/orders/:id/accept', async (req, res) => {
     const { riderName, riderPhone, riderId } = req.body;
     const orderId = req.params.id;
+    const rId = riderId ? String(riderId) : 'rider_' + Date.now().toString().slice(-4);
+    const rName = riderName || 'Delivery Partner';
+    const rPhone = riderPhone || '';
+    const client = await pool.connect();
     try {
-        const dbRes = await pool.query(`INSERT INTO delivery_orders (id, order_number, rider_id, rider_name, rider_phone, stage, status, current_lat, current_lng, dest_lat, dest_lng)
+        await client.query('BEGIN');
+        const dbRes = await client.query(`INSERT INTO delivery_orders (id, order_number, rider_id, rider_name, rider_phone, stage, status, current_lat, current_lng, dest_lat, dest_lng)
        VALUES ($1, $1, $2, $3, $4, 'accepted', 'accepted', 12.9716, 77.5946, 12.9816, 77.6046)
-       ON CONFLICT (id) DO UPDATE SET stage = 'accepted', status = 'accepted', rider_name = COALESCE($3, delivery_orders.rider_name), rider_phone = COALESCE($4, delivery_orders.rider_phone), updated_at = NOW()
-       RETURNING *`, [orderId, riderId || 'rider_' + Date.now().toString().slice(-4), riderName || 'Delivery Partner', riderPhone || '']);
+       ON CONFLICT (id) DO UPDATE SET stage = 'accepted', status = 'accepted', rider_id = EXCLUDED.rider_id, rider_name = COALESCE(EXCLUDED.rider_name, delivery_orders.rider_name), rider_phone = COALESCE(EXCLUDED.rider_phone, delivery_orders.rider_phone), updated_at = NOW()
+       RETURNING *`, [orderId, rId, rName, rPhone]);
+        // Sync main orders table
+        await client.query(`UPDATE orders SET status = 'accepted', rider_id = $1, rider_name = $2, rider_phone = $3, updated_at = NOW() WHERE id::text = $4 OR order_number = $4`, [rId, rName, rPhone, String(orderId)]).catch(() => null);
+        await client.query('COMMIT');
+        client.release();
         const r = dbRes.rows[0];
         const order = {
             id: r.id,
@@ -286,29 +336,38 @@ app.post('/api/delivery/orders/:id/accept', async (req, res) => {
         return res.json({ success: true, message: 'Order accepted in PostgreSQL RDS', order });
     }
     catch (err) {
-        return res.status(500).json({ error: 'Failed to accept order in database' });
+        await client.query('ROLLBACK').catch(() => null);
+        client.release();
+        return res.status(500).json({ error: 'Failed to accept order in database', message: err?.message });
     }
 });
 // Rider Stage Progression — Direct PostgreSQL SQL Mutation & Automatic Inventory Deduction
 app.put('/api/delivery/orders/:id/stage', async (req, res) => {
     const { stage } = req.body;
     const orderId = req.params.id;
+    const statusVal = stage === 'delivered' ? 'delivered' : (stage === 'out_for_delivery' || stage === 'in_transit' ? 'out_for_delivery' : stage);
+    const client = await pool.connect();
     try {
-        const dbRes = await pool.query(`UPDATE delivery_orders SET stage = $1, status = $2, updated_at = NOW() WHERE id = $3 RETURNING *`, [stage, stage === 'delivered' ? 'delivered' : 'in_transit', orderId]);
+        await client.query('BEGIN');
+        const dbRes = await client.query(`UPDATE delivery_orders SET stage = $1, status = $2, updated_at = NOW() WHERE id = $3 OR order_number = $3 RETURNING *`, [stage, statusVal, orderId]);
         if (!dbRes.rows || dbRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            client.release();
             return res.status(404).json({ error: 'Delivery order not found' });
         }
+        // Sync main orders table status
+        await client.query(`UPDATE orders SET status = $1, updated_at = NOW() WHERE id::text = $2 OR order_number = $2`, [statusVal, String(orderId)]).catch(() => null);
         // Automatic product and warehouse inventory deduction when rider picks up produce from dark store
         if (stage === 'picked_up' || stage === 'at_warehouse' || stage === 'accepted') {
             try {
-                const itemsRes = await pool.query(`SELECT product_id, product_name, quantity FROM order_items WHERE order_id = $1 OR order_id = (SELECT id FROM orders WHERE id::text = $1 OR order_number = $1 LIMIT 1)`, [orderId]);
+                const itemsRes = await client.query(`SELECT product_id, product_name, quantity FROM order_items WHERE order_id = $1 OR order_id = (SELECT id FROM orders WHERE id::text = $1 OR order_number = $1 LIMIT 1)`, [orderId]);
                 for (const item of itemsRes.rows || []) {
                     const qty = Number(item.quantity || 1);
                     const pId = item.product_id;
                     const pName = item.product_name;
                     if (pId || pName) {
-                        await pool.query(`UPDATE inventory SET quantity = GREATEST(0, quantity - $1), status = CASE WHEN (quantity - $1) <= 0 THEN 'out_of_stock' ELSE 'in_stock' END, updated_at = NOW() WHERE product_id = $2 OR LOWER(product_name) = LOWER($3)`, [qty, pId || 0, (pName || '').toLowerCase()]);
-                        await pool.query(`UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2 OR LOWER(name) = LOWER($3)`, [qty, pId || 0, (pName || '').toLowerCase()]);
+                        await client.query(`UPDATE inventory SET quantity = GREATEST(0, quantity - $1), status = CASE WHEN (quantity - $1) <= 0 THEN 'out_of_stock' ELSE 'in_stock' END, updated_at = NOW() WHERE product_id = $2 OR LOWER(product_name) = LOWER($3)`, [qty, pId || 0, (pName || '').toLowerCase()]);
+                        await client.query(`UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2 OR LOWER(name) = LOWER($3)`, [qty, pId || 0, (pName || '').toLowerCase()]);
                     }
                 }
             }
@@ -316,6 +375,8 @@ app.put('/api/delivery/orders/:id/stage', async (req, res) => {
                 console.warn('⚠️ Inventory deduction on rider stage update warning:', invErr?.message);
             }
         }
+        await client.query('COMMIT');
+        client.release();
         const r = dbRes.rows[0];
         const order = {
             id: r.id,
@@ -335,7 +396,9 @@ app.put('/api/delivery/orders/:id/stage', async (req, res) => {
         return res.json({ success: true, order });
     }
     catch (err) {
-        return res.status(500).json({ error: 'Failed to update stage in database' });
+        await client.query('ROLLBACK').catch(() => null);
+        client.release();
+        return res.status(500).json({ error: 'Failed to update stage in database', message: err?.message });
     }
 });
 // Delivery Slots Endpoint
@@ -469,35 +532,51 @@ app.get(['/api/delivery/riders', '/api/rider/list'], async (_req, res) => {
 // Rider Payout Request — Direct PostgreSQL SQL Mutation
 app.post('/api/delivery/payout', async (req, res) => {
     const { amount, riderId, upiId } = req.body;
-    const payoutAmt = Number(amount || 0);
-    if (payoutAmt <= 0) {
-        return res.status(400).json({ error: 'Valid payout amount required' });
-    }
-    const txnId = 'TXN-' + Math.floor(100000 + Math.random() * 900000);
+    const rId = riderId ? String(riderId) : '';
+    const client = await pool.connect();
     try {
-        // Fetch rider info for enriched payout record
-        let riderName = '', riderPhone = '', riderEmail = '';
-        if (riderId) {
-            const riderRes = await pool.query('SELECT name, phone, email FROM delivery_riders WHERE id = $1', [String(riderId)]).catch(() => null);
-            if (riderRes?.rows?.[0]) {
+        let payoutAmt = Number(amount || 0);
+        let riderName = '', riderPhone = '', riderEmail = '', currentBalance = 0;
+        if (rId) {
+            const riderRes = await client.query('SELECT name, phone, email, wallet_balance FROM delivery_riders WHERE id = $1', [rId]);
+            if (riderRes.rows && riderRes.rows.length > 0) {
                 riderName = riderRes.rows[0].name || '';
                 riderPhone = riderRes.rows[0].phone || '';
                 riderEmail = riderRes.rows[0].email || '';
+                currentBalance = Number(riderRes.rows[0].wallet_balance || 0);
             }
         }
-        await pool.query(`INSERT INTO rider_payouts (rider_id, rider_name, phone, email, upi_id, amount, transaction_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'COMPLETED')`, [String(riderId || ''), riderName, riderPhone, riderEmail, upiId || '', payoutAmt, txnId]);
-        if (riderId) {
-            await pool.query(`UPDATE delivery_riders SET wallet_balance = GREATEST(0, wallet_balance - $1) WHERE id = $2`, [payoutAmt, String(riderId)]);
+        if (payoutAmt <= 0) {
+            payoutAmt = currentBalance;
         }
+        if (payoutAmt <= 0) {
+            client.release();
+            return res.status(400).json({ error: 'No wallet balance available for payout request' });
+        }
+        if (currentBalance > 0 && payoutAmt > currentBalance) {
+            client.release();
+            return res.status(400).json({ error: `Payout amount ₹${payoutAmt} exceeds current wallet balance ₹${currentBalance}` });
+        }
+        const txnId = 'TXN-' + Math.floor(100000 + Math.random() * 900000);
+        await client.query('BEGIN');
+        await client.query(`INSERT INTO rider_payouts (rider_id, rider_name, phone, email, upi_id, amount, transaction_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'COMPLETED')`, [rId, riderName, riderPhone, riderEmail, upiId || '', payoutAmt, txnId]);
+        if (rId) {
+            await client.query(`UPDATE delivery_riders SET wallet_balance = GREATEST(0, wallet_balance - $1) WHERE id = $2`, [payoutAmt, rId]);
+        }
+        await client.query('COMMIT');
+        client.release();
         return res.json({
             success: true,
             message: `Payout request for ₹${payoutAmt} completed successfully`,
             transactionId: txnId,
+            payoutAmount: payoutAmt,
             timestamp: new Date().toISOString()
         });
     }
     catch (err) {
+        await client.query('ROLLBACK').catch(() => null);
+        client.release();
         return res.status(500).json({
             error: 'Payout request failed due to database error',
             message: err?.message
@@ -522,25 +601,68 @@ app.post('/api/delivery/otp/generate', async (req, res) => {
 });
 // Handover OTP Verification & Rider Payout Credit
 app.post('/api/rider/verify-handover-otp', async (req, res) => {
-    const { orderId, inputOtp, expectedOtp, riderId } = req.body;
-    if (!inputOtp || (expectedOtp && inputOtp !== expectedOtp)) {
-        return res.status(400).json({ error: 'Invalid handover OTP code' });
+    const { orderId, inputOtp, otp, riderId } = req.body;
+    const userOtp = String(inputOtp || otp || '').trim();
+    if (!orderId || !userOtp) {
+        return res.status(400).json({ error: 'orderId and valid OTP PIN are required' });
     }
     const payoutCredit = 45;
+    const client = await pool.connect();
     try {
-        await pool.query("UPDATE delivery_orders SET stage = 'delivered', status = 'delivered', updated_at = NOW() WHERE id = $1", [orderId]);
-        if (riderId) {
-            await pool.query('UPDATE delivery_riders SET wallet_balance = wallet_balance + $1 WHERE id = $2', [payoutCredit, String(riderId)]);
+        let valid = false;
+        let actualRiderId = riderId ? String(riderId) : '';
+        // Query delivery_orders first
+        const dbRes = await client.query("SELECT delivery_otp, rider_id FROM delivery_orders WHERE id = $1 OR order_number = $1", [String(orderId)]);
+        if (dbRes.rows && dbRes.rows.length > 0) {
+            const storedOtp = String(dbRes.rows[0].delivery_otp || '').trim();
+            if (!actualRiderId && dbRes.rows[0].rider_id) {
+                actualRiderId = String(dbRes.rows[0].rider_id);
+            }
+            if (storedOtp && userOtp === storedOtp) {
+                valid = true;
+            }
         }
+        // Query orders table fallback if not verified yet
+        if (!valid) {
+            const mainRes = await client.query("SELECT delivery_otp, rider_id FROM orders WHERE id::text = $1 OR order_number = $1", [String(orderId)]);
+            if (mainRes.rows && mainRes.rows.length > 0) {
+                const storedOtp = String(mainRes.rows[0].delivery_otp || '').trim();
+                if (!actualRiderId && mainRes.rows[0].rider_id) {
+                    actualRiderId = String(mainRes.rows[0].rider_id);
+                }
+                if (storedOtp && userOtp === storedOtp) {
+                    valid = true;
+                }
+            }
+        }
+        if (!valid) {
+            client.release();
+            return res.status(400).json({ error: 'Invalid handover OTP code. Please check OTP with customer.' });
+        }
+        await client.query('BEGIN');
+        // Update delivery_orders
+        await client.query("UPDATE delivery_orders SET stage = 'delivered', status = 'delivered', updated_at = NOW() WHERE id = $1 OR order_number = $1", [String(orderId)]);
+        // Update orders table
+        await client.query("UPDATE orders SET status = 'delivered', updated_at = NOW() WHERE id::text = $1 OR order_number = $1", [String(orderId)]).catch(() => null);
+        // Credit rider wallet balance & total deliveries
+        if (actualRiderId) {
+            await client.query('UPDATE delivery_riders SET wallet_balance = wallet_balance + $1, total_deliveries = total_deliveries + 1 WHERE id = $2', [payoutCredit, actualRiderId]);
+        }
+        await client.query('COMMIT');
+        client.release();
+        return res.json({
+            success: true,
+            orderId: String(orderId),
+            status: 'DELIVERED',
+            payoutCredit,
+            message: `OTP verified successfully! Credited ₹${payoutCredit} to rider wallet.`
+        });
     }
-    catch (err) { }
-    return res.json({
-        success: true,
-        orderId: orderId || '',
-        status: 'DELIVERED',
-        payoutCredit,
-        message: `OTP verified! Credited ₹${payoutCredit} to rider wallet.`
-    });
+    catch (err) {
+        await client.query('ROLLBACK').catch(() => null);
+        client.release();
+        return res.status(500).json({ error: 'Handover verification failed', message: err?.message });
+    }
 });
 // Rider Stats & Earnings — Direct PostgreSQL Querying
 app.get('/api/delivery/stats', async (req, res) => {

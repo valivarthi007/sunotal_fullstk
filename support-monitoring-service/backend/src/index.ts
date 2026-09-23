@@ -38,6 +38,11 @@ async function initDb() {
         resolved_by VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
+      CREATE INDEX IF NOT EXISTS idx_support_tickets_category ON support_tickets(category);
+      CREATE INDEX IF NOT EXISTS idx_support_tickets_ticket_id ON support_tickets(ticket_id);
+      CREATE INDEX IF NOT EXISTS idx_support_tickets_sender_email ON support_tickets(sender_email);
     `);
     console.log('🐘 [support-service] PostgreSQL database tables ready.');
   } catch (err: any) {
@@ -107,6 +112,12 @@ app.post("/api/support/tickets", async (req: any, res: any) => {
     return res.status(400).json({ error: "Required fields missing" });
   }
 
+  const cleanEmail = String(senderEmail).trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleanEmail)) {
+    return res.status(400).json({ error: "Please provide a valid email address" });
+  }
+
   const timestamp = Date.now().toString().slice(-6);
   const uniqueNum = Math.floor(100000 + Math.random() * 900000);
   const ticketId = `TKT-2026-${timestamp}-${uniqueNum}`;
@@ -115,7 +126,7 @@ app.post("/api/support/tickets", async (req: any, res: any) => {
     const dbRes = await pool.query(
       `INSERT INTO support_tickets (ticket_id, role, sender_name, sender_email, sender_phone, category, order_id, subject, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [ticketId, role, senderName, senderEmail.trim().toLowerCase(), senderPhone || "", category, orderId || "", subject, description, "open"]
+      [ticketId, role, String(senderName).trim(), cleanEmail, senderPhone || "", category, orderId || "", String(subject).trim(), String(description).trim(), "open"]
     );
 
     return res.status(201).json(formatTicket(dbRes.rows[0]));

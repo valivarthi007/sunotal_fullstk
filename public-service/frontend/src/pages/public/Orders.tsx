@@ -283,7 +283,7 @@ export default function Orders() {
         body: JSON.stringify({
           orderId: ratingOrder.id,
           userId: user?.id || 1,
-          riderId: ratingOrder.riderId || "RIDER-101",
+          riderId: (ratingOrder as any).riderId || "RIDER-101",
           riderRating: driverStars,
           productRating: itemStars,
           riderFeedback: ratingFeedback,

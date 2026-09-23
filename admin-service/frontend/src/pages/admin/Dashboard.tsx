@@ -253,7 +253,7 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, icon, trend }: { title: string, value: number, icon: React.ReactNode, trend: string }) {
+function StatCard({ title, value, icon, trend }: { title: string, value: string | number, icon: React.ReactNode, trend: string }) {
   return (
     <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
       <div className="flex justify-between items-start mb-4">

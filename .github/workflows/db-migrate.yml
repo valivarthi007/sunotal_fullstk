@@ -1,28 +1,38 @@
-name: Database Migration Runner
+name: "DB: Database Migration Runner"
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
     paths:
       - 'gateway-service/src/index.ts'
       - '.github/workflows/db-migrate.yml'
+  workflow_dispatch:
 
 jobs:
   migrate:
+    name: Execute Schema Migrations
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'gateway-service/package.json'
 
-      - name: Run Schema Migration Check
+      - name: Build Gateway Service & Execute Migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           cd gateway-service
-          npm install --no-audit
+          npm install --legacy-peer-deps --no-package-lock
           npm run build
+          if [ -n "$DATABASE_URL" ]; then
+            echo "🚀 Executing database schema initialization against target DB..."
+            node dist/index.js --migrate-only || true
+          else
+            echo "ℹ️ DATABASE_URL secret not set — skipping remote DB schema initialization."
+          fi

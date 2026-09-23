@@ -59,8 +59,7 @@ async function uploadToS3(params) {
                 Bucket: AWS_S3_BUCKET,
                 Key: key,
                 Body: buffer,
-                ContentType: contentType,
-                ACL: 'public-read'
+                ContentType: contentType
             });
             await s3Client.send(command);
             if (AWS_CLOUDFRONT_DOMAIN) {
@@ -1302,18 +1301,28 @@ app.post('/api/inventory/deduct', async (req, res) => {
     const { items } = req.body || {};
     if (!Array.isArray(items))
         return res.status(400).json({ error: 'Items array is required' });
+    const client = await gatewayPgPool.connect();
     try {
+        await client.query('BEGIN');
         for (const item of items) {
-            const prodId = Number(item.productId);
+            const prodId = Number(item.productId || item.id);
             const qty = Number(item.quantity || 1);
-            if (prodId) {
-                await gatewayPgPool.query('UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2', [qty, prodId]);
-                await gatewayPgPool.query('UPDATE inventory SET quantity = GREATEST(0, quantity - $1) WHERE product_id = $2', [qty, prodId]);
+            const pName = String(item.productName || item.name || '');
+            if (prodId > 0) {
+                await client.query('UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2', [qty, prodId]);
+                await client.query(`UPDATE inventory SET quantity = GREATEST(0, quantity - $1),
+             status = CASE WHEN (quantity - $1) <= 0 THEN 'out_of_stock' ELSE 'in_stock' END,
+             updated_at = NOW()
+           WHERE product_id = $2 OR LOWER(product_name) = LOWER($3)`, [qty, prodId, pName]);
             }
         }
+        await client.query('COMMIT');
+        client.release();
         return res.json({ success: true, message: 'Inventory stock deducted successfully' });
     }
     catch (err) {
+        await client.query('ROLLBACK').catch(() => null);
+        client.release();
         return res.status(500).json({ error: 'Failed to deduct inventory stock', message: err?.message });
     }
 });
@@ -1712,26 +1721,31 @@ app.get(['/api/delivery/payouts', '/api/admin/rider-payouts'], async (_req, res)
         return res.status(500).json({ error: 'Failed to fetch rider payouts', message: err?.message });
     }
 });
-// ADMIN DASHBOARD STATS
+// ADMIN DASHBOARD STATS (Optimized with SQL Aggregates)
 app.get('/api/admin/stats', async (_req, res) => {
     try {
-        const [uRes, pRes, vRes, oRes, wRes, rRes, qRes, pOutRes] = await Promise.all([
-            gatewayPgPool.query('SELECT * FROM users ORDER BY id DESC'),
-            gatewayPgPool.query('SELECT * FROM products ORDER BY id DESC'),
-            gatewayPgPool.query('SELECT * FROM vendors ORDER BY id DESC'),
-            gatewayPgPool.query('SELECT * FROM orders ORDER BY id DESC'),
-            gatewayPgPool.query('SELECT * FROM warehouses WHERE is_active = true'),
-            gatewayPgPool.query("SELECT COUNT(*) FROM delivery_riders WHERE status = 'available' OR status = 'on_delivery' OR status = 'APPROVED'"),
+        const [uCountRes, pCountRes, vCountRes, vActiveRes, oCountRes, oRevRes, wCountRes, rRes, qRes, pOutRes, recentVRes, recentURes] = await Promise.all([
+            gatewayPgPool.query('SELECT COUNT(*) FROM users'),
+            gatewayPgPool.query('SELECT COUNT(*) FROM products'),
+            gatewayPgPool.query('SELECT COUNT(*) FROM vendors'),
+            gatewayPgPool.query('SELECT COUNT(*) FROM vendors WHERE active = true'),
+            gatewayPgPool.query('SELECT COUNT(*) FROM orders'),
+            gatewayPgPool.query("SELECT COALESCE(SUM(final_amount), SUM(total_amount), 0) as rev FROM orders WHERE status != 'cancelled'"),
+            gatewayPgPool.query('SELECT COUNT(*) FROM warehouses WHERE is_active = true'),
+            gatewayPgPool.query("SELECT COUNT(*) FROM delivery_riders WHERE status = 'available' OR status = 'on_delivery' OR status = 'APPROVED' OR status = 'ONLINE'").catch(() => ({ rows: [{ count: '0' }] })),
             gatewayPgPool.query("SELECT COALESCE(SUM(price * quantity), 0) as vendor_charges FROM quotations WHERE status IN ('accepted', 'approved') OR payment_status = 'paid'").catch(() => ({ rows: [{ vendor_charges: 0 }] })),
-            gatewayPgPool.query("SELECT COALESCE(SUM(amount), 0) as delivery_charges FROM rider_payouts WHERE status IN ('paid', 'COMPLETED')").catch(() => ({ rows: [{ delivery_charges: 0 }] })),
+            gatewayPgPool.query("SELECT COALESCE(SUM(amount), 0) as delivery_charges FROM rider_payouts WHERE status IN ('paid', 'completed', 'COMPLETED')").catch(() => ({ rows: [{ delivery_charges: 0 }] })),
+            gatewayPgPool.query('SELECT * FROM vendors ORDER BY id DESC LIMIT 5'),
+            gatewayPgPool.query('SELECT id, name, email, role, phone, city, created_at FROM users ORDER BY id DESC LIMIT 5'),
         ]);
-        const users = uRes.rows || [];
-        const products = pRes.rows || [];
-        const vendors = vRes.rows || [];
-        const orders = oRes.rows || [];
-        const warehouses = wRes.rows || [];
+        const totalUsers = parseInt(uCountRes.rows[0]?.count || '0', 10);
+        const totalProducts = parseInt(pCountRes.rows[0]?.count || '0', 10);
+        const totalVendors = parseInt(vCountRes.rows[0]?.count || '0', 10);
+        const activeVendors = parseInt(vActiveRes.rows[0]?.count || '0', 10);
+        const totalOrders = parseInt(oCountRes.rows[0]?.count || '0', 10);
+        const userRevenue = Number(oRevRes.rows[0]?.rev || 0);
+        const activeDarkStores = parseInt(wCountRes.rows[0]?.count || '0', 10);
         const onlineRiders = parseInt(rRes.rows[0]?.count || '0', 10);
-        const userRevenue = orders.reduce((sum, o) => sum + Number(o.final_amount || o.total_amount || 0), 0);
         const vendorCharges = Number(qRes.rows[0]?.vendor_charges || 0);
         const deliveryCharges = Number(pOutRes.rows[0]?.delivery_charges || 0);
         const awsEcsFargate = 48.50;
@@ -1741,11 +1755,11 @@ app.get('/api/admin/stats', async (_req, res) => {
         const awsMonthlyCost = Number((awsEcsFargate + awsRdsPostgres + awsElastiCache + awsAlbCloudFront).toFixed(2));
         const netPlatformMargin = Number((userRevenue - (vendorCharges + deliveryCharges + awsMonthlyCost)).toFixed(2));
         res.json({
-            totalProducts: products.length,
-            totalUsers: users.length,
-            totalVendors: vendors.length,
-            activeVendors: vendors.filter(v => v.active !== false).length,
-            activeOrders: orders.length,
+            totalProducts,
+            totalUsers,
+            totalVendors,
+            activeVendors,
+            activeOrders: totalOrders,
             totalRevenue: userRevenue,
             userRevenue,
             vendorCharges,
@@ -1758,11 +1772,11 @@ app.get('/api/admin/stats', async (_req, res) => {
                 albCloudFront: awsAlbCloudFront,
             },
             netPlatformMargin,
-            totalOrders: orders.length,
+            totalOrders,
             onlineRiders,
-            activeDarkStores: warehouses.length,
-            recentVendors: vendors.slice(0, 5).map(formatVendorRow),
-            recentUsers: users.slice(0, 5).map(u => ({ id: String(u.id), name: u.name, email: u.email, role: u.role, phone: u.phone, city: u.city, createdAt: u.created_at }))
+            activeDarkStores,
+            recentVendors: (recentVRes.rows || []).map(formatVendorRow),
+            recentUsers: (recentURes.rows || []).map(u => ({ id: String(u.id), name: u.name, email: u.email, role: u.role, phone: u.phone, city: u.city, createdAt: u.created_at }))
         });
     }
     catch (err) {
@@ -2163,25 +2177,43 @@ app.post('/api/delivery/otp/generate', async (req, res) => {
     }
 });
 app.post('/api/rider/verify-handover-otp', async (req, res) => {
-    const { orderId, otp } = req.body || {};
-    if (!orderId || !otp)
-        return res.status(400).json({ error: 'Order ID and OTP are required' });
+    const { orderId, otp, inputOtp, riderId } = req.body || {};
+    const userOtp = String(inputOtp || otp || '').trim();
+    if (!orderId || !userOtp)
+        return res.status(400).json({ error: 'Order ID and valid OTP PIN are required' });
+    const client = await gatewayPgPool.connect();
     try {
-        const oRes = await gatewayPgPool.query('SELECT * FROM orders WHERE id = $1', [Number(orderId)]);
-        if (!oRes.rows || oRes.rows.length === 0)
+        const oRes = await client.query('SELECT * FROM orders WHERE id::text = $1 OR order_number = $1', [String(orderId)]);
+        if (!oRes.rows || oRes.rows.length === 0) {
+            client.release();
             return res.status(404).json({ error: 'Order not found' });
-        const order = oRes.rows[0];
-        const isMatch = String(order.delivery_otp).trim() === String(otp).trim() || (process.env.NODE_ENV !== 'production' && String(otp).trim() === '123456');
-        if (isMatch) {
-            await gatewayPgPool.query(`UPDATE orders SET status = 'delivered', updated_at = NOW() WHERE id = $1`, [Number(orderId)]);
-            await gatewayPgPool.query(`INSERT INTO rider_payouts (rider_id, rider_name, amount, trips_completed, status)
-         VALUES ($1, $2, 50.00, 1, 'completed')`, [order.rider_id || 'RIDER-101', order.rider_name || 'Vikram Singh']);
-            broadcastRealtimeEvent({ type: 'ORDER_DELIVERED', path: req.originalUrl || req.url, method: req.method, data: { orderId } });
-            return res.json({ success: true, message: 'OTP verified! Order delivered successfully. ₹50 credited to rider wallet.' });
         }
-        return res.status(400).json({ error: 'Invalid OTP code. Please ask customer for correct 6-digit PIN.' });
+        const order = oRes.rows[0];
+        if (order.status === 'delivered') {
+            client.release();
+            return res.json({ success: true, message: 'Order is already marked as delivered.', status: 'delivered' });
+        }
+        const storedOtp = String(order.delivery_otp || '').trim();
+        if (!storedOtp || userOtp !== storedOtp) {
+            client.release();
+            return res.status(400).json({ error: 'Invalid handover OTP PIN code. Please ask customer for correct 6-digit PIN.' });
+        }
+        await client.query('BEGIN');
+        await client.query(`UPDATE orders SET status = 'delivered', updated_at = NOW() WHERE id = $1`, [order.id]);
+        await client.query(`UPDATE delivery_orders SET status = 'delivered', stage = 'delivered', updated_at = NOW() WHERE id = $1 OR order_number = $1`, [String(order.id)]).catch(() => null);
+        const actualRiderId = riderId ? String(riderId) : (order.rider_id || 'RIDER-101');
+        const actualRiderName = order.rider_name || 'Vikram Singh';
+        await client.query(`INSERT INTO rider_payouts (rider_id, rider_name, amount, trips_completed, status)
+       VALUES ($1, $2, 45.00, 1, 'COMPLETED')`, [actualRiderId, actualRiderName]);
+        await client.query(`UPDATE delivery_riders SET wallet_balance = wallet_balance + 45.00, total_deliveries = total_deliveries + 1 WHERE id = $1`, [actualRiderId]).catch(() => null);
+        await client.query('COMMIT');
+        client.release();
+        broadcastRealtimeEvent({ type: 'ORDER_DELIVERED', path: req.originalUrl || req.url, method: req.method, data: { orderId: order.id } });
+        return res.json({ success: true, message: 'OTP verified! Order delivered successfully. ₹45 credited to rider wallet.', status: 'delivered' });
     }
     catch (err) {
+        await client.query('ROLLBACK').catch(() => null);
+        client.release();
         return res.status(500).json({ error: 'OTP verification failed', message: err?.message });
     }
 });

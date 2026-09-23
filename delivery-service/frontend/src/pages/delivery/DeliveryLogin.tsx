@@ -23,7 +23,7 @@ export default function DeliveryLogin() {
       let response = await fetch("/api/delivery/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, phone: email, password }),
       });
 
       if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504 || response.status === 404)) {
@@ -94,9 +94,9 @@ export default function DeliveryLogin() {
                 <Mail className="w-3.5 h-3.5 text-emerald-600" /> Registered Email or Phone
               </label>
               <Input
-                type="email"
+                type="text"
                 required
-                placeholder="rider@sunotal.com"
+                placeholder="9876543210 or rider@sunotal.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-11 rounded-xl text-xs bg-background"

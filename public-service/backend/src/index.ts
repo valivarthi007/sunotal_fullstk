@@ -81,6 +81,8 @@ async function initDb() {
       `CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)`,
       `CREATE INDEX IF NOT EXISTS idx_products_active ON products(active)`,
       `CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)`,
+      `CREATE INDEX IF NOT EXISTS idx_products_lower_name ON products(LOWER(name))`,
+      `CREATE INDEX IF NOT EXISTS idx_products_lower_category ON products(LOWER(category))`,
       `CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name)`,
     ];
     for (const idx of indexes) {
@@ -107,7 +109,7 @@ app.get('/api/healthz', (_req, res) => {
 
 // Products Listing with Filter/Search/Sort — Direct PostgreSQL SQL Querying
 app.get('/api/products', async (req, res) => {
-  const { category, search, sort, all } = req.query;
+  const { category, search, sort, all, limit } = req.query;
   try {
     const showAll = all === 'true' || all === '1';
     let queryStr = showAll ? 'SELECT * FROM products WHERE 1=1' : 'SELECT * FROM products WHERE active = true';
@@ -127,6 +129,10 @@ app.get('/api/products', async (req, res) => {
     else if (sort === 'price-high') queryStr += ' ORDER BY price DESC';
     else if (sort === 'rating') queryStr += ' ORDER BY rating DESC';
     else queryStr += ' ORDER BY id DESC';
+
+    const maxLimit = Math.min(Number(limit || 200), 500);
+    params.push(maxLimit);
+    queryStr += ` LIMIT $${params.length}`;
 
     const dbRes = await pool.query(queryStr, params);
     const formatted = (dbRes.rows || []).map((p: any) => ({
@@ -172,7 +178,9 @@ app.get('/api/products/:id', async (req, res) => {
         image: p.image,
         isOrganic: p.is_organic,
         stock: p.stock,
-        rating: Number(p.rating || 5.0)
+        rating: Number(p.rating || 5.0),
+        status: p.status || 'active',
+        active: p.active ?? true,
       });
     }
     return res.status(404).json({ error: 'Product not found' });
@@ -267,12 +275,17 @@ app.post('/api/categories', async (req, res) => {
     const c = dbRes.rows[0];
     const newCat = { id: c.id, name: c.name, icon: c.icon, active: c.active };
 
-    // Async sync notification to operations service
-    fetch(`${OPERATIONS_SERVICE_URL}/api/categories`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newCat),
-    }).catch(() => null);
+    // Async sync notification with 3s timeout
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      fetch(`${OPERATIONS_SERVICE_URL}/api/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCat),
+        signal: controller.signal
+      }).catch(() => null).finally(() => clearTimeout(timeout));
+    } catch {}
 
     return res.status(201).json(newCat);
   } catch (err: any) {

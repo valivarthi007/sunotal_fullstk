@@ -48,6 +48,10 @@ services:
       - PORT=5000
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-ap-south-1}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-jcs-raju-sunotal-final}
     networks:
       default:
         aliases:
@@ -103,6 +107,10 @@ services:
       - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
       - REDIS_HOST=redis
       - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-ap-south-1}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-jcs-raju-sunotal-final}
     depends_on:
       postgres:
         condition: service_healthy
@@ -313,6 +321,10 @@ services:
       vendor-service-frontend:
         condition: service_healthy
       delivery-service-frontend:
+        condition: service_healthy
+      support-service-frontend:
+        condition: service_healthy
+      monitoring-service-frontend:
         condition: service_healthy
 
 volumes:

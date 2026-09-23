@@ -143,7 +143,7 @@ export default function OrdersBoard() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={fetchBoardOrders} disabled={loading} className="gap-1.5 text-xs font-bold rounded-xl">
+            <Button variant="outline" size="sm" onClick={() => fetchBoardOrders()} disabled={loading} className="gap-1.5 text-xs font-bold rounded-xl">
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-emerald-600" : ""}`} /> Refresh Board
             </Button>
           </div>

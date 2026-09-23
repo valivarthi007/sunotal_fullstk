@@ -9,7 +9,7 @@ resource "aws_sqs_queue" "orders_queue" {
   name                       = "sunotal-orders-queue"
   message_retention_seconds  = 86400
   visibility_timeout_seconds = 30
-  receive_wait_time_seconds  = 20   # Long polling — reduces empty receives and cost
+  receive_wait_time_seconds  = 20 # Long polling — reduces empty receives and cost
 
   # Dead-letter queue for failed messages
   redrive_policy = jsonencode({
@@ -23,7 +23,7 @@ resource "aws_sqs_queue" "orders_queue" {
 # Dead Letter Queue for unprocessable order events
 resource "aws_sqs_queue" "orders_dlq" {
   name                      = "sunotal-orders-dlq"
-  message_retention_seconds = 1209600  # 14 days retention for failed messages
+  message_retention_seconds = 1209600 # 14 days retention for failed messages
   tags                      = merge(var.tags, { Name = "sunotal-orders-dlq" })
 }
 
@@ -97,7 +97,7 @@ resource "aws_sns_topic_subscription" "rating_sub" {
 
 output "sns_topic_arn" { value = aws_sns_topic.events.arn }
 output "sqs_queue_url" { value = aws_sqs_queue.orders_queue.url }
-output "sqs_dlq_url"   { value = aws_sqs_queue.orders_dlq.url }
+output "sqs_dlq_url" { value = aws_sqs_queue.orders_dlq.url }
 output "rider_queue_url" { value = aws_sqs_queue.rider_assignment_queue.url }
 output "rating_queue_url" { value = aws_sqs_queue.rating_events_queue.url }
 output "notification_queue_url" { value = aws_sqs_queue.notification_queue.url }

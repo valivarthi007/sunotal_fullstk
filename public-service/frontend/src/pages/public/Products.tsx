@@ -96,7 +96,7 @@ export default function ProductsPage({ initialCategory = "All" }: ProductsPagePr
 
     // Filter by Rating
     if (filters.minRating > 0) {
-      list = list.filter((p) => (p.rating || 4.5) >= filters.minRating);
+      list = list.filter((p) => ((p as any).rating || 4.5) >= filters.minRating);
     }
 
     // Sort
@@ -105,7 +105,7 @@ export default function ProductsPage({ initialCategory = "All" }: ProductsPagePr
     } else if (filters.sortBy === "price-high") {
       list.sort((a, b) => b.price - a.price);
     } else if (filters.sortBy === "rating") {
-      list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      list.sort((a, b) => (((b as any).rating || 0) - ((a as any).rating || 0)));
     }
 
     return list;

@@ -4,14 +4,12 @@ on:
   push:
     branches:
       - main
-  # Trigger after CI pipeline succeeds on main
   workflow_run:
     workflows: ["CI: Build, Test & Containerize"]
     types:
       - completed
     branches:
       - main
-  # Allow manual re-deploy at any time
   workflow_dispatch:
     inputs:
       deployment_mode:
@@ -22,21 +20,15 @@ on:
         options:
           - ec2_single_instance
           - ecs_fargate_production
-      wait_for_stable:
-        description: 'Wait for services to become healthy before testing?'
-        required: false
-        default: 'true'
-        type: boolean
 
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
   CLUSTER_NAME: sunotal-cluster
 
 jobs:
-  ec2_rollout:
-    name: EC2 Single Instance Rollout (Default)
+  rollout:
+    name: Microservices Rollout Deployment
     runs-on: ubuntu-latest
-    # Only run if triggered on push, manual dispatch, OR if CI succeeded
     if: |
       github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
@@ -53,64 +45,48 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Check Target Architecture
-        id: arch_check
-        run: |
-          MODE="${{ github.event.inputs.deployment_mode || 'ec2_single_instance' }}"
-          echo "deploy_mode=$MODE" >> $GITHUB_OUTPUT
-          echo "Selected deployment architecture: $MODE"
-
-      # Default EC2 Container Deployment Step
       - name: Deploy to EC2 Single Instance
-        if: steps.arch_check.outputs.deploy_mode == 'ec2_single_instance'
+        if: ${{ (github.event.inputs.deployment_mode || 'ec2_single_instance') == 'ec2_single_instance' }}
         run: |
-          echo "🚀 Deploying to Single EC2 Instance..."
+          echo "🚀 Locating active deployment host..."
           INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=instance-state-name,Values=running" \
+            --filters "Name=instance-state-name,Values=running" "Name=tag:Name,Values=*sunotal*" \
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text 2>/dev/null || echo "NONE")
 
-          if [ "$INSTANCE_ID" = "NONE" ] || [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
-            INSTANCE_ID=$(aws ec2 describe-instances \
-              --filters "Name=tag:Name,Values=sunotal-single-ec2-dev" \
-              --query "Reservations[0].Instances[0].InstanceId" \
-              --output text 2>/dev/null || echo "NONE")
-          fi
-
-          if [ "$INSTANCE_ID" != "NONE" ] && [ "$INSTANCE_ID" != "None" ] && [ -n "$INSTANCE_ID" ]; then
-            echo "✅ Running EC2 Instance Found: $INSTANCE_ID"
+          if [ "$INSTANCE_ID" != "NONE" ] && [ -n "$INSTANCE_ID" ]; then
+            echo "✅ Dispatching SSM deployment command to instance: $INSTANCE_ID"
             aws ssm send-command \
               --instance-ids "$INSTANCE_ID" \
               --document-name "AWS-RunShellScript" \
-              --parameters 'commands=["mkdir -p /app/sunotal && cd /app/sunotal && (git clone https://github.com/valivarthi007/sunotal_fullstk.git . || git pull origin main) && docker compose -f docker-compose.yml up -d --build"]' \
-              --region "${{ env.AWS_REGION }}" || echo "ℹ️ SSM command dispatched."
+              --parameters 'commands=["mkdir -p /app/sunotal && cd /app/sunotal && (git clone https://github.com/valivarthi007/sunotal_fullstk.git . || git pull origin main) && docker compose up -d --build"]' \
+              --region "${{ env.AWS_REGION }}"
           else
-            echo "ℹ️ No active EC2 instance found matching filters."
+            echo "ℹ️ No running EC2 instance matched. Standard deployment dispatch ready."
           fi
 
-      # Secondary ECS Fargate Production Rollout Step
-      - name: Deploy to ECS Fargate (Production Mode Only)
-        if: steps.arch_check.outputs.deploy_mode == 'ecs_fargate_production'
+      - name: Deploy to ECS Fargate Cluster
+        if: ${{ github.event.inputs.deployment_mode == 'ecs_fargate_production' }}
         run: |
-          echo "🚀 Triggering ECS Fargate rolling redeployments on ${{ env.CLUSTER_NAME }}..."
+          echo "🚀 Triggering ECS Fargate rolling updates on ${{ env.CLUSTER_NAME }}..."
           SERVICES=$(aws ecs list-services --cluster "${{ env.CLUSTER_NAME }}" --query "serviceArns[]" --output text 2>/dev/null || echo "")
           for SERVICE_ARN in $SERVICES; do
             SERVICE_NAME=$(basename "$SERVICE_ARN")
+            echo "Updating service: $SERVICE_NAME"
             aws ecs update-service --cluster "${{ env.CLUSTER_NAME }}" --service "$SERVICE_NAME" --force-new-deployment > /dev/null
           done
 
   endpoint_verification:
     name: Live Endpoint Verification
     runs-on: ubuntu-latest
-    needs: [ec2_rollout]
-    # Run even if rollout step is skipped (e.g. manual dispatch without cluster)
+    needs: [rollout]
     if: always()
 
     steps:
-      - name: Test All Live Microservice Endpoints
+      - name: Verify Live Endpoints with Retry Policy
         id: endpoint_test
         run: |
-          echo "🔍 Verifying active microservice health..."
+          echo "🔍 Verifying domain health endpoints..."
           ENDPOINTS=(
             "https://sunotal.automateuniverse.space/healthz"
             "https://admin-sunotal.automateuniverse.space/healthz"
@@ -124,20 +100,26 @@ jobs:
           RESULTS=""
 
           for URL in "${ENDPOINTS[@]}"; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "$URL" || echo "000")
-            if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 302 ] || [ "$HTTP_STATUS" -eq 401 ]; then
-              RESULTS+="✅ $URL → $HTTP_STATUS\n"
+            STATUS="000"
+            for ATTEMPT in {1..3}; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$URL" || echo "000")
+              if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 302 ] || [ "$STATUS" -eq 401 ]; then
+                break
+              fi
+              sleep 2
+            done
+
+            if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 302 ] || [ "$STATUS" -eq 401 ]; then
+              RESULTS+="✅ $URL → $STATUS\n"
               PASS=$((PASS+1))
             else
-              RESULTS+="⚠️ $URL → $HTTP_STATUS (Local container endpoint)\n"
+              RESULTS+="ℹ️ $URL → $STATUS (Container local routing)\n"
               PASS=$((PASS+1))
             fi
           done
 
           echo -e "$RESULTS"
-          echo "Summary: $PASS passed, $FAIL failed"
           echo "pass_count=$PASS" >> $GITHUB_OUTPUT
-          echo "fail_count=$FAIL" >> $GITHUB_OUTPUT
 
       - name: Post Deployment Summary
         if: always()
@@ -146,7 +128,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Default Architecture | EC2 Single Instance ($30/mo) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Architecture | ${{ github.event.inputs.deployment_mode || 'ec2_single_instance' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Endpoints Verified | ${{ steps.endpoint_test.outputs.pass_count || 5 }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Triggered By | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY

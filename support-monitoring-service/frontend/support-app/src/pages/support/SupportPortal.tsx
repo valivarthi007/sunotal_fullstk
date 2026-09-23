@@ -167,20 +167,11 @@ export default function SupportPortal() {
         setSelectedTicket(null);
         setResolutionText("");
       } else {
-        toast.success(`Ticket ${selectedTicket.ticketId} resolved successfully!`);
-        setTickets((prev) =>
-          prev.map((t) =>
-            t.ticketId === selectedTicket.ticketId
-              ? { ...t, status: "resolved", resolution: resolutionText }
-              : t
-          )
-        );
-        setSelectedTicket(null);
-        setResolutionText("");
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || err.message || `Failed to resolve ticket ${selectedTicket.ticketId}`);
       }
     } catch {
-      toast.success(`Ticket ${selectedTicket?.ticketId} resolved successfully`);
-      setSelectedTicket(null);
+      toast.error(`Network error resolving ticket ${selectedTicket?.ticketId}`);
     } finally {
       setIsResolving(false);
     }
@@ -216,6 +207,13 @@ export default function SupportPortal() {
     } catch {
       toast.error("Failed to submit ticket");
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("sunotal_admin_token");
+    localStorage.removeItem("sunotal_token");
+    setIsAdminAuthenticated(false);
+    toast.success("Logged out from Support Portal");
   };
 
   if (!isAdminAuthenticated) {
@@ -308,6 +306,14 @@ export default function SupportPortal() {
               className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs gap-1.5 shadow-lg shadow-emerald-500/20"
             >
               <Sparkles className="w-4 h-4" /> Create Test Ticket
+            </Button>
+            <Button
+              onClick={handleLogout}
+              variant="destructive"
+              size="sm"
+              className="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl text-xs gap-1.5"
+            >
+              <span>Logout</span>
             </Button>
           </div>
         </div>

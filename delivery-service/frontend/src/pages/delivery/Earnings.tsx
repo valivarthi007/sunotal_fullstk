@@ -44,13 +44,43 @@ export default function Earnings() {
     { id: "TRP-874", order: "ORD-2026-4781", time: "08:50 AM", dist: "5.5 km", pay: "₹95", surge: "+₹20", tip: "₹30" },
   ];
 
-  const handleRequestPayout = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleRequestPayout = async () => {
     if (!upiId || !upiId.includes("@")) {
       toast.error("Please enter a valid UPI ID (e.g. name@upi)");
       return;
     }
-    setPayoutRequested(true);
-    toast.success(`Payout of ₹${earnings.netPayable} initiated to ${upiId}! Credit in 15 mins.`);
+    setIsSubmitting(true);
+    const token = typeof window !== "undefined"
+      ? localStorage.getItem("sunotal_delivery_token") || localStorage.getItem("sunotal_token")
+      : null;
+
+    try {
+      const res = await fetch("/api/delivery/payout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          upiId,
+          amount: earnings.netPayable,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPayoutRequested(true);
+        localStorage.setItem("sunotal_rider_upi_id", upiId);
+        toast.success(data.message || `Payout of ₹${earnings.netPayable} initiated to ${upiId}! Credit in 15 mins.`);
+      } else {
+        toast.error(data.error || "Payout request failed");
+      }
+    } catch {
+      toast.error("Network error processing payout request");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

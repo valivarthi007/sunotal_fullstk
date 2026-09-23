@@ -103,11 +103,19 @@ resource "aws_security_group" "ecs" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description     = "Ports allowed from ALB"
-    from_port       = 0
-    to_port         = 65535
+    description     = "Microservice traffic from ALB"
+    from_port       = 80
+    to_port         = 5011
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description = "Inter-service communication within ECS tasks"
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    self        = true
   }
 
   egress {
@@ -124,7 +132,7 @@ resource "aws_security_group" "ecs" {
 
 resource "aws_security_group" "db" {
   name        = "sunotal-db-sg"
-  description = "Security group for RDS PostgreSQL database"
+  description = "Security group for RDS PostgreSQL database & ElastiCache Redis"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -144,27 +152,11 @@ resource "aws_security_group" "db" {
   }
 
   ingress {
-    description = "PostgreSQL from VPC (EKS Pods / Internal)"
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = ["10.10.0.0/16"]
-  }
-
-  ingress {
-    description     = "DocumentDB MongoDB from ECS Fargate"
-    from_port       = 27017
-    to_port         = 27017
+    description     = "Redis from ECS Fargate"
+    from_port       = 6379
+    to_port         = 6379
     protocol        = "tcp"
     security_groups = [aws_security_group.ecs.id]
-  }
-
-  ingress {
-    description = "DocumentDB MongoDB from VPC"
-    from_port   = 27017
-    to_port     = 27017
-    protocol    = "tcp"
-    cidr_blocks = ["10.10.0.0/16"]
   }
 
   egress {
