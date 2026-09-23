@@ -307,46 +307,7 @@ async function initDatabase() {
             }
             catch { }
         }
-        // Initial Seeds — EXECUTED EXACTLY ONCE (prevents re-populating deleted items)
-        const seedCheck = await client.query(`SELECT name FROM schema_migrations WHERE name = 'initial_seeds_v1'`);
-        if (!seedCheck.rows || seedCheck.rows.length === 0) {
-            const adminPassHash = await bcryptjs_1.default.hash('admin123', 10);
-            const vendorPassHash = await bcryptjs_1.default.hash('vendor123', 10);
-            await client.query(`
-        INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
-        VALUES 
-          ('Sunotal Admin', 'admin@sunotal.com', '${adminPassHash}', 'admin', true, '9876543210', 'Bengaluru', 5000),
-          ('Farm Vendor', 'vendor@sunotal.com', '${vendorPassHash}', 'vendor', true, '9876543212', 'Vijayawada', 2500)
-        ON CONFLICT (email) DO NOTHING;
-
-        INSERT INTO vendors (name, vendor_name, first_name, last_name, email, phone, category, address, city, location, produce, farm_size, status, active, bank_name, account_number, ifsc_code, branch_name, account_holder_name, upi_id)
-        VALUES 
-          ('Ramesh Kumar Farms', 'Ramesh Farms', 'Ramesh', 'Kumar', 'vendor@sunotal.com', '9876543212', 'Fresh Vegetables', 'Urmilanagar', 'Vijayawada', 'Vijayawada Mandal', 'Organic Tomatoes', '10 Acres', 'approved', true, 'HDFC Bank Ltd', '501004892156', 'HDFC0001234', 'Vijayawada Main Branch', 'Ramesh Kumar', 'ramesh@okhdfc')
-        ON CONFLICT (email) DO NOTHING;
-
-        INSERT INTO warehouses (name, address, city, latitude, longitude, free_delivery_radius_km, max_service_radius_km, base_delivery_fee, per_km_rate, is_active)
-        SELECT 'Vijayawada Central Hub', 'Urmilanagar Main Road', 'Vijayawada', 16.5447, 80.6037, 30.00, 70.00, 50.00, 8.00, true
-        WHERE NOT EXISTS (SELECT 1 FROM warehouses WHERE name = 'Vijayawada Central Hub');
-
-        INSERT INTO categories (name, icon, active) VALUES
-          ('Vegetables', '🥦', true),
-          ('Fruits', '🍎', true),
-          ('Dairy & Eggs', '🥛', true),
-          ('Grains & Staples', '🌾', true)
-        ON CONFLICT (name) DO NOTHING;
-
-        INSERT INTO products (name, category, price, original_price, unit, image, is_organic, stock, rating, active)
-        SELECT 'Organic Farm Tomatoes', 'Vegetables', 45.00, 60.00, '1 kg', 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400', true, 150, 4.90, true
-        WHERE NOT EXISTS (SELECT 1 FROM products WHERE name = 'Organic Farm Tomatoes');
-
-        INSERT INTO quotations (vendor_name, produce, crop_name, quantity, price, category, unit, quality_grade, expected_harvest_date, dark_store_allocation, notes, phone, address, status, payment_status)
-        SELECT 'Ramesh Farms', 'Fresh Red Tomatoes', 'Fresh Red Tomatoes', 25.00, 32.00, 'Vegetables', 'Quintal', 'Grade A (Organic / Premium)', '2026-09-25', 'Vijayawada Central Hub', 'Direct farm harvest from Urmilanagar', 'pending', 'processing'
-        WHERE NOT EXISTS (SELECT 1 FROM quotations WHERE vendor_name = 'Ramesh Farms');
-
-        INSERT INTO schema_migrations (name) VALUES ('initial_seeds_v1');
-      `);
-        }
-        console.log('✅ PostgreSQL clean database initialization & seeds ready.');
+        console.log('✅ PostgreSQL database schema & indexes ready.');
     }
     catch (err) {
         console.error('⚠️ PostgreSQL DB init error:', err?.message || err);
@@ -462,17 +423,10 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
     const cleanEmail = String(email).trim().toLowerCase();
     try {
         const dbRes = await gatewayPgPool.query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
-        // Explicit Admin login fallback for admin-sunotal, support-sunotal, and monitoring portals
-        if (cleanEmail === 'admin@sunotal.com' && (password === 'admin123' || password === 'admin')) {
-            const u = (dbRes.rows && dbRes.rows.length > 0) ? dbRes.rows[0] : { id: '1', name: 'Sunotal Admin', email: 'admin@sunotal.com', role: 'admin', active: true, phone: '9876543210', city: 'Bengaluru', wallet_balance: 5000, created_at: new Date().toISOString() };
-            const normUser = { id: String(u.id), name: u.name, email: u.email, role: 'admin', active: true, status: 'active', phone: u.phone || '9876543210', city: u.city || 'Bengaluru', walletBalance: Number(u.wallet_balance || 5000), createdAt: u.created_at };
-            const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
-            return res.json({ success: true, token, user: normUser });
-        }
         if (dbRes.rows && dbRes.rows.length > 0) {
             const u = dbRes.rows[0];
             const match = await bcryptjs_1.default.compare(password, u.password_hash);
-            if (match || (u.role === 'admin' && (password === 'admin123' || password === 'admin'))) {
+            if (match) {
                 const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '', city: u.city || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
                 const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
                 return res.json({ success: true, token, user: normUser });

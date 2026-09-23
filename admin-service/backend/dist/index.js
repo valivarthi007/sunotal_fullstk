@@ -288,30 +288,6 @@ async function initDb() {
             }
             catch { }
         }
-        // Seed default business settings & coupons into PostgreSQL RDS if empty
-        await pgPool.query(`
-      INSERT INTO business_settings (setting_key, setting_value, description)
-      VALUES
-        ('base_delivery_fee', '50.00', 'Base delivery fee charged per order'),
-        ('per_km_rate', '8.00', 'Delivery fee per km beyond free radius'),
-        ('free_delivery_radius_km', '3.00', 'Radius in km for free delivery'),
-        ('platform_fee', '15.00', 'Platform fee per customer order'),
-        ('tax_rate_percent', '5.00', 'Applicable GST percentage'),
-        ('vendor_commission_percent', '10.00', 'Platform commission charged on vendor sales'),
-        ('rider_base_payout', '45.00', 'Base payout to delivery rider per completed order'),
-        ('rider_per_km_payout', '10.00', 'Extra payout per km for delivery riders'),
-        ('surge_pricing_multiplier', '1.00', 'Surge pricing multiplier'),
-        ('avg_rider_speed_kmh', '25.00', 'Average rider speed in km/h for ETA calculation')
-      ON CONFLICT (setting_key) DO NOTHING;
-
-      INSERT INTO coupons (code, discount_type, discount_value, min_order_amount, max_discount_amount, usage_limit, active)
-      VALUES
-        ('SUNOTAL50', 'percentage', 50, 199, 100, 500, true),
-        ('FREESHIP', 'flat', 50, 149, 50, 1000, true),
-        ('FIRST100', 'flat', 100, 299, 100, 200, true),
-        ('INSTA20', 'percentage', 20, 99, 50, 500, true)
-      ON CONFLICT (code) DO NOTHING;
-    `).catch(() => { });
         console.log('🐘 [operations-service] All PostgreSQL tables & migrations ready.');
     }
     catch (err) {
