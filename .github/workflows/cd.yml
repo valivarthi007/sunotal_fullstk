@@ -82,7 +82,7 @@ jobs:
             aws ssm send-command \
               --instance-ids "$INSTANCE_ID" \
               --document-name "AWS-RunShellScript" \
-              --parameters 'commands=["if [ -d \"/home/ec2-user/app/sunotal_fullstk\" ]; then cd /home/ec2-user/app/sunotal_fullstk; elif [ -d \"/opt/sunotal\" ]; then cd /opt/sunotal; fi && git pull origin main && docker compose -f docker-compose.yml up -d --build"]' \
+              --parameters 'commands=["cd /app/sunotal && git pull origin main && docker compose -f docker-compose.yml up -d --build"]' \
               --region "${{ env.AWS_REGION }}" || echo "ℹ️ SSM command dispatched."
           else
             echo "ℹ️ No active EC2 instance found matching filters."

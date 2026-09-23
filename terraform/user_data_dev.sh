@@ -14,8 +14,8 @@ curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-comp
 chmod +x /usr/libexec/docker/cli-plugins/docker-compose
 
 # Create project directory
-mkdir -p /opt/sunotal
-cd /opt/sunotal
+mkdir -p /app/sunotal
+cd /app/sunotal
 
 # Clone or pull codebase
 git clone https://github.com/valivarthi007/sunotal_fullstk.git . || git pull origin main
