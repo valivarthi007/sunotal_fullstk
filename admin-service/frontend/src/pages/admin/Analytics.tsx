@@ -65,7 +65,12 @@ export default function Analytics() {
 
         const kpiJson = await kpiRes.json();
         if (kpiJson.success) {
-          setDeliveryKpis(kpiJson);
+          setDeliveryKpis((prev) => ({
+            totalRiders: Number(kpiJson.totalRiders ?? prev.totalRiders ?? 0),
+            avgRiderRating: Number(kpiJson.avgRiderRating ?? prev.avgRiderRating ?? 4.9),
+            totalPayouts: Number(kpiJson.totalPayouts ?? prev.totalPayouts ?? 0),
+            totalDeliveredOrders: Number(kpiJson.totalDeliveredOrders ?? prev.totalDeliveredOrders ?? 0),
+          }));
         }
       } catch {
         // Fallback to initial mock data if backend not reached
@@ -74,8 +79,8 @@ export default function Analytics() {
     loadAnalytics();
   }, []);
 
-  const totalPeriodRevenue = revenueData.reduce((sum, d) => sum + d.revenue, 0);
-  const totalPeriodOrders = revenueData.reduce((sum, d) => sum + d.orders, 0);
+  const totalPeriodRevenue = (revenueData || []).reduce((sum, d) => sum + (Number(d?.revenue) || 0), 0);
+  const totalPeriodOrders = (revenueData || []).reduce((sum, d) => sum + (Number(d?.orders) || 0), 0);
 
   return (
     <AdminLayout>
@@ -98,7 +103,7 @@ export default function Analytics() {
             <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
               <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Gross Revenue
             </p>
-            <p className="text-2xl font-black text-emerald-600 font-mono">₹{totalPeriodRevenue.toLocaleString()}</p>
+            <p className="text-2xl font-black text-emerald-600 font-mono">₹{Number(totalPeriodRevenue || 0).toLocaleString()}</p>
             <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
               <ArrowUpRight className="w-3 h-3" /> +18.4% vs last week
             </p>
@@ -128,7 +133,7 @@ export default function Analytics() {
               <Bike className="w-3.5 h-3.5 text-amber-500" /> Rider Payouts Disbursed
             </p>
             <p className="text-2xl font-black text-amber-500 font-mono">
-              ₹{deliveryKpis.totalPayouts.toLocaleString()}
+              ₹{(deliveryKpis?.totalPayouts ?? 0).toLocaleString()}
             </p>
           </div>
         </div>
