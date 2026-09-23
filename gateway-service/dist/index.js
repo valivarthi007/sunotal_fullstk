@@ -18,6 +18,24 @@ function signJwtNative(payload, secret) {
     const signature = crypto_1.default.createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url');
     return `${header}.${body}.${signature}`;
 }
+function verifyJwtNative(token, secret) {
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3)
+            return null;
+        const [headerB64, bodyB64, signature] = parts;
+        const expectedSig = crypto_1.default.createHmac('sha256', secret).update(`${headerB64}.${bodyB64}`).digest('base64url');
+        if (signature !== expectedSig)
+            return null;
+        const payload = JSON.parse(Buffer.from(bodyB64, 'base64url').toString('utf-8'));
+        if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp)
+            return null;
+        return payload;
+    }
+    catch {
+        return null;
+    }
+}
 const isRds = DATABASE_URL.includes('amazonaws.com') || DATABASE_URL.includes('rds');
 const gatewayPgPool = new pg_1.Pool({
     connectionString: DATABASE_URL,
@@ -416,6 +434,39 @@ app.get(['/healthz', '/api/healthz'], (_req, res) => {
     res.json({ status: 'OK', service: 'Sunotal Direct API Engine', timestamp: new Date().toISOString() });
 });
 // AUTH & USERS
+app.get(['/api/auth/me', '/api/auth/user', '/api/users/me'], async (req, res) => {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!token)
+        return res.status(401).json({ error: 'Not authenticated' });
+    const decoded = verifyJwtNative(token, JWT_SECRET);
+    if (!decoded || !decoded.id) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    try {
+        const dbRes = await gatewayPgPool.query('SELECT * FROM users WHERE id = $1', [Number(decoded.id)]);
+        if (dbRes.rows && dbRes.rows.length > 0) {
+            const u = dbRes.rows[0];
+            const normUser = {
+                id: String(u.id),
+                name: u.name,
+                email: u.email,
+                role: u.role,
+                active: u.active ?? true,
+                status: u.active === false ? 'inactive' : 'active',
+                phone: u.phone || '',
+                city: u.city || '',
+                walletBalance: Number(u.wallet_balance || 0),
+                createdAt: u.created_at
+            };
+            return res.json({ success: true, user: normUser, ...normUser });
+        }
+        return res.status(404).json({ error: 'User not found' });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch current user', message: err?.message });
+    }
+});
 app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async (req, res) => {
     const { email, password } = req.body || {};
     if (!email || !password)
