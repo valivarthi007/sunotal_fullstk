@@ -130,6 +130,17 @@ async function initDatabase() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Banners Table
+      CREATE TABLE IF NOT EXISTS banners (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        subtitle TEXT,
+        image TEXT NOT NULL,
+        link TEXT DEFAULT '/products',
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Products Table
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
@@ -992,6 +1003,52 @@ app.delete('/api/product-definitions/:id', async (req, res) => {
   }
 });
 
+// BANNERS
+app.get('/api/banners', async (_req, res) => {
+  try {
+    const dbRes = await gatewayPgPool.query('SELECT * FROM banners WHERE active = true ORDER BY id ASC');
+    const banners = (dbRes.rows || []).map(b => ({
+      id: b.id,
+      title: b.title,
+      subtitle: b.subtitle || '',
+      image: b.image,
+      link: b.link || '/products',
+      active: b.active ?? true
+    }));
+    return res.json(banners);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch banners', message: err?.message });
+  }
+});
+
+app.post('/api/banners', async (req, res) => {
+  const { title, subtitle, image, link } = req.body || {};
+  if (!title || !image) return res.status(400).json({ error: 'Title and image are required' });
+  try {
+    const dbRes = await gatewayPgPool.query(
+      `INSERT INTO banners (title, subtitle, image, link, active) VALUES ($1, $2, $3, $4, true) RETURNING *`,
+      [title, subtitle || '', image, link || '/products']
+    );
+    const b = dbRes.rows[0];
+    const formatted = { id: b.id, title: b.title, subtitle: b.subtitle, image: b.image, link: b.link, active: true };
+    broadcastRealtimeEvent({ type: 'BANNER_CREATED', path: req.originalUrl || req.url, method: 'POST', data: formatted });
+    return res.status(201).json(formatted);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to create banner', message: err?.message });
+  }
+});
+
+app.delete('/api/banners/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    await gatewayPgPool.query('DELETE FROM banners WHERE id = $1', [id]);
+    broadcastRealtimeEvent({ type: 'BANNER_DELETED', path: req.originalUrl || req.url, method: 'DELETE', data: { id } });
+    return res.json({ success: true, message: 'Banner deleted successfully', deletedId: id });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to delete banner', message: err?.message });
+  }
+});
+
 // RIDER FLEET & PAYOUTS
 app.get('/api/delivery/riders', async (_req, res) => {
   try {
@@ -1820,6 +1877,11 @@ app.get(['/api/storefront/search', '/api/products/search'], async (req, res) => 
   } catch (err: any) {
     return res.status(500).json({ error: 'Search failed', message: err?.message });
   }
+});
+
+// Global Fallback for Unhandled API Routes (returns JSON instead of Express HTML 404)
+app.use('/api/*', (req, res) => {
+  return res.status(404).json({ error: `API endpoint ${req.method} ${req.originalUrl || req.url} not found`, path: req.originalUrl || req.url });
 });
 
 app.listen(PORT, () => {
