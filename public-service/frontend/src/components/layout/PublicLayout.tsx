@@ -35,10 +35,25 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const { location: userLoc, isLoading: isLocLoading, setManualLocation } = useLocationState();
 
   const queryClient = useQueryClient();
+  const token = typeof localStorage !== "undefined" ? localStorage.getItem("sunotal_token") : null;
+  const tokenUser = useMemo(() => {
+    if (!token) return null;
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) return null;
+      return payload;
+    } catch {
+      return null;
+    }
+  }, [token]);
+
   const { data: rawUser } = useGetCurrentUser({
-    query: { queryKey: getGetCurrentUserQueryKey(), retry: false, refetchOnWindowFocus: false },
+    query: { queryKey: getGetCurrentUserQueryKey(), retry: false, refetchOnWindowFocus: false, enabled: !!token },
   });
-  const user = (rawUser as any)?.user || rawUser;
+  const serverUser = (rawUser as any)?.user || rawUser;
+  const user = serverUser || tokenUser;
   const { items, totalItems, totalPrice, isOpen, openCart, closeCart, updateQuantity, removeItem, clearCart } = useCart();
 
   useEffect(() => {
@@ -172,7 +187,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse ml-0.5" />
             </button>
 
-            {localStorage.getItem("sunotal_token") && user ? (
+            {token && user ? (
               <div className="hidden sm:flex items-center gap-2">
                 <Button
                   variant="outline"
