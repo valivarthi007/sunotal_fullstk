@@ -50,7 +50,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
-      - AWS_REGION=${AWS_REGION:-ap-south-1}
+      - AWS_REGION=${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-jcs-raju-sunotal-final}
     networks:
       default:
@@ -109,7 +109,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-sunotal-jwt-secret-dev}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
-      - AWS_REGION=${AWS_REGION:-ap-south-1}
+      - AWS_REGION=${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-jcs-raju-sunotal-final}
     depends_on:
       postgres:

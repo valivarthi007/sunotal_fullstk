@@ -8,7 +8,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@127.0.0.1:5432/sunotal';
 const JWT_SECRET = process.env.JWT_SECRET || 'sunotal_jwt_secret_2026_super_secure';
-const AWS_REGION = process.env.AWS_REGION || 'ap-south-1';
+const AWS_REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || 'jcs-raju-sunotal-final';
 const AWS_CLOUDFRONT_DOMAIN = process.env.AWS_CLOUDFRONT_DOMAIN || '';
 
@@ -452,15 +452,15 @@ async function initDatabase() {
 
     // Seed Accounts Initialization (Admin, Support, Monitoring, User, Vendor, Rider)
     const seedUsers = [
-      { name: 'System Admin', email: 'admin@sunotal.com', pass: 'admin123', role: 'admin', phone: '+91 9876543210', city: 'Bengaluru' },
-      { name: 'System Admin (Cloud)', email: 'admin@automateuniverse.space', pass: 'admin123', role: 'admin', phone: '+91 9876543210', city: 'Bengaluru' },
-      { name: 'Support Specialist', email: 'support@sunotal.com', pass: 'support123', role: 'admin', phone: '+91 9876543211', city: 'Bengaluru' },
-      { name: 'Support Specialist (Cloud)', email: 'support@automateuniverse.space', pass: 'support123', role: 'admin', phone: '+91 9876543211', city: 'Bengaluru' },
-      { name: 'Monitoring Specialist', email: 'monitoring@sunotal.com', pass: 'monitoring123', role: 'admin', phone: '+91 9876543212', city: 'Bengaluru' },
-      { name: 'Monitoring Specialist (Cloud)', email: 'monitoring@automateuniverse.space', pass: 'monitoring123', role: 'admin', phone: '+91 9876543212', city: 'Bengaluru' },
-      { name: 'Customer Account', email: 'user@sunotal.com', pass: 'user123', role: 'customer', phone: '+91 9876543213', city: 'Bengaluru' },
-      { name: 'Fresh Produce Vendor', email: 'vendor@sunotal.com', pass: 'vendor123', role: 'vendor', phone: '+91 9876543214', city: 'Vijayawada' },
-      { name: 'Delivery Partner', email: 'rider@sunotal.com', pass: 'rider123', role: 'rider', phone: '+91 9876543215', city: 'Bengaluru' },
+      { name: 'System Admin', email: 'admin@sunotal.com', pass: 'admin123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
+      { name: 'System Admin (Cloud)', email: 'admin@automateuniverse.space', pass: 'admin123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
+      { name: 'Support Specialist', email: 'support@sunotal.com', pass: 'support123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
+      { name: 'Support Specialist (Cloud)', email: 'support@automateuniverse.space', pass: 'support123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
+      { name: 'Monitoring Specialist', email: 'monitoring@sunotal.com', pass: 'monitoring123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
+      { name: 'Monitoring Specialist (Cloud)', email: 'monitoring@automateuniverse.space', pass: 'monitoring123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
+      { name: 'Customer Account', email: 'user@sunotal.com', pass: 'user123', role: 'customer', phone: '9063636167', city: 'Vijayawada' },
+      { name: 'Fresh Produce Vendor', email: 'vendor@sunotal.com', pass: 'vendor123', role: 'vendor', phone: '9063636167', city: 'Vijayawada' },
+      { name: 'Delivery Partner', email: 'rider@sunotal.com', pass: 'rider123', role: 'rider', phone: '9063636167', city: 'Vijayawada' },
     ];
 
     for (const u of seedUsers) {
@@ -469,7 +469,7 @@ async function initDatabase() {
         await client.query(
           `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
            VALUES ($1, $2, $3, $4, true, $5, $6, 1000.00)
-           ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash`,
+           ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, phone = EXCLUDED.phone, city = EXCLUDED.city, active = true`,
           [u.name, u.email.toLowerCase(), hash, u.role, u.phone, u.city]
         );
       } catch (err: any) {
