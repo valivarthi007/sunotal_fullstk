@@ -1593,9 +1593,9 @@ app.post("/api/orders", async (req: any, res: any) => {
     const orderNumber = `SUN-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
     const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
-    // Random default rider assignment
+    // Default rider assignment
     const ridersRes = await pgPool.query("SELECT * FROM delivery_riders WHERE status = 'ONLINE' LIMIT 1").catch(() => null);
-    const assignedRider = ridersRes?.rows?.[0] || { id: "RIDER-101", name: "Vikram Singh", phone: "+91 9876543210" };
+    const assignedRider = ridersRes?.rows?.[0] || { id: null, name: "Delivery Partner", phone: "" };
 
     const orderRes = await pgPool.query(
       `INSERT INTO orders (order_number, user_id, user_name, user_phone, delivery_address, delivery_latitude, delivery_longitude, warehouse_id, status, subtotal, delivery_fee, discount, tax, total_amount, payment_method, payment_status, delivery_otp, rider_id, rider_name, rider_phone, eta_minutes)

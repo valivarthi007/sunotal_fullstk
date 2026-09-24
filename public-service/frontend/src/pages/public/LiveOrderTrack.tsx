@@ -79,12 +79,12 @@ export default function LiveOrderTrack() {
               orderNumber: order.orderNumber,
               status: order.status,
               etaMinutes: order.status === "delivered" ? 0 : 11,
-              darkStore: "Indiranagar Dark Store Hub",
+              darkStore: order.darkStore || "Sunotal Dark Store Hub",
               driver: {
                 name: order.riderName || "Delivery Partner",
                 phone: order.riderPhone || "",
                 rating: "4.9 ★",
-                vehicleNo: "KA-05-EX-4821",
+                vehicleNo: "EV Express Delivery",
                 photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
               },
               timeline: buildTimeline(order),
@@ -114,12 +114,12 @@ export default function LiveOrderTrack() {
                 orderNumber: order.orderNumber || `ORD-${orderId}`,
                 status: order.status || "placed",
                 etaMinutes: 11,
-                darkStore: "Indiranagar Dark Store Hub",
+                darkStore: order.darkStore || "Sunotal Dark Store Hub",
                 driver: {
                   name: order.riderName || "Delivery Partner",
                   phone: order.riderPhone || "",
                   rating: "4.9 ★",
-                  vehicleNo: "KA-05-EX-4821",
+                  vehicleNo: "EV Express Delivery",
                   photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
                 },
                 timeline: buildTimeline(order),
@@ -137,33 +137,29 @@ export default function LiveOrderTrack() {
         }
       } catch {}
 
-      // Demo fallback
+      // Clean generic fallback
       return {
         orderId: orderId,
-        orderNumber: `SUN-DEMO-${orderId}`,
-        status: "out_for_delivery",
-        etaMinutes: 11,
-        darkStore: "Indiranagar Dark Store Hub",
+        orderNumber: `ORD-${orderId}`,
+        status: "placed",
+        etaMinutes: 15,
+        darkStore: "Sunotal Dark Store Hub",
         driver: {
-          name: "Ramesh Kumar",
-          phone: "+91 98765 43210",
-          rating: "4.9 ★",
-          vehicleNo: "KA-05-EX-4821",
+          name: "Delivery Partner",
+          phone: "",
+          rating: "5.0 ★",
+          vehicleNo: "EV Express Fleet",
           photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
         },
         timeline: [
-          { step: "Order Received", time: "10:42 AM", completed: true },
-          { step: "Packed at Dark Store", time: "10:45 AM", completed: true },
-          { step: "Out for Express Delivery", time: "10:47 AM", completed: true, active: true },
-          { step: "Arrived at Doorstep", time: "Est. 10:55 AM", completed: false },
+          { step: "Order Received", time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), completed: true, active: true },
+          { step: "Packed at Dark Store", time: "Pending", completed: false },
+          { step: "Out for Express Delivery", time: "Pending", completed: false },
+          { step: "Arrived at Doorstep", time: "Pending", completed: false },
         ],
-        items: [
-          { name: "Fresh Hydroponic Tomatoes", unit: "500 g", qty: 2, price: 45 },
-          { name: "Farm Fresh Milk (A2 Toned)", unit: "1 L", qty: 1, price: 68 },
-          { name: "Organic Crisp Spinach", unit: "250 g", qty: 1, price: 30 },
-        ],
-        deliveryAddress: "Flat 402, Green Valley Apartments, Electronic City, Bengaluru",
-        totalAmount: 188,
+        items: [],
+        deliveryAddress: "Customer Location",
+        totalAmount: 0,
       };
     },
     refetchInterval: 10000,
@@ -171,30 +167,26 @@ export default function LiveOrderTrack() {
 
 
   const data = trackData || {
-    orderNumber: `ORD-2026-${orderId}`,
-    status: "out_for_delivery",
-    etaMinutes: 11,
-    darkStore: "Indiranagar Dark Store Hub",
+    orderNumber: `ORD-${orderId}`,
+    status: "placed",
+    etaMinutes: 15,
+    darkStore: "Sunotal Dark Store Hub",
     driver: {
       name: "Delivery Partner",
       phone: "",
-      rating: "4.9 ★",
-      vehicleNo: "KA-05-EX-4821",
+      rating: "5.0 ★",
+      vehicleNo: "EV Express Fleet",
       photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
     },
     timeline: [
-      { step: "Order Received", time: "10:42 AM", completed: true },
-      { step: "Packed at Dark Store", time: "10:45 AM", completed: true },
-      { step: "Out for Express Delivery", time: "10:47 AM", completed: true, active: true },
-      { step: "Arrived at Doorstep", time: "Est. 10:55 AM", completed: false },
+      { step: "Order Received", time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), completed: true, active: true },
+      { step: "Packed at Dark Store", time: "Pending", completed: false },
+      { step: "Out for Express Delivery", time: "Pending", completed: false },
+      { step: "Arrived at Doorstep", time: "Pending", completed: false },
     ],
-    items: [
-      { name: "Fresh Organic Tomatoes", unit: "500 g", qty: 2, price: 45 },
-      { name: "Amul Taaza Milk", unit: "1 L", qty: 1, price: 68 },
-      { name: "Organic Spinach", unit: "250 g", qty: 1, price: 30 },
-    ],
-    deliveryAddress: "Your delivery address",
-    totalAmount: 188,
+    items: [],
+    deliveryAddress: "Customer Location",
+    totalAmount: 0,
   };
 
   // Always safe arrays — never crashes
@@ -244,7 +236,7 @@ export default function LiveOrderTrack() {
               {/* Progress Dial */}
               <div className="w-32 h-32 rounded-full bg-emerald-500/10 border-4 border-emerald-500/40 flex flex-col items-center justify-center text-center shadow-inner">
                 <Truck className="w-8 h-8 text-emerald-400 animate-bounce" />
-                <span className="text-xs font-bold text-slate-300 mt-1">Out for Delivery</span>
+                <span className="text-xs font-bold text-slate-300 mt-1">{data.status ? data.status.replace("_", " ").toUpperCase() : "PROCESSING"}</span>
               </div>
             </div>
           </CardContent>
@@ -277,7 +269,7 @@ export default function LiveOrderTrack() {
                     <Store className="w-5 h-5" />
                   </div>
                   <span className="text-[10px] font-bold bg-slate-900/90 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30 mt-1">
-                    Dark Store #04
+                    {data.darkStore || "Dark Store Hub"}
                   </span>
                 </div>
 
@@ -287,7 +279,7 @@ export default function LiveOrderTrack() {
                     <Navigation className="w-6 h-6 transform rotate-45" />
                   </div>
                   <span className="text-[10px] font-extrabold bg-emerald-950 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/40 mt-1 shadow-md">
-                    Rider Ramesh (1.2 km away)
+                    Rider {data?.driver?.name || "Partner"}
                   </span>
                 </div>
 

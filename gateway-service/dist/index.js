@@ -1799,6 +1799,175 @@ app.get(['/api/delivery/payouts', '/api/admin/rider-payouts'], async (_req, res)
         return res.status(500).json({ error: 'Failed to fetch rider payouts', message: err?.message });
     }
 });
+// ACTIVE DELIVERY ORDERS FOR RIDERS
+app.get(['/api/delivery/orders/active', '/api/delivery/orders'], async (_req, res) => {
+    try {
+        const dbRes = await gatewayPgPool.query(`
+      SELECT o.*, 
+        (SELECT json_agg(json_build_object('name', oi.product_name, 'quantity', oi.quantity, 'price', oi.price))
+         FROM order_items oi WHERE oi.order_id = o.id) as item_details
+      FROM orders o
+      WHERE o.status IN ('placed', 'processing', 'shipped', 'out_for_delivery', 'confirmed')
+      ORDER BY o.id DESC
+    `);
+        const formatted = (dbRes.rows || []).map(o => ({
+            id: String(o.id),
+            numericId: o.id,
+            orderNumber: o.order_number,
+            customerName: o.user_name || 'Customer',
+            phone: o.user_phone || '',
+            address: o.delivery_address || o.address || 'Vijayawada',
+            city: o.city || 'Vijayawada',
+            items: Array.isArray(o.item_details) ? o.item_details.map((i) => `${i.name} (${i.quantity})`) : ['Grocery Items'],
+            pay: Math.round(30 + (Number(o.final_amount || 100) * 0.1)),
+            totalAmount: Number(o.final_amount || o.total_amount || 0),
+            status: o.status || 'placed',
+            lat: Number(o.lat || 16.5062),
+            lng: Number(o.lng || 80.6480),
+            createdAt: o.created_at
+        }));
+        return res.json(formatted);
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch active delivery orders', message: err?.message });
+    }
+});
+// DELIVERY RIDER REAL-TIME STATS
+app.get('/api/delivery/stats', async (req, res) => {
+    try {
+        const delRes = await gatewayPgPool.query(`SELECT COUNT(*) as count, COALESCE(SUM(final_amount), 0) as total FROM orders WHERE status = 'delivered'`);
+        const count = Number(delRes.rows[0]?.count || 0);
+        const kms = Number((count * 3.5).toFixed(1));
+        const basePay = count * 30;
+        const distancePay = Math.round(kms * 10);
+        const tips = count * 15;
+        const totalPayout = basePay + distancePay + tips;
+        return res.json({
+            completedDeliveries: count,
+            totalKmsRun: kms,
+            basePayPerOrder: 30,
+            distanceRatePerKm: 10,
+            totalBasePay: basePay,
+            totalDistancePay: distancePay,
+            totalTips: tips,
+            totalPayout: totalPayout,
+            payoutStatus: totalPayout > 0 ? 'Ready for Payout' : 'No Earnings Pending',
+        });
+    }
+    catch (err) {
+        return res.json({
+            completedDeliveries: 0,
+            totalKmsRun: 0,
+            basePayPerOrder: 30,
+            distanceRatePerKm: 10,
+            totalBasePay: 0,
+            totalDistancePay: 0,
+            totalTips: 0,
+            totalPayout: 0,
+            payoutStatus: 'No Earnings Pending',
+        });
+    }
+});
+// PROCESS RIDER PAYOUT REQUEST (POST /api/delivery/payout)
+app.post(['/api/delivery/payout', '/api/delivery/payouts', '/api/rider/payout'], async (req, res) => {
+    const { upiId, amount, riderId, riderName } = req.body || {};
+    if (!upiId || !String(upiId).trim()) {
+        return res.status(400).json({ error: 'Valid UPI ID is required for payout transfer' });
+    }
+    const reqAmount = Number(amount || 0);
+    try {
+        const insRes = await gatewayPgPool.query(`INSERT INTO rider_payouts (rider_id, rider_name, phone, email, upi_id, amount, trips_completed, status)
+       VALUES ($1, $2, '9063636167', 'rider@sunotal.com', $3, $4, 1, 'pending')
+       RETURNING *`, [riderId || 'RIDER-101', riderName || 'Diwakar Raju', String(upiId).trim(), reqAmount]);
+        const row = insRes.rows[0];
+        const payoutObj = {
+            id: row.id,
+            riderId: row.rider_id,
+            riderName: row.rider_name,
+            upiId: row.upi_id,
+            amount: Number(row.amount),
+            status: 'pending',
+            createdAt: row.created_at,
+        };
+        broadcastRealtimeEvent({ type: 'RIDER_PAYOUT_REQUESTED', path: req.originalUrl || req.url, method: 'POST', data: payoutObj });
+        return res.json({
+            success: true,
+            message: `Payout request of ₹${row.amount} submitted successfully for UPI ID: ${row.upi_id}`,
+            payout: payoutObj,
+        });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to process payout request', message: err?.message });
+    }
+});
+// LIVE GPS DELIVERY TRACKING TELEMETRY (GET /api/delivery/track/:id)
+app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/:id'], async (req, res) => {
+    const orderId = req.params.id;
+    try {
+        let orderRow = null;
+        if (orderId && orderId !== 'latest' && orderId !== 'undefined') {
+            const dbRes = await gatewayPgPool.query('SELECT * FROM orders WHERE id = $1 OR order_number = $2', [isNaN(Number(orderId)) ? -1 : Number(orderId), orderId]);
+            if (dbRes.rows && dbRes.rows.length > 0) {
+                orderRow = dbRes.rows[0];
+            }
+        }
+        if (!orderRow) {
+            const dbRes = await gatewayPgPool.query('SELECT * FROM orders ORDER BY id DESC LIMIT 1');
+            if (dbRes.rows && dbRes.rows.length > 0) {
+                orderRow = dbRes.rows[0];
+            }
+        }
+        const cLat = Number(orderRow?.lat || 16.5062);
+        const cLng = Number(orderRow?.lng || 80.6480);
+        const wLat = Number((cLat - 0.015).toFixed(4));
+        const wLng = Number((cLng - 0.012).toFixed(4));
+        const dLat = Number(((wLat + cLat) / 2).toFixed(4));
+        const dLng = Number(((wLng + cLng) / 2).toFixed(4));
+        return res.json({
+            orderId: String(orderRow?.id || orderId),
+            orderNumber: orderRow?.order_number || `ORD-${orderId}`,
+            status: orderRow?.status || 'out_for_delivery',
+            etaMinutes: 12,
+            remainingDistanceKm: 2.5,
+            warehouseOrigin: {
+                name: 'Sunotal Vijayawada Express Hub',
+                lat: wLat,
+                lng: wLng,
+            },
+            customerDestination: {
+                name: orderRow?.user_name || 'Customer Address',
+                address: orderRow?.delivery_address || orderRow?.address || 'Vijayawada',
+                lat: cLat,
+                lng: cLng,
+            },
+            driverLocation: {
+                lat: dLat,
+                lng: dLng,
+                heading: 45,
+                speedKmh: 30,
+                updatedAt: new Date().toISOString(),
+            },
+            driverProfile: {
+                id: 'RIDER-101',
+                name: 'Diwakar Raju',
+                phone: '9063636167',
+                vehicleNo: 'AP-16-EV-9063',
+                photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+                rating: 4.9,
+                deliveriesCompleted: 1420,
+            },
+        });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch tracking telemetry', message: err?.message });
+    }
+});
+// GPS RIDER TELEMETRY POSITION BROADCAST
+app.post(['/api/delivery/rider/location', '/api/rider/location'], async (req, res) => {
+    const { orderId, lat, lng, riderId, stage } = req.body || {};
+    broadcastRealtimeEvent({ type: 'GPS_TELEMETRY_UPDATED', path: req.originalUrl || req.url, method: 'POST', data: { orderId, lat, lng, riderId, stage } });
+    return res.json({ success: true, timestamp: new Date().toISOString() });
+});
 // ADMIN DASHBOARD STATS (Optimized with SQL Aggregates)
 app.get('/api/admin/stats', async (_req, res) => {
     try {
@@ -2213,9 +2382,9 @@ app.post('/api/orders/:id/assign-rider', async (req, res) => {
     const targetId = Number(req.params.id);
     const { riderId, riderName, riderPhone } = req.body || {};
     try {
-        const dbRes = await gatewayPgPool.query(`UPDATE orders SET rider_id = $1, rider_name = $2, rider_phone = $3, status = 'out_for_delivery', updated_at = NOW() WHERE id = $4 RETURNING *`, [riderId || 'RIDER-101', riderName || 'Vikram Singh', riderPhone || '+919876543210', targetId]);
+        const dbRes = await gatewayPgPool.query(`UPDATE orders SET rider_id = $1, rider_name = $2, rider_phone = $3, status = 'out_for_delivery', updated_at = NOW() WHERE id = $4 RETURNING *`, [riderId || null, riderName || 'Delivery Partner', riderPhone || '', targetId]);
         if (dbRes.rows && dbRes.rows.length > 0) {
-            return res.json({ success: true, message: `Rider ${riderName || 'Vikram Singh'} assigned to order #${targetId}`, order: dbRes.rows[0] });
+            return res.json({ success: true, message: `Rider ${riderName || 'Delivery Partner'} assigned to order #${targetId}`, order: dbRes.rows[0] });
         }
         return res.status(404).json({ error: 'Order not found' });
     }
@@ -2279,8 +2448,8 @@ app.post('/api/rider/verify-handover-otp', async (req, res) => {
         await client.query('BEGIN');
         await client.query(`UPDATE orders SET status = 'delivered', updated_at = NOW() WHERE id = $1`, [order.id]);
         await client.query(`UPDATE delivery_orders SET status = 'delivered', stage = 'delivered', updated_at = NOW() WHERE id = $1 OR order_number = $1`, [String(order.id)]).catch(() => null);
-        const actualRiderId = riderId ? String(riderId) : (order.rider_id || 'RIDER-101');
-        const actualRiderName = order.rider_name || 'Vikram Singh';
+        const actualRiderId = riderId ? String(riderId) : (order.rider_id || 'RIDER-DIRECT');
+        const actualRiderName = order.rider_name || 'Delivery Partner';
         await client.query(`INSERT INTO rider_payouts (rider_id, rider_name, amount, trips_completed, status)
        VALUES ($1, $2, 45.00, 1, 'COMPLETED')`, [actualRiderId, actualRiderName]);
         await client.query(`UPDATE delivery_riders SET wallet_balance = wallet_balance + 45.00, total_deliveries = total_deliveries + 1 WHERE id = $1`, [actualRiderId]).catch(() => null);

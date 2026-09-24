@@ -19,24 +19,16 @@ export default function DeliveryDashboard() {
   const [orderStage, setOrderStage] = useState<"accepted" | "at_warehouse" | "picked_up" | "delivered">("accepted");
   
   // Reports & Logic Payment Data (Initialized cleanly without hardcoded presets)
-  const [stats, setStats] = useState(() => {
-    if (typeof window !== "undefined") {
-      const cached = localStorage.getItem("sunotal_delivery_stats");
-      if (cached) {
-        try { return JSON.parse(cached); } catch {}
-      }
-    }
-    return {
-      completedDeliveries: 0,
-      totalKmsRun: 0,
-      basePayPerOrder: 30,
-      distanceRatePerKm: 10,
-      totalBasePay: 0,
-      totalDistancePay: 0,
-      totalTips: 0,
-      totalPayout: 0,
-      payoutStatus: "No Earnings Pending",
-    };
+  const [stats, setStats] = useState({
+    completedDeliveries: 0,
+    totalKmsRun: 0,
+    basePayPerOrder: 30,
+    distanceRatePerKm: 10,
+    totalBasePay: 0,
+    totalDistancePay: 0,
+    totalTips: 0,
+    totalPayout: 0,
+    payoutStatus: "No Earnings Pending",
   });
 
   const [riderUser, setRiderUser] = useState<any>(null);
@@ -44,6 +36,40 @@ export default function DeliveryDashboard() {
   const [riderUpiId, setRiderUpiId] = useState(() =>
     typeof window !== "undefined" ? localStorage.getItem("sunotal_rider_upi_id") || "" : ""
   );
+  const [otpInput, setOtpInput] = useState("");
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+
+  const handleVerifyOtp = async () => {
+    if (!otpInput) {
+      toast.error("Please enter the delivery PIN from customer");
+      return;
+    }
+    setIsVerifyingOtp(true);
+    try {
+      const res = await fetch("/api/rider/verify-handover-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: acceptedOrder?.numericId || acceptedOrder?.id || 1,
+          inputOtp: otpInput,
+          otp: otpInput,
+          riderId: riderUser?.id,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(data.message || "OTP verified! Handover complete.");
+        setOrderStage("delivered");
+        handleAdvanceStage();
+      } else {
+        toast.error(data.error || "Invalid OTP PIN. Please check customer phone.");
+      }
+    } catch {
+      toast.error("Network error during OTP verification.");
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
 
   // Handle Day-Out Payout Request
   const handlePayoutRequest = async () => {
@@ -59,18 +85,21 @@ export default function DeliveryDashboard() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ upiId: riderUpiId }),
+        body: JSON.stringify({
+          upiId: riderUpiId,
+          amount: stats.totalPayout || riderUser?.walletBalance || 0,
+          riderId: riderUser?.id,
+        }),
       });
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
         setPayoutRequested(true);
-        toast.success(`Payout request submitted successfully for UPI ID: ${riderUpiId}`);
+        toast.success(data.message || `Payout request submitted successfully for UPI ID: ${riderUpiId}`);
       } else {
-        setPayoutRequested(true);
-        toast.success(`Payout request submitted for UPI ID: ${riderUpiId}`);
+        toast.error(data.error || "Payout request failed");
       }
     } catch {
-      setPayoutRequested(true);
-      toast.success(`Payout request submitted for UPI ID: ${riderUpiId}`);
+      toast.error("Network error submitting payout request");
     }
   };
 
@@ -100,6 +129,36 @@ export default function DeliveryDashboard() {
       })
       .catch(() => {});
   }, []);
+
+  // GPS Location Watcher & Broadcaster
+  useEffect(() => {
+    if (!isOnline || !navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        if (acceptedOrder) {
+          fetch("/api/delivery/rider/location", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderId: acceptedOrder.id || acceptedOrder.orderNumber,
+              lat: latitude,
+              lng: longitude,
+              riderId: riderUser?.id || "RIDER-DIRECT",
+              riderName: riderUser?.name || "Delivery Partner",
+              riderPhone: riderUser?.phone || "",
+              stage: orderStage,
+            }),
+          }).catch(() => null);
+        }
+      },
+      (err) => console.warn("GPS watch warning:", err.message),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [isOnline, acceptedOrder, orderStage, riderUser]);
 
   // Countdown timer for Order Acceptance Window
   useEffect(() => {
@@ -421,20 +480,20 @@ export default function DeliveryDashboard() {
                   <div className="bg-card p-4 rounded-2xl border space-y-2 text-xs">
                     <div className="flex items-center justify-between border-b pb-2">
                       <span className="font-bold text-emerald-600 text-sm">{currentAlertOrder ? `Order #${currentAlertOrder.id}` : "Express Order"}</span>
-                      <strong className="text-foreground">{currentAlertOrder?.customerName || "Ananya Roy"}</strong>
+                      <strong className="text-foreground">{currentAlertOrder?.customerName || "Customer"}</strong>
                     </div>
                     <div className="flex items-center justify-between text-muted-foreground">
                       <span>Delivery Address:</span>
-                      <strong className="text-foreground text-right max-w-[220px] truncate">{currentAlertOrder?.address || "HSR Layout Sector 3, Bengaluru"}</strong>
+                      <strong className="text-foreground text-right max-w-[220px] truncate">{currentAlertOrder?.address || (userLoc?.city || "Vijayawada")}</strong>
                     </div>
                     <div className="flex items-center justify-between text-muted-foreground">
                       <span>Order Items:</span>
-                      <strong className="text-emerald-700 text-right max-w-[220px] truncate">{currentAlertOrder?.items?.join(", ") || "Fresh Groceries Pack"}</strong>
+                      <strong className="text-emerald-700 text-right max-w-[220px] truncate">{currentAlertOrder?.items?.join(", ") || "Fresh Groceries"}</strong>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t text-sm">
                       <span className="text-muted-foreground font-semibold">Calculated Rider Payout:</span>
                       <strong className="text-emerald-600 font-mono font-bold text-base">
-                        ₹{currentAlertOrder?.pay || (30 + Math.round(3.4 * 10))}.00
+                        ₹{currentAlertOrder?.pay || 40}.00
                       </strong>
                     </div>
                   </div>
@@ -493,15 +552,42 @@ export default function DeliveryDashboard() {
                     </div>
                   </div>
 
-                  <Button
-                    onClick={handleAdvanceStage}
-                    className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md shadow-emerald-600/20"
-                  >
-                    {orderStage === "accepted" && "1. Confirm Arrival at Dark Store"}
-                    {orderStage === "at_warehouse" && "2. Confirm Order Picked Up"}
-                    {orderStage === "picked_up" && "3. Mark Order as DELIVERED"}
-                    {orderStage === "delivered" && "4. Complete Task & Return to Available Fleet"}
-                  </Button>
+                  {orderStage === "picked_up" && (
+                    <div className="space-y-3 p-4 bg-accent/40 rounded-2xl border border-emerald-500/30">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                          <span>Enter Customer 6-Digit Delivery PIN</span>
+                          <span className="text-[10px] text-emerald-600 font-mono font-bold">Ask customer at door</span>
+                        </label>
+                        <Input
+                          type="text"
+                          maxLength={6}
+                          placeholder="e.g. 123456"
+                          value={otpInput}
+                          onChange={(e) => setOtpInput(e.target.value)}
+                          className="h-11 font-mono text-center text-lg tracking-widest bg-background border-emerald-500/50 rounded-xl font-bold"
+                        />
+                      </div>
+                      <Button
+                        onClick={handleVerifyOtp}
+                        disabled={isVerifyingOtp || !otpInput}
+                        className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md"
+                      >
+                        {isVerifyingOtp ? "Verifying PIN..." : "Verify OTP & Complete Delivery (₹50 Credit)"}
+                      </Button>
+                    </div>
+                  )}
+
+                  {orderStage !== "picked_up" && (
+                    <Button
+                      onClick={handleAdvanceStage}
+                      className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md shadow-emerald-600/20"
+                    >
+                      {orderStage === "accepted" && "1. Confirm Arrival at Dark Store"}
+                      {orderStage === "at_warehouse" && "2. Confirm Order Picked Up"}
+                      {orderStage === "delivered" && "4. Complete Task & Return to Available Fleet"}
+                    </Button>
+                  )}
                 </div>
               ) : (
                 !hasAlert && (
@@ -511,15 +597,8 @@ export default function DeliveryDashboard() {
                     </div>
                     <h3 className="font-bold text-lg text-secondary">Searching for Nearby Express Orders...</h3>
                     <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                      You are positioned in high-demand delivery zone (HSR Layout). Keep duty online to receive instant delivery alerts.
+                      You are positioned in high-demand delivery zone ({riderUser?.city || "Vijayawada"}). Keep duty online to receive instant delivery alerts.
                     </p>
-                    <Button
-                      onClick={() => { setHasAlert(true); setTimer(30); }}
-                      variant="outline"
-                      className="rounded-xl text-xs font-bold border-emerald-600/30 text-emerald-600 gap-2"
-                    >
-                      <RefreshCw className="w-4 h-4" /> Simulate Test Order Alert
-                    </Button>
                   </div>
                 )
               )}

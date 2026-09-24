@@ -19,24 +19,16 @@ export default function DeliveryDashboard() {
   const [orderStage, setOrderStage] = useState<"accepted" | "at_warehouse" | "picked_up" | "delivered">("accepted");
   
   // Reports & Logic Payment Data (Initialized cleanly without hardcoded presets)
-  const [stats, setStats] = useState(() => {
-    if (typeof window !== "undefined") {
-      const cached = localStorage.getItem("sunotal_delivery_stats");
-      if (cached) {
-        try { return JSON.parse(cached); } catch {}
-      }
-    }
-    return {
-      completedDeliveries: 0,
-      totalKmsRun: 0,
-      basePayPerOrder: 30,
-      distanceRatePerKm: 10,
-      totalBasePay: 0,
-      totalDistancePay: 0,
-      totalTips: 0,
-      totalPayout: 0,
-      payoutStatus: "No Earnings Pending",
-    };
+  const [stats, setStats] = useState({
+    completedDeliveries: 0,
+    totalKmsRun: 0,
+    basePayPerOrder: 30,
+    distanceRatePerKm: 10,
+    totalBasePay: 0,
+    totalDistancePay: 0,
+    totalTips: 0,
+    totalPayout: 0,
+    payoutStatus: "No Earnings Pending",
   });
 
   const [riderUser, setRiderUser] = useState<any>(null);
@@ -153,9 +145,9 @@ export default function DeliveryDashboard() {
               orderId: acceptedOrder.id || acceptedOrder.orderNumber,
               lat: latitude,
               lng: longitude,
-              riderId: riderUser?.id || "RIDER-101",
-              riderName: riderUser?.name || "Vikram Singh",
-              riderPhone: riderUser?.phone || "+91 9876543210",
+              riderId: riderUser?.id || "RIDER-DIRECT",
+              riderName: riderUser?.name || "Delivery Partner",
+              riderPhone: riderUser?.phone || "",
               stage: orderStage,
             }),
           }).catch(() => null);
@@ -488,20 +480,20 @@ export default function DeliveryDashboard() {
                   <div className="bg-card p-4 rounded-2xl border space-y-2 text-xs">
                     <div className="flex items-center justify-between border-b pb-2">
                       <span className="font-bold text-emerald-600 text-sm">{currentAlertOrder ? `Order #${currentAlertOrder.id}` : "Express Order"}</span>
-                      <strong className="text-foreground">{currentAlertOrder?.customerName || "Ananya Roy"}</strong>
+                      <strong className="text-foreground">{currentAlertOrder?.customerName || "Customer"}</strong>
                     </div>
                     <div className="flex items-center justify-between text-muted-foreground">
                       <span>Delivery Address:</span>
-                      <strong className="text-foreground text-right max-w-[220px] truncate">{currentAlertOrder?.address || "HSR Layout Sector 3, Bengaluru"}</strong>
+                      <strong className="text-foreground text-right max-w-[220px] truncate">{currentAlertOrder?.address || (userLoc?.city || "Vijayawada")}</strong>
                     </div>
                     <div className="flex items-center justify-between text-muted-foreground">
                       <span>Order Items:</span>
-                      <strong className="text-emerald-700 text-right max-w-[220px] truncate">{currentAlertOrder?.items?.join(", ") || "Fresh Groceries Pack"}</strong>
+                      <strong className="text-emerald-700 text-right max-w-[220px] truncate">{currentAlertOrder?.items?.join(", ") || "Fresh Groceries"}</strong>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t text-sm">
                       <span className="text-muted-foreground font-semibold">Calculated Rider Payout:</span>
                       <strong className="text-emerald-600 font-mono font-bold text-base">
-                        ₹{currentAlertOrder?.pay || (30 + Math.round(3.4 * 10))}.00
+                        ₹{currentAlertOrder?.pay || 40}.00
                       </strong>
                     </div>
                   </div>
@@ -605,15 +597,8 @@ export default function DeliveryDashboard() {
                     </div>
                     <h3 className="font-bold text-lg text-secondary">Searching for Nearby Express Orders...</h3>
                     <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                      You are positioned in high-demand delivery zone (HSR Layout). Keep duty online to receive instant delivery alerts.
+                      You are positioned in high-demand delivery zone ({riderUser?.city || "Vijayawada"}). Keep duty online to receive instant delivery alerts.
                     </p>
-                    <Button
-                      onClick={() => { setHasAlert(true); setTimer(30); }}
-                      variant="outline"
-                      className="rounded-xl text-xs font-bold border-emerald-600/30 text-emerald-600 gap-2"
-                    >
-                      <RefreshCw className="w-4 h-4" /> Simulate Test Order Alert
-                    </Button>
                   </div>
                 )
               )}

@@ -126,7 +126,7 @@ export default function VendorDashboard() {
       price: 3500,
       qualityGrade: "Grade A (Organic / Premium)",
       expectedHarvestDate: new Date().toISOString().split("T")[0],
-      darkStoreAllocation: "HSR Layout Dark Store #104",
+      darkStoreAllocation: "",
       notes: "",
     },
   });

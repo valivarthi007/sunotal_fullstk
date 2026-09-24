@@ -54,9 +54,14 @@ export default function VendorDashboard() {
   const { data: user, isLoading: isUserLoading } = useGetCurrentUser({
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false }
   });
-  const { data: categories } = useListCategories();
-  const { data: productDefs } = useListProductDefinitions();
-  const { data: products } = useListProducts();
+  const { data: rawCategories } = useListCategories();
+  const { data: rawProductDefs } = useListProductDefinitions();
+  const { data: rawProducts } = useListProducts();
+
+  const categories = Array.isArray(rawCategories) ? rawCategories : (Array.isArray((rawCategories as any)?.categories) ? (rawCategories as any).categories : []);
+  const productDefs = Array.isArray(rawProductDefs) ? rawProductDefs : [];
+  const products = Array.isArray(rawProducts) ? rawProducts : (Array.isArray((rawProducts as any)?.products) ? (rawProducts as any).products : []);
+
 
   const [vendorProfile, setVendorProfile] = useState<any>(null);
   const [quotations, setQuotations] = useState<any[]>([]);
@@ -121,7 +126,7 @@ export default function VendorDashboard() {
       price: 3500,
       qualityGrade: "Grade A (Organic / Premium)",
       expectedHarvestDate: new Date().toISOString().split("T")[0],
-      darkStoreAllocation: "HSR Layout Dark Store #104",
+      darkStoreAllocation: "",
       notes: "",
     },
   });

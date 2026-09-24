@@ -24,8 +24,8 @@ export default function LiveOrderTrack() {
   const [match, params] = useRoute("/orders/:id/track");
   const orderId = params?.id || "1";
 
-  // Countdown timer simulation for 12 min express delivery
-  const [secondsLeft, setSecondsLeft] = useState(684); // 11 mins 24 secs
+  // Countdown timer simulation for express delivery
+  const [secondsLeft, setSecondsLeft] = useState(684);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -40,73 +40,158 @@ export default function LiveOrderTrack() {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
+  // Build timeline from order status
+  const buildTimeline = (order: any) => {
+    const status = order?.status || "placed";
+    const createdAt = order?.createdAt ? new Date(order.createdAt) : new Date();
+    const fmt = (d: Date) => d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    const add = (d: Date, mins: number) => new Date(d.getTime() + mins * 60 * 1000);
+
+    const stages = [
+      { key: "placed", step: "Order Received", time: fmt(createdAt) },
+      { key: "packed", step: "Packed at Dark Store", time: fmt(add(createdAt, 3)) },
+      { key: "out_for_delivery", step: "Out for Express Delivery", time: fmt(add(createdAt, 8)) },
+      { key: "delivered", step: "Arrived at Doorstep", time: order?.status === "delivered" ? fmt(add(createdAt, 25)) : `Est. ${fmt(add(createdAt, 25))}` },
+    ];
+
+    const statusOrder = ["placed", "processing", "packed", "out_for_delivery", "delivered"];
+    const currentIdx = statusOrder.indexOf(status);
+
+    return stages.map((s, i) => ({
+      ...s,
+      completed: statusOrder.indexOf(s.key) <= currentIdx,
+      active: statusOrder.indexOf(s.key) === currentIdx && status !== "delivered",
+    }));
+  };
+
   const { data: trackData, isLoading } = useQuery({
     queryKey: ["order-track", orderId],
     queryFn: async () => {
-      const res = await fetch(`/api/orders/${orderId}/track`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("sunotal_token") || ""}`,
+      const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token") || "";
+      // Try backend first
+      try {
+        const res = await fetch(`/api/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const order = await res.json();
+          if (order && order.orderNumber) {
+            return {
+              orderId: order.id || orderId,
+              orderNumber: order.orderNumber,
+              status: order.status,
+              etaMinutes: order.status === "delivered" ? 0 : 11,
+              darkStore: order.darkStore || "Sunotal Dark Store Hub",
+              driver: {
+                name: order.riderName || "Delivery Partner",
+                phone: order.riderPhone || "",
+                rating: "4.9 ★",
+                vehicleNo: "EV Express Delivery",
+                photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+              },
+              timeline: buildTimeline(order),
+              items: (Array.isArray(order.items) ? order.items : []).map((i: any) => ({
+                name: i.productName || i.name || "Item",
+                unit: i.unit || "pcs",
+                qty: i.quantity || 1,
+                price: i.unitPrice || i.price || 0,
+              })),
+              deliveryAddress: [order.shippingAddress, order.city, order.state].filter(Boolean).join(", "),
+              totalAmount: order.finalAmount || order.totalAmount || 0,
+            };
+          }
+        }
+      } catch {}
+
+      // Try localStorage fallback
+      try {
+        const stored = localStorage.getItem("sunotal_user_orders");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            const order = parsed.find((o: any) => String(o.id) === orderId || String(o.orderNumber) === orderId || String(o.orderId) === orderId);
+            if (order) {
+              return {
+                orderId: order.id || orderId,
+                orderNumber: order.orderNumber || `ORD-${orderId}`,
+                status: order.status || "placed",
+                etaMinutes: 11,
+                darkStore: order.darkStore || "Sunotal Dark Store Hub",
+                driver: {
+                  name: order.riderName || "Delivery Partner",
+                  phone: order.riderPhone || "",
+                  rating: "4.9 ★",
+                  vehicleNo: "EV Express Delivery",
+                  photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+                },
+                timeline: buildTimeline(order),
+                items: (Array.isArray(order.items) ? order.items : []).map((i: any) => ({
+                  name: i.productName || i.name || "Item",
+                  unit: i.unit || "pcs",
+                  qty: i.quantity || 1,
+                  price: i.unitPrice || i.price || 0,
+                })),
+                deliveryAddress: order.shippingAddress || order.address || "Your delivery address",
+                totalAmount: order.finalAmount || order.totalPrice || 0,
+              };
+            }
+          }
+        }
+      } catch {}
+
+      // Clean generic fallback
+      return {
+        orderId: orderId,
+        orderNumber: `ORD-${orderId}`,
+        status: "placed",
+        etaMinutes: 15,
+        darkStore: "Sunotal Dark Store Hub",
+        driver: {
+          name: "Delivery Partner",
+          phone: "",
+          rating: "5.0 ★",
+          vehicleNo: "EV Express Fleet",
+          photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
         },
-      });
-      if (!res.ok) {
-        // Fallback demo data if API returns mock
-        return {
-          orderId: orderId,
-          orderNumber: `ORD-2026-${orderId.padStart(4, "0")}`,
-          status: "out_for_delivery",
-          etaMinutes: 11,
-          darkStore: "Dark Store #04 - Electronic City Phase 1",
-          driver: {
-            name: "Ramesh Kumar",
-            phone: "+91 98765 43210",
-            rating: "4.9 ★",
-            vehicleNo: "KA-05-EX-4821",
-            photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-          },
-          timeline: [
-            { step: "Order Received", time: "10:42 AM", completed: true },
-            { step: "Packed at Dark Store", time: "10:45 AM", completed: true },
-            { step: "Out for Express Delivery", time: "10:47 AM", completed: true, active: true },
-            { step: "Arrived at Doorstep", time: "Est. 10:55 AM", completed: false },
-          ],
-          items: [
-            { name: "Fresh Hydroponic Tomatoes", unit: "500 g", qty: 2, price: 45 },
-            { name: "Farm Fresh Milk (A2 Toned)", unit: "1 L", qty: 1, price: 68 },
-            { name: "Organic Crisp Spinach", unit: "250 g", qty: 1, price: 30 },
-          ],
-          deliveryAddress: "Flat 402, Green Valley Apartments, Electronic City, Bengaluru",
-        };
-      }
-      return res.json();
+        timeline: [
+          { step: "Order Received", time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), completed: true, active: true },
+          { step: "Packed at Dark Store", time: "Pending", completed: false },
+          { step: "Out for Express Delivery", time: "Pending", completed: false },
+          { step: "Arrived at Doorstep", time: "Pending", completed: false },
+        ],
+        items: [],
+        deliveryAddress: "Customer Location",
+        totalAmount: 0,
+      };
     },
-    refetchInterval: 5000,
+    refetchInterval: 10000,
   });
 
+
   const data = trackData || {
-    orderNumber: `ORD-2026-${orderId}`,
-    status: "out_for_delivery",
-    etaMinutes: 11,
-    darkStore: "Dark Store #04 - Electronic City Phase 1",
+    orderNumber: `ORD-${orderId}`,
+    status: "placed",
+    etaMinutes: 15,
+    darkStore: "Sunotal Dark Store Hub",
     driver: {
-      name: "Ramesh Kumar",
-      phone: "+91 98765 43210",
-      rating: "4.9 ★",
-      vehicleNo: "KA-05-EX-4821",
+      name: "Delivery Partner",
+      phone: "",
+      rating: "5.0 ★",
+      vehicleNo: "EV Express Fleet",
       photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
     },
     timeline: [
-      { step: "Order Received", time: "10:42 AM", completed: true },
-      { step: "Packed at Dark Store", time: "10:45 AM", completed: true },
-      { step: "Out for Express Delivery", time: "10:47 AM", completed: true, active: true },
-      { step: "Arrived at Doorstep", time: "Est. 10:55 AM", completed: false },
+      { step: "Order Received", time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), completed: true, active: true },
+      { step: "Packed at Dark Store", time: "Pending", completed: false },
+      { step: "Out for Express Delivery", time: "Pending", completed: false },
+      { step: "Arrived at Doorstep", time: "Pending", completed: false },
     ],
-    items: [
-      { name: "Fresh Hydroponic Tomatoes", unit: "500 g", qty: 2, price: 45 },
-      { name: "Farm Fresh Milk (A2 Toned)", unit: "1 L", qty: 1, price: 68 },
-      { name: "Organic Crisp Spinach", unit: "250 g", qty: 1, price: 30 },
-    ],
-    deliveryAddress: "Flat 402, Green Valley Apartments, Electronic City, Bengaluru",
+    items: [],
+    deliveryAddress: "Customer Location",
+    totalAmount: 0,
   };
+
+  // Always safe arrays — never crashes
+  const timeline = Array.isArray(data.timeline) ? data.timeline : [];
+  const items = Array.isArray(data.items) ? data.items : [];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 pb-16">
@@ -151,7 +236,7 @@ export default function LiveOrderTrack() {
               {/* Progress Dial */}
               <div className="w-32 h-32 rounded-full bg-emerald-500/10 border-4 border-emerald-500/40 flex flex-col items-center justify-center text-center shadow-inner">
                 <Truck className="w-8 h-8 text-emerald-400 animate-bounce" />
-                <span className="text-xs font-bold text-slate-300 mt-1">Out for Delivery</span>
+                <span className="text-xs font-bold text-slate-300 mt-1">{data.status ? data.status.replace("_", " ").toUpperCase() : "PROCESSING"}</span>
               </div>
             </div>
           </CardContent>
@@ -184,7 +269,7 @@ export default function LiveOrderTrack() {
                     <Store className="w-5 h-5" />
                   </div>
                   <span className="text-[10px] font-bold bg-slate-900/90 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30 mt-1">
-                    Dark Store #04
+                    {data.darkStore || "Dark Store Hub"}
                   </span>
                 </div>
 
@@ -194,7 +279,7 @@ export default function LiveOrderTrack() {
                     <Navigation className="w-6 h-6 transform rotate-45" />
                   </div>
                   <span className="text-[10px] font-extrabold bg-emerald-950 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/40 mt-1 shadow-md">
-                    Rider Ramesh (1.2 km away)
+                    Rider {data?.driver?.name || "Partner"}
                   </span>
                 </div>
 
@@ -221,9 +306,9 @@ export default function LiveOrderTrack() {
             <Card className="bg-slate-900 border-slate-800 rounded-3xl p-6 shadow-lg">
               <h3 className="text-base font-bold text-white mb-4">Delivery Milestone Progress</h3>
               <div className="space-y-6">
-                {data.timeline.map((step: any, idx: number) => (
+                {timeline.map((step: any, idx: number) => (
                   <div key={idx} className="flex items-start gap-4 relative">
-                    {idx < data.timeline.length - 1 && (
+                    {idx < timeline.length - 1 && (
                       <div
                         className={`absolute left-4 top-8 bottom-0 w-0.5 ${
                           step.completed ? "bg-emerald-500" : "bg-slate-800"
@@ -307,7 +392,7 @@ export default function LiveOrderTrack() {
                 <Package className="w-4 h-4 text-slate-400" />
               </h3>
               <div className="space-y-2 divide-y divide-slate-800/60">
-                {data.items.map((item: any, i: number) => (
+                {items.map((item: any, i: number) => (
                   <div key={i} className="pt-2 flex items-center justify-between text-xs">
                     <div>
                       <p className="font-medium text-slate-200">{item.name}</p>
