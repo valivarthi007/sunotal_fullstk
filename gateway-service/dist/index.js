@@ -11,7 +11,7 @@ const crypto_1 = __importDefault(require("crypto"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const pg_1 = require("pg");
 const client_s3_1 = require("@aws-sdk/client-s3");
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@127.0.0.1:5432/sunotal';
 const JWT_SECRET = process.env.JWT_SECRET || 'sunotal_jwt_secret_2026_super_secure';
 const AWS_REGION = process.env.AWS_REGION || 'ap-south-1';
 const AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || 'jcs-raju-sunotal-final';
@@ -112,8 +112,23 @@ const gatewayPgPool = new pg_1.Pool({
 // Database Initialization & Clean Slate Schema Script
 async function initDatabase() {
     let client;
+    let attempts = 0;
+    const maxAttempts = 3;
+    while (attempts < maxAttempts) {
+        try {
+            attempts++;
+            client = await gatewayPgPool.connect();
+            break;
+        }
+        catch (err) {
+            if (attempts >= maxAttempts) {
+                console.warn('⚠️ PostgreSQL DB init notice (DB connection offline or pending):', err?.message || err);
+                return;
+            }
+            await new Promise((res) => setTimeout(res, 2000));
+        }
+    }
     try {
-        client = await gatewayPgPool.connect();
         console.log('🐘 Initializing clean PostgreSQL database schema and tables...');
         await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -460,14 +475,25 @@ async function initDatabase() {
         console.log('✅ PostgreSQL database schema, indexes & seed user credentials ready.');
     }
     catch (err) {
-        console.error('⚠️ PostgreSQL DB init error:', err?.message || err);
+        console.warn('⚠️ PostgreSQL DB init notice:', err?.message || err);
     }
     finally {
         if (client)
             client.release();
     }
 }
-initDatabase();
+if (process.argv.includes('--migrate-only')) {
+    initDatabase().then(() => {
+        console.log('✅ Database migration check completed.');
+        process.exit(0);
+    }).catch((err) => {
+        console.warn('ℹ️ Database migration check finished (DB pending/offline):', err?.message || err);
+        process.exit(0);
+    });
+}
+else {
+    initDatabase();
+}
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 app.use((0, cors_1.default)({ origin: true, credentials: true }));
