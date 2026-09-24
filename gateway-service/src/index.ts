@@ -1996,41 +1996,82 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
   const orderId = req.params.id;
   try {
     let orderRow: any = null;
-    if (orderId && orderId !== 'latest' && orderId !== 'undefined') {
-      const dbRes = await gatewayPgPool.query('SELECT * FROM orders WHERE id = $1 OR order_number = $2', [isNaN(Number(orderId)) ? -1 : Number(orderId), orderId]);
+    let warehouseRow: any = null;
+
+    if (gatewayPgPool && orderId && orderId !== 'latest' && orderId !== 'undefined') {
+      const dbRes = await gatewayPgPool.query(`
+        SELECT o.*, 
+               w.name as wh_name, w.latitude as wh_lat, w.longitude as wh_lng, w.address as wh_address, w.city as wh_city,
+               r.name as rider_full_name, r.phone as rider_full_phone
+        FROM orders o
+        LEFT JOIN warehouses w ON o.warehouse_id = w.id
+        LEFT JOIN users r ON (o.rider_id::text = r.id::text OR o.rider_name = r.name)
+        WHERE o.id = $1 OR o.order_number = $2
+      `, [isNaN(Number(orderId)) ? -1 : Number(orderId), orderId]);
+
       if (dbRes.rows && dbRes.rows.length > 0) {
         orderRow = dbRes.rows[0];
       }
     }
 
-    if (!orderRow) {
-      const dbRes = await gatewayPgPool.query('SELECT * FROM orders ORDER BY id DESC LIMIT 1');
+    if (!orderRow && gatewayPgPool) {
+      const dbRes = await gatewayPgPool.query(`
+        SELECT o.*, 
+               w.name as wh_name, w.latitude as wh_lat, w.longitude as wh_lng, w.address as wh_address, w.city as wh_city,
+               r.name as rider_full_name, r.phone as rider_full_phone
+        FROM orders o
+        LEFT JOIN warehouses w ON o.warehouse_id = w.id
+        LEFT JOIN users r ON (o.rider_id::text = r.id::text OR o.rider_name = r.name)
+        ORDER BY o.id DESC LIMIT 1
+      `);
       if (dbRes.rows && dbRes.rows.length > 0) {
         orderRow = dbRes.rows[0];
       }
     }
 
-    const cLat = Number(orderRow?.lat || 16.5062);
-    const cLng = Number(orderRow?.lng || 80.6480);
-    const wLat = Number((cLat - 0.015).toFixed(4));
-    const wLng = Number((cLng - 0.012).toFixed(4));
-    const dLat = Number(((wLat + cLat) / 2).toFixed(4));
-    const dLng = Number(((wLng + cLng) / 2).toFixed(4));
+    // Try fetching active warehouse from DB if not linked directly
+    if (gatewayPgPool && (!orderRow?.wh_lat || !orderRow?.wh_lng)) {
+      const wRes = await gatewayPgPool.query('SELECT * FROM warehouses WHERE is_active = true ORDER BY id ASC LIMIT 1');
+      if (wRes.rows && wRes.rows.length > 0) {
+        warehouseRow = wRes.rows[0];
+      }
+    }
+
+    // 1. Warehouse Origin Coordinates (Dynamic from DB warehouse table or fallback land coordinate)
+    const wLat = Number(orderRow?.wh_lat || warehouseRow?.latitude || 16.5062);
+    const wLng = Number(orderRow?.wh_lng || warehouseRow?.longitude || 80.6480);
+    const whName = orderRow?.wh_name || warehouseRow?.name || 'Sunotal Express Dark Store Hub';
+
+    // 2. Customer Destination Coordinates (Dynamic from DB order table)
+    let cLat = Number(orderRow?.delivery_latitude || orderRow?.latitude || orderRow?.lat || 0);
+    let cLng = Number(orderRow?.delivery_longitude || orderRow?.longitude || orderRow?.lng || 0);
+
+    if (!cLat || !cLng || isNaN(cLat) || isNaN(cLng)) {
+      cLat = Number((wLat + 0.008).toFixed(4));
+      cLng = Number((wLng + 0.006).toFixed(4));
+    }
+
+    // 3. Live Rider GPS Location & Telemetry (Dynamic from live rider updates or vector)
+    const liveTelemetry = (global as any).activeRiderTelemetry?.[String(orderId)] || (global as any).activeRiderTelemetry?.[String(orderRow?.id)] || (global as any).activeRiderTelemetry?.[String(orderRow?.order_number)];
+    const dLat = liveTelemetry?.lat || Number(((wLat + cLat) / 2).toFixed(4));
+    const dLng = liveTelemetry?.lng || Number(((wLng + cLng) / 2).toFixed(4));
+    const currentStage = liveTelemetry?.stage || orderRow?.status || 'out_for_delivery';
 
     return res.json({
       orderId: String(orderRow?.id || orderId),
       orderNumber: orderRow?.order_number || `ORD-${orderId}`,
-      status: orderRow?.status || 'out_for_delivery',
-      etaMinutes: 12,
-      remainingDistanceKm: 2.5,
+      status: currentStage,
+      stage: currentStage,
+      etaMinutes: currentStage === 'delivered' ? 0 : (orderRow?.eta_minutes || 12),
+      remainingDistanceKm: currentStage === 'delivered' ? 0 : 2.5,
       warehouseOrigin: {
-        name: 'Sunotal Vijayawada Express Hub',
+        name: whName,
         lat: wLat,
         lng: wLng,
       },
       customerDestination: {
-        name: orderRow?.user_name || 'Customer Address',
-        address: orderRow?.delivery_address || orderRow?.address || 'Vijayawada',
+        name: orderRow?.user_name || orderRow?.customer_name || 'Customer Address',
+        address: orderRow?.delivery_address || orderRow?.address || 'Customer Location',
         lat: cLat,
         lng: cLng,
       },
@@ -2038,17 +2079,17 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
         lat: dLat,
         lng: dLng,
         heading: 45,
-        speedKmh: 30,
-        updatedAt: new Date().toISOString(),
+        speedKmh: currentStage === 'delivered' ? 0 : 30,
+        updatedAt: liveTelemetry?.updatedAt || new Date().toISOString(),
       },
       driverProfile: {
-        id: 'RIDER-101',
-        name: 'Diwakar Raju',
-        phone: '9063636167',
-        vehicleNo: 'AP-16-EV-9063',
+        id: liveTelemetry?.riderId || orderRow?.rider_id || 'RIDER-ACTIVE',
+        name: liveTelemetry?.riderName || orderRow?.rider_name || orderRow?.rider_full_name || 'Delivery Partner',
+        phone: liveTelemetry?.riderPhone || orderRow?.rider_phone || orderRow?.rider_full_phone || '9063636167',
+        vehicleNo: orderRow?.vehicle_no || 'EV Express Bike',
         photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
         rating: 4.9,
-        deliveriesCompleted: 1420,
+        deliveriesCompleted: 150,
       },
     });
   } catch (err: any) {
@@ -2059,6 +2100,29 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
 // GPS RIDER TELEMETRY POSITION BROADCAST
 app.post(['/api/delivery/rider/location', '/api/rider/location'], async (req, res) => {
   const { orderId, lat, lng, riderId, stage } = req.body || {};
+  if (!(global as any).activeRiderTelemetry) {
+    (global as any).activeRiderTelemetry = {};
+  }
+  if (orderId) {
+    (global as any).activeRiderTelemetry[String(orderId)] = {
+      lat: Number(lat || 16.5102),
+      lng: Number(lng || 80.6510),
+      stage: stage || 'out_for_delivery',
+      riderId: riderId || 'RIDER-101',
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (stage && gatewayPgPool) {
+      let dbStatus = stage;
+      if (stage === 'at_warehouse' || stage === 'at_dark_store') dbStatus = 'at_dark_store';
+      else if (stage === 'picked_up' || stage === 'out_for_delivery') dbStatus = 'out_for_delivery';
+      else if (stage === 'delivered') dbStatus = 'delivered';
+
+      try {
+        await gatewayPgPool.query('UPDATE orders SET status = $1 WHERE id = $2 OR order_number = $3', [dbStatus, isNaN(Number(orderId)) ? -1 : Number(orderId), String(orderId)]);
+      } catch {}
+    }
+  }
   broadcastRealtimeEvent({ type: 'GPS_TELEMETRY_UPDATED', path: req.originalUrl || req.url, method: 'POST', data: { orderId, lat, lng, riderId, stage } });
   return res.json({ success: true, timestamp: new Date().toISOString() });
 });

@@ -55,10 +55,10 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
       }
 
       const { warehouseOrigin, customerDestination, driverLocation, driverProfile } = telemetry;
-      const wLat = warehouseOrigin?.lat || 0;
-      const wLng = warehouseOrigin?.lng || 0;
-      const cLat = customerDestination?.lat || 0;
-      const cLng = customerDestination?.lng || 0;
+      const wLat = warehouseOrigin?.lat || 16.5062;
+      const wLng = warehouseOrigin?.lng || 80.6480;
+      const cLat = customerDestination?.lat || 16.5142;
+      const cLng = customerDestination?.lng || 80.6540;
       const dLat = driverLocation?.lat || (wLat + cLat) / 2;
       const dLng = driverLocation?.lng || (wLng + cLng) / 2;
 
@@ -205,24 +205,68 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
         <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
           <Clock className="w-4 h-4 text-emerald-600" /> Express Delivery Stages & Rider Movement
         </h4>
-        <div className="grid grid-cols-4 gap-2 text-center text-[10px]">
-          <div className="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 font-bold space-y-1">
-            <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-600" />
-            <span>1. Order Confirmed</span>
-          </div>
-          <div className="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 font-bold space-y-1">
-            <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-600" />
-            <span>2. At Dark Store</span>
-          </div>
-          <div className="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 font-bold space-y-1">
-            <Truck className="w-4 h-4 mx-auto text-emerald-600 animate-pulse" />
-            <span>3. Out for Delivery</span>
-          </div>
-          <div className="p-2.5 rounded-2xl bg-muted text-muted-foreground border border-border font-semibold space-y-1">
-            <MapPin className="w-4 h-4 mx-auto text-muted-foreground" />
-            <span>4. Arrived at Door</span>
-          </div>
-        </div>
+        {(() => {
+          const status = (telemetry?.status || telemetry?.stage || "out_for_delivery").toLowerCase();
+          const isAtStore = status === "at_dark_store" || status === "at_warehouse" || status === "accepted" || status === "confirmed" || status === "processing";
+          const isOutForDel = status === "out_for_delivery" || status === "picked_up" || status === "shipped";
+          const isArrived = status === "arrived" || status === "arrived_at_door";
+          const isDelivered = status === "delivered";
+
+          const stage2Done = isOutForDel || isArrived || isDelivered;
+          const stage2Active = isAtStore;
+
+          const stage3Done = isArrived || isDelivered;
+          const stage3Active = isOutForDel;
+
+          const stage4Done = isDelivered;
+          const stage4Active = isArrived;
+
+          return (
+            <div className="grid grid-cols-4 gap-2 text-center text-[10px]">
+              {/* Stage 1: Order Confirmed */}
+              <div className="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 font-bold space-y-1">
+                <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-600" />
+                <span>1. Order Confirmed</span>
+              </div>
+
+              {/* Stage 2: At Dark Store */}
+              <div className={`p-2.5 rounded-2xl font-bold space-y-1 transition-all ${
+                stage2Done
+                  ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40"
+                  : stage2Active
+                  ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/50 animate-pulse"
+                  : "bg-muted text-muted-foreground border border-border font-semibold"
+              }`}>
+                {stage2Done ? <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-600" /> : <Clock className={`w-4 h-4 mx-auto ${stage2Active ? "text-amber-500 animate-spin" : "text-muted-foreground"}`} />}
+                <span>2. At Dark Store</span>
+              </div>
+
+              {/* Stage 3: Out for Delivery */}
+              <div className={`p-2.5 rounded-2xl font-bold space-y-1 transition-all ${
+                stage3Done
+                  ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40"
+                  : stage3Active
+                  ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 animate-pulse"
+                  : "bg-muted text-muted-foreground border border-border font-semibold"
+              }`}>
+                {stage3Done ? <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-600" /> : <Truck className={`w-4 h-4 mx-auto ${stage3Active ? "text-emerald-600 animate-bounce" : "text-muted-foreground"}`} />}
+                <span>3. Out for Delivery</span>
+              </div>
+
+              {/* Stage 4: Arrived at Door */}
+              <div className={`p-2.5 rounded-2xl font-bold space-y-1 transition-all ${
+                stage4Done
+                  ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40"
+                  : stage4Active
+                  ? "bg-emerald-500/30 text-emerald-600 border-2 border-emerald-500 animate-bounce"
+                  : "bg-muted text-muted-foreground border border-border font-semibold"
+              }`}>
+                {stage4Done ? <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-600" /> : <MapPin className={`w-4 h-4 mx-auto ${stage4Active ? "text-emerald-500" : "text-muted-foreground"}`} />}
+                <span>{stage4Done ? "4. Delivered" : "4. Arrived at Door"}</span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

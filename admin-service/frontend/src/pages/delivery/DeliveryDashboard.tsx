@@ -185,11 +185,11 @@ export default function DeliveryDashboard() {
           mapInstanceRef.current = null;
         }
 
-        // Dynamic customer and dark store coordinates based on user location
-        const custLat = acceptedOrder?.lat || userLoc?.latitude || 16.5062;
-        const custLng = acceptedOrder?.lng || userLoc?.longitude || 80.6480;
-        const hubLat = Number((custLat - 0.015).toFixed(4));
-        const hubLng = Number((custLng - 0.012).toFixed(4));
+        // Land-accurate Vijayawada Coordinates (Benz Circle Hub & Customer Land)
+        const hubLat = 16.5062; // Benz Circle Hub, Vijayawada (Solid land)
+        const hubLng = 80.6480;
+        const custLat = acceptedOrder?.lat || acceptedOrder?.delivery_latitude || 16.5142;
+        const custLng = acceptedOrder?.lng || acceptedOrder?.delivery_longitude || 80.6540;
         const midLat = Number(((hubLat + custLat) / 2).toFixed(4));
         const midLng = Number(((hubLng + custLng) / 2).toFixed(4));
 

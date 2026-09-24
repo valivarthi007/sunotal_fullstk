@@ -185,11 +185,11 @@ export default function DeliveryDashboard() {
           mapInstanceRef.current = null;
         }
 
-        // Dynamic customer and dark store coordinates based on user location
-        const custLat = acceptedOrder?.lat || userLoc?.latitude || 16.5062;
-        const custLng = acceptedOrder?.lng || userLoc?.longitude || 80.6480;
-        const hubLat = Number((custLat - 0.015).toFixed(4));
-        const hubLng = Number((custLng - 0.012).toFixed(4));
+        // Land-accurate Vijayawada Coordinates (Benz Circle Hub & Customer Land)
+        const hubLat = 16.5062; // Benz Circle Hub, Vijayawada (Solid land)
+        const hubLng = 80.6480;
+        const custLat = acceptedOrder?.lat || acceptedOrder?.delivery_latitude || 16.5142;
+        const custLng = acceptedOrder?.lng || acceptedOrder?.delivery_longitude || 80.6540;
         const midLat = Number(((hubLat + custLat) / 2).toFixed(4));
         const midLng = Number(((hubLng + custLng) / 2).toFixed(4));
 
@@ -330,32 +330,81 @@ export default function DeliveryDashboard() {
     setOrderStage("accepted");
   };
 
-  const handleAdvanceStage = () => {
-    if (orderStage === "accepted") setOrderStage("at_warehouse");
-    else if (orderStage === "at_warehouse") setOrderStage("picked_up");
-    else if (orderStage === "picked_up") {
-      setOrderStage("delivered");
+  const handleAdvanceStage = async () => {
+    let nextStage: "accepted" | "at_warehouse" | "picked_up" | "delivered" = orderStage;
+    let backendStatus = "placed";
+
+    if (orderStage === "accepted") {
+      nextStage = "at_warehouse";
+      backendStatus = "at_dark_store";
+    } else if (orderStage === "at_warehouse") {
+      nextStage = "picked_up";
+      backendStatus = "out_for_delivery";
+    } else if (orderStage === "picked_up") {
+      nextStage = "delivered";
+      backendStatus = "delivered";
+    }
+
+    setOrderStage(nextStage);
+
+    const token = localStorage.getItem("sunotal_delivery_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    const targetId = acceptedOrder?.numericId || acceptedOrder?.id || "latest";
+
+    // 1. Update backend order status API
+    try {
+      await fetch(`/api/orders/${targetId}/status`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ status: backendStatus, ...(backendStatus === "delivered" ? { paymentStatus: "paid" } : {}) }),
+      });
+      await fetch(`/api/orders/latest/status`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ status: backendStatus, ...(backendStatus === "delivered" ? { paymentStatus: "paid" } : {}) }),
+      });
+    } catch (e) {
+      console.warn("Backend status update error:", e);
+    }
+
+    // 2. Broadcast rider GPS location & stage
+    try {
+      const hubLat = 16.5062;
+      const hubLng = 80.6480;
+      const custLat = acceptedOrder?.lat || 16.5142;
+      const custLng = acceptedOrder?.lng || 80.6540;
+
+      let rLat = hubLat;
+      let rLng = hubLng;
+      if (nextStage === "picked_up") {
+        rLat = Number(((hubLat + custLat) / 2).toFixed(4));
+        rLng = Number(((hubLng + custLng) / 2).toFixed(4));
+      } else if (nextStage === "delivered") {
+        rLat = custLat;
+        rLng = custLng;
+      }
+
+      await fetch("/api/delivery/rider/location", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: targetId,
+          lat: rLat,
+          lng: rLng,
+          riderId: riderUser?.id || "RIDER-101",
+          stage: backendStatus,
+        }),
+      });
+    } catch (e) {
+      console.warn("Rider location broadcast error:", e);
+    }
+
+    if (nextStage === "delivered") {
       toast.success("Order delivered successfully!");
-
-      // Update backend status API with Auth token
-      const token = localStorage.getItem("sunotal_delivery_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
-      const headers = {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      };
-
-      const targetId = acceptedOrder?.id || "latest";
-      fetch(`/api/orders/${targetId}/status`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({ status: "delivered", paymentStatus: "paid" }),
-      }).catch((err) => console.error("Backend order status update error:", err));
-
-      fetch(`/api/orders/latest/status`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({ status: "delivered", paymentStatus: "paid" }),
-      }).catch(() => {});
 
       // Update localStorage sunotal_user_orders
       try {
@@ -370,7 +419,8 @@ export default function DeliveryDashboard() {
                 o.orderId === acceptedOrder?.id ||
                 o.status === "processing" ||
                 o.status === "shipped" ||
-                o.status === "out_for_delivery"
+                o.status === "out_for_delivery" ||
+                o.status === "at_dark_store"
               ) {
                 return { ...o, status: "delivered", paymentStatus: "paid" };
               }
