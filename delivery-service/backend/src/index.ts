@@ -170,16 +170,17 @@ app.get('/api/delivery/orders/active', async (_req, res) => {
         d.rider_phone,
         COALESCE(d.stage, 'placed') as stage,
         COALESCE(d.status, o.status, 'placed') as status,
-        COALESCE(d.current_lat, 12.9716) as current_lat,
-        COALESCE(d.current_lng, 77.5946) as current_lng,
-        COALESCE(d.dest_lat, 12.9816) as dest_lat,
-        COALESCE(d.dest_lng, 77.6046) as dest_lng,
+        COALESCE(d.current_lat, w.latitude, o.delivery_latitude, o.latitude, 0) as current_lat,
+        COALESCE(d.current_lng, w.longitude, o.delivery_longitude, o.longitude, 0) as current_lng,
+        COALESCE(d.dest_lat, o.delivery_latitude, o.latitude, 0) as dest_lat,
+        COALESCE(d.dest_lng, o.delivery_longitude, o.longitude, 0) as dest_lng,
         COALESCE(d.updated_at, o.updated_at, NOW()) as updated_at,
         o.total_amount,
         o.shipping_address,
         u.name as customer_name
       FROM orders o
       LEFT JOIN delivery_orders d ON (d.id = o.id::text OR d.order_number = o.order_number OR d.id = o.order_number)
+      LEFT JOIN warehouses w ON o.warehouse_id = w.id
       LEFT JOIN users u ON u.id = o.user_id
       WHERE COALESCE(d.status, o.status) NOT IN ('delivered', 'cancelled')
       ORDER BY COALESCE(d.updated_at, o.updated_at) DESC
@@ -205,10 +206,10 @@ app.get('/api/delivery/orders/active', async (_req, res) => {
       riderPhone: r.rider_phone || '',
       stage: r.stage || 'placed',
       status: r.status || 'placed',
-      currentLat: Number(r.current_lat || 12.9716),
-      currentLng: Number(r.current_lng || 77.5946),
-      destLat: Number(r.dest_lat || 12.9816),
-      destLng: Number(r.dest_lng || 77.6046),
+      currentLat: Number(r.current_lat || 0),
+      currentLng: Number(r.current_lng || 0),
+      destLat: Number(r.dest_lat || 0),
+      destLng: Number(r.dest_lng || 0),
       totalAmount: Number(r.total_amount || 0),
       address: r.shipping_address || 'Delivery Address',
       customerName: r.customer_name || 'Customer',
@@ -306,10 +307,10 @@ app.get(['/api/delivery/stream/:orderId', '/api/delivery/tracking/:orderId/strea
         riderPhone: r.rider_phone || '',
         stage: r.stage || 'in_transit',
         status: r.status || 'ON_THE_WAY',
-        currentLat: Number(r.current_lat || 12.9716),
-        currentLng: Number(r.current_lng || 77.5946),
-        destLat: Number(r.dest_lat || 12.9816),
-        destLng: Number(r.dest_lng || 77.6046),
+        currentLat: Number(r.current_lat || 0),
+        currentLng: Number(r.current_lng || 0),
+        destLat: Number(r.dest_lat || 0),
+        destLng: Number(r.dest_lng || 0),
         updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString()
       };
       sendOrderUpdate(dbOrder);
@@ -343,12 +344,25 @@ app.post('/api/delivery/orders/:id/accept', async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    const orderLocRes = await client.query(
+      `SELECT o.delivery_latitude, o.delivery_longitude, o.latitude, o.longitude, w.latitude as wh_lat, w.longitude as wh_lng
+       FROM orders o
+       LEFT JOIN warehouses w ON o.warehouse_id = w.id
+       WHERE o.id::text = $1 OR o.order_number = $1 LIMIT 1`,
+      [String(orderId)]
+    ).catch(() => ({ rows: [] }));
+    const locRow = orderLocRes.rows[0] || {};
+    const destLat = Number(locRow.delivery_latitude || locRow.latitude || 0);
+    const destLng = Number(locRow.delivery_longitude || locRow.longitude || 0);
+    const currentLat = Number(locRow.wh_lat || destLat || 0);
+    const currentLng = Number(locRow.wh_lng || destLng || 0);
+
     const dbRes = await client.query(
       `INSERT INTO delivery_orders (id, order_number, rider_id, rider_name, rider_phone, stage, status, current_lat, current_lng, dest_lat, dest_lng)
-       VALUES ($1, $1, $2, $3, $4, 'accepted', 'accepted', 12.9716, 77.5946, 12.9816, 77.6046)
+       VALUES ($1, $1, $2, $3, $4, 'accepted', 'accepted', $5, $6, $7, $8)
        ON CONFLICT (id) DO UPDATE SET stage = 'accepted', status = 'accepted', rider_id = EXCLUDED.rider_id, rider_name = COALESCE(EXCLUDED.rider_name, delivery_orders.rider_name), rider_phone = COALESCE(EXCLUDED.rider_phone, delivery_orders.rider_phone), updated_at = NOW()
        RETURNING *`,
-      [orderId, rId, rName, rPhone]
+      [orderId, rId, rName, rPhone, currentLat || null, currentLng || null, destLat || null, destLng || null]
     );
 
     // Sync main orders table
@@ -479,13 +493,22 @@ app.get('/api/delivery/slots', (_req, res) => {
 app.get('/api/delivery/track/:orderId', async (req, res) => {
   const { orderId } = req.params;
   try {
-    const dbRes = await pool.query('SELECT * FROM delivery_orders WHERE id = $1 OR order_number = $1', [orderId]);
+    const dbRes = await pool.query(`
+      SELECT d.*, 
+             w.latitude as wh_lat, w.longitude as wh_lng,
+             o.delivery_latitude, o.delivery_longitude, o.latitude as order_lat, o.longitude as order_lng
+      FROM delivery_orders d
+      LEFT JOIN orders o ON (d.id = o.id::text OR d.order_number = o.order_number)
+      LEFT JOIN warehouses w ON o.warehouse_id = w.id
+      WHERE d.id = $1 OR d.order_number = $1
+    `, [orderId]);
+
     if (dbRes.rows && dbRes.rows.length > 0) {
       const r = dbRes.rows[0];
-      const lat = Number(r.current_lat || 12.9716);
-      const lng = Number(r.current_lng || 77.5946);
-      const destLat = Number(r.dest_lat || 12.9816);
-      const destLng = Number(r.dest_lng || 77.6046);
+      const destLat = Number(r.dest_lat || r.delivery_latitude || r.order_lat || 0);
+      const destLng = Number(r.dest_lng || r.delivery_longitude || r.order_lng || 0);
+      const lat = Number(r.current_lat || r.wh_lat || destLat || 0);
+      const lng = Number(r.current_lng || r.wh_lng || destLng || 0);
       const etaMinutes = calculateEtaMinutes(lat, lng, destLat, destLng);
       return res.json({
         orderId,
