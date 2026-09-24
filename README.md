@@ -1,6 +1,8 @@
 # 🥦 Sunotal Grocery - Decoupled Cloud-Native Quick-Commerce Platform
 
-> **10-15 Minute Hyperlocal Grocery & Fresh Produce Quick-Commerce Ecosystem** built with decoupled, containerized **MERN Microservices** (`services/*`), **Frontend Micro-apps** (`apps/*`), AWS DocumentDB (MongoDB), AWS ElastiCache Redis, Route 53 DNS, ACM Wildcard SSL, AWS Application Load Balancer, AWS ECS Fargate, AWS SQS/SNS Event Bus, AWS Lambda S3 Photo Manager, and Automated GitHub Actions CI/CD Pipelines.
+> **10-15 Minute Hyperlocal Grocery & Fresh Produce Quick-Commerce Ecosystem** built with decoupled, containerized **Microservices**, **Domain Frontends**, AWS RDS PostgreSQL, AWS ElastiCache Redis, Route 53 DNS, ACM Wildcard SSL, AWS Application Load Balancer, AWS ECS Fargate, AWS SQS/SNS Event Bus, AWS Lambda S3 Photo Manager, and Automated GitHub Actions CI/CD Pipelines.
+
+![Build Status](https://github.com/valivarthi007/sunotal_fullstk/actions/workflows/ci.yml/badge.svg) ![Audit Status](https://img.shields.io/badge/FullStack%20Audit-Passed%20(0%20Errors)-brightgreen) ![Terraform](https://img.shields.io/badge/Terraform-Validated-blue)
 
 ---
 
