@@ -1636,9 +1636,37 @@ app.post('/api/delivery/calculate', async (req, res) => {
 });
 
 // PRODUCTS & CATALOG
-app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (_req, res) => {
+app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (req, res) => {
   try {
-    const dbRes = await gatewayPgPool.query('SELECT * FROM products ORDER BY id DESC');
+    const category = req.query.category as string | undefined;
+    const search = req.query.search as string | undefined;
+    const all = req.query.all;
+
+    let sql = 'SELECT * FROM products';
+    const params: any[] = [];
+    const conditions: string[] = [];
+
+    if (category && category !== 'All') {
+      params.push(category);
+      conditions.push(`LOWER(category) = LOWER($${params.length})`);
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`(LOWER(name) LIKE LOWER($${params.length}) OR LOWER(category) LIKE LOWER($${params.length}))`);
+    }
+
+    if (!all && req.path === '/api/storefront') {
+      conditions.push('active = true');
+    }
+
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    sql += ' ORDER BY id DESC';
+
+    const dbRes = await gatewayPgPool.query(sql, params);
     return res.json(dbRes.rows.map(p => ({
       id: String(p.id),
       name: p.name,

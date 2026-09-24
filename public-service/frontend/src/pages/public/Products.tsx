@@ -3,7 +3,7 @@ import { ProductCard, ProductCardSkeleton } from "@/components/ui/ProductCard";
 import { useListProducts, useListCategories } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal, Package, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { FilterSidebar, FilterOptions } from "@/components/ui/FilterSidebar";
@@ -29,10 +29,21 @@ const pathToCategory = (path: string) => {
   }
 };
 
+const getCategoryFromUrl = () => {
+  if (typeof window !== "undefined") {
+    const urlParams = new URLSearchParams(window.location.search);
+    const cat = urlParams.get("category");
+    if (cat) return cat;
+  }
+  return null;
+};
+
 export default function ProductsPage({ initialCategory = "All" }: ProductsPageProps) {
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const [search, setSearch] = useState("");
-  const currentCategory = initialCategory !== "All" ? initialCategory : pathToCategory(location.split("?")[0]);
+  const currentCategory = initialCategory !== "All"
+    ? initialCategory
+    : (getCategoryFromUrl() || pathToCategory(location.split("?")[0]));
 
   const { data: rawDbCategories } = useListCategories();
   const dbCategories = Array.isArray(rawDbCategories) ? rawDbCategories : [];
@@ -59,8 +70,23 @@ export default function ProductsPage({ initialCategory = "All" }: ProductsPagePr
     sortBy: "default",
   });
 
+  // Sync state if URL changes
+  useEffect(() => {
+    const catFromUrl = getCategoryFromUrl();
+    if (catFromUrl && catFromUrl.toLowerCase() !== filters.category.toLowerCase()) {
+      setFilters((prev) => ({ ...prev, category: catFromUrl }));
+    }
+  }, [location]);
+
   const handleFilterChange = (newFilters: Partial<FilterOptions>) => {
-    setFilters((prev) => ({ ...prev, ...newFilters }));
+    setFilters((prev) => {
+      const updated = { ...prev, ...newFilters };
+      if (newFilters.category !== undefined) {
+        const newUrl = updated.category === "All" ? "/products" : `/products?category=${encodeURIComponent(updated.category)}`;
+        window.history.pushState(null, "", newUrl);
+      }
+      return updated;
+    });
   };
 
   const handleResetFilters = () => {
@@ -73,6 +99,7 @@ export default function ProductsPage({ initialCategory = "All" }: ProductsPagePr
       sortBy: "default",
     });
     setSearch("");
+    window.history.pushState(null, "", "/products");
   };
 
   const { data: rawProducts, isLoading } = useListProducts(
@@ -85,6 +112,13 @@ export default function ProductsPage({ initialCategory = "All" }: ProductsPagePr
 
   const displayedProducts = useMemo(() => {
     let list = rawProducts ? [...rawProducts] : [];
+
+    // Explicit Filter by Category
+    if (filters.category && filters.category !== "All") {
+      list = list.filter(
+        (p) => p.category && p.category.toLowerCase().trim() === filters.category.toLowerCase().trim()
+      );
+    }
 
     // Filter by Price
     list = list.filter((p) => p.price <= filters.maxPrice);
