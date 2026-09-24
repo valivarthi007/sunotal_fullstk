@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useListCategories, useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { Leaf, Users, TrendingUp, HandCoins } from "lucide-react";
+import { Leaf, Users, TrendingUp, HandCoins, Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation } from "wouter";
@@ -26,6 +26,12 @@ const formSchema = z.object({
   gstin: z.string().optional().refine((val) => !val || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i.test(val), {
     message: "Invalid GSTIN format (e.g. 36AAACB1234C1ZV)",
   }),
+  accountHolderName: z.string().optional(),
+  bankName: z.string().optional(),
+  accountNumber: z.string().optional(),
+  ifscCode: z.string().optional(),
+  branchName: z.string().optional(),
+  upiId: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -45,6 +51,12 @@ export default function FarmerRegistration() {
       password: "",
       aadhar: "",
       gstin: "",
+      accountHolderName: "",
+      bankName: "",
+      accountNumber: "",
+      ifscCode: "",
+      branchName: "",
+      upiId: "",
       notes: "",
     },
   });
@@ -291,6 +303,101 @@ export default function FarmerRegistration() {
                     </FormItem>
                   )}
                 />
+
+                {/* Bank Account Details Section */}
+                <div className="pt-4 border-t border-border space-y-4">
+                  <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+                    <Building2 className="w-4 h-4" />
+                    <span>Bank Account Details (For Payouts & Settlement)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="accountHolderName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Account Holder Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="As per bank passbook" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="bankName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Bank Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. State Bank of India / HDFC" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="accountNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Account Number</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. 30987654321" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="ifscCode"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>IFSC Code</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. SBIN0004123" className="uppercase" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="branchName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Branch Name / City</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Main Agriculture Branch, Vijayawada" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="upiId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>UPI ID (Optional)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. name@upi" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
 
                 <FormField
                   control={form.control}

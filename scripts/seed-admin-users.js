@@ -13,15 +13,7 @@ const pool = new Pool({
 });
 
 const seedUsers = [
-  { name: 'System Admin', email: 'admin@sunotal.com', pass: 'admin123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
-  { name: 'System Admin (Cloud)', email: 'admin@automateuniverse.space', pass: 'admin123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
-  { name: 'Support Specialist', email: 'support@sunotal.com', pass: 'support123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
-  { name: 'Support Specialist (Cloud)', email: 'support@automateuniverse.space', pass: 'support123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
-  { name: 'Monitoring Specialist', email: 'monitoring@sunotal.com', pass: 'monitoring123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
-  { name: 'Monitoring Specialist (Cloud)', email: 'monitoring@automateuniverse.space', pass: 'monitoring123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
-  { name: 'Customer Account', email: 'user@sunotal.com', pass: 'user123', role: 'customer', phone: '9063636167', city: 'Vijayawada' },
-  { name: 'Fresh Produce Vendor', email: 'vendor@sunotal.com', pass: 'vendor123', role: 'vendor', phone: '9063636167', city: 'Vijayawada' },
-  { name: 'Delivery Partner', email: 'rider@sunotal.com', pass: 'rider123', role: 'rider', phone: '9063636167', city: 'Vijayawada' },
+  { name: 'Diwakar', email: 'admin@sunotal.com', pass: 'admin123', role: 'admin', phone: '9063636167', city: 'Vijayawada' },
 ];
 
 async function seed() {
@@ -46,18 +38,18 @@ async function seed() {
       );
     `);
 
-    console.log('🔑 Seeding user credentials with Phone: 9063636167 & Location: Vijayawada...');
+    console.log('🔑 Seeding user credentials with Name: Diwakar, Phone: 9063636167 & Location: Vijayawada...');
     for (const u of seedUsers) {
       const hash = await bcrypt.hash(u.pass, 10);
       const res = await client.query(
         `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
          VALUES ($1, $2, $3, $4, true, $5, $6, 1000.00)
-         ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, phone = EXCLUDED.phone, city = EXCLUDED.city, active = true
+         ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, phone = EXCLUDED.phone, city = EXCLUDED.city, active = true
          RETURNING id, name, email, role, phone, city;`,
         [u.name, u.email.toLowerCase(), hash, u.role, u.phone, u.city]
       );
       const row = res.rows[0];
-      console.log(`  ✅ User Seeded: ID #${row.id} | ${row.email} | Phone: ${row.phone} | City: ${row.city} | Role: ${row.role} | Pass: ${u.pass}`);
+      console.log(`  ✅ User Seeded: ID #${row.id} | Name: ${row.name} | ${row.email} | Phone: ${row.phone} | City: ${row.city} | Role: ${row.role} | Pass: ${u.pass}`);
     }
 
     console.log('\n🎉 Database admin & service credential seeding completed successfully!');
