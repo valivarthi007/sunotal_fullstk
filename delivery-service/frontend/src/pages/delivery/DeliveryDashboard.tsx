@@ -173,77 +173,112 @@ export default function DeliveryDashboard() {
     if (!acceptedOrder) return;
 
     let isMounted = true;
-    const timerId = setTimeout(() => {
-      if (!mapContainerRef.current || !isMounted) return;
+    const targetId = acceptedOrder?.numericId || acceptedOrder?.id || "latest";
 
-      mapProvider.loadSdk().then(() => {
-        const L = (window as any).L;
-        if (!L || !mapContainerRef.current || !isMounted) return;
+    fetch(`/api/delivery/track/${targetId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !mapContainerRef.current) return;
 
-        if (mapInstanceRef.current) {
-          try { mapInstanceRef.current.remove(); } catch {}
-          mapInstanceRef.current = null;
+        const wLat = Number(data?.warehouseOrigin?.lat || acceptedOrder?.warehouse_latitude || 0);
+        const wLng = Number(data?.warehouseOrigin?.lng || acceptedOrder?.warehouse_longitude || 0);
+        const whName = data?.warehouseOrigin?.name || acceptedOrder?.warehouse_name || "Dark Store Hub";
+
+        let cLat = Number(data?.customerDestination?.lat || acceptedOrder?.lat || acceptedOrder?.delivery_latitude || 0);
+        let cLng = Number(data?.customerDestination?.lng || acceptedOrder?.lng || acceptedOrder?.delivery_longitude || 0);
+
+        if (!cLat || !cLng) {
+          cLat = wLat ? wLat + 0.008 : 0;
+          cLng = wLng ? wLng + 0.006 : 0;
         }
 
-        // Land-accurate Vijayawada Coordinates (Benz Circle Hub & Customer Land)
-        const hubLat = 16.5062; // Benz Circle Hub, Vijayawada (Solid land)
-        const hubLng = 80.6480;
-        const custLat = acceptedOrder?.lat || acceptedOrder?.delivery_latitude || 16.5142;
-        const custLng = acceptedOrder?.lng || acceptedOrder?.delivery_longitude || 80.6540;
-        const midLat = Number(((hubLat + custLat) / 2).toFixed(4));
-        const midLng = Number(((hubLng + custLng) / 2).toFixed(4));
+        const dLat = Number(data?.driverLocation?.lat || ((wLat + cLat) / 2));
+        const dLng = Number(data?.driverLocation?.lng || ((wLng + cLng) / 2));
 
-        const map = L.map(mapContainerRef.current, {
-          zoomControl: true,
-          scrollWheelZoom: false,
-        }).setView([custLat, custLng], 14);
+        mapProvider.loadSdk().then(() => {
+          const L = (window as any).L;
+          if (!L || !mapContainerRef.current || !isMounted) return;
 
-        L.tileLayer(mapProvider.getTileUrl(), {
-          attribution: mapProvider.getTileAttribution(),
-          maxZoom: 19,
-        }).addTo(map);
+          if (mapInstanceRef.current) {
+            try { mapInstanceRef.current.remove(); } catch {}
+            mapInstanceRef.current = null;
+          }
 
-        // Dark Store Warehouse Marker
-        const darkStoreIcon = L.divIcon({
-          className: "ds-marker",
-          html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">HUB</div>',
-          iconSize: [36, 36],
+          const map = L.map(mapContainerRef.current, {
+            zoomControl: true,
+            scrollWheelZoom: false,
+          });
+
+          L.tileLayer(mapProvider.getTileUrl(), {
+            attribution: mapProvider.getTileAttribution(),
+            maxZoom: 19,
+          }).addTo(map);
+
+          // 1. Warehouse Origin Marker
+          const darkStoreIcon = L.divIcon({
+            className: "ds-marker",
+            html: '<div style="background:#0B2914;color:#10b981;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #10b981;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">HUB</div>',
+            iconSize: [36, 36],
+          });
+          if (wLat && wLng) {
+            L.marker([wLat, wLng], { icon: darkStoreIcon })
+              .addTo(map)
+              .bindPopup(`<b>${whName}</b>`);
+          }
+
+          // 2. Delivery Partner Live Marker
+          const driverIcon = L.divIcon({
+            className: "driver-marker",
+            html: '<div style="background:#f59e0b;color:black;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 10px rgba(0,0,0,0.5)">🛵</div>',
+            iconSize: [36, 36],
+          });
+          if (dLat && dLng) {
+            L.marker([dLat, dLng], { icon: driverIcon })
+              .addTo(map)
+              .bindPopup(`<b>Delivery Partner (Live Position)</b>`);
+          }
+
+          // 3. Customer Destination Marker
+          const custIcon = L.divIcon({
+            className: "cust-marker",
+            html: '<div style="background:#059669;color:white;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">📍</div>',
+            iconSize: [36, 36],
+          });
+          if (cLat && cLng) {
+            L.marker([cLat, cLng], { icon: custIcon })
+              .addTo(map)
+              .bindPopup(`<b>Delivery Destination (${acceptedOrder?.customerName || "Customer"})</b>`);
+          }
+
+          // Polyline route
+          const points: [number, number][] = [];
+          if (wLat && wLng) points.push([wLat, wLng]);
+          if (dLat && dLng) points.push([dLat, dLng]);
+          if (cLat && cLng) points.push([cLat, cLng]);
+
+          if (points.length >= 2) {
+            L.polyline(points, {
+              color: "#059669",
+              weight: 5,
+              dashArray: "8, 8",
+            }).addTo(map);
+
+            map.fitBounds(points, { padding: [50, 50] });
+          }
+
+          setTimeout(() => {
+            if (map) map.invalidateSize();
+          }, 200);
+
+          mapInstanceRef.current = map;
         });
-        L.marker([hubLat, hubLng], { icon: darkStoreIcon })
-          .addTo(map)
-          .bindPopup(`<b>Sunotal Dark Store Hub (${userLoc?.city || "Local Hub"})</b>`);
-
-        // Customer Destination Marker
-        const custIcon = L.divIcon({
-          className: "cust-marker",
-          html: '<div style="background:#059669;color:white;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3)">📍</div>',
-          iconSize: [36, 36],
-        });
-        L.marker([custLat, custLng], { icon: custIcon })
-          .addTo(map)
-          .bindPopup(`<b>Delivery Destination (${acceptedOrder?.customerName || "Customer"})</b>`);
-
-        // Route polyline
-        L.polyline([[hubLat, hubLng], [midLat, midLng], [custLat, custLng]], {
-          color: "#059669",
-          weight: 5,
-          dashArray: "8, 8",
-        }).addTo(map);
-
-        map.fitBounds([[hubLat, hubLng], [custLat, custLng]], { padding: [50, 50] });
-        setTimeout(() => {
-          if (map) map.invalidateSize();
-        }, 200);
-
-        mapInstanceRef.current = map;
-      });
-    }, 150);
+      })
+      .catch(() => {});
 
     return () => {
       isMounted = false;
-      clearTimeout(timerId);
     };
-  }, [acceptedOrder, userLoc]);
+  }, [acceptedOrder]);
 
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [currentAlertOrder, setCurrentAlertOrder] = useState<any | null>(null);
@@ -373,17 +408,18 @@ export default function DeliveryDashboard() {
 
     // 2. Broadcast rider GPS location & stage
     try {
-      const hubLat = 16.5062;
-      const hubLng = 80.6480;
-      const custLat = acceptedOrder?.lat || 16.5142;
-      const custLng = acceptedOrder?.lng || 80.6540;
+      const whLat = Number(acceptedOrder?.warehouse_latitude || 0);
+      const whLng = Number(acceptedOrder?.warehouse_longitude || 0);
+      const custLat = Number(acceptedOrder?.lat || acceptedOrder?.delivery_latitude || 0);
+      const custLng = Number(acceptedOrder?.lng || acceptedOrder?.delivery_longitude || 0);
 
-      let rLat = hubLat;
-      let rLng = hubLng;
-      if (nextStage === "picked_up") {
-        rLat = Number(((hubLat + custLat) / 2).toFixed(4));
-        rLng = Number(((hubLng + custLng) / 2).toFixed(4));
-      } else if (nextStage === "delivered") {
+      let rLat = whLat || (custLat ? custLat - 0.008 : 0);
+      let rLng = whLng || (custLng ? custLng - 0.006 : 0);
+
+      if ((nextStage === "picked_up" || nextStage === "out_for_delivery") && custLat && custLng) {
+        rLat = Number(((rLat + custLat) / 2).toFixed(4));
+        rLng = Number(((rLng + custLng) / 2).toFixed(4));
+      } else if (nextStage === "delivered" || nextStage === "arrived") {
         rLat = custLat;
         rLng = custLng;
       }
@@ -399,6 +435,22 @@ export default function DeliveryDashboard() {
           stage: backendStatus,
         }),
       });
+
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          fetch("/api/delivery/rider/location", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderId: targetId,
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              riderId: riderUser?.id || "RIDER-101",
+              stage: backendStatus,
+            }),
+          }).catch(() => {});
+        }, () => {}, { enableHighAccuracy: true });
+      }
     } catch (e) {
       console.warn("Rider location broadcast error:", e);
     }

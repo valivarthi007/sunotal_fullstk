@@ -1822,8 +1822,8 @@ app.get(['/api/delivery/orders/active', '/api/delivery/orders'], async (_req, re
             pay: Math.round(30 + (Number(o.final_amount || 100) * 0.1)),
             totalAmount: Number(o.final_amount || o.total_amount || 0),
             status: o.status || 'placed',
-            lat: Number(o.lat || 16.5062),
-            lng: Number(o.lng || 80.6480),
+            lat: Number(o.delivery_latitude || o.latitude || o.lat || 0),
+            lng: Number(o.delivery_longitude || o.longitude || o.lng || 0),
             createdAt: o.created_at
         }));
         return res.json(formatted);
@@ -1900,6 +1900,36 @@ app.post(['/api/delivery/payout', '/api/delivery/payouts', '/api/rider/payout'],
         return res.status(500).json({ error: 'Failed to process payout request', message: err?.message });
     }
 });
+function getHaversineDistanceKm(lat1, lon1, lat2, lon2) {
+    if (!lat1 || !lon1 || !lat2 || !lon2)
+        return 99999;
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+function findNearestWarehouse(custLat, custLng, warehouses) {
+    if (!warehouses || warehouses.length === 0)
+        return null;
+    let nearest = warehouses[0];
+    let minDistance = 99999;
+    for (const w of warehouses) {
+        const wLat = Number(w.latitude || w.lat || 0);
+        const wLng = Number(w.longitude || w.lng || 0);
+        if (wLat && wLng) {
+            const dist = getHaversineDistanceKm(custLat, custLng, wLat, wLng);
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearest = w;
+            }
+        }
+    }
+    return nearest;
+}
 // LIVE GPS DELIVERY TRACKING TELEMETRY (GET /api/delivery/track/:id)
 app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/:id'], async (req, res) => {
     const orderId = req.params.id;
@@ -1910,7 +1940,7 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
             const dbRes = await gatewayPgPool.query(`
         SELECT o.*, 
                w.name as wh_name, w.latitude as wh_lat, w.longitude as wh_lng, w.address as wh_address, w.city as wh_city,
-               r.name as rider_full_name, r.phone as rider_full_phone
+               r.name as rider_full_name, r.phone as rider_full_phone, r.profile_photo_url as rider_photo
         FROM orders o
         LEFT JOIN warehouses w ON o.warehouse_id = w.id
         LEFT JOIN users r ON (o.rider_id::text = r.id::text OR o.rider_name = r.name)
@@ -1924,7 +1954,7 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
             const dbRes = await gatewayPgPool.query(`
         SELECT o.*, 
                w.name as wh_name, w.latitude as wh_lat, w.longitude as wh_lng, w.address as wh_address, w.city as wh_city,
-               r.name as rider_full_name, r.phone as rider_full_phone
+               r.name as rider_full_name, r.phone as rider_full_phone, r.profile_photo_url as rider_photo
         FROM orders o
         LEFT JOIN warehouses w ON o.warehouse_id = w.id
         LEFT JOIN users r ON (o.rider_id::text = r.id::text OR o.rider_name = r.name)
@@ -1934,36 +1964,52 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
                 orderRow = dbRes.rows[0];
             }
         }
-        // Try fetching active warehouse from DB if not linked directly
-        if (gatewayPgPool && (!orderRow?.wh_lat || !orderRow?.wh_lng)) {
-            const wRes = await gatewayPgPool.query('SELECT * FROM warehouses WHERE is_active = true ORDER BY id ASC LIMIT 1');
-            if (wRes.rows && wRes.rows.length > 0) {
-                warehouseRow = wRes.rows[0];
-            }
-        }
-        // 1. Warehouse Origin Coordinates (Dynamic from DB warehouse table or fallback land coordinate)
-        const wLat = Number(orderRow?.wh_lat || warehouseRow?.latitude || 16.5062);
-        const wLng = Number(orderRow?.wh_lng || warehouseRow?.longitude || 80.6480);
-        const whName = orderRow?.wh_name || warehouseRow?.name || 'Sunotal Express Dark Store Hub';
-        // 2. Customer Destination Coordinates (Dynamic from DB order table)
+        // 1. Customer Location: Captured during order placement or user address table
         let cLat = Number(orderRow?.delivery_latitude || orderRow?.latitude || orderRow?.lat || 0);
         let cLng = Number(orderRow?.delivery_longitude || orderRow?.longitude || orderRow?.lng || 0);
-        if (!cLat || !cLng || isNaN(cLat) || isNaN(cLng)) {
+        if ((!cLat || !cLng) && orderRow?.user_id && gatewayPgPool) {
+            try {
+                const uAddrRes = await gatewayPgPool.query('SELECT latitude, longitude FROM user_addresses WHERE user_id = $1 AND latitude IS NOT NULL ORDER BY is_default DESC LIMIT 1', [orderRow.user_id]);
+                if (uAddrRes.rows && uAddrRes.rows.length > 0) {
+                    cLat = Number(uAddrRes.rows[0].latitude);
+                    cLng = Number(uAddrRes.rows[0].longitude);
+                }
+            }
+            catch { }
+        }
+        // 2. Warehouse Location: Nearest active warehouse configured in Admin
+        if (gatewayPgPool) {
+            const wRes = await gatewayPgPool.query('SELECT * FROM warehouses WHERE is_active = true');
+            if (wRes.rows && wRes.rows.length > 0) {
+                if (orderRow?.warehouse_id) {
+                    const matchedWh = wRes.rows.find((w) => Number(w.id) === Number(orderRow.warehouse_id));
+                    warehouseRow = matchedWh || findNearestWarehouse(cLat, cLng, wRes.rows) || wRes.rows[0];
+                }
+                else {
+                    warehouseRow = findNearestWarehouse(cLat, cLng, wRes.rows) || wRes.rows[0];
+                }
+            }
+        }
+        const wLat = Number(orderRow?.wh_lat || warehouseRow?.latitude || (cLat ? cLat - 0.015 : 0));
+        const wLng = Number(orderRow?.wh_lng || warehouseRow?.longitude || (cLng ? cLng - 0.012 : 0));
+        const whName = orderRow?.wh_name || warehouseRow?.name || 'Sunotal Dark Store Hub';
+        if (!cLat || !cLng) {
             cLat = Number((wLat + 0.008).toFixed(4));
             cLng = Number((wLng + 0.006).toFixed(4));
         }
-        // 3. Live Rider GPS Location & Telemetry (Dynamic from live rider updates or vector)
+        // 3. Delivery Partner Live GPS Location
         const liveTelemetry = global.activeRiderTelemetry?.[String(orderId)] || global.activeRiderTelemetry?.[String(orderRow?.id)] || global.activeRiderTelemetry?.[String(orderRow?.order_number)];
         const dLat = liveTelemetry?.lat || Number(((wLat + cLat) / 2).toFixed(4));
         const dLng = liveTelemetry?.lng || Number(((wLng + cLng) / 2).toFixed(4));
-        const currentStage = liveTelemetry?.stage || orderRow?.status || 'out_for_delivery';
+        const currentStage = liveTelemetry?.stage || orderRow?.status || 'placed';
+        const distKm = Number(getHaversineDistanceKm(dLat, dLng, cLat, cLng).toFixed(1));
         return res.json({
             orderId: String(orderRow?.id || orderId),
             orderNumber: orderRow?.order_number || `ORD-${orderId}`,
             status: currentStage,
             stage: currentStage,
-            etaMinutes: currentStage === 'delivered' ? 0 : (orderRow?.eta_minutes || 12),
-            remainingDistanceKm: currentStage === 'delivered' ? 0 : 2.5,
+            etaMinutes: currentStage === 'delivered' ? 0 : Math.max(5, Math.ceil(distKm * 3)),
+            remainingDistanceKm: currentStage === 'delivered' ? 0 : (distKm > 9000 ? 2.5 : distKm),
             warehouseOrigin: {
                 name: whName,
                 lat: wLat,
@@ -1985,9 +2031,9 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
             driverProfile: {
                 id: liveTelemetry?.riderId || orderRow?.rider_id || 'RIDER-ACTIVE',
                 name: liveTelemetry?.riderName || orderRow?.rider_name || orderRow?.rider_full_name || 'Delivery Partner',
-                phone: liveTelemetry?.riderPhone || orderRow?.rider_phone || orderRow?.rider_full_phone || '9063636167',
+                phone: liveTelemetry?.riderPhone || orderRow?.rider_phone || orderRow?.rider_full_phone || '',
                 vehicleNo: orderRow?.vehicle_no || 'EV Express Bike',
-                photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+                photo: orderRow?.rider_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
                 rating: 4.9,
                 deliveriesCompleted: 150,
             },
@@ -2005,8 +2051,8 @@ app.post(['/api/delivery/rider/location', '/api/rider/location'], async (req, re
     }
     if (orderId) {
         global.activeRiderTelemetry[String(orderId)] = {
-            lat: Number(lat || 16.5102),
-            lng: Number(lng || 80.6510),
+            lat: Number(lat || 0),
+            lng: Number(lng || 0),
             stage: stage || 'out_for_delivery',
             riderId: riderId || 'RIDER-101',
             updatedAt: new Date().toISOString(),
@@ -2356,21 +2402,43 @@ app.get('/api/orders/:id', async (req, res) => {
     }
 });
 app.post(['/api/orders', '/api/orders/checkout'], async (req, res) => {
-    const { userId, userName, userPhone, address, shippingAddress, city, items, subtotal, discount, tax, deliveryFee, finalAmount, paymentMethod } = req.body || {};
+    const { userId, userName, userPhone, address, shippingAddress, city, items, subtotal, discount, tax, deliveryFee, finalAmount, paymentMethod, latitude, longitude, deliveryLatitude, deliveryLongitude, warehouseId } = req.body || {};
     if (!items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: 'Order items are required' });
     }
     const orderNum = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const delAddress = shippingAddress || address || 'Bengaluru Central';
+    const delAddress = shippingAddress || address || 'Vijayawada Central';
     const totAmount = subtotal || items.reduce((sum, i) => sum + (Number(i.price) * Number(i.quantity)), 0);
     const finAmount = finalAmount || (totAmount - (discount || 0) + (deliveryFee || 0));
     try {
         const client = await gatewayPgPool.connect();
         try {
             await client.query('BEGIN');
-            const oRes = await client.query(`INSERT INTO orders (order_number, user_id, user_name, user_phone, address, delivery_address, city, total_amount, discount_amount, final_amount, delivery_fee, status, payment_status, payment_method, delivery_otp, eta_minutes)
-         VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, 'placed', 'paid', $11, $12, 15) RETURNING *`, [orderNum, userId || 1, userName || 'Customer', userPhone || '', delAddress, city || 'Bengaluru', totAmount, discount || 0, finAmount, deliveryFee || 0, paymentMethod || 'UPI / Wallet', otp]);
+            let orderLat = Number(deliveryLatitude || latitude || req.body?.lat || 0);
+            let orderLng = Number(deliveryLongitude || longitude || req.body?.lng || 0);
+            if ((!orderLat || !orderLng) && userId) {
+                try {
+                    const addrRes = await client.query('SELECT latitude, longitude FROM user_addresses WHERE user_id = $1 AND latitude IS NOT NULL ORDER BY is_default DESC LIMIT 1', [userId]);
+                    if (addrRes.rows && addrRes.rows.length > 0) {
+                        orderLat = Number(addrRes.rows[0].latitude);
+                        orderLng = Number(addrRes.rows[0].longitude);
+                    }
+                }
+                catch { }
+            }
+            let activeWhId = warehouseId ? Number(warehouseId) : null;
+            if (!activeWhId) {
+                try {
+                    const whRes = await client.query('SELECT id FROM warehouses WHERE is_active = true ORDER BY id ASC LIMIT 1');
+                    if (whRes.rows && whRes.rows.length > 0) {
+                        activeWhId = whRes.rows[0].id;
+                    }
+                }
+                catch { }
+            }
+            const oRes = await client.query(`INSERT INTO orders (order_number, user_id, user_name, user_phone, address, delivery_address, city, total_amount, discount_amount, final_amount, delivery_fee, status, payment_status, payment_method, delivery_otp, eta_minutes, delivery_latitude, delivery_longitude, warehouse_id)
+         VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, 'placed', 'paid', $11, $12, 15, $13, $14, $15) RETURNING *`, [orderNum, userId || 1, userName || 'Customer', userPhone || '', delAddress, city || 'Vijayawada', totAmount, discount || 0, finAmount, deliveryFee || 0, paymentMethod || 'UPI / Wallet', otp, orderLat || null, orderLng || null, activeWhId]);
             const newOrder = oRes.rows[0];
             for (const item of items) {
                 const pPrice = Number(item.price || 50);

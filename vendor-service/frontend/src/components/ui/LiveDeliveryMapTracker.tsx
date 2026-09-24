@@ -29,68 +29,7 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
         throw new Error("Invalid telemetry response");
       }
     } catch {
-      // Robust simulation fallback so Live GPS Map is always available with location awareness
-      const now = Date.now();
-      const progress = (now % 120000) / 120000;
-      
-      const userCity = (localStorage.getItem("sunotal_user_city") || "Vijayawada").toLowerCase();
-      let wLat = 16.5062, wLng = 80.6480, cLat = 16.5142, cLng = 80.6540;
-      let hubName = "Vijayawada Benz Circle Express Hub #302";
-      let destCity = "Vijayawada";
-
-      if (userCity.includes("hyderabad")) {
-        wLat = 17.4401; wLng = 78.3489; cLat = 17.3850; cLng = 78.4867;
-        hubName = "Hyderabad HITEC City Dark Store Hub #201";
-        destCity = "Hyderabad";
-      } else if (userCity.includes("vijayawada")) {
-        wLat = 16.5062; wLng = 80.6480; cLat = 16.5142; cLng = 80.6540;
-        hubName = "Vijayawada Benz Circle Express Hub #302";
-        destCity = "Vijayawada";
-      } else if (userCity.includes("vizag") || userCity.includes("visakhapatnam")) {
-        wLat = 17.7200; wLng = 83.3000; cLat = 17.6868; cLng = 83.2185;
-        hubName = "Vizag Direct Farm Hub #401";
-        destCity = "Visakhapatnam";
-      }
-
-      const dLat = Number((wLat + (cLat - wLat) * progress).toFixed(5));
-      const dLng = Number((wLng + (cLng - wLng) * progress).toFixed(5));
-
-      setTelemetry({
-        orderId: String(orderId),
-        status: "out_for_delivery",
-        warehouseOrigin: {
-          name: hubName,
-          lat: wLat,
-          lng: wLng,
-        },
-        customerDestination: {
-          address: `Express Delivery Sector, ${destCity}`,
-          city: destCity,
-          lat: cLat,
-          lng: cLng,
-        },
-        driverLocation: {
-          lat: dLat,
-          lng: dLng,
-          speedKmh: 32 + Math.floor(progress * 8),
-          heading: 45,
-        },
-        etaMinutes: Math.max(2, Math.round(12 * (1 - progress))),
-        remainingDistanceKm: Number((3.5 * (1 - progress)).toFixed(1)),
-        driverProfile: {
-          name: "Ramesh Kumar (EV Partner)",
-          phone: "+91 99089 70908",
-          vehicleNo: "KA-01-EV-8842",
-          rating: 4.9,
-          deliveriesCompleted: 412,
-          photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
-        },
-        routePolyline: [
-          [wLat, wLng],
-          [dLat, dLng],
-          [cLat, cLng],
-        ],
-      });
+      setTelemetry(null);
     } finally {
       setLoading(false);
     }
