@@ -6,6 +6,7 @@ import { ShoppingCart, Leaf, Check, MapPin, Plus, Minus } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
 import { useState } from "react";
+import { Link } from "wouter";
 
 export function ProductCard({ product }: { product: Product }) {
   const { items, addItem, removeItem, updateQuantity } = useCart();
@@ -81,19 +82,21 @@ export function ProductCard({ product }: { product: Product }) {
         )}
       </div>
 
-      <div className="aspect-square overflow-hidden bg-muted/30">
+      <Link href={`/products/${product.id}`} className="aspect-square overflow-hidden bg-muted/30 cursor-pointer block">
         <img
           src={normalizeImageUrl(product.image, product.category)}
           alt={product.name}
           onError={(e) => handleImageError(e, product.category)}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-      </div>
+      </Link>
 
       <div className="flex flex-1 flex-col p-4 pb-16">
         <div className="mb-2">
           <p className="text-xs text-muted-foreground mb-1">{product.unit}</p>
-          <h3 className="font-bold text-secondary line-clamp-2 leading-tight">{product.name}</h3>
+          <Link href={`/products/${product.id}`} className="font-bold text-secondary line-clamp-2 leading-tight hover:text-emerald-600 transition-colors cursor-pointer block">
+            {product.name}
+          </Link>
           {product.location && (
             <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1 line-clamp-1">
               <MapPin className="w-3 h-3 shrink-0" /> {product.location}

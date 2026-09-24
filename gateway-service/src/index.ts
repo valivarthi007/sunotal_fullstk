@@ -241,6 +241,7 @@ async function initDatabase() {
         is_organic BOOLEAN DEFAULT TRUE,
         stock INT DEFAULT 100,
         rating NUMERIC(3,2) DEFAULT 4.80,
+        description TEXT,
         active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
@@ -445,6 +446,7 @@ async function initDatabase() {
       `CREATE INDEX IF NOT EXISTS idx_warehouses_active ON warehouses(is_active)`,
       `CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id)`,
       `CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC)`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS description TEXT`,
     ];
     for (const idx of indexes) {
       try { await client.query(idx); } catch { }
@@ -1645,6 +1647,7 @@ app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (_req
       originalPrice: Number(p.original_price || p.price),
       unit: p.unit,
       image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
+      description: p.description || '',
       isOrganic: p.is_organic,
       stock: p.stock,
       rating: Number(p.rating || 4.8),
@@ -1655,23 +1658,80 @@ app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (_req
   }
 });
 
+app.get(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
+  const targetId = Number(req.params.id);
+  if (isNaN(targetId)) return res.status(400).json({ error: 'Invalid product ID' });
+  try {
+    const dbRes = await gatewayPgPool.query('SELECT * FROM products WHERE id = $1', [targetId]);
+    if (dbRes.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
+    const p = dbRes.rows[0];
+    return res.json({
+      id: String(p.id),
+      name: p.name,
+      category: p.category,
+      price: Number(p.price),
+      originalPrice: Number(p.original_price || p.price),
+      unit: p.unit,
+      image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
+      description: p.description || '',
+      isOrganic: p.is_organic,
+      stock: p.stock,
+      rating: Number(p.rating || 4.8),
+      active: p.active ?? true
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch product', message: err?.message });
+  }
+});
+
 app.post(['/api/products', '/api/admin/products'], async (req, res) => {
-  const { name, category, price, originalPrice, unit, image, isOrganic, stock } = req.body || {};
+  const { name, category, price, originalPrice, unit, image, description, isOrganic, stock } = req.body || {};
   if (!name || !category || price === undefined) return res.status(400).json({ error: 'Name, category, and price required' });
   try {
     const dbRes = await gatewayPgPool.query(
-      `INSERT INTO products (name, category, price, original_price, unit, image, is_organic, stock, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) RETURNING *`,
-      [name, category, Number(price), Number(originalPrice || price), unit || '1 kg', image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400', isOrganic !== false, Number(stock || 100)]
+      `INSERT INTO products (name, category, price, original_price, unit, image, description, is_organic, stock, active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true) RETURNING *`,
+      [name, category, Number(price), Number(originalPrice || price), unit || '1 kg', image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400', description || '', isOrganic !== false, Number(stock || 100)]
     );
     const p = dbRes.rows[0];
     const formattedProduct = {
-      id: String(p.id), name: p.name, category: p.category, price: Number(p.price), originalPrice: Number(p.original_price), unit: p.unit, image: p.image, isOrganic: p.is_organic, stock: p.stock, rating: 4.8, active: true
+      id: String(p.id), name: p.name, category: p.category, price: Number(p.price), originalPrice: Number(p.original_price), unit: p.unit, image: p.image, description: p.description || '', isOrganic: p.is_organic, stock: p.stock, rating: 4.8, active: true
     };
     broadcastRealtimeEvent({ type: 'PRODUCT_CREATED', path: req.originalUrl || req.url, method: 'POST', data: formattedProduct });
     return res.status(201).json(formattedProduct);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to create product', message: err?.message });
+  }
+});
+
+app.put(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
+  const targetId = Number(req.params.id);
+  if (isNaN(targetId)) return res.status(400).json({ error: 'Invalid product ID' });
+  const { name, category, price, originalPrice, unit, image, description, isOrganic, stock } = req.body || {};
+  try {
+    const dbRes = await gatewayPgPool.query(
+      `UPDATE products 
+       SET name = COALESCE($1, name),
+           category = COALESCE($2, category),
+           price = COALESCE($3, price),
+           original_price = COALESCE($4, original_price),
+           unit = COALESCE($5, unit),
+           image = COALESCE($6, image),
+           description = COALESCE($7, description),
+           is_organic = COALESCE($8, is_organic),
+           stock = COALESCE($9, stock)
+       WHERE id = $10 RETURNING *`,
+      [name, category, price !== undefined ? Number(price) : null, originalPrice !== undefined ? Number(originalPrice) : null, unit, image, description, isOrganic, stock !== undefined ? Number(stock) : null, targetId]
+    );
+    if (dbRes.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
+    const p = dbRes.rows[0];
+    const formattedProduct = {
+      id: String(p.id), name: p.name, category: p.category, price: Number(p.price), originalPrice: Number(p.original_price), unit: p.unit, image: p.image, description: p.description || '', isOrganic: p.is_organic, stock: p.stock, rating: Number(p.rating || 4.8), active: p.active ?? true
+    };
+    broadcastRealtimeEvent({ type: 'PRODUCT_UPDATED', path: req.originalUrl || req.url, method: 'PUT', data: formattedProduct });
+    return res.json(formattedProduct);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update product', message: err?.message });
   }
 });
 

@@ -16,6 +16,7 @@ import Register from "@/pages/public/Register";
 import Profile from "@/pages/public/Profile";
 import Checkout from "@/pages/public/Checkout";
 import Orders from "@/pages/public/Orders";
+import ProductDetail from "@/pages/public/ProductDetail";
 
 // Lazy-Loaded New Feature Pages & Sub-Portals for Bundle Optimization
 const LiveOrderTrack = lazy(() => import("@/pages/public/LiveOrderTrack"));
@@ -292,6 +293,8 @@ function SubdomainRouter() {
     <Suspense fallback={<LoadingFallback />}>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/products/:id" component={ProductDetail} />
+        <Route path="/product/:id" component={ProductDetail} />
         <Route path="/products"><ProductsPage initialCategory="All" /></Route>
         <Route path="/vegetables"><ProductsPage initialCategory="Vegetables" /></Route>
         <Route path="/fruits"><ProductsPage initialCategory="Fruits" /></Route>
