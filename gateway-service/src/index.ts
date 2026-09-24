@@ -434,7 +434,34 @@ async function initDatabase() {
       try { await client.query(idx); } catch { }
     }
 
-    console.log('✅ PostgreSQL database schema & indexes ready.');
+    // Seed Accounts Initialization (Admin, Support, Monitoring, User, Vendor, Rider)
+    const seedUsers = [
+      { name: 'System Admin', email: 'admin@sunotal.com', pass: 'admin123', role: 'admin', phone: '+91 9876543210', city: 'Bengaluru' },
+      { name: 'System Admin (Cloud)', email: 'admin@automateuniverse.space', pass: 'admin123', role: 'admin', phone: '+91 9876543210', city: 'Bengaluru' },
+      { name: 'Support Specialist', email: 'support@sunotal.com', pass: 'support123', role: 'admin', phone: '+91 9876543211', city: 'Bengaluru' },
+      { name: 'Support Specialist (Cloud)', email: 'support@automateuniverse.space', pass: 'support123', role: 'admin', phone: '+91 9876543211', city: 'Bengaluru' },
+      { name: 'Monitoring Specialist', email: 'monitoring@sunotal.com', pass: 'monitoring123', role: 'admin', phone: '+91 9876543212', city: 'Bengaluru' },
+      { name: 'Monitoring Specialist (Cloud)', email: 'monitoring@automateuniverse.space', pass: 'monitoring123', role: 'admin', phone: '+91 9876543212', city: 'Bengaluru' },
+      { name: 'Customer Account', email: 'user@sunotal.com', pass: 'user123', role: 'customer', phone: '+91 9876543213', city: 'Bengaluru' },
+      { name: 'Fresh Produce Vendor', email: 'vendor@sunotal.com', pass: 'vendor123', role: 'vendor', phone: '+91 9876543214', city: 'Vijayawada' },
+      { name: 'Delivery Partner', email: 'rider@sunotal.com', pass: 'rider123', role: 'rider', phone: '+91 9876543215', city: 'Bengaluru' },
+    ];
+
+    for (const u of seedUsers) {
+      try {
+        const hash = await bcrypt.hash(u.pass, 10);
+        await client.query(
+          `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
+           VALUES ($1, $2, $3, $4, true, $5, $6, 1000.00)
+           ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash`,
+          [u.name, u.email.toLowerCase(), hash, u.role, u.phone, u.city]
+        );
+      } catch (err: any) {
+        console.warn(`Failed to seed user ${u.email}:`, err?.message || err);
+      }
+    }
+
+    console.log('✅ PostgreSQL database schema, indexes & seed user credentials ready.');
   } catch (err: any) {
     console.error('⚠️ PostgreSQL DB init error:', err?.message || err);
   } finally {
