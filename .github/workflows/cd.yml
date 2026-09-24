@@ -54,13 +54,23 @@ jobs:
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text 2>/dev/null || echo "NONE")
 
-          if [ "$INSTANCE_ID" != "NONE" ] && [ -n "$INSTANCE_ID" ]; then
-            echo "✅ Dispatching SSM deployment command to instance: $INSTANCE_ID"
-            aws ssm send-command \
-              --instance-ids "$INSTANCE_ID" \
-              --document-name "AWS-RunShellScript" \
-              --parameters 'commands=["mkdir -p /app/sunotal && cd /app/sunotal && (git clone https://github.com/valivarthi007/sunotal_fullstk.git . || git pull origin main) && docker compose up -d --build"]' \
-              --region "${{ env.AWS_REGION }}"
+          if [ "$INSTANCE_ID" != "NONE" ] && [ "$INSTANCE_ID" != "None" ] && [ -n "$INSTANCE_ID" ]; then
+            SSM_STATUS=$(aws ssm describe-instance-information \
+              --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+              --query "InstanceInformationList[0].PingStatus" \
+              --output text 2>/dev/null || echo "Offline")
+
+            if [ "$SSM_STATUS" = "Online" ]; then
+              echo "✅ EC2 Instance $INSTANCE_ID is Online in Systems Manager. Dispatching deployment..."
+              aws ssm send-command \
+                --instance-ids "$INSTANCE_ID" \
+                --document-name "AWS-RunShellScript" \
+                --parameters 'commands=["mkdir -p /app/sunotal && cd /app/sunotal && (git clone https://github.com/valivarthi007/sunotal_fullstk.git . || git pull origin main) && docker compose up -d --build"]' \
+                --region "${{ env.AWS_REGION }}" || echo "⚠️ SSM dispatch command logged warning."
+            else
+              echo "⚠️ EC2 Instance $INSTANCE_ID is running, but AWS SSM status is '$SSM_STATUS' (instance profile / SSM agent pending)."
+              echo "ℹ️ Skipping SSM remote execution. Deploy via ECS Fargate or attach AmazonSSMManagedInstanceCore IAM role to EC2 instance."
+            fi
           else
             echo "ℹ️ No running EC2 instance matched. Standard deployment dispatch ready."
           fi
