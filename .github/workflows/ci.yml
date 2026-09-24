@@ -78,6 +78,12 @@ jobs:
           sleep 5
           docker compose exec -T postgres pg_isready -U sunotal
 
+      - name: Verify Seed Admin User Credentials
+        run: |
+          export DATABASE_URL="postgresql://sunotal:sunotal_pass_dev@127.0.0.1:5432/sunotal"
+          npm install pg bcryptjs
+          node scripts/seed-admin-users.js
+
       - name: Teardown Test Infrastructure
         if: always()
         run: docker compose down -v
