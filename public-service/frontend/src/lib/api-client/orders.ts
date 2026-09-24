@@ -50,6 +50,10 @@ export async function createOrderCheckout(payload: {
   state: string;
   pincode: string;
   deliveryFee?: number;
+  latitude?: number;
+  longitude?: number;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
   corporateGstin?: string;
   corporatePoRef?: string;
   paymentMethod?: string;

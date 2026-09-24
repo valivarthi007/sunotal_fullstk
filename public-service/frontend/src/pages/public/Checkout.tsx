@@ -156,6 +156,9 @@ export default function Checkout() {
 
       let orderNumber = "";
       try {
+        const latVal = userLoc?.latitude || Number(localStorage.getItem("sunotal_user_lat") || 0) || undefined;
+        const lngVal = userLoc?.longitude || Number(localStorage.getItem("sunotal_user_lng") || 0) || undefined;
+
         const res = await createOrderCheckout({
           items: checkoutItems,
           shippingAddress: values.streetAddress,
@@ -163,6 +166,10 @@ export default function Checkout() {
           state: values.state,
           pincode: values.pincode,
           deliveryFee: deliveryFeeAmount,
+          latitude: latVal,
+          longitude: lngVal,
+          deliveryLatitude: latVal,
+          deliveryLongitude: lngVal,
           corporateGstin: values.gstin,
           corporatePoRef: values.poNumber,
           paymentMethod: values.paymentMethod === "corporate_po" ? "po" : values.paymentMethod,
