@@ -63,13 +63,30 @@ export default function OrdersBoard() {
   });
   const [loading, setLoading] = useState(true);
   const [assignRiderOrder, setAssignRiderOrder] = useState<Order | null>(null);
-  const [selectedRider, setSelectedRider] = useState("RIDER-101");
+  const [selectedRider, setSelectedRider] = useState("");
+  const [availableRiders, setAvailableRiders] = useState<{ id: string; name: string; phone: string }[]>([]);
 
-  const RIDERS_LIST = [
-    { id: "RIDER-101", name: "Vikram Singh", phone: "+91 9876543210" },
-    { id: "RIDER-102", name: "Suresh Kumar", phone: "+91 9876543211" },
-    { id: "RIDER-103", name: "Anand Verma", phone: "+91 9876543212" },
-  ];
+  const fetchRiders = async () => {
+    try {
+      const res = await fetch("/api/delivery/riders");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const formatted = data.map((r: any) => ({
+            id: String(r.id || r.riderId || `RIDER-${r.id}`),
+            name: String(r.name || r.riderName || "Delivery Partner"),
+            phone: String(r.phone || r.mobile || "")
+          }));
+          setAvailableRiders(formatted);
+          if (formatted.length > 0) {
+            setSelectedRider(formatted[0].id);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load registered delivery riders:", err);
+    }
+  };
 
   const fetchBoardOrders = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
@@ -88,6 +105,7 @@ export default function OrdersBoard() {
 
   useEffect(() => {
     fetchBoardOrders();
+    fetchRiders();
     const interval = setInterval(() => fetchBoardOrders(true), 10000); // Silent live poll every 10s
     return () => clearInterval(interval);
   }, []);
@@ -111,7 +129,7 @@ export default function OrdersBoard() {
 
   const handleAssignRiderSubmit = async () => {
     if (!assignRiderOrder) return;
-    const rider = RIDERS_LIST.find((r) => r.id === selectedRider) || RIDERS_LIST[0];
+    const rider = availableRiders.find((r) => r.id === selectedRider) || availableRiders[0] || { id: selectedRider, name: 'Delivery Partner', phone: '' };
     try {
       const res = await fetch(`/api/orders/${assignRiderOrder.id}/assign-rider`, {
         method: "POST",
@@ -264,9 +282,9 @@ export default function OrdersBoard() {
                   <SelectValue placeholder="Select Rider" />
                 </SelectTrigger>
                 <SelectContent>
-                  {RIDERS_LIST.map((r) => (
+                  {availableRiders.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
-                      {r.name} ({r.phone})
+                      {r.name} {r.phone ? `(${r.phone})` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
