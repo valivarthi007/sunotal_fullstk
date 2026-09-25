@@ -11,7 +11,10 @@
     "build:rider:android": "cd packages/rider-app && npx eas build --platform android",
     "build:rider:ios": "cd packages/rider-app && npx eas build --platform ios",
     "build:vendor:android": "cd packages/vendor-app && npx eas build --platform android",
-    "build:vendor:ios": "cd packages/vendor-app && npx eas build --platform ios"
+    "build:vendor:ios": "cd packages/vendor-app && npx eas build --platform ios",
+    "apk:customer": "cd packages/customer-app && npx eas build --platform android --profile preview",
+    "apk:rider": "cd packages/rider-app && npx eas build --platform android --profile preview",
+    "apk:vendor": "cd packages/vendor-app && npx eas build --platform android --profile preview"
   },
   "workspaces": [
     "shared",
