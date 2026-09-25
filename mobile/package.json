@@ -1,0 +1,20 @@
+{
+  "name": "sunotal-mobile-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start:customer": "cd packages/customer-app && npx expo start",
+    "start:rider": "cd packages/rider-app && npx expo start",
+    "start:vendor": "cd packages/vendor-app && npx expo start",
+    "build:customer:android": "cd packages/customer-app && npx eas build --platform android",
+    "build:customer:ios": "cd packages/customer-app && npx eas build --platform ios",
+    "build:rider:android": "cd packages/rider-app && npx eas build --platform android",
+    "build:rider:ios": "cd packages/rider-app && npx eas build --platform ios",
+    "build:vendor:android": "cd packages/vendor-app && npx eas build --platform android",
+    "build:vendor:ios": "cd packages/vendor-app && npx eas build --platform ios"
+  },
+  "workspaces": [
+    "shared",
+    "packages/*"
+  ]
+}

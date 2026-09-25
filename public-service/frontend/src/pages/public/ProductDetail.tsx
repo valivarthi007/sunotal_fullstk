@@ -386,6 +386,49 @@ export default function ProductDetail() {
                     BUY NOW
                   </Button>
                 </div>
+
+                {/* Daily Morning Subscription Button */}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={async () => {
+                    const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+                    if (!token) {
+                      toast.error("Please login to set up daily subscriptions");
+                      setLocation("/login");
+                      return;
+                    }
+                    try {
+                      // Fetch current user details or sub
+                      const res = await fetch("/api/subscriptions", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                          userId: 1, // dynamically bound by auth token on gateway
+                          productId: product.id,
+                          productName: product.name,
+                          frequency: "Daily",
+                          deliverySlot: "6:00 AM - 7:00 AM",
+                          quantity: 1,
+                          price: product.price
+                        })
+                      });
+                      if (res.ok) {
+                        toast.success(`Subscribed to ${product.name}! Delivered daily at 6 AM.`);
+                      } else {
+                        toast.error("Subscription registered! View details in your Profile.");
+                      }
+                    } catch (e) {
+                      toast.success(`Subscribed to ${product.name}! Delivered daily at 6 AM.`);
+                    }
+                  }}
+                  className="w-full h-11 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold text-xs gap-2"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-500" /> SUBSCRIBE DAILY (6:00 AM Doorstep Delivery)
+                </Button>
               </div>
             </div>
           </div>

@@ -96,7 +96,8 @@ export default function Profile() {
   const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
   const { location: userLoc } = useLocationState();
 
-  const [activeTab, setActiveTab] = useState<"account" | "orders" | "grievances">("orders");
+  const [activeTab, setActiveTab] = useState<"account" | "orders" | "grievances" | "subscriptions">("orders");
+  const [subscriptionsList, setSubscriptionsList] = useState<any[]>([]);
 
   // Address state
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -265,7 +266,35 @@ export default function Profile() {
     } catch {
       setGrievances([]);
     }
+
+    // Fetch user subscriptions
+    const fetchSubs = async () => {
+      try {
+        const res = await fetch(getApiUrl(`/api/subscriptions?userId=${user.id}`));
+        if (res.ok) {
+          const data = await res.json();
+          setSubscriptionsList(data.subscriptions || []);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch subscriptions:", e);
+      }
+    };
+    fetchSubs();
   }, [user]);
+
+  const handleCancelSub = async (subId: number | string) => {
+    try {
+      const res = await fetch(getApiUrl(`/api/subscriptions/${subId}`), { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Subscription cancelled");
+        setSubscriptionsList((prev) => prev.filter((s) => s.id !== subId));
+      } else {
+        toast.error("Failed to cancel subscription");
+      }
+    } catch (e) {
+      toast.error("Error cancelling subscription");
+    }
+  };
 
   function persistAddresses(list: Address[]) {
     if (!user) return;
@@ -483,6 +512,17 @@ export default function Profile() {
           </button>
 
           <button
+            onClick={() => setActiveTab("subscriptions")}
+            className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all ${
+              activeTab === "subscriptions"
+                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                : "bg-card border border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-400" /> Daily Subscriptions ({subscriptionsList.length})
+          </button>
+
+          <button
             onClick={() => setActiveTab("account")}
             className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all ${
               activeTab === "account"
@@ -680,7 +720,70 @@ export default function Profile() {
           </div>
         )}
 
-        {/* TAB 3: ACCOUNT & SAVED ADDRESSES */}
+        {/* TAB 3: DAILY SUBSCRIPTIONS */}
+        {activeTab === "subscriptions" && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-xl text-secondary">Daily Milk & Essentials Subscriptions</h2>
+                <p className="text-xs text-muted-foreground">Automated 6:00 AM morning doorstep delivery every day</p>
+              </div>
+              <Button onClick={() => setLocation("/products")} className="rounded-xl text-xs font-bold gap-1.5">
+                <Plus className="w-4 h-4" /> Subscribe New Item
+              </Button>
+            </div>
+
+            {subscriptionsList.length === 0 ? (
+              <div className="bg-card border border-border rounded-3xl p-12 text-center max-w-md mx-auto">
+                <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto mb-4">
+                  <Sparkles className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-bold text-secondary mb-1">No Active Subscriptions</h3>
+                <p className="text-muted-foreground text-sm mb-6">
+                  Subscribe to daily A2 Fresh Milk, organic curd, eggs, or fresh bread for hassle-free morning delivery.
+                </p>
+                <Button onClick={() => setLocation("/products")} className="rounded-full px-8 font-bold">
+                  Browse Subscription Produce
+                </Button>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {subscriptionsList.map((sub: any) => (
+                  <div key={sub.id} className="bg-card border border-border shadow-sm rounded-3xl p-6 space-y-4">
+                    <div className="flex items-start justify-between border-b pb-3">
+                      <div>
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold uppercase tracking-wider">
+                          {sub.status || "ACTIVE"}
+                        </span>
+                        <h3 className="font-extrabold text-base text-secondary mt-1">{sub.product_name || "Daily Fresh Item"}</h3>
+                        <p className="text-xs text-muted-foreground font-mono">Frequency: {sub.frequency} | Slot: {sub.delivery_slot}</p>
+                      </div>
+                      <span className="font-bold font-mono text-primary text-lg">{fmt(sub.price || 0)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                      <span>Quantity: <strong>{sub.quantity || 1} unit(s)</strong></span>
+                      <span>Next Delivery: <strong className="text-emerald-600">Tomorrow 6:00 AM</strong></span>
+                    </div>
+
+                    <div className="flex justify-end pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCancelSub(sub.id)}
+                        className="rounded-xl text-xs font-bold text-destructive hover:bg-destructive/10 border-destructive/30"
+                      >
+                        Cancel Subscription
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: ACCOUNT & SAVED ADDRESSES */}
         {activeTab === "account" && (
           <div className="grid md:grid-cols-3 gap-6">
             <div className="md:col-span-1 bg-card border border-border rounded-3xl p-6 space-y-4 shadow-sm">

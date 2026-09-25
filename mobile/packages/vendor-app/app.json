@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Sunotal Vendor & Store Partner App",
+    "slug": "sunotal-vendor",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sunotal.vendor"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.sunotal.vendor"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

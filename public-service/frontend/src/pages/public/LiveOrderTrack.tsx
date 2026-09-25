@@ -165,6 +165,22 @@ export default function LiveOrderTrack() {
     refetchInterval: 10000,
   });
 
+  // Fetch real-time GPS location from Gateway stream
+  const { data: riderGpsData } = useQuery({
+    queryKey: ["rider-gps", orderId],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`/api/orders/${orderId}/location`);
+        if (res.ok) {
+          const json = await res.json();
+          return json.location || null;
+        }
+      } catch {}
+      return null;
+    },
+    refetchInterval: 3000,
+  });
+
 
   const data = trackData || {
     orderNumber: `ORD-${orderId}`,

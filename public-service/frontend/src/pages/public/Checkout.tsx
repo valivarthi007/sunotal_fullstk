@@ -76,6 +76,11 @@ export default function Checkout() {
   // Dynamic Delivery Calculation State
   const [deliveryCalc, setDeliveryCalc] = useState<DeliveryFeeCalculation | null>(null);
 
+  // Rider Tipping, Instructions & Substitute Preferences
+  const [tipAmount, setTipAmount] = useState<number>(0);
+  const [deliveryInstruction, setDeliveryInstruction] = useState<string>("");
+  const [replacementPref, setReplacementPref] = useState<string>("");
+
   const form = useForm<CheckoutValues>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
@@ -133,7 +138,7 @@ export default function Checkout() {
 
   const deliveryFeeAmount = deliveryCalc ? deliveryCalc.deliveryFee : 0;
   const gstAmount = Math.round(totalPrice * 0.05);
-  const finalPayable = totalPrice + gstAmount + deliveryFeeAmount;
+  const finalPayable = totalPrice + gstAmount + deliveryFeeAmount + tipAmount;
 
   const handlePlaceOrder = async (values: CheckoutValues) => {
     if (items.length === 0) {
@@ -166,6 +171,9 @@ export default function Checkout() {
           state: values.state,
           pincode: values.pincode,
           deliveryFee: deliveryFeeAmount,
+          tipAmount: tipAmount,
+          deliveryInstruction: deliveryInstruction,
+          replacementPref: replacementPref,
           latitude: latVal,
           longitude: lngVal,
           deliveryLatitude: latVal,
@@ -351,35 +359,32 @@ export default function Checkout() {
                     </div>
                   </div>
 
-                  {/* Fast Quick Select Address Presets */}
+                  {/* Dynamic Saved Address Quick Presets */}
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-                    <span className="text-muted-foreground font-medium text-[11px] shrink-0">Quick Presets:</span>
+                    <span className="text-muted-foreground font-medium text-[11px] shrink-0">Saved Address Presets:</span>
                     <button
                       type="button"
                       onClick={() => {
-                        form.setValue("streetAddress", "Flat 402, Green Acres, 100 Feet Rd, Indiranagar");
-                        form.setValue("city", "Bengaluru");
-                        form.setValue("state", "Karnataka");
-                        form.setValue("pincode", "560038");
-                        toast.success("Loaded Home address preset");
+                        if (userLoc.city) {
+                          form.setValue("city", userLoc.city);
+                          form.setValue("state", userLoc.state || "");
+                          form.setValue("pincode", userLoc.pincode || "");
+                          toast.success(`Loaded current location (${userLoc.city})`);
+                        }
                       }}
-                      className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg hover:bg-emerald-100 font-semibold shrink-0"
+                      className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-lg hover:bg-emerald-100 font-semibold shrink-0"
                     >
-                      🏠 Home (Indiranagar)
+                      📍 Auto-Detected ({userLoc.city || "Current Location"})
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        form.setValue("streetAddress", "Building 4B, E-City Phase 1");
-                        form.setValue("city", "Bengaluru");
-                        form.setValue("state", "Karnataka");
-                        form.setValue("pincode", "560100");
-                        toast.success("Loaded Office address preset");
-                      }}
-                      className="px-3 py-1 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg hover:bg-blue-100 font-semibold shrink-0"
-                    >
-                      🏢 Office (Electronic City)
-                    </button>
+                    {showMapModal ? null : (
+                      <button
+                        type="button"
+                        onClick={() => setShowMapModal(true)}
+                        className="px-3 py-1 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 rounded-lg hover:bg-blue-100 font-semibold shrink-0"
+                      >
+                        🗺️ Select on Map
+                      </button>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -494,7 +499,85 @@ export default function Checkout() {
                   </div>
                 </div>
 
-                {/* Section 3: Payment Method Selection */}
+                {/* Section 3: Delivery Preferences & Rider Tip (Quick Commerce Standard) */}
+                <div className="bg-card border border-border shadow-sm rounded-3xl p-6 space-y-5">
+                  <div className="flex items-center gap-3 border-b pb-4">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-lg text-secondary">Delivery Preferences & Rider Tip</h2>
+                      <p className="text-xs text-muted-foreground">Custom instructions, tipping, and out-of-stock replacement</p>
+                    </div>
+                  </div>
+
+                  {/* Rider Tip Selection */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-secondary flex items-center justify-between">
+                      <span>🚴 Tip your delivery partner:</span>
+                      <span className="text-emerald-600 font-bold font-mono">₹{tipAmount}</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {[0, 10, 20, 30, 50].map((amount) => (
+                        <button
+                          key={amount}
+                          type="button"
+                          onClick={() => setTipAmount(amount)}
+                          className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                            tipAmount === amount
+                              ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 shadow-sm"
+                              : "border-border hover:bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {amount === 0 ? "No Tip" : `₹${amount}`}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground italic">100% of the tip goes directly to your delivery partner upon completion.</p>
+                  </div>
+
+                  {/* Delivery Instructions Chips */}
+                  <div className="space-y-2 border-t pt-4">
+                    <label className="text-xs font-semibold text-secondary">📦 Delivery instructions for rider:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        "🔔 Do not ring bell",
+                        "📦 Leave with security",
+                        "🐾 Pet at home",
+                        "📞 Call before arrival",
+                      ].map((inst) => (
+                        <button
+                          key={inst}
+                          type="button"
+                          onClick={() => setDeliveryInstruction(inst)}
+                          className={`p-2.5 rounded-xl border text-left text-xs font-medium transition-all ${
+                            deliveryInstruction === inst
+                              ? "border-emerald-600 bg-emerald-50/70 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-semibold"
+                              : "border-border hover:border-muted-foreground/30 text-muted-foreground"
+                          }`}
+                        >
+                          {inst}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Out of Stock Replacement Selector */}
+                  <div className="space-y-2 border-t pt-4">
+                    <label className="text-xs font-semibold text-secondary">🔄 If an item goes out-of-stock:</label>
+                    <select
+                      value={replacementPref}
+                      onChange={(e) => setReplacementPref(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl border border-border bg-background text-xs text-foreground focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    >
+                      <option value="Replace with closest brand">✨ Auto-replace with closest similar brand</option>
+                      <option value="Call me for replacement">📞 Call me first to confirm substitute</option>
+                      <option value="Cancel item and refund">❌ Don't replace - refund item amount</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Section 4: Payment Method Selection */}
                 <div className="bg-card border border-border shadow-sm rounded-3xl p-6 space-y-4">
                   <div className="flex items-center gap-3 border-b pb-4">
                     <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
@@ -618,6 +701,12 @@ export default function Checkout() {
                       <span>Delivery Fee:</span>
                       <span className="font-mono text-emerald-600">{deliveryFeeAmount === 0 ? "FREE" : fmt(deliveryFeeAmount)}</span>
                     </div>
+                    {tipAmount > 0 && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Delivery Partner Tip:</span>
+                        <span className="font-mono text-emerald-600">{fmt(tipAmount)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between pt-3 border-t text-base font-extrabold text-secondary">
                       <span>Total Payable:</span>
                       <span className="text-primary font-mono">{fmt(finalPayable)}</span>

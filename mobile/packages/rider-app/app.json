@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Sunotal Delivery Partner Rider App",
+    "slug": "sunotal-rider",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#047857"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sunotal.rider",
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Sunotal Delivery Partner app tracks live GPS location during active order delivery to provide customers with accurate ETAs."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#047857"
+      },
+      "package": "com.sunotal.rider",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
