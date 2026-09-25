@@ -33,6 +33,9 @@ jobs:
           - 'support-monitoring-service/backend'
           - 'support-monitoring-service/frontend/support-app'
           - 'support-monitoring-service/frontend/monitoring-app'
+          - 'mobile/packages/customer-app'
+          - 'mobile/packages/rider-app'
+          - 'mobile/packages/vendor-app'
 
     steps:
       - name: Checkout Repository
