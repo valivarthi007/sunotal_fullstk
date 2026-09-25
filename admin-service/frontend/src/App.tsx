@@ -39,6 +39,7 @@ const OrdersBoard = lazy(() => import("@/pages/admin/OrdersBoard"));
 const DeliveryPartners = lazy(() => import("@/pages/admin/DeliveryPartners"));
 const AnalyticsAdmin = lazy(() => import("@/pages/admin/Analytics"));
 const CouponManager = lazy(() => import("@/pages/admin/CouponManager"));
+const AwsCostBreakdown = lazy(() => import("@/pages/admin/AwsCostBreakdown"));
 
 // Vendor & Delivery Portal Pages (Lazy Loaded)
 const VendorDashboard = lazy(() => import("@/pages/vendor/VendorDashboard"));
@@ -280,6 +281,8 @@ function SubdomainRouter() {
           <Route path="/admin/analytics" component={AnalyticsAdmin} />
           <Route path="/coupons" component={CouponManager} />
           <Route path="/admin/coupons" component={CouponManager} />
+          <Route path="/aws-billing" component={AwsCostBreakdown} />
+          <Route path="/admin/aws-billing" component={AwsCostBreakdown} />
           <Route path="/" component={AdminRouteGuard} />
           <Route component={AdminRouteGuard} />
         </Switch>
@@ -350,6 +353,8 @@ function SubdomainRouter() {
         <Route path="/vendor/register" component={FarmerRegistration} />
         <Route path="/farmer" component={FarmerRegistration} />
         <Route path="/delivery/register" component={DeliveryRegistration} />
+        <Route path="/aws-billing" component={AwsCostBreakdown} />
+        <Route path="/admin/aws-billing" component={AwsCostBreakdown} />
 
         {/* Strict Subdomain Protection */}
         <Route path="/admin/:rest*">

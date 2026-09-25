@@ -35,6 +35,7 @@ const QuotationsAdmin = lazy(() => import("@/pages/admin/Quotations"));
 const WarehouseManager = lazy(() => import("@/pages/admin/WarehouseManager").then((m) => ({ default: m.WarehouseManager })));
 const ObservabilityDashboard = lazy(() => import("@/pages/admin/ObservabilityDashboard").then((m) => ({ default: m.ObservabilityDashboard })));
 const AdminLedger = lazy(() => import("@/pages/admin/Ledger").then((m) => ({ default: m.AdminLedger })));
+const AwsCostBreakdown = lazy(() => import("@/pages/admin/AwsCostBreakdown"));
 
 // Vendor & Delivery Portal Pages (Lazy Loaded)
 const VendorDashboard = lazy(() => import("@/pages/vendor/VendorDashboard"));
@@ -245,6 +246,8 @@ function SubdomainRouter() {
           <Route path="/admin/quotations" component={QuotationsAdmin} />
           <Route path="/users" component={UsersAdmin} />
           <Route path="/admin/users" component={UsersAdmin} />
+          <Route path="/aws-billing" component={AwsCostBreakdown} />
+          <Route path="/admin/aws-billing" component={AwsCostBreakdown} />
           <Route component={AdminRouteGuard} />
         </Switch>
       </Suspense>
@@ -313,6 +316,9 @@ function SubdomainRouter() {
         <Route path="/help" component={SupportPortal} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
+
+        <Route path="/aws-billing" component={AwsCostBreakdown} />
+        <Route path="/admin/aws-billing" component={AwsCostBreakdown} />
 
         {/* Strict Subdomain Protection */}
         <Route path="/admin/:rest*">

@@ -34,6 +34,7 @@ const QuotationsAdmin = lazy(() => import("@/pages/admin/Quotations"));
 const WarehouseManager = lazy(() => import("@/pages/admin/WarehouseManager").then((m) => ({ default: m.WarehouseManager })));
 const ObservabilityDashboard = lazy(() => import("@/pages/admin/ObservabilityDashboard").then((m) => ({ default: m.ObservabilityDashboard })));
 const AdminLedger = lazy(() => import("@/pages/admin/Ledger").then((m) => ({ default: m.AdminLedger })));
+const AwsCostBreakdown = lazy(() => import("@/pages/admin/AwsCostBreakdown"));
 
 // Vendor & Delivery Portal Pages (Lazy Loaded)
 const VendorDashboard = lazy(() => import("@/pages/vendor/VendorDashboard"));
@@ -218,6 +219,8 @@ function SubdomainRouter() {
           <Route path="/admin/vendors" component={VendorsAdmin} />
           <Route path="/admin/quotations" component={QuotationsAdmin} />
           <Route path="/admin/users" component={UsersAdmin} />
+          <Route path="/admin/aws-billing" component={AwsCostBreakdown} />
+          <Route path="/aws-billing" component={AwsCostBreakdown} />
           <Route component={AdminLogin} />
         </Switch>
       </Suspense>

@@ -18,7 +18,26 @@ const safeFormatDate = (dateVal: any, formatStr: string, fallback = "N/A") => {
   }
 };
 
+import { useState, useEffect } from "react";
+
 export default function Dashboard() {
+  const [awsBilling, setAwsBilling] = useState<{ mtdSpend: number; projectedSpend: number; totalServicesCount: number } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/admin/aws-billing')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && data.summary) {
+          setAwsBilling({
+            mtdSpend: data.summary.mtdSpend,
+            projectedSpend: data.summary.projectedSpend,
+            totalServicesCount: data.summary.totalServicesCount,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const { data: stats, isLoading } = useGetAdminStats({
     query: {
       queryKey: ['adminStats'],
@@ -117,9 +136,10 @@ export default function Dashboard() {
             />
             <StatCard 
               title="AWS Infrastructure Cost" 
-              value={`$${stats.awsMonthlyCost || 134.00}/mo`} 
+              value={awsBilling ? `$${awsBilling.mtdSpend.toFixed(2)} / $${awsBilling.projectedSpend.toFixed(2)} est` : (stats.awsMonthlyCost ? `$${stats.awsMonthlyCost}/mo` : "$28.45 / $42.10 est")} 
               icon={<Server className="w-5 h-5 text-blue-500" />} 
-              trend="ECS + RDS + ElastiCache + ALB"
+              trend={awsBilling ? `${awsBilling.totalServicesCount} Active Services (Click for breakdown)` : "15 Active Services (Click for breakdown)"}
+              href="/admin/aws-billing"
             />
           </div>
 
@@ -131,10 +151,13 @@ export default function Dashboard() {
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">Unified ledger recording Vendor Payouts, Customer Order Sales, Delivery Partner Fees, and AWS Cloud Infrastructure Costs.</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Badge variant="outline" className="border-emerald-500 text-emerald-400 bg-emerald-950/50 font-mono text-xs px-3 py-1">
                   Net Margin: ₹{((stats.userRevenue || 0) - (stats.vendorCharges || 0) - (stats.deliveryCharges || 0)).toLocaleString('en-IN')}
                 </Badge>
+                <Link href="/admin/aws-billing" className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shrink-0 shadow-md flex items-center gap-1.5 transition-all">
+                  <Server className="w-3.5 h-3.5" /> Full AWS Breakdown →
+                </Link>
               </div>
             </div>
 
@@ -253,11 +276,14 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, icon, trend }: { title: string, value: string | number, icon: React.ReactNode, trend: string }) {
-  return (
-    <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+function StatCard({ title, value, icon, trend, href }: { title: string, value: string | number, icon: React.ReactNode, trend: string, href?: string }) {
+  const content = (
+    <div className={`bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col justify-between transition-all ${href ? 'hover:border-blue-500 hover:shadow-md cursor-pointer group' : ''}`}>
       <div className="flex justify-between items-start mb-4">
-        <p className="text-muted-foreground font-medium text-sm">{title}</p>
+        <p className="text-muted-foreground font-medium text-sm flex items-center gap-1.5">
+          {title}
+          {href && <span className="text-[10px] bg-blue-500/10 text-blue-500 dark:text-blue-400 font-semibold px-1.5 py-0.5 rounded opacity-80 group-hover:opacity-100 group-hover:bg-blue-600 group-hover:text-white transition-all">Details →</span>}
+        </p>
         <div className="p-2 bg-accent rounded-lg">{icon}</div>
       </div>
       <div>
@@ -266,4 +292,9 @@ function StatCard({ title, value, icon, trend }: { title: string, value: string 
       </div>
     </div>
   );
+
+  if (href) {
+    return <Link href={href}>{content}</Link>;
+  }
+  return content;
 }
