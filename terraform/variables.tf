@@ -54,6 +54,19 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
+variable "mongodb_uri" {
+  description = "MongoDB connection URI (MongoDB Atlas or AWS DocumentDB)"
+  type        = string
+  default     = "mongodb+srv://sunotal_admin:SunotalAtlas2026Pass@sunotal-cluster.mongodb.net/sunotal?retryWrites=true&w=majority"
+  sensitive   = true
+}
+
+variable "mongodb_atlas_project_id" {
+  description = "Optional MongoDB Atlas Project ID"
+  type        = string
+  default     = ""
+}
+
 variable "enable_docdb" {
   description = "Enable AWS DocumentDB cluster creation (disabled by default for Free Tier compatibility)"
   type        = bool

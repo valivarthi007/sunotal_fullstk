@@ -84,6 +84,7 @@ module "ecs" {
   alb_listener_arn      = module.acm_alb.alb_listener_arn
   aws_region            = var.aws_region
   database_url          = module.rds.database_url
+  mongodb_uri           = module.documentdb.endpoint
   jwt_secret            = var.jwt_secret
   tags                  = local.common_tags
 }
@@ -109,8 +110,6 @@ resource "aws_lb_target_group_attachment" "ec2_dev" {
   port             = 80
 }
 
-
-
 # ─── 6. AWS RDS PostgreSQL Database ───────────────────────────────────────────
 module "rds" {
   source               = "./modules/rds"
@@ -119,6 +118,18 @@ module "rds" {
   db_security_group_id = module.security.db_security_group_id
   dev_mode             = var.dev_mode
   tags                 = local.common_tags
+}
+
+# ─── 6b. MongoDB Document Database (Atlas M0 Free Tier / AWS DocumentDB) ──────
+module "documentdb" {
+  source                          = "./modules/documentdb"
+  vpc_id                          = module.vpc.vpc_id
+  private_subnet_ids              = module.vpc.private_subnet_ids
+  db_security_group_id            = module.security.db_security_group_id
+  enable_docdb                    = var.enable_docdb
+  mongodb_atlas_project_id        = var.mongodb_atlas_project_id
+  mongodb_atlas_connection_string = var.mongodb_uri
+  tags                            = local.common_tags
 }
 
 

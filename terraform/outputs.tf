@@ -14,6 +14,12 @@ output "database_url" {
   sensitive   = true
 }
 
+output "mongodb_endpoint" {
+  description = "MongoDB Connection Endpoint (Atlas M0 or AWS DocumentDB)"
+  value       = module.documentdb.endpoint
+  sensitive   = true
+}
+
 output "redis_endpoint" {
   description = "ElastiCache Redis endpoint address"
   value       = module.elasticache.primary_endpoint_address

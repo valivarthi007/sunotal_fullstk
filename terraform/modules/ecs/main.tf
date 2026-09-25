@@ -19,6 +19,12 @@ variable "database_url" {
   default   = "postgresql://sunotal_admin:SunotalPostgres2026SecurePass!@sunotal-postgres-db.c2d668wu0n34.us-east-1.rds.amazonaws.com:5432/sunotal?sslmode=require"
 }
 
+variable "mongodb_uri" {
+  type      = string
+  sensitive = true
+  default   = "mongodb+srv://sunotal_admin:SunotalAtlas2026Pass@sunotal-cluster.mongodb.net/sunotal?retryWrites=true&w=majority"
+}
+
 variable "jwt_secret" {
   type      = string
   sensitive = true
@@ -195,6 +201,7 @@ resource "aws_ecs_task_definition" "tasks" {
 
     environment = [
       { name = "DATABASE_URL", value = var.database_url },
+      { name = "MONGODB_URI", value = var.mongodb_uri },
       { name = "PORT", value = tostring(each.value.port) },
       { name = "NODE_ENV", value = "production" },
       { name = "JWT_SECRET", value = var.jwt_secret },

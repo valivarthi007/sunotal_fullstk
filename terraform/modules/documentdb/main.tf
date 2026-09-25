@@ -1,17 +1,7 @@
-terraform {
-  required_providers {
-    mongodbatlas = {
-      source  = "mongodb/mongodbatlas"
-      version = "~> 1.14.0"
-    }
-  }
-}
-
 variable "vpc_id" { type = string }
 variable "private_subnet_ids" { type = list(string) }
 variable "db_security_group_id" { type = string }
 variable "tags" { type = map(string) }
-
 
 variable "enable_docdb" {
   description = "Enable AWS DocumentDB cluster creation (disabled by default due to AWS Free Tier restriction)"
@@ -63,19 +53,8 @@ resource "aws_docdb_cluster_instance" "docdb_instance" {
   tags = merge(var.tags, { Name = "sunotal-docdb-instance-1" })
 }
 
-# ─── 2. MongoDB Atlas Integration ─────────────────────────────────────────────
-resource "mongodbatlas_cluster" "atlas" {
-  count                       = var.mongodb_atlas_project_id != "" ? 1 : 0
-  project_id                  = var.mongodb_atlas_project_id
-  name                        = "sunotal-atlas-cluster"
-  provider_name               = "TENANT"
-  backing_provider_name       = "AWS"
-  provider_region_name        = "US_EAST_1"
-  provider_instance_size_name = "M0"
-}
-
-# ─── 3. Outputs ───────────────────────────────────────────────────────────────
+# ─── 2. Outputs ───────────────────────────────────────────────────────────────
 output "endpoint" {
   description = "MongoDB Connection Endpoint (Atlas or DocumentDB)"
-  value       = var.enable_docdb ? try(aws_docdb_cluster.docdb[0].endpoint, "") : (length(mongodbatlas_cluster.atlas) > 0 ? try(mongodbatlas_cluster.atlas[0].connection_strings[0].standard_srv, var.mongodb_atlas_connection_string) : var.mongodb_atlas_connection_string)
+  value       = var.enable_docdb ? try("mongodb://${aws_docdb_cluster.docdb[0].master_username}:${aws_docdb_cluster.docdb[0].master_password}@${aws_docdb_cluster.docdb[0].endpoint}:27017/sunotal?ssl=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false", "") : var.mongodb_atlas_connection_string
 }
