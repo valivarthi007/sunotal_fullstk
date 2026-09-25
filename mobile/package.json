@@ -14,7 +14,13 @@
     "build:vendor:ios": "cd packages/vendor-app && npx eas build --platform ios",
     "apk:customer": "cd packages/customer-app && npx eas build --platform android --profile preview",
     "apk:rider": "cd packages/rider-app && npx eas build --platform android --profile preview",
-    "apk:vendor": "cd packages/vendor-app && npx eas build --platform android --profile preview"
+    "apk:vendor": "cd packages/vendor-app && npx eas build --platform android --profile preview",
+    "tunnel:customer": "cd packages/customer-app && npx expo start --tunnel",
+    "tunnel:rider": "cd packages/rider-app && npx expo start --tunnel",
+    "tunnel:vendor": "cd packages/vendor-app && npx expo start --tunnel",
+    "web:customer": "cd packages/customer-app && npx expo start --web",
+    "web:rider": "cd packages/rider-app && npx expo start --web",
+    "web:vendor": "cd packages/vendor-app && npx expo start --web"
   },
   "workspaces": [
     "shared",
