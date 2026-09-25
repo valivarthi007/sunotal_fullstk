@@ -116,6 +116,60 @@ export default function Profile() {
 
   const [searchQuery, setSearchQuery] = useState("");
 
+  // User Profile Editing State
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editCity, setEditCity] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const handleOpenEditProfile = () => {
+    setEditName(user?.name || "");
+    setEditPhone(user?.phone || "");
+    setEditCity(userLoc?.city || (user as any)?.city || "");
+    setIsEditingProfile(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      toast.error("Name cannot be empty");
+      return;
+    }
+    if (editPhone && !/^[6-9]\d{9}$/.test(editPhone.trim())) {
+      toast.error("Please enter a valid 10-digit mobile number");
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+      const res = await fetch(getApiUrl(`/api/users/${user?.id}`), {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          name: editName.trim(),
+          phone: editPhone.trim(),
+          city: editCity.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Profile updated successfully!");
+        queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+        setIsEditingProfile(false);
+      } else {
+        toast.error("Failed to update profile");
+      }
+    } catch {
+      toast.error("Failed to connect to server");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   // Load user data, addresses, orders & grievances
   useEffect(() => {
     if (!user) return;
@@ -630,7 +684,17 @@ export default function Profile() {
         {activeTab === "account" && (
           <div className="grid md:grid-cols-3 gap-6">
             <div className="md:col-span-1 bg-card border border-border rounded-3xl p-6 space-y-4 shadow-sm">
-              <h2 className="font-bold text-lg text-secondary border-b pb-3">Personal Info</h2>
+              <div className="flex items-center justify-between border-b pb-3">
+                <h2 className="font-bold text-lg text-secondary">Personal Info</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenEditProfile}
+                  className="h-8 px-2.5 text-xs font-bold gap-1.5 rounded-xl border-primary/30 text-primary hover:bg-primary/5"
+                >
+                  <Edit2 className="w-3.5 h-3.5" /> Edit Profile
+                </Button>
+              </div>
               <div className="space-y-3 text-sm">
                 <div>
                   <span className="text-xs text-muted-foreground">Full Name</span>
@@ -659,7 +723,7 @@ export default function Profile() {
                 </div>
                 <Button
                   onClick={() =>
-                    setEditingAddr({ id: String(Date.now()), label: "Office", line1: "", line2: "", city: userLoc.city || "Hyderabad", phone: user.phone || "" })
+                    setEditingAddr({ id: String(Date.now()), label: "", line1: "", line2: "", city: "", phone: "" })
                   }
                   className="rounded-xl font-bold text-xs gap-1.5"
                 >
@@ -918,6 +982,69 @@ export default function Profile() {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* MODAL: EDIT USER PROFILE */}
+        <Dialog open={isEditingProfile} onOpenChange={setIsEditingProfile}>
+          <DialogContent className="sm:max-w-md rounded-3xl p-6 border-border shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-secondary flex items-center gap-2">
+                <UserIcon className="w-5 h-5 text-primary" /> Edit Personal Profile
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Update your account name, mobile number, and primary city.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 pt-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Full Name</Label>
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="rounded-xl h-11"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Mobile Phone Number</Label>
+                <Input
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="10-digit mobile number"
+                  className="rounded-xl h-11 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Default City</Label>
+                <Input
+                  value={editCity}
+                  onChange={(e) => setEditCity(e.target.value)}
+                  placeholder="Your primary city"
+                  className="rounded-xl h-11"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  variant="ghost"
+                  onClick={() => setIsEditingProfile(false)}
+                  className="rounded-xl font-bold text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveProfile}
+                  disabled={isSavingProfile}
+                  className="rounded-xl font-bold text-xs bg-primary text-primary-foreground shadow-md"
+                >
+                  {isSavingProfile ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </PublicLayout>
   );

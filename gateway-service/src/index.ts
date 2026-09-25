@@ -2239,13 +2239,65 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
     const wLng = Number(orderRow?.wh_lng || warehouseRow?.longitude || 0);
     const whName = orderRow?.wh_name || warehouseRow?.name || 'Dark Store Hub';
 
-    // 3. Delivery Partner Live GPS Location
+    // 3. Delivery Partner Live GPS Location & Rider Profile DB Lookup
     const liveTelemetry = (global as any).activeRiderTelemetry?.[String(orderId)] || (global as any).activeRiderTelemetry?.[String(orderRow?.id)] || (global as any).activeRiderTelemetry?.[String(orderRow?.order_number)];
     const dLat = liveTelemetry?.lat || (wLat && cLat ? Number(((wLat + cLat) / 2).toFixed(4)) : wLat);
     const dLng = liveTelemetry?.lng || (wLng && cLng ? Number(((wLng + cLng) / 2).toFixed(4)) : wLng);
     const currentStage = liveTelemetry?.stage || orderRow?.status || 'placed';
 
     const distKm = Number(getHaversineDistanceKm(dLat, dLng, cLat, cLng).toFixed(1));
+
+    // Dynamic Rider DB Query
+    let riderName = liveTelemetry?.riderName || orderRow?.rider_name || orderRow?.rider_full_name;
+    let riderPhone = liveTelemetry?.riderPhone || orderRow?.rider_phone || orderRow?.rider_full_phone;
+    let vehicleNo = orderRow?.vehicle_no || orderRow?.vehicle;
+    let riderPhoto = orderRow?.rider_photo;
+    let rating = 4.9;
+    let deliveriesCompleted = 150;
+
+    const targetRiderId = liveTelemetry?.riderId || orderRow?.rider_id;
+    if (gatewayPgPool) {
+      try {
+        if (targetRiderId) {
+          const cleanId = String(targetRiderId).replace(/[^0-9]/g, '');
+          const rRes = await gatewayPgPool.query(
+            'SELECT * FROM delivery_riders WHERE id = $1 OR rider_id = $2 LIMIT 1',
+            [Number(cleanId) || 0, String(targetRiderId)]
+          );
+          if (rRes.rows && rRes.rows.length > 0) {
+            const r = rRes.rows[0];
+            if (!riderName) riderName = r.name || r.rider_name;
+            if (!riderPhone) riderPhone = r.phone;
+            if (!vehicleNo) vehicleNo = r.vehicle || r.vehicle_no;
+            if (!riderPhoto) riderPhoto = r.photo || r.avatar;
+            if (r.rating || r.avg_rating) rating = Number(r.rating || r.avg_rating);
+            if (r.total_deliveries !== undefined) deliveriesCompleted = Number(r.total_deliveries);
+          }
+
+          if (!riderName) {
+            const uRes = await gatewayPgPool.query(
+              'SELECT id, name, phone, wallet_balance FROM users WHERE id = $1 LIMIT 1',
+              [Number(cleanId) || 0]
+            );
+            if (uRes.rows && uRes.rows.length > 0) {
+              riderName = uRes.rows[0].name;
+              riderPhone = uRes.rows[0].phone;
+            }
+          }
+        }
+
+        if (!riderName) {
+          const fallbackRiderRes = await gatewayPgPool.query(
+            "SELECT * FROM users WHERE LOWER(role) IN ('delivery', 'rider', 'delivery_partner', 'driver') ORDER BY id ASC LIMIT 1"
+          );
+          if (fallbackRiderRes.rows && fallbackRiderRes.rows.length > 0) {
+            const fr = fallbackRiderRes.rows[0];
+            riderName = fr.name;
+            riderPhone = fr.phone;
+          }
+        }
+      } catch {}
+    }
 
     return res.json({
       orderId: String(orderRow?.id || orderId),
@@ -2273,13 +2325,13 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
         updatedAt: liveTelemetry?.updatedAt || new Date().toISOString(),
       },
       driverProfile: {
-        id: liveTelemetry?.riderId || orderRow?.rider_id || 'RIDER-ACTIVE',
-        name: liveTelemetry?.riderName || orderRow?.rider_name || orderRow?.rider_full_name || 'Delivery Partner',
-        phone: liveTelemetry?.riderPhone || orderRow?.rider_phone || orderRow?.rider_full_phone || '',
-        vehicleNo: orderRow?.vehicle_no || 'EV Express Bike',
-        photo: orderRow?.rider_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
-        rating: 4.9,
-        deliveriesCompleted: 150,
+        id: targetRiderId || 'RIDER-ACTIVE',
+        name: riderName || 'Assigned Delivery Partner',
+        phone: riderPhone || '',
+        vehicleNo: vehicleNo || 'EV Express Bike',
+        photo: riderPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+        rating: rating,
+        deliveriesCompleted: deliveriesCompleted,
       },
     });
   } catch (err: any) {

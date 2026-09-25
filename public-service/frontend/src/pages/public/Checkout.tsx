@@ -80,9 +80,9 @@ export default function Checkout() {
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
       streetAddress: "",
-      city: userLoc.city || "Bengaluru",
-      state: userLoc.state || "Karnataka",
-      pincode: userLoc.pincode || "560100",
+      city: userLoc.city || "",
+      state: userLoc.state || "",
+      pincode: userLoc.pincode || "",
       companyName: "",
       gstin: "",
       poNumber: "",
@@ -91,7 +91,7 @@ export default function Checkout() {
   });
 
   // Sync user location into checkout address form & calculate distance delivery fee
-  const currentCity = form.watch("city") || "Bengaluru";
+  const currentCity = form.watch("city") || "";
 
   useEffect(() => {
     if (userLoc.city) form.setValue("city", userLoc.city);
@@ -102,7 +102,7 @@ export default function Checkout() {
   // Recalculate Delivery Fee when location/city changes
   useEffect(() => {
     calculateDeliveryFee({
-      city: currentCity || userLoc.city || "Bengaluru",
+      city: currentCity || userLoc.city || "",
       lat: userLoc.latitude,
       lng: userLoc.longitude,
     })
@@ -116,8 +116,8 @@ export default function Checkout() {
           freeRadiusKm: 30,
           maxServiceRadiusKm: 70,
           isServiceable: true,
-          warehouseName: "Express Regional Hub",
-          warehouseCity: currentCity || "Bengaluru",
+          warehouseName: "Express Dark Store Hub",
+          warehouseCity: currentCity || userLoc.city || "",
           estimatedHours: "2 Hours",
         });
       });
