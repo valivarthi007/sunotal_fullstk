@@ -35,6 +35,29 @@ import { Badge } from "@/components/ui/badge";
 
 import { VendorLayout } from "@/components/layout/VendorLayout";
 import { fetchWarehouses, Warehouse, useListProductDefinitions, useListProducts } from "@/lib/api-client";
+import { RaiseGrievanceModal } from "@/components/ui/RaiseGrievanceModal";
+import { AlertTriangle } from "lucide-react";
+
+export const getCategoryIcon = (categoryName: string) => {
+  const cat = (categoryName || "").toLowerCase();
+  if (cat.includes("produce") || cat.includes("veg") || cat.includes("fruit") || cat.includes("harvest") || cat.includes("crop")) return "🥦";
+  if (cat.includes("organic") || cat.includes("farm")) return "🌱";
+  if (cat.includes("dairy") || cat.includes("milk") || cat.includes("egg") || cat.includes("cheese") || cat.includes("butter")) return "🥛";
+  if (cat.includes("beverage") || cat.includes("drink") || cat.includes("juice") || cat.includes("soda") || cat.includes("water") || cat.includes("tea") || cat.includes("coffee")) return "🥤";
+  if (cat.includes("snack") || cat.includes("munch") || cat.includes("chip") || cat.includes("biscuit") || cat.includes("chocolate") || cat.includes("candy")) return "🍿";
+  if (cat.includes("electronic") || cat.includes("tech") || cat.includes("cable") || cat.includes("gadget") || cat.includes("mobile") || cat.includes("device")) return "🔌";
+  if (cat.includes("clean") || cat.includes("house") || cat.includes("detergent") || cat.includes("home")) return "🧹";
+  if (cat.includes("personal") || cat.includes("hygiene") || cat.includes("beauty") || cat.includes("care") || cat.includes("soap") || cat.includes("shampoo")) return "🧼";
+  if (cat.includes("meat") || cat.includes("poultry") || cat.includes("chicken") || cat.includes("fish") || cat.includes("seafood")) return "🥩";
+  if (cat.includes("bakery") || cat.includes("bread") || cat.includes("cake") || cat.includes("pastry")) return "🍞";
+  if (cat.includes("frozen") || cat.includes("ice")) return "🧊";
+  if (cat.includes("baby") || cat.includes("infant") || cat.includes("diaper")) return "🍼";
+  if (cat.includes("pet") || cat.includes("dog") || cat.includes("cat")) return "🐾";
+  if (cat.includes("pharma") || cat.includes("health") || cat.includes("medicine")) return "💊";
+  if (cat.includes("grain") || cat.includes("rice") || cat.includes("pulses") || cat.includes("atta") || cat.includes("flour")) return "🌾";
+  if (cat.includes("oil") || cat.includes("ghee") || cat.includes("spice") || cat.includes("masala")) return "🥫";
+  return "📦";
+};
 
 const quotationSchema = z.object({
   category: z.string().min(1, "Please select a supply category"),
@@ -119,6 +142,8 @@ export default function VendorDashboard() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<"submit" | "history" | "payouts">("submit");
+  const [showGrievanceModal, setShowGrievanceModal] = useState(false);
+  const [isCustomProduct, setIsCustomProduct] = useState(false);
 
   const form = useForm<z.infer<typeof quotationSchema>>({
     resolver: zodResolver(quotationSchema),
@@ -281,6 +306,12 @@ export default function VendorDashboard() {
 
             <div className="flex items-center gap-3">
               <Button
+                onClick={() => setShowGrievanceModal(true)}
+                className="bg-rose-600 hover:bg-rose-500 text-white rounded-full text-xs font-bold gap-1.5 shadow-md shadow-rose-600/20"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 animate-pulse" /> Raise Grievance / Incident
+              </Button>
+              <Button
                 onClick={handleLogout}
                 variant="outline"
                 size="sm"
@@ -290,6 +321,16 @@ export default function VendorDashboard() {
               </Button>
             </div>
           </div>
+
+          <RaiseGrievanceModal
+            isOpen={showGrievanceModal}
+            onClose={() => setShowGrievanceModal(false)}
+            defaultRole="vendor"
+            userProfile={{
+              name: `${vendorProfile?.firstName || ''} ${vendorProfile?.lastName || ''}`.trim(),
+              phone: vendorProfile?.phone,
+            }}
+          />
 
           {/* Navigation Tabs */}
           <div className="flex border-b border-border gap-2 text-xs font-semibold overflow-x-auto">
@@ -355,23 +396,17 @@ export default function VendorDashboard() {
                                   <SelectValue placeholder="Select Quick-Commerce Category" />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                              <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
                                 {categories && categories.length > 0 ? (
                                   categories.map((cat: any) => (
                                     <SelectItem key={cat.id || cat.name} value={cat.name}>
-                                      📦 {cat.name}
+                                      {cat.icon || getCategoryIcon(cat.name)} {cat.name}
                                     </SelectItem>
                                   ))
                                 ) : (
-                                  <>
-                                    <SelectItem value="Fresh Produce & Organic">🍏 Fresh Produce & Organic</SelectItem>
-                                    <SelectItem value="Dairy, Bread & Eggs">🥛 Dairy, Bread & Eggs</SelectItem>
-                                    <SelectItem value="Beverages & Drinks">🥤 Beverages & Drinks</SelectItem>
-                                    <SelectItem value="Snacks & Munchies">🍿 Snacks & Munchies</SelectItem>
-                                    <SelectItem value="Electronics & Tech Accessories">🔌 Electronics & Tech Accessories</SelectItem>
-                                    <SelectItem value="Cleaning & Household">🧹 Cleaning & Household</SelectItem>
-                                    <SelectItem value="Personal Care & Hygiene">🧼 Personal Care & Hygiene</SelectItem>
-                                  </>
+                                  <SelectItem value="none" disabled>
+                                    No categories created in DB yet. Please add categories in Admin Panel first.
+                                  </SelectItem>
                                 )}
                               </SelectContent>
                             </Select>
@@ -380,19 +415,61 @@ export default function VendorDashboard() {
                         )}
                       />
 
-                      {/* Product Name Input */}
+                      {/* Produce / Product Name (Admin Defined Catalog) */}
                       <FormField
                         control={form.control}
                         name="produce"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold">Product / Item Name</FormLabel>
+                            <FormLabel className="text-slate-300 font-bold flex items-center justify-between">
+                              <span>Product Name (Admin Catalog)</span>
+                              {availableProduceItems.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsCustomProduct(!isCustomProduct);
+                                    if (!isCustomProduct) field.onChange("");
+                                  }}
+                                  className="text-[10px] text-amber-400 hover:underline font-bold"
+                                >
+                                  {isCustomProduct ? "← Select from Admin Catalog" : "+ Enter Custom Product"}
+                                </button>
+                              )}
+                            </FormLabel>
                             <FormControl>
-                              <Input
-                                placeholder="e.g. Fast Charging USB-C Cable 65W / Organic Alphonso Mangoes"
-                                {...field}
-                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
-                              />
+                              {!isCustomProduct && availableProduceItems.length > 0 ? (
+                                <Select
+                                  onValueChange={(val) => {
+                                    if (val === "__CUSTOM__") {
+                                      setIsCustomProduct(true);
+                                      field.onChange("");
+                                    } else {
+                                      field.onChange(val);
+                                    }
+                                  }}
+                                  value={field.value}
+                                >
+                                  <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                    <SelectValue placeholder="Select Product defined by Admin..." />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
+                                    {availableProduceItems.map((item: string) => (
+                                      <SelectItem key={item} value={item}>
+                                        ✨ {item}
+                                      </SelectItem>
+                                    ))}
+                                    <SelectItem value="__CUSTOM__" className="text-amber-400 font-bold">
+                                      ✏️ + Enter Custom Item Name...
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Input
+                                  placeholder="Type product name (e.g. Alphonso Mangoes / USB-C Cable)..."
+                                  {...field}
+                                  className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+                                />
+                              )}
                             </FormControl>
                             <FormMessage />
                           </FormItem>
