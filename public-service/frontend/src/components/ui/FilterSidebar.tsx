@@ -69,7 +69,7 @@ export function FilterSidebar({
             }`}
           >
             <span className="flex items-center gap-2">
-              <span>📦</span> All Categories
+              <span>🛍️</span> All Categories
             </span>
             {filters.category === "All" && (
               <Badge variant="secondary" className="bg-emerald-600 text-white text-[10px]">
@@ -80,6 +80,9 @@ export function FilterSidebar({
 
           {categories.map((cat) => {
             const isSelected = filters.category.toLowerCase() === cat.name.toLowerCase();
+            const displayIcon = (!cat.icon || cat.icon === '📦')
+              ? (cat.name.toLowerCase().includes('veg') ? '🥦' : cat.name.toLowerCase().includes('fruit') ? '🍎' : '📦')
+              : cat.icon;
             return (
               <div
                 key={cat.id}
@@ -91,7 +94,7 @@ export function FilterSidebar({
                 }`}
               >
                 <span className="flex items-center gap-2 truncate">
-                  <span>{cat.icon || "📦"}</span> {cat.name}
+                  <span>{displayIcon}</span> {cat.name}
                 </span>
                 {isSelected && (
                   <Badge variant="secondary" className="bg-emerald-600 text-white text-[10px]">

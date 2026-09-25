@@ -38,9 +38,13 @@ import { fetchWarehouses, Warehouse, useListProductDefinitions, useListProducts 
 import { RaiseGrievanceModal } from "@/components/ui/RaiseGrievanceModal";
 import { AlertTriangle } from "lucide-react";
 
-export const getCategoryIcon = (categoryName: string) => {
+export const getCategoryIcon = (categoryName: string, iconInDb?: string) => {
+  if (iconInDb && iconInDb !== '📦') return iconInDb;
   const cat = (categoryName || "").toLowerCase();
-  if (cat.includes("produce") || cat.includes("veg") || cat.includes("fruit") || cat.includes("harvest") || cat.includes("crop")) return "🥦";
+  if (cat.includes("all")) return "🛍️";
+  if (cat.includes("fruit")) return "🍎";
+  if (cat.includes("vegitable") || cat.includes("vegetable") || cat.includes("veg")) return "🥦";
+  if (cat.includes("produce") || cat.includes("harvest") || cat.includes("crop")) return "🌱";
   if (cat.includes("organic") || cat.includes("farm")) return "🌱";
   if (cat.includes("dairy") || cat.includes("milk") || cat.includes("egg") || cat.includes("cheese") || cat.includes("butter")) return "🥛";
   if (cat.includes("beverage") || cat.includes("drink") || cat.includes("juice") || cat.includes("soda") || cat.includes("water") || cat.includes("tea") || cat.includes("coffee")) return "🥤";
@@ -54,7 +58,8 @@ export const getCategoryIcon = (categoryName: string) => {
   if (cat.includes("baby") || cat.includes("infant") || cat.includes("diaper")) return "🍼";
   if (cat.includes("pet") || cat.includes("dog") || cat.includes("cat")) return "🐾";
   if (cat.includes("pharma") || cat.includes("health") || cat.includes("medicine")) return "💊";
-  if (cat.includes("grain") || cat.includes("rice") || cat.includes("pulses") || cat.includes("atta") || cat.includes("flour")) return "🌾";
+  if (cat.includes("grain") || cat.includes("rice") || cat.includes("pulses") || cat.includes("atta") || cat.includes("flour") || cat.includes("dal")) return "🌾";
+  if (cat.includes("breakfast") || cat.includes("meal") || cat.includes("cereal")) return "🥣";
   if (cat.includes("oil") || cat.includes("ghee") || cat.includes("spice") || cat.includes("masala")) return "🥫";
   return "📦";
 };
@@ -415,61 +420,32 @@ export default function VendorDashboard() {
                         )}
                       />
 
-                      {/* Produce / Product Name (Admin Defined Catalog) */}
+                      {/* Produce / Product Name (Strictly Admin Defined Catalog) */}
                       <FormField
                         control={form.control}
                         name="produce"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold flex items-center justify-between">
-                              <span>Product Name (Admin Catalog)</span>
-                              {availableProduceItems.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setIsCustomProduct(!isCustomProduct);
-                                    if (!isCustomProduct) field.onChange("");
-                                  }}
-                                  className="text-[10px] text-amber-400 hover:underline font-bold"
-                                >
-                                  {isCustomProduct ? "← Select from Admin Catalog" : "+ Enter Custom Product"}
-                                </button>
-                              )}
-                            </FormLabel>
+                            <FormLabel className="text-slate-300 font-bold">Product Name (Admin Catalog)</FormLabel>
                             <FormControl>
-                              {!isCustomProduct && availableProduceItems.length > 0 ? (
-                                <Select
-                                  onValueChange={(val) => {
-                                    if (val === "__CUSTOM__") {
-                                      setIsCustomProduct(true);
-                                      field.onChange("");
-                                    } else {
-                                      field.onChange(val);
-                                    }
-                                  }}
-                                  value={field.value}
-                                >
-                                  <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
-                                    <SelectValue placeholder="Select Product defined by Admin..." />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
-                                    {availableProduceItems.map((item: string) => (
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                  <SelectValue placeholder="Select Product defined by Admin..." />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
+                                  {availableProduceItems.length > 0 ? (
+                                    availableProduceItems.map((item: string) => (
                                       <SelectItem key={item} value={item}>
                                         ✨ {item}
                                       </SelectItem>
-                                    ))}
-                                    <SelectItem value="__CUSTOM__" className="text-amber-400 font-bold">
-                                      ✏️ + Enter Custom Item Name...
+                                    ))
+                                  ) : (
+                                    <SelectItem value="none" disabled>
+                                      No products defined by Admin for this category. Contact Admin to add product.
                                     </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <Input
-                                  placeholder="Type product name (e.g. Alphonso Mangoes / USB-C Cable)..."
-                                  {...field}
-                                  className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
-                                />
-                              )}
+                                  )}
+                                </SelectContent>
+                              </Select>
                             </FormControl>
                             <FormMessage />
                           </FormItem>
