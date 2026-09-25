@@ -641,16 +641,35 @@ export default function VendorDashboard() {
 
             {/* Calculations & Quick Conversion Helper */}
             <div className="space-y-6">
-              <div className="bg-gradient-to-br from-slate-900 to-emerald-950 border border-emerald-900/60 rounded-3xl p-6 shadow-2xl space-y-4">
+              <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950 border border-emerald-900/80 rounded-3xl p-6 shadow-2xl space-y-4">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-emerald-300 font-bold uppercase tracking-wider">ESTIMATED BATCH VALUE</span>
+                  <span className="text-emerald-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <Coins className="w-4 h-4 text-emerald-400" /> BATCH YIELD & MARGIN STUDIO
+                  </span>
                   <Badge className="bg-amber-400/20 text-amber-300 border-amber-400/30 text-[10px] font-mono">
                     2-DAY SETTLEMENT
                   </Badge>
                 </div>
 
-                <div className="text-3xl font-extrabold font-mono text-white">
-                  ₹{totalValue.toLocaleString("en-IN")}
+                <div className="text-3xl font-extrabold font-mono text-white flex items-baseline justify-between">
+                  <span>₹{totalValue.toLocaleString("en-IN")}</span>
+                  <span className="text-xs text-emerald-400 font-sans font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                    +{Math.max(8, Math.round((((form.watch("suggestedMrp") || price * 1.3) - price) / (form.watch("suggestedMrp") || price * 1.3)) * 100))}% Projected Margin
+                  </span>
+                </div>
+
+                {/* Freshness Index Meter */}
+                <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-300 font-bold flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Harvest Freshness Index
+                    </span>
+                    <span className="font-mono font-bold text-emerald-400">94% (Cold-Chain Grade A)</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full w-[94%] shadow-sm"></div>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Optimal intake slot reserved at target Dark Store Hub.</p>
                 </div>
 
                 <div className="space-y-2 pt-2 border-t border-emerald-900/60 text-xs">
@@ -659,8 +678,16 @@ export default function VendorDashboard() {
                     <span className="font-bold text-white font-mono">{quantity} {selectedUnit}</span>
                   </div>
                   <div className="flex justify-between text-slate-300">
-                    <span>Asking Unit Price:</span>
+                    <span>Wholesale Unit Price:</span>
                     <span className="font-bold text-white font-mono">₹{price} / {selectedUnit}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Target Retail RRP:</span>
+                    <span className="font-bold text-emerald-400 font-mono">₹{form.watch("suggestedMrp") || Math.round(price * 1.3)} / {selectedUnit}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Dark Store Processing Fee:</span>
+                    <span className="font-mono text-amber-300">₹{(totalValue * 0.02).toFixed(2)} (2%)</span>
                   </div>
                   {selectedUnit === "Quintal" && (
                     <div className="p-2.5 bg-slate-950/80 rounded-xl border border-emerald-800/40 text-[11px] text-amber-300 font-mono">

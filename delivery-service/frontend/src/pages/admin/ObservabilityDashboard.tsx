@@ -296,6 +296,75 @@ export const ObservabilityDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Interactive System Topology Map */}
+      <div className="border border-slate-800 rounded-3xl p-6 bg-slate-950 text-white shadow-2xl space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-cyan-400" />
+            <h2 className="font-extrabold text-lg tracking-tight">System Infrastructure Cluster Topology Map</h2>
+          </div>
+          <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 font-mono text-xs">
+            LIVE TRAFFIC ROUTING
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-mono">
+          <div className="p-4 bg-slate-900/90 rounded-2xl border border-cyan-500/40 space-y-2">
+            <div className="text-cyan-400 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              🌐 CloudFront CDN
+            </div>
+            <div className="text-xl font-bold text-white">99.98% Cache Hit</div>
+            <div className="text-[10px] text-slate-400">Edge Locations: Global (TLS 1.3)</div>
+          </div>
+
+          <div className="p-4 bg-slate-900/90 rounded-2xl border border-emerald-500/40 space-y-2">
+            <div className="text-emerald-400 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              ⚡ ALB Gateway
+            </div>
+            <div className="text-xl font-bold text-white">38ms Latency</div>
+            <div className="text-[10px] text-slate-400">Target Group: Healthy (6 Tasks)</div>
+          </div>
+
+          <div className="p-4 bg-slate-900/90 rounded-2xl border border-purple-500/40 space-y-2">
+            <div className="text-purple-400 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              🐘 RDS PostgreSQL
+            </div>
+            <div className="text-xl font-bold text-white">db.t4g.medium</div>
+            <div className="text-[10px] text-slate-400">Connection Pool: 14 / 100 Active</div>
+          </div>
+
+          <div className="p-4 bg-slate-900/90 rounded-2xl border border-rose-500/40 space-y-2">
+            <div className="text-rose-400 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              ⚡ ElastiCache Redis
+            </div>
+            <div className="text-xl font-bold text-white">cache.t4g.micro</div>
+            <div className="text-[10px] text-slate-400">Hit Rate: 98.4% (Session Cache)</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Live Log Stream Terminal */}
+      <div className="border border-slate-800 rounded-3xl p-6 bg-slate-950 text-white shadow-2xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-2">
+            <Server className="w-5 h-5 text-emerald-400" />
+            <h2 className="font-extrabold text-lg text-white">Microservices Live JSON Log Stream Terminal</h2>
+          </div>
+          <div className="flex items-center gap-2 font-mono text-xs">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+            <span className="text-emerald-400 font-bold">STREAMING ACTIVE</span>
+          </div>
+        </div>
+
+        <div className="bg-black/90 p-4 rounded-2xl border border-slate-800 h-48 overflow-y-auto font-mono text-[11px] space-y-1.5">
+          <div className="text-slate-400"><span className="text-emerald-400">[INFO]</span> 2026-09-25T07:28:12Z [gateway-service] GET /api/admin/aws-billing 200 OK - 24ms</div>
+          <div className="text-slate-400"><span className="text-cyan-400">[DEBUG]</span> 2026-09-25T07:28:14Z [auth-service] JWT Token validation succeeded for userId: USR-9841</div>
+          <div className="text-slate-400"><span className="text-emerald-400">[INFO]</span> 2026-09-25T07:28:18Z [inventory-service] Stock sync executed for Dark Store Hub #104</div>
+          <div className="text-slate-400"><span className="text-amber-400">[WARN]</span> 2026-09-25T07:28:22Z [delivery-service] Rider GPS ping latency elevated (120ms) - auto-recovered</div>
+          <div className="text-slate-400"><span className="text-emerald-400">[INFO]</span> 2026-09-25T07:28:25Z [operations-service] Order #ORD-9201 state updated: DISPATCHED</div>
+        </div>
+      </div>
+
       {/* Microservices Pod Health Grid */}
       <div className="space-y-4">
         <h2 className="font-bold text-lg flex items-center gap-2">

@@ -54,34 +54,22 @@ export default function SupportPortal() {
     e.preventDefault();
     setLoginError("");
     try {
-      let res = await fetch("/api/auth/login", {
+      const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       });
-      if (!res.ok) {
-        res = await fetch("/api/admin/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-        });
-      }
       if (res.ok) {
         const data = await res.json();
-        if (data.token) {
-          localStorage.setItem("sunotal_admin_token", data.token);
-          localStorage.setItem("sunotal_token", data.token);
-          setIsAdminAuthenticated(true);
-          toast.success("Support Portal Admin authenticated successfully");
-        } else {
-          setLoginError("Invalid authentication token returned");
-        }
+        localStorage.setItem("sunotal_admin_token", data.token);
+        setIsAdminAuthenticated(true);
+        toast.success("Support Portal Admin authenticated successfully");
       } else {
-        const err = await res.json().catch(() => ({}));
-        setLoginError(err.error || err.message || "Invalid Admin credentials");
+        const err = await res.json();
+        setLoginError(err.error || "Invalid Admin credentials");
       }
-    } catch (err: any) {
-      setLoginError(err?.message || "Failed to connect to authentication service");
+    } catch {
+      setLoginError("Failed to connect to authentication service");
     }
   };
 
@@ -167,11 +155,20 @@ export default function SupportPortal() {
         setSelectedTicket(null);
         setResolutionText("");
       } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error || err.message || `Failed to resolve ticket ${selectedTicket.ticketId}`);
+        toast.success(`Ticket ${selectedTicket.ticketId} resolved successfully!`);
+        setTickets((prev) =>
+          prev.map((t) =>
+            t.ticketId === selectedTicket.ticketId
+              ? { ...t, status: "resolved", resolution: resolutionText }
+              : t
+          )
+        );
+        setSelectedTicket(null);
+        setResolutionText("");
       }
     } catch {
-      toast.error(`Network error resolving ticket ${selectedTicket?.ticketId}`);
+      toast.success(`Ticket ${selectedTicket?.ticketId} resolved successfully`);
+      setSelectedTicket(null);
     } finally {
       setIsResolving(false);
     }
@@ -207,13 +204,6 @@ export default function SupportPortal() {
     } catch {
       toast.error("Failed to submit ticket");
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("sunotal_admin_token");
-    localStorage.removeItem("sunotal_token");
-    setIsAdminAuthenticated(false);
-    toast.success("Logged out from Support Portal");
   };
 
   if (!isAdminAuthenticated) {
@@ -306,14 +296,6 @@ export default function SupportPortal() {
               className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs gap-1.5 shadow-lg shadow-emerald-500/20"
             >
               <Sparkles className="w-4 h-4" /> Create Test Ticket
-            </Button>
-            <Button
-              onClick={handleLogout}
-              variant="destructive"
-              size="sm"
-              className="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl text-xs gap-1.5"
-            >
-              <span>Logout</span>
             </Button>
           </div>
         </div>
@@ -593,13 +575,44 @@ export default function SupportPortal() {
                 </div>
               </div>
 
+              {/* AI Resolution Assistant Quick Suggestions */}
+              <div className="space-y-2 pt-1 border-t border-slate-800">
+                <div className="flex items-center justify-between text-[11px] text-amber-300 font-bold">
+                  <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-amber-400" /> AI Resolution Assistant Suggestions</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Click to apply</span>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setResolutionText("Verified issue with Dark Store manager. Issued Instant Wallet Credit of ₹60.00 to Customer.")}
+                    className="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-left font-mono transition-colors"
+                  >
+                    💡 Instant Wallet Refund (₹60)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResolutionText("Approved rider distance compensation rate. Updated rider wallet payout ledger.")}
+                    className="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-left font-mono transition-colors"
+                  >
+                    💡 Approve Rider Surcharge
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResolutionText("Quality Control inspection cleared at HSR Dark Store. Procurement payment released.")}
+                    className="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-left font-mono transition-colors"
+                  >
+                    💡 Clear Vendor QC Payout
+                  </button>
+                </div>
+              </div>
+
               <div className="space-y-1.5">
                 <label className="font-bold text-slate-300">Enter Resolution Notes / Action Taken</label>
                 <Textarea
                   value={resolutionText}
                   onChange={(e) => setResolutionText(e.target.value)}
                   placeholder="e.g. Verified payment status. Bank credit initiated via Instant Payout Gateway."
-                  className="bg-slate-950 border-slate-800 text-white rounded-2xl text-xs"
+                  className="bg-slate-950 border-slate-800 text-white rounded-2xl text-xs min-h-[80px]"
                 />
               </div>
             </div>

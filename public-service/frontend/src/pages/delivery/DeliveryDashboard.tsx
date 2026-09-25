@@ -562,9 +562,27 @@ export default function DeliveryDashboard() {
                     <span className="text-emerald-600 font-mono font-bold text-xl">₹{acceptedOrder.pay}.00</span>
                   </div>
 
-                  {/* Interactive Route Map */}
+                  {/* Interactive Route Map with Floating Navigation Pill */}
                   <div className="h-64 rounded-2xl overflow-hidden border relative shadow-inner">
                     <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+                    
+                    <div className="absolute top-3 left-3 right-3 z-[1000] bg-slate-900/95 backdrop-blur border border-slate-700 text-white p-3 rounded-xl shadow-lg flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <Navigation className="w-4 h-4 text-emerald-400 animate-pulse" />
+                        <div>
+                          <div className="font-bold text-white text-[11px]">📍 Next: {orderStage === 'accepted' || orderStage === 'at_warehouse' ? 'Dark Store Hub Pickup' : 'Customer Handover Destination'}</div>
+                          <div className="text-[10px] text-slate-300">Est. Distance: 1.8 km • 6 mins away</div>
+                        </div>
+                      </div>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${acceptedOrder?.lat || 16.5062},${acceptedOrder?.lng || 80.6480}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[10px] shrink-0 shadow flex items-center gap-1 transition-all"
+                      >
+                        <Route className="w-3 h-3" /> Nav Maps →
+                      </a>
+                    </div>
                   </div>
 
                   {/* Stepper Workflow */}

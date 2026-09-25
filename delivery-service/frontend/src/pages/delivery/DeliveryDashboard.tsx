@@ -365,98 +365,32 @@ export default function DeliveryDashboard() {
     setOrderStage("accepted");
   };
 
-  const handleAdvanceStage = async () => {
-    let nextStage: "accepted" | "at_warehouse" | "picked_up" | "delivered" = orderStage;
-    let backendStatus = "placed";
-
-    if (orderStage === "accepted") {
-      nextStage = "at_warehouse";
-      backendStatus = "at_dark_store";
-    } else if (orderStage === "at_warehouse") {
-      nextStage = "picked_up";
-      backendStatus = "out_for_delivery";
-    } else if (orderStage === "picked_up") {
-      nextStage = "delivered";
-      backendStatus = "delivered";
-    }
-
-    setOrderStage(nextStage);
-
-    const token = localStorage.getItem("sunotal_delivery_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-
-    const targetId = acceptedOrder?.numericId || acceptedOrder?.id || "latest";
-
-    // 1. Update backend order status API
-    try {
-      await fetch(`/api/orders/${targetId}/status`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({ status: backendStatus, ...(backendStatus === "delivered" ? { paymentStatus: "paid" } : {}) }),
-      });
-      await fetch(`/api/orders/latest/status`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({ status: backendStatus, ...(backendStatus === "delivered" ? { paymentStatus: "paid" } : {}) }),
-      });
-    } catch (e) {
-      console.warn("Backend status update error:", e);
-    }
-
-    // 2. Broadcast rider GPS location & stage
-    try {
-      const whLat = Number(acceptedOrder?.warehouse_latitude || 0);
-      const whLng = Number(acceptedOrder?.warehouse_longitude || 0);
-      const custLat = Number(acceptedOrder?.lat || acceptedOrder?.delivery_latitude || 0);
-      const custLng = Number(acceptedOrder?.lng || acceptedOrder?.delivery_longitude || 0);
-
-      let rLat = whLat || (custLat ? custLat - 0.008 : 0);
-      let rLng = whLng || (custLng ? custLng - 0.006 : 0);
-
-      if ((nextStage === "picked_up" || nextStage === "out_for_delivery") && custLat && custLng) {
-        rLat = Number(((rLat + custLat) / 2).toFixed(4));
-        rLng = Number(((rLng + custLng) / 2).toFixed(4));
-      } else if (nextStage === "delivered" || nextStage === "arrived") {
-        rLat = custLat;
-        rLng = custLng;
-      }
-
-      await fetch("/api/delivery/rider/location", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: targetId,
-          lat: rLat,
-          lng: rLng,
-          riderId: riderUser?.id || "RIDER-101",
-          stage: backendStatus,
-        }),
-      });
-
-      if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition((pos) => {
-          fetch("/api/delivery/rider/location", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              orderId: targetId,
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              riderId: riderUser?.id || "RIDER-101",
-              stage: backendStatus,
-            }),
-          }).catch(() => {});
-        }, () => {}, { enableHighAccuracy: true });
-      }
-    } catch (e) {
-      console.warn("Rider location broadcast error:", e);
-    }
-
-    if (nextStage === "delivered") {
+  const handleAdvanceStage = () => {
+    if (orderStage === "accepted") setOrderStage("at_warehouse");
+    else if (orderStage === "at_warehouse") setOrderStage("picked_up");
+    else if (orderStage === "picked_up") {
+      setOrderStage("delivered");
       toast.success("Order delivered successfully!");
+
+      // Update backend status API with Auth token
+      const token = localStorage.getItem("sunotal_delivery_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const targetId = acceptedOrder?.id || "latest";
+      fetch(`/api/orders/${targetId}/status`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ status: "delivered", paymentStatus: "paid" }),
+      }).catch((err) => console.error("Backend order status update error:", err));
+
+      fetch(`/api/orders/latest/status`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ status: "delivered", paymentStatus: "paid" }),
+      }).catch(() => {});
 
       // Update localStorage sunotal_user_orders
       try {
@@ -471,8 +405,7 @@ export default function DeliveryDashboard() {
                 o.orderId === acceptedOrder?.id ||
                 o.status === "processing" ||
                 o.status === "shipped" ||
-                o.status === "out_for_delivery" ||
-                o.status === "at_dark_store"
+                o.status === "out_for_delivery"
               ) {
                 return { ...o, status: "delivered", paymentStatus: "paid" };
               }
@@ -629,9 +562,27 @@ export default function DeliveryDashboard() {
                     <span className="text-emerald-600 font-mono font-bold text-xl">₹{acceptedOrder.pay}.00</span>
                   </div>
 
-                  {/* Interactive Route Map */}
+                  {/* Interactive Route Map with Floating Navigation Pill */}
                   <div className="h-64 rounded-2xl overflow-hidden border relative shadow-inner">
                     <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+                    
+                    <div className="absolute top-3 left-3 right-3 z-[1000] bg-slate-900/95 backdrop-blur border border-slate-700 text-white p-3 rounded-xl shadow-lg flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <Navigation className="w-4 h-4 text-emerald-400 animate-pulse" />
+                        <div>
+                          <div className="font-bold text-white text-[11px]">📍 Next: {orderStage === 'accepted' || orderStage === 'at_warehouse' ? 'Dark Store Hub Pickup' : 'Customer Handover Destination'}</div>
+                          <div className="text-[10px] text-slate-300">Est. Distance: 1.8 km • 6 mins away</div>
+                        </div>
+                      </div>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${acceptedOrder?.lat || 16.5062},${acceptedOrder?.lng || 80.6480}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[10px] shrink-0 shadow flex items-center gap-1 transition-all"
+                      >
+                        <Route className="w-3 h-3" /> Nav Maps →
+                      </a>
+                    </div>
                   </div>
 
                   {/* Stepper Workflow */}
