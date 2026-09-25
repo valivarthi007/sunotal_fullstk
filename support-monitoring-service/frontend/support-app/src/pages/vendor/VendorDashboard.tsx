@@ -28,7 +28,8 @@ import {
   Sparkles,
   Zap,
   Building2,
-  Calendar
+  Calendar,
+  Coins
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
