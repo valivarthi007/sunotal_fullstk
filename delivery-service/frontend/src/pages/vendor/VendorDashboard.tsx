@@ -38,9 +38,13 @@ import { fetchWarehouses, Warehouse, useListProductDefinitions, useListProducts 
 import { RaiseGrievanceModal } from "@/components/ui/RaiseGrievanceModal";
 import { AlertTriangle } from "lucide-react";
 
-export const getCategoryIcon = (categoryName: string) => {
+export const getCategoryIcon = (categoryName: string, iconInDb?: string) => {
+  if (iconInDb && iconInDb !== '📦') return iconInDb;
   const cat = (categoryName || "").toLowerCase();
-  if (cat.includes("produce") || cat.includes("veg") || cat.includes("fruit") || cat.includes("harvest") || cat.includes("crop")) return "🥦";
+  if (cat.includes("all")) return "🛍️";
+  if (cat.includes("fruit")) return "🍎";
+  if (cat.includes("vegitable") || cat.includes("vegetable") || cat.includes("veg")) return "🥦";
+  if (cat.includes("produce") || cat.includes("harvest") || cat.includes("crop")) return "🌱";
   if (cat.includes("organic") || cat.includes("farm")) return "🌱";
   if (cat.includes("dairy") || cat.includes("milk") || cat.includes("egg") || cat.includes("cheese") || cat.includes("butter")) return "🥛";
   if (cat.includes("beverage") || cat.includes("drink") || cat.includes("juice") || cat.includes("soda") || cat.includes("water") || cat.includes("tea") || cat.includes("coffee")) return "🥤";
@@ -54,7 +58,8 @@ export const getCategoryIcon = (categoryName: string) => {
   if (cat.includes("baby") || cat.includes("infant") || cat.includes("diaper")) return "🍼";
   if (cat.includes("pet") || cat.includes("dog") || cat.includes("cat")) return "🐾";
   if (cat.includes("pharma") || cat.includes("health") || cat.includes("medicine")) return "💊";
-  if (cat.includes("grain") || cat.includes("rice") || cat.includes("pulses") || cat.includes("atta") || cat.includes("flour")) return "🌾";
+  if (cat.includes("grain") || cat.includes("rice") || cat.includes("pulses") || cat.includes("atta") || cat.includes("flour") || cat.includes("dal")) return "🌾";
+  if (cat.includes("breakfast") || cat.includes("meal") || cat.includes("cereal")) return "🥣";
   if (cat.includes("oil") || cat.includes("ghee") || cat.includes("spice") || cat.includes("masala")) return "🥫";
   return "📦";
 };
@@ -333,33 +338,33 @@ export default function VendorDashboard() {
           />
 
           {/* Navigation Tabs */}
-          <div className="flex border-b border-border gap-2 text-xs font-semibold overflow-x-auto">
+          <div className="flex bg-emerald-50/60 p-1.5 border border-emerald-100/80 rounded-2xl gap-2 text-xs font-semibold overflow-x-auto shadow-xs">
             <button
               onClick={() => setActiveTab("submit")}
-              className={`py-3 px-5 border-b-2 transition-all flex items-center gap-2 rounded-t-xl whitespace-nowrap ${
+              className={`py-2.5 px-5 transition-all flex items-center gap-2 rounded-xl whitespace-nowrap ${
                 activeTab === "submit"
-                  ? "border-emerald-600 text-emerald-600 font-bold bg-accent/40"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                  ? "bg-emerald-600 text-white font-bold shadow-sm"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-emerald-100/50"
               }`}
             >
               <PlusCircle className="w-4 h-4" /> Submit Wholesale Supply Proposal
             </button>
             <button
               onClick={() => setActiveTab("history")}
-              className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+              className={`py-2.5 px-4 transition-all flex items-center gap-2 rounded-xl whitespace-nowrap ${
                 activeTab === "history"
-                  ? "border-emerald-400 text-emerald-400 font-bold bg-slate-900/60 rounded-t-xl"
-                  : "border-transparent text-slate-400 hover:text-white"
+                  ? "bg-emerald-600 text-white font-bold shadow-sm"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-emerald-100/50"
               }`}
             >
               <FileText className="w-4 h-4" /> Wholesale Proposals ({quotations.length})
             </button>
             <button
               onClick={() => setActiveTab("payouts")}
-              className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+              className={`py-2.5 px-4 transition-all flex items-center gap-2 rounded-xl whitespace-nowrap ${
                 activeTab === "payouts"
-                  ? "border-emerald-400 text-emerald-400 font-bold bg-slate-900/60 rounded-t-xl"
-                  : "border-transparent text-slate-400 hover:text-white"
+                  ? "bg-emerald-600 text-white font-bold shadow-sm"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-emerald-100/50"
               }`}
             >
               <CreditCard className="w-4 h-4" /> Vendor Settlement Payouts
@@ -370,12 +375,12 @@ export default function VendorDashboard() {
           {activeTab === "submit" && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Form Section */}
-              <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
+              <div className="lg:col-span-2 bg-card border border-border rounded-3xl p-6 shadow-sm space-y-6">
                 <div>
-                  <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-amber-400" /> Submit Wholesale Supply Proposal
+                  <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-500" /> Submit Wholesale Supply Proposal
                   </h2>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-muted-foreground">
                     Supply FMCG, Electronics & Tech, Fresh Produce, Dairy, or Household goods direct to Sunotal Dark Stores.
                   </p>
                 </div>
@@ -389,14 +394,14 @@ export default function VendorDashboard() {
                         name="category"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold">Supply Category</FormLabel>
+                            <FormLabel className="text-foreground font-bold">Supply Category</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
-                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                <SelectTrigger className="bg-background border-border text-foreground rounded-xl h-11 text-xs">
                                   <SelectValue placeholder="Select Quick-Commerce Category" />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
+                              <SelectContent className="bg-card border-border text-foreground max-h-60">
                                 {categories && categories.length > 0 ? (
                                   categories.map((cat: any) => (
                                     <SelectItem key={cat.id || cat.name} value={cat.name}>
@@ -415,61 +420,32 @@ export default function VendorDashboard() {
                         )}
                       />
 
-                      {/* Produce / Product Name (Admin Defined Catalog) */}
+                      {/* Produce / Product Name (Strictly Admin Defined Catalog) */}
                       <FormField
                         control={form.control}
                         name="produce"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold flex items-center justify-between">
-                              <span>Product Name (Admin Catalog)</span>
-                              {availableProduceItems.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setIsCustomProduct(!isCustomProduct);
-                                    if (!isCustomProduct) field.onChange("");
-                                  }}
-                                  className="text-[10px] text-amber-400 hover:underline font-bold"
-                                >
-                                  {isCustomProduct ? "← Select from Admin Catalog" : "+ Enter Custom Product"}
-                                </button>
-                              )}
-                            </FormLabel>
+                            <FormLabel className="text-foreground font-bold">Product Name (Admin Catalog)</FormLabel>
                             <FormControl>
-                              {!isCustomProduct && availableProduceItems.length > 0 ? (
-                                <Select
-                                  onValueChange={(val) => {
-                                    if (val === "__CUSTOM__") {
-                                      setIsCustomProduct(true);
-                                      field.onChange("");
-                                    } else {
-                                      field.onChange(val);
-                                    }
-                                  }}
-                                  value={field.value}
-                                >
-                                  <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
-                                    <SelectValue placeholder="Select Product defined by Admin..." />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
-                                    {availableProduceItems.map((item: string) => (
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <SelectTrigger className="bg-background border-border text-foreground rounded-xl h-11 text-xs">
+                                  <SelectValue placeholder="Select Product defined by Admin..." />
+                                </SelectTrigger>
+                                <SelectContent className="bg-card border-border text-foreground max-h-60">
+                                  {availableProduceItems.length > 0 ? (
+                                    availableProduceItems.map((item: string) => (
                                       <SelectItem key={item} value={item}>
                                         ✨ {item}
                                       </SelectItem>
-                                    ))}
-                                    <SelectItem value="__CUSTOM__" className="text-amber-400 font-bold">
-                                      ✏️ + Enter Custom Item Name...
+                                    ))
+                                  ) : (
+                                    <SelectItem value="none" disabled>
+                                      No products defined by Admin for this category. Contact Admin to add product.
                                     </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <Input
-                                  placeholder="Type product name (e.g. Alphonso Mangoes / USB-C Cable)..."
-                                  {...field}
-                                  className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
-                                />
-                              )}
+                                  )}
+                                </SelectContent>
+                              </Select>
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -484,12 +460,12 @@ export default function VendorDashboard() {
                         name="brand"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold">Brand / OEM Manufacturer</FormLabel>
+                            <FormLabel className="text-foreground font-bold">Brand / OEM Manufacturer</FormLabel>
                             <FormControl>
                               <Input
                                 placeholder="e.g. Boat / Amul / Tata / Sony"
                                 {...field}
-                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+                                className="bg-background border-border text-foreground rounded-xl h-11 text-xs"
                               />
                             </FormControl>
                             <FormMessage />
@@ -503,12 +479,12 @@ export default function VendorDashboard() {
                         name="batchNo"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold">Model # / Batch No</FormLabel>
+                            <FormLabel className="text-foreground font-bold">Model # / Batch No</FormLabel>
                             <FormControl>
                               <Input
                                 placeholder="e.g. BATCH-2026-09 / MOD-X65"
                                 {...field}
-                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+                                className="bg-background border-border text-foreground rounded-xl h-11 text-xs"
                               />
                             </FormControl>
                             <FormMessage />
@@ -522,12 +498,12 @@ export default function VendorDashboard() {
                         name="expiryOrWarranty"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold">Warranty / Expiry Info</FormLabel>
+                            <FormLabel className="text-foreground font-bold">Warranty / Expiry Info</FormLabel>
                             <FormControl>
                               <Input
                                 placeholder="e.g. 1 Year OEM Warranty / Best Before Oct 2026"
                                 {...field}
-                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+                                className="bg-background border-border text-foreground rounded-xl h-11 text-xs"
                               />
                             </FormControl>
                             <FormMessage />
@@ -543,16 +519,16 @@ export default function VendorDashboard() {
                         name="unit"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
-                              <Scale className="w-3.5 h-3.5 text-amber-400" /> Supply Packaging Unit
+                            <FormLabel className="text-foreground font-bold flex items-center gap-1">
+                              <Scale className="w-3.5 h-3.5 text-amber-500" /> Supply Packaging Unit
                             </FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
-                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-bold">
+                                <SelectTrigger className="bg-background border-border text-foreground rounded-xl h-11 text-xs font-bold">
                                   <SelectValue placeholder="Select Unit" />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                              <SelectContent className="bg-card border-border text-foreground">
                                 <SelectItem value="Pieces">Pieces / Units</SelectItem>
                                 <SelectItem value="Packs">Packs / Boxes</SelectItem>
                                 <SelectItem value="Cartons">Wholesale Cartons</SelectItem>
@@ -572,13 +548,13 @@ export default function VendorDashboard() {
                         name="quantity"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold">Supply Quantity ({selectedUnit})</FormLabel>
+                            <FormLabel className="text-foreground font-bold">Supply Quantity ({selectedUnit})</FormLabel>
                             <FormControl>
                               <Input
                                 type="number"
                                 min="1"
                                 {...field}
-                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-mono font-bold"
+                                className="bg-background border-border text-foreground rounded-xl h-11 text-xs font-mono font-bold"
                               />
                             </FormControl>
                             <FormMessage />
@@ -592,13 +568,13 @@ export default function VendorDashboard() {
                         name="price"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold">Wholesale Quote (₹ per {selectedUnit})</FormLabel>
+                            <FormLabel className="text-foreground font-bold">Wholesale Quote (₹ per {selectedUnit})</FormLabel>
                             <FormControl>
                               <Input
                                 type="number"
                                 min="1"
                                 {...field}
-                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-mono font-bold text-amber-400"
+                                className="bg-background border-border text-foreground rounded-xl h-11 text-xs font-mono font-bold text-amber-700"
                               />
                             </FormControl>
                             <FormMessage />
@@ -614,13 +590,13 @@ export default function VendorDashboard() {
                         name="suggestedMrp"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold">Suggested Retail MRP (₹)</FormLabel>
+                            <FormLabel className="text-foreground font-bold">Suggested Retail MRP (₹)</FormLabel>
                             <FormControl>
                               <Input
                                 type="number"
                                 min="1"
                                 {...field}
-                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-mono font-bold text-emerald-400"
+                                className="bg-background border-border text-foreground rounded-xl h-11 text-xs font-mono font-bold text-emerald-700"
                               />
                             </FormControl>
                             <FormMessage />
@@ -634,14 +610,14 @@ export default function VendorDashboard() {
                         name="qualityGrade"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold">Quality & Compliance Grade</FormLabel>
+                            <FormLabel className="text-foreground font-bold">Quality & Compliance Grade</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
-                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                <SelectTrigger className="bg-background border-border text-foreground rounded-xl h-11 text-xs">
                                   <SelectValue placeholder="Grade" />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                              <SelectContent className="bg-card border-border text-foreground">
                                 <SelectItem value="Grade A (Verified / Premium)">Grade A (Verified OEM / Sealed)</SelectItem>
                                 <SelectItem value="Grade A (Organic Certified)">Grade A (Organic Certified)</SelectItem>
                                 <SelectItem value="Grade B (Standard Commercial)">Grade B (Standard Commercial)</SelectItem>
@@ -658,16 +634,16 @@ export default function VendorDashboard() {
                         name="darkStoreAllocation"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
-                              <Building2 className="w-3.5 h-3.5 text-amber-400" /> Target Dark Store Hub
+                            <FormLabel className="text-foreground font-bold flex items-center gap-1">
+                              <Building2 className="w-3.5 h-3.5 text-amber-500" /> Target Dark Store Hub
                             </FormLabel>
                             <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                               <FormControl>
-                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                <SelectTrigger className="bg-background border-border text-foreground rounded-xl h-11 text-xs">
                                   <SelectValue placeholder="Select Target Store / Warehouse" />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
+                              <SelectContent className="bg-card border-border text-foreground max-h-60">
                                 {targetWarehouses.length > 0 ? (
                                   targetWarehouses.map((wh) => {
                                     const labelVal = `${wh.name} (${wh.city})`;
@@ -693,12 +669,12 @@ export default function VendorDashboard() {
                     name="notes"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-slate-300 font-bold">Additional Notes / Organic Certifications</FormLabel>
+                        <FormLabel className="text-foreground font-bold">Additional Notes / Organic Certifications</FormLabel>
                         <FormControl>
                           <Textarea
                             placeholder="e.g. Certified Organic by Jaivik Bharat, harvested using drip irrigation."
                             {...field}
-                            className="bg-slate-950 border-slate-800 text-white rounded-xl text-xs"
+                            className="bg-background border-border text-foreground rounded-xl text-xs"
                           />
                         </FormControl>
                         <FormMessage />
@@ -709,7 +685,7 @@ export default function VendorDashboard() {
                   <Button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full h-12 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-2xl text-xs shadow-lg transition-all"
+                    className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl text-xs shadow-md shadow-emerald-600/20 transition-all"
                   >
                     {isSubmitting ? "Submitting Harvest Quotation..." : "Submit Produce Supply Quotation"}
                   </Button>
@@ -719,61 +695,61 @@ export default function VendorDashboard() {
 
             {/* Calculations & Quick Conversion Helper */}
             <div className="space-y-6">
-              <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950 border border-emerald-900/80 rounded-3xl p-6 shadow-2xl space-y-4">
+              <div className="bg-gradient-to-br from-emerald-50 via-emerald-50/60 to-teal-50 border border-emerald-200/80 rounded-3xl p-6 shadow-sm space-y-4">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-emerald-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                    <Coins className="w-4 h-4 text-emerald-400" /> BATCH YIELD & MARGIN STUDIO
+                  <span className="text-emerald-900 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                    <Coins className="w-4 h-4 text-emerald-600" /> BATCH YIELD & MARGIN STUDIO
                   </span>
-                  <Badge className="bg-amber-400/20 text-amber-300 border-amber-400/30 text-[10px] font-mono">
+                  <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] font-mono font-bold">
                     2-DAY SETTLEMENT
                   </Badge>
                 </div>
 
-                <div className="text-3xl font-extrabold font-mono text-white flex items-baseline justify-between">
+                <div className="text-3xl font-extrabold font-mono text-emerald-950 flex items-baseline justify-between">
                   <span>₹{totalValue.toLocaleString("en-IN")}</span>
-                  <span className="text-xs text-emerald-400 font-sans font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                  <span className="text-xs text-emerald-800 font-sans font-bold bg-white/80 px-2.5 py-1 rounded-full border border-emerald-200 shadow-xs">
                     +{Math.max(8, Math.round((((form.watch("suggestedMrp") || price * 1.3) - price) / (form.watch("suggestedMrp") || price * 1.3)) * 100))}% Projected Margin
                   </span>
                 </div>
 
                 {/* Freshness Index Meter */}
-                <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                <div className="p-3 bg-white/80 rounded-2xl border border-emerald-200/80 space-y-2">
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-300 font-bold flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Harvest Freshness Index
+                    <span className="text-emerald-950 font-bold flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Harvest Freshness Index
                     </span>
-                    <span className="font-mono font-bold text-emerald-400">94% (Cold-Chain Grade A)</span>
+                    <span className="font-mono font-bold text-emerald-700">94% (Cold-Chain Grade A)</span>
                   </div>
-                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full w-[94%] shadow-sm"></div>
+                  <div className="w-full bg-emerald-100 h-2 rounded-full overflow-hidden">
+                    <div className="bg-gradient-to-r from-emerald-500 to-teal-500 h-full rounded-full w-[94%] shadow-xs"></div>
                   </div>
-                  <p className="text-[10px] text-slate-400">Optimal intake slot reserved at target Dark Store Hub.</p>
+                  <p className="text-[10px] text-emerald-700">Optimal intake slot reserved at target Dark Store Hub.</p>
                 </div>
 
-                <div className="space-y-2 pt-2 border-t border-emerald-900/60 text-xs">
-                  <div className="flex justify-between text-slate-300">
+                <div className="space-y-2 pt-2 border-t border-emerald-200/80 text-xs">
+                  <div className="flex justify-between text-emerald-900">
                     <span>Supply Quantity:</span>
-                    <span className="font-bold text-white font-mono">{quantity} {selectedUnit}</span>
+                    <span className="font-bold text-emerald-950 font-mono">{quantity} {selectedUnit}</span>
                   </div>
-                  <div className="flex justify-between text-slate-300">
+                  <div className="flex justify-between text-emerald-900">
                     <span>Wholesale Unit Price:</span>
-                    <span className="font-bold text-white font-mono">₹{price} / {selectedUnit}</span>
+                    <span className="font-bold text-emerald-950 font-mono">₹{price} / {selectedUnit}</span>
                   </div>
-                  <div className="flex justify-between text-slate-300">
+                  <div className="flex justify-between text-emerald-900">
                     <span>Target Retail RRP:</span>
-                    <span className="font-bold text-emerald-400 font-mono">₹{form.watch("suggestedMrp") || Math.round(price * 1.3)} / {selectedUnit}</span>
+                    <span className="font-bold text-emerald-700 font-mono">₹{form.watch("suggestedMrp") || Math.round(price * 1.3)} / {selectedUnit}</span>
                   </div>
-                  <div className="flex justify-between text-slate-300">
+                  <div className="flex justify-between text-emerald-900">
                     <span>Dark Store Processing Fee:</span>
-                    <span className="font-mono text-amber-300">₹{(totalValue * 0.02).toFixed(2)} (2%)</span>
+                    <span className="font-mono text-amber-800 font-bold">₹{(totalValue * 0.02).toFixed(2)} (2%)</span>
                   </div>
                   {selectedUnit === "Quintal" && (
-                    <div className="p-2.5 bg-slate-950/80 rounded-xl border border-emerald-800/40 text-[11px] text-amber-300 font-mono">
+                    <div className="p-2.5 bg-white/90 rounded-xl border border-emerald-200 text-[11px] text-amber-900 font-mono font-medium">
                       💡 Conversion: {quantity} Quintals = {quantity * 100} Kilograms
                     </div>
                   )}
                   {selectedUnit === "Liters" && (
-                    <div className="p-2.5 bg-slate-950/80 rounded-xl border border-emerald-800/40 text-[11px] text-amber-300 font-mono">
+                    <div className="p-2.5 bg-white/90 rounded-xl border border-emerald-200 text-[11px] text-amber-900 font-mono font-medium">
                       🥛 Milk Volume: {quantity} Liters (Direct Cold-Chain Pickup)
                     </div>
                   )}
@@ -781,12 +757,12 @@ export default function VendorDashboard() {
               </div>
 
               {/* Direct Farmer Guarantee Card */}
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-xs space-y-3">
-                <div className="flex items-center gap-2 font-extrabold text-white">
-                  <Zap className="w-4 h-4 text-amber-400" />
+              <div className="bg-card border border-border rounded-3xl p-5 text-xs space-y-3 shadow-sm">
+                <div className="flex items-center gap-2 font-extrabold text-foreground">
+                  <Zap className="w-4 h-4 text-amber-500" />
                   <span>Sunotal Direct Farmer Guarantee</span>
                 </div>
-                <ul className="space-y-1.5 text-slate-400 text-[11px] leading-relaxed">
+                <ul className="space-y-1.5 text-muted-foreground text-[11px] leading-relaxed">
                   <li>• Zero middleman commission—you get 100% of agreed price.</li>
                   <li>• Cold-chain logistics vehicle provided for doorstep farm pickup.</li>
                   <li>• Direct bank account transfer within 48 hours of Dark Store QC.</li>
@@ -798,13 +774,13 @@ export default function VendorDashboard() {
 
         {/* TAB 2: History & Quotations List */}
         {activeTab === "history" && (
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-            <h3 className="font-extrabold text-lg text-white">Harvest Supply Quotations</h3>
+          <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+            <h3 className="font-extrabold text-lg text-foreground">Harvest Supply Quotations</h3>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-2xl border border-border">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px]">
+                  <tr className="bg-muted/40 border-b border-border text-muted-foreground uppercase tracking-wider text-[10px]">
                     <th className="py-3 px-4">ID</th>
                     <th className="py-3 px-4">Produce Name</th>
                     <th className="py-3 px-4">Category</th>
@@ -814,21 +790,21 @@ export default function VendorDashboard() {
                     <th className="py-3 px-4">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody className="divide-y divide-border">
                   {quotations.map((q) => (
-                    <tr key={q.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-amber-400">#{q.id}</td>
-                      <td className="py-3 px-4 font-bold text-white">{q.produce}</td>
-                      <td className="py-3 px-4">{q.category}</td>
-                      <td className="py-3 px-4 font-mono font-bold text-emerald-300">{q.quantity} {q.unit || "Quintal"}</td>
-                      <td className="py-3 px-4 font-mono">₹{q.price}</td>
-                      <td className="py-3 px-4 text-slate-400">{q.darkStoreAllocation || "HSR Dark Store #104"}</td>
+                    <tr key={q.id} className="hover:bg-accent/40 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-amber-700">#{q.id}</td>
+                      <td className="py-3 px-4 font-bold text-foreground">{q.produce}</td>
+                      <td className="py-3 px-4 text-muted-foreground">{q.category}</td>
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-700">{q.quantity} {q.unit || "Quintal"}</td>
+                      <td className="py-3 px-4 font-mono font-bold text-foreground">₹{q.price}</td>
+                      <td className="py-3 px-4 text-muted-foreground">{q.darkStoreAllocation || "HSR Dark Store #104"}</td>
                       <td className="py-3 px-4">
                         <Badge
                           className={`text-[10px] uppercase font-mono font-bold ${
                             q.status === "accepted"
-                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                              : "bg-amber-400/20 text-amber-300 border-amber-400/30"
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              : "bg-amber-100 text-amber-800 border-amber-300"
                           }`}
                         >
                           {q.status}
@@ -844,42 +820,42 @@ export default function VendorDashboard() {
 
         {/* TAB 3: Farmer Payouts & Advance Settlements */}
         {activeTab === "payouts" && (
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
+          <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-6">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
-                <h3 className="font-extrabold text-lg text-white flex items-center gap-2">
-                  <CreditCard className="w-5 h-5 text-emerald-400" /> Direct Farmer Bank Payouts & Settlement Ledger
+                <h3 className="font-extrabold text-lg text-foreground flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-emerald-600" /> Direct Farmer Bank Payouts & Settlement Ledger
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Payments are automatically credited to your bank account upon Dark Store quality inspection and admin invoice issuance.
                 </p>
               </div>
-              <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 px-3 py-1 font-mono text-xs">
+              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 px-3 py-1 font-mono text-xs font-bold">
                 VERIFIED FARM VENDOR
               </Badge>
             </div>
 
             {/* Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Total Settled Earnings</div>
-                <div className="text-2xl font-extrabold font-mono text-emerald-400">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1">
+                <div className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Total Settled Earnings</div>
+                <div className="text-2xl font-extrabold font-mono text-emerald-700">
                   ₹{quotations.filter((q) => q.paymentStatus === "paid" || q.status === "accepted").reduce((acc, q) => acc + (q.quantity * q.price), 0).toLocaleString("en-IN")}
                 </div>
                 <div className="text-[10px] text-slate-500 font-mono">100% Direct Bank Transfer</div>
               </div>
 
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Pending QC / Payouts</div>
-                <div className="text-2xl font-extrabold font-mono text-amber-400">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1">
+                <div className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Pending QC / Payouts</div>
+                <div className="text-2xl font-extrabold font-mono text-amber-700">
                   ₹{quotations.filter((q) => q.status === "pending" || q.paymentStatus === "processing").reduce((acc, q) => acc + (q.quantity * q.price), 0).toLocaleString("en-IN")}
                 </div>
                 <div className="text-[10px] text-slate-500 font-mono">QC Clearance within 48h</div>
               </div>
 
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Invoices Generated</div>
-                <div className="text-2xl font-extrabold font-mono text-white">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1">
+                <div className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Invoices Generated</div>
+                <div className="text-2xl font-extrabold font-mono text-foreground">
                   {invoices.length > 0 ? invoices.length : quotations.filter((q) => q.status === "accepted").length}
                 </div>
                 <div className="text-[10px] text-slate-500 font-mono">Official GST & Mandi Records</div>
@@ -888,15 +864,15 @@ export default function VendorDashboard() {
 
             {/* Invoices Table */}
             <div className="space-y-3 pt-2">
-              <h4 className="font-bold text-sm text-white flex items-center gap-2">
-                <FileText className="w-4 h-4 text-emerald-400" /> Settled Invoices & Payout Receipts
+              <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-600" /> Settled Invoices & Payout Receipts
               </h4>
 
               {invoices.length > 0 ? (
-                <div className="overflow-x-auto rounded-2xl border border-slate-800">
+                <div className="overflow-x-auto rounded-2xl border border-border">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px]">
+                      <tr className="bg-muted/40 border-b border-border text-muted-foreground uppercase tracking-wider text-[10px]">
                         <th className="py-3 px-4">Invoice #</th>
                         <th className="py-3 px-4">Date</th>
                         <th className="py-3 px-4">Quotation ID</th>
@@ -905,18 +881,18 @@ export default function VendorDashboard() {
                         <th className="py-3 px-4 text-right">Invoice Document</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
+                    <tbody className="divide-y divide-border">
                       {invoices.map((inv) => {
                         const token = localStorage.getItem("sunotal_vendor_token") || localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_admin_token");
                         const downloadUrl = `/api/vendors/invoices/${inv.id}/download?token=${token}`;
                         return (
-                          <tr key={inv.id} className="hover:bg-slate-800/40 transition-colors">
-                            <td className="py-3 px-4 font-mono font-bold text-amber-400">{inv.invoiceNumber}</td>
-                            <td className="py-3 px-4 text-slate-300 font-mono">{new Date(inv.createdAt).toLocaleDateString()}</td>
-                            <td className="py-3 px-4 font-mono text-slate-400">#{inv.quotationId}</td>
-                            <td className="py-3 px-4 font-mono font-bold text-emerald-400">₹{Number(inv.amount).toLocaleString("en-IN")}</td>
+                          <tr key={inv.id} className="hover:bg-accent/40 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-amber-700">{inv.invoiceNumber}</td>
+                            <td className="py-3 px-4 text-muted-foreground font-mono">{new Date(inv.createdAt).toLocaleDateString()}</td>
+                            <td className="py-3 px-4 font-mono text-muted-foreground">#{inv.quotationId}</td>
+                            <td className="py-3 px-4 font-mono font-bold text-emerald-700">₹{Number(inv.amount).toLocaleString("en-IN")}</td>
                             <td className="py-3 px-4">
-                              <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px] uppercase font-mono font-bold">
+                              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] uppercase font-mono font-bold">
                                 PAID & SETTLED
                               </Badge>
                             </td>
@@ -925,7 +901,7 @@ export default function VendorDashboard() {
                                 href={downloadUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition-all shadow-xs"
                               >
                                 <Download className="w-3.5 h-3.5" /> Download HTML Invoice
                               </a>
@@ -937,10 +913,10 @@ export default function VendorDashboard() {
                   </table>
                 </div>
               ) : (
-                <div className="p-8 text-center bg-slate-950/60 rounded-2xl border border-slate-800/80 text-slate-400 space-y-2">
-                  <Clock className="w-8 h-8 mx-auto text-slate-600 mb-2" />
-                  <p className="font-semibold text-xs text-slate-300">Previous Transactions Registered in Ledger</p>
-                  <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                <div className="p-8 text-center bg-slate-50/60 rounded-2xl border border-slate-200/80 text-muted-foreground space-y-2">
+                  <Clock className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+                  <p className="font-semibold text-xs text-foreground">Previous Transactions Registered in Ledger</p>
+                  <p className="text-[11px] text-muted-foreground max-w-md mx-auto">
                     Quotations accepted by admin show up in your Harvest Supply Quotations tab. Invoices generated by admin will be available for download here.
                   </p>
                 </div>

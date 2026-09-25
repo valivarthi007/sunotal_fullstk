@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -10,12 +43,86 @@ const cors_1 = __importDefault(require("cors"));
 const crypto_1 = __importDefault(require("crypto"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const pg_1 = require("pg");
+const mongoose_1 = __importStar(require("mongoose"));
 const client_s3_1 = require("@aws-sdk/client-s3");
+const client_cost_explorer_1 = require("@aws-sdk/client-cost-explorer");
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@127.0.0.1:5432/sunotal';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/sunotal';
 const JWT_SECRET = process.env.JWT_SECRET || 'sunotal_jwt_secret_2026_super_secure';
 const AWS_REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || 'jcs-raju-sunotal-final';
 const AWS_CLOUDFRONT_DOMAIN = process.env.AWS_CLOUDFRONT_DOMAIN || '';
+let costExplorerClient = null;
+try {
+    costExplorerClient = new client_cost_explorer_1.CostExplorerClient({
+        region: 'us-east-1',
+        credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        } : undefined
+    });
+}
+catch (err) {
+    console.warn('⚠️ Could not initialize AWS Cost Explorer client:', err);
+}
+// MONGODB CONNECTION & FLEXIBLE SCHEMAS
+let isMongoConnected = false;
+async function initMongo() {
+    try {
+        await mongoose_1.default.connect(MONGODB_URI, { serverSelectionTimeoutMS: 3000 });
+        isMongoConnected = true;
+        console.log('✅ Connected to MongoDB Document Database for Quick-Commerce Catalog & Supplies');
+    }
+    catch (err) {
+        console.warn('⚠️ MongoDB connection notice (using PostgreSQL hybrid fallback):', err?.message || err);
+        isMongoConnected = false;
+    }
+}
+initMongo();
+const ProductMongoSchema = new mongoose_1.Schema({
+    id: { type: String, required: true },
+    sku: { type: String },
+    name: { type: String, required: true },
+    brand: { type: String, default: '' },
+    category: { type: String, required: true },
+    subCategory: { type: String, default: '' },
+    price: { type: Number, required: true },
+    originalPrice: { type: Number },
+    unit: { type: String, default: '1 unit' },
+    image: { type: String },
+    description: { type: String, default: '' },
+    isOrganic: { type: Boolean, default: false },
+    stock: { type: Number, default: 0 },
+    rating: { type: Number, default: 5.0 },
+    active: { type: Boolean, default: true },
+    attributes: { type: mongoose_1.Schema.Types.Mixed, default: {} }, // 100% Dynamic schema key-values
+    tags: [{ type: String }],
+    vendorId: { type: String },
+    createdAt: { type: Date, default: Date.now }
+});
+const ProductModel = mongoose_1.default.models.MongoProduct || mongoose_1.default.model('MongoProduct', ProductMongoSchema);
+const VendorSupplyMongoSchema = new mongoose_1.Schema({
+    id: { type: String, required: true },
+    vendorId: { type: String, required: true },
+    vendorName: { type: String, required: true },
+    category: { type: String, required: true },
+    subCategory: { type: String, default: '' },
+    produce: { type: String, required: true },
+    brand: { type: String, default: '' },
+    batchNo: { type: String, default: '' },
+    expiryOrWarranty: { type: String, default: '' },
+    unit: { type: String, default: '1 unit' },
+    quantity: { type: Number, required: true },
+    price: { type: Number, required: true },
+    suggestedMrp: { type: Number },
+    darkStoreAllocation: { type: String, required: true },
+    qualityGrade: { type: String, default: 'A Grade' },
+    status: { type: String, default: 'PENDING' },
+    notes: { type: String, default: '' },
+    attributes: { type: mongoose_1.Schema.Types.Mixed, default: {} },
+    createdAt: { type: Date, default: Date.now }
+});
+const VendorSupplyModel = mongoose_1.default.models.MongoVendorSupply || mongoose_1.default.model('MongoVendorSupply', VendorSupplyMongoSchema);
 let s3Client = null;
 try {
     s3Client = new client_s3_1.S3Client({
@@ -237,6 +344,7 @@ async function initDatabase() {
         is_organic BOOLEAN DEFAULT TRUE,
         stock INT DEFAULT 100,
         rating NUMERIC(3,2) DEFAULT 4.80,
+        description TEXT,
         active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
@@ -442,6 +550,7 @@ async function initDatabase() {
             `CREATE INDEX IF NOT EXISTS idx_warehouses_active ON warehouses(is_active)`,
             `CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id)`,
             `CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC)`,
+            `ALTER TABLE products ADD COLUMN IF NOT EXISTS description TEXT`,
         ];
         for (const idx of indexes) {
             try {
@@ -464,7 +573,30 @@ async function initDatabase() {
                 console.warn(`Failed to seed user ${u.email}:`, err?.message || err);
             }
         }
-        console.log('✅ PostgreSQL database schema, indexes & seed user credentials ready.');
+        // Seed 11 Quick-Commerce Verticals Categories
+        const seedCategories = [
+            { name: "Fresh Produce & Organic", icon: "🍏" },
+            { name: "Dairy, Bread & Eggs", icon: "🥛" },
+            { name: "Beverages & Drinks", icon: "🥤" },
+            { name: "Snacks & Munchies", icon: "🍿" },
+            { name: "Breakfast & Instant Meals", icon: "🥣" },
+            { name: "Grains, Oils & Dal", icon: "🌾" },
+            { name: "Personal Care & Hygiene", icon: "🧼" },
+            { name: "Cleaning & Household", icon: "🧹" },
+            { name: "Electronics & Tech Accessories", icon: "🔌" },
+            { name: "Baby Care & Wellness", icon: "👶" },
+            { name: "Pet Care & Specialty", icon: "🐶" }
+        ];
+        for (const cat of seedCategories) {
+            try {
+                await client.query(`INSERT INTO categories (name, icon, active) VALUES ($1, $2, true)
+           ON CONFLICT (name) DO UPDATE SET icon = EXCLUDED.icon`, [cat.name, cat.icon]);
+            }
+            catch (err) {
+                console.warn(`Failed to seed category ${cat.name}:`, err?.message || err);
+            }
+        }
+        console.log('✅ PostgreSQL database schema, indexes, seed accounts & Quick-Commerce categories ready.');
     }
     catch (err) {
         console.warn('⚠️ PostgreSQL DB init notice:', err?.message || err);
@@ -896,15 +1028,43 @@ app.get(['/api/admin/quotations', '/api/vendors/quotations', '/api/procurement/q
     }
 });
 app.post(['/api/vendors/quotations', '/api/procurement/quotations'], async (req, res) => {
-    const { vendorName, name, produce, cropName, quantity, price, category, unit, qualityGrade, expectedHarvestDate, darkStoreAllocation, notes, phone, address } = req.body || {};
-    const produceName = produce || cropName;
+    const { vendorId, vendorName, name, produce, cropName, quantity, price, suggestedMrp, category, subCategory, unit, qualityGrade, expectedHarvestDate, darkStoreAllocation, notes, phone, address, brand, batchNo, expiryOrWarranty, attributes } = req.body || {};
+    const produceName = produce || name || cropName;
     if (!produceName || quantity === undefined || price === undefined) {
-        return res.status(400).json({ error: 'Produce name, quantity, and price per unit are required' });
+        return res.status(400).json({ error: 'Item/Product name, quantity, and wholesale price per unit are required' });
     }
     try {
         const dbRes = await gatewayPgPool.query(`INSERT INTO quotations (vendor_name, produce, crop_name, quantity, price, category, unit, quality_grade, expected_harvest_date, dark_store_allocation, notes, phone, address, status, payment_status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'pending', 'processing') RETURNING *`, [vendorName || name || 'Local Farm Vendor', produceName, produceName, Number(quantity), Number(price), category || 'Vegetables', unit || 'Quintal', qualityGrade || 'Grade A (Organic / Premium)', expectedHarvestDate || new Date().toISOString().split('T')[0], darkStoreAllocation || 'Vijayawada Central Hub', notes || '', phone || '', address || '']);
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'pending', 'processing') RETURNING *`, [vendorName || name || 'Quick-Commerce Supply Vendor', produceName, produceName, Number(quantity), Number(price), category || 'Fresh Produce & Organic', unit || '1 unit', qualityGrade || 'Grade A (Premium / Verified)', expectedHarvestDate || new Date().toISOString().split('T')[0], darkStoreAllocation || 'Vijayawada Central Hub', notes || '', phone || '', address || '']);
         const q = dbRes.rows[0];
+        // Sync to Mongo VendorSupplyModel
+        if (isMongoConnected) {
+            try {
+                await VendorSupplyModel.create({
+                    id: String(q.id),
+                    vendorId: vendorId || 'VND-' + Date.now(),
+                    vendorName: vendorName || name || 'Quick-Commerce Supply Vendor',
+                    category: category || 'Fresh Produce & Organic',
+                    subCategory: subCategory || '',
+                    produce: produceName,
+                    brand: brand || '',
+                    batchNo: batchNo || '',
+                    expiryOrWarranty: expiryOrWarranty || '',
+                    unit: unit || '1 unit',
+                    quantity: Number(quantity),
+                    price: Number(price),
+                    suggestedMrp: suggestedMrp ? Number(suggestedMrp) : undefined,
+                    darkStoreAllocation: darkStoreAllocation || 'Central Dark Store Hub',
+                    qualityGrade: qualityGrade || 'Grade A',
+                    status: 'PENDING',
+                    notes: notes || '',
+                    attributes: attributes || {}
+                });
+            }
+            catch (mErr) {
+                console.warn('⚠️ Mongo VendorSupply sync warning:', mErr?.message);
+            }
+        }
         return res.status(201).json({
             id: q.id, vendorName: q.vendor_name, produce: q.produce, cropName: q.crop_name, quantity: Number(q.quantity), price: Number(q.price), category: q.category, unit: q.unit, qualityGrade: q.quality_grade, expectedHarvestDate: q.expected_harvest_date, darkStoreAllocation: q.dark_store_allocation, notes: q.notes, status: q.status, paymentStatus: q.payment_status, createdAt: q.created_at
         });
@@ -914,26 +1074,23 @@ app.post(['/api/vendors/quotations', '/api/procurement/quotations'], async (req,
     }
 });
 function parseQuotationUnitAndPrice(rawUnit, rawQuantity, rawPrice, category = '') {
-    const u = (rawUnit || 'Quintal').toLowerCase().trim();
+    const u = (rawUnit || '1 unit').toLowerCase().trim();
     const cat = (category || '').toLowerCase().trim();
-    const isLiquid = cat.includes('dairy') || cat.includes('liquid') || cat.includes('milk') || cat.includes('juice');
+    const isLiquid = cat.includes('dairy') || cat.includes('liquid') || cat.includes('milk') || cat.includes('beverage') || cat.includes('drink');
     let qtyInBaseUnit = Number(rawQuantity || 1);
-    let baseUnitName = isLiquid ? 'Litre' : 'kg';
+    let baseUnitName = 'unit';
     let vendorPricePerBaseUnit = Number(rawPrice || 0);
     if (u.includes('quintal')) {
-        // 1 Quintal = 100 kg
         qtyInBaseUnit = Number(rawQuantity || 1) * 100;
         vendorPricePerBaseUnit = Number(rawPrice || 0) / 100;
         baseUnitName = 'kg';
     }
     else if (u.includes('ton')) {
-        // 1 Metric Ton = 1000 kg
         qtyInBaseUnit = Number(rawQuantity || 1) * 1000;
         vendorPricePerBaseUnit = Number(rawPrice || 0) / 1000;
         baseUnitName = 'kg';
     }
     else if (u.includes('ml') || u.includes('milliliter')) {
-        // 1 Litre = 1000 mL
         qtyInBaseUnit = Number(rawQuantity || 1) / 1000;
         vendorPricePerBaseUnit = Number(rawPrice || 0) * 1000;
         baseUnitName = 'Litre';
@@ -943,13 +1100,26 @@ function parseQuotationUnitAndPrice(rawUnit, rawQuantity, rawPrice, category = '
         vendorPricePerBaseUnit = Number(rawPrice || 0);
         baseUnitName = 'Litre';
     }
-    else {
-        // kg or default
+    else if (u.includes('kg') || u.includes('kilo')) {
         qtyInBaseUnit = Number(rawQuantity || 1);
         vendorPricePerBaseUnit = Number(rawPrice || 0);
-        baseUnitName = isLiquid ? 'Litre' : 'kg';
+        baseUnitName = 'kg';
     }
-    // Calculate selling price per 1 kg / 1 Litre with 10% markup per unit
+    else if (u.includes('g') || u.includes('gram')) {
+        qtyInBaseUnit = Number(rawQuantity || 1) / 1000;
+        vendorPricePerBaseUnit = Number(rawPrice || 0) * 1000;
+        baseUnitName = 'kg';
+    }
+    else if (u.includes('piece') || u.includes('pcs') || u.includes('pack') || u.includes('box') || u.includes('bottle') || u.includes('can') || u.includes('unit') || u.includes('item')) {
+        qtyInBaseUnit = Number(rawQuantity || 1);
+        vendorPricePerBaseUnit = Number(rawPrice || 0);
+        baseUnitName = rawUnit.trim() || 'unit';
+    }
+    else {
+        qtyInBaseUnit = Number(rawQuantity || 1);
+        vendorPricePerBaseUnit = Number(rawPrice || 0);
+        baseUnitName = isLiquid ? 'Litre' : (cat.includes('fresh') || cat.includes('produce') || cat.includes('grain') ? 'kg' : 'unit');
+    }
     const sellingPrice = Number((vendorPricePerBaseUnit * 1.10).toFixed(2));
     const originalPrice = Number((sellingPrice * 1.25).toFixed(2));
     const displayUnit = `1 ${baseUnitName}`;
@@ -972,19 +1142,22 @@ app.put(['/api/admin/quotations/:id/status', '/api/admin/quotations/:id'], async
             if (status === 'accepted' || status === 'approved') {
                 const crop = q.produce || q.crop_name;
                 if (crop) {
-                    const cat = q.category || 'Vegetables';
-                    const vendorName = q.vendor_name || 'Farm Vendor';
+                    const cat = q.category || 'Fresh Produce & Organic';
+                    const vendorName = q.vendor_name || 'Supply Vendor';
                     const darkStore = q.dark_store_allocation || 'Central Dark Store Hub';
                     const parsed = parseQuotationUnitAndPrice(q.unit, Number(q.quantity), Number(q.price), cat);
                     let defaultImg = 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&q=80';
-                    if (cat.toLowerCase().includes('fruit')) {
+                    if (cat.toLowerCase().includes('electronics') || cat.toLowerCase().includes('tech')) {
+                        defaultImg = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80';
+                    }
+                    else if (cat.toLowerCase().includes('fruit') || cat.toLowerCase().includes('produce')) {
                         defaultImg = 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=500&q=80';
                     }
-                    else if (parsed.baseUnitName === 'Litre') {
+                    else if (parsed.baseUnitName === 'Litre' || cat.toLowerCase().includes('beverage') || cat.toLowerCase().includes('dairy')) {
                         defaultImg = 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=500&q=80';
                     }
-                    else if (cat.toLowerCase().includes('grain')) {
-                        defaultImg = 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=500&q=80';
+                    else if (cat.toLowerCase().includes('snack') || cat.toLowerCase().includes('biscuit')) {
+                        defaultImg = 'https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=500&q=80';
                     }
                     let targetProdId = null;
                     try {
@@ -998,25 +1171,39 @@ app.put(['/api/admin/quotations/:id/status', '/api/admin/quotations/:id'], async
                  VALUES ($1, $2, $3, $4, $5, $6, true, $7, true) RETURNING id`, [crop, cat, parsed.sellingPrice, parsed.originalPrice, parsed.displayUnit, defaultImg, parsed.qtyInBaseUnit]);
                             targetProdId = newProd.rows[0]?.id || null;
                         }
+                        // Also sync to MongoDB ProductModel
+                        if (isMongoConnected && targetProdId) {
+                            await ProductModel.findOneAndUpdate({ id: String(targetProdId) }, {
+                                id: String(targetProdId),
+                                name: crop,
+                                category: cat,
+                                price: parsed.sellingPrice,
+                                originalPrice: parsed.originalPrice,
+                                unit: parsed.displayUnit,
+                                image: defaultImg,
+                                stock: parsed.qtyInBaseUnit,
+                                active: true
+                            }, { upsert: true, new: true });
+                        }
                     }
                     catch (e) {
                         console.warn('Product auto-upsert warning:', e?.message);
                     }
                     try {
                         await gatewayPgPool.query(`INSERT INTO inventory (product_id, product_name, vendor_name, warehouse_name, quantity, unit, status, notes)
-               VALUES ($1, $2, $3, $4, $5, $6, 'in_stock', $7)`, [targetProdId, crop, vendorName, darkStore, parsed.qtyInBaseUnit, parsed.baseUnitName, `Auto-stocked from approved quotation #${q.id}`]);
+               VALUES ($1, $2, $3, $4, $5, $6, 'in_stock', $7)`, [targetProdId, crop, vendorName, darkStore, parsed.qtyInBaseUnit, parsed.baseUnitName, `Auto-stocked from approved proposal #${q.id}`]);
                     }
                     catch (e) {
                         console.warn('Inventory auto-stock warning:', e?.message);
                     }
                 }
             }
-            return res.json({ success: true, message: `Quotation #${targetId} marked as ${status}`, quotation: q });
+            return res.json({ success: true, message: `Proposal #${targetId} marked as ${status}`, quotation: q });
         }
-        return res.status(404).json({ error: 'Quotation not found' });
+        return res.status(404).json({ error: 'Proposal not found' });
     }
     catch (err) {
-        return res.status(500).json({ error: 'Failed to update quotation status', message: err?.message });
+        return res.status(500).json({ error: 'Failed to update proposal status', message: err?.message });
     }
 });
 // S3 FILE UPLOAD ENDPOINT FOR PHOTOS & DOCUMENTS
@@ -1566,43 +1753,203 @@ app.post('/api/delivery/calculate', async (req, res) => {
     }
 });
 // PRODUCTS & CATALOG
-app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (_req, res) => {
+app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (req, res) => {
     try {
-        const dbRes = await gatewayPgPool.query('SELECT * FROM products ORDER BY id DESC');
-        return res.json(dbRes.rows.map(p => ({
-            id: String(p.id),
-            name: p.name,
-            category: p.category,
-            price: Number(p.price),
-            originalPrice: Number(p.original_price || p.price),
-            unit: p.unit,
-            image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
-            isOrganic: p.is_organic,
-            stock: p.stock,
-            rating: Number(p.rating || 4.8),
-            active: p.active ?? true
-        })));
+        const category = req.query.category;
+        const search = req.query.search;
+        const all = req.query.all;
+        let sql = 'SELECT * FROM products';
+        const params = [];
+        const conditions = [];
+        if (category && category !== 'All') {
+            params.push(category);
+            conditions.push(`LOWER(category) = LOWER($${params.length})`);
+        }
+        if (search) {
+            params.push(`%${search}%`);
+            conditions.push(`(LOWER(name) LIKE LOWER($${params.length}) OR LOWER(category) LIKE LOWER($${params.length}))`);
+        }
+        if (!all && req.path === '/api/storefront') {
+            conditions.push('active = true');
+        }
+        if (conditions.length > 0) {
+            sql += ' WHERE ' + conditions.join(' AND ');
+        }
+        sql += ' ORDER BY id DESC';
+        const dbRes = await gatewayPgPool.query(sql, params);
+        // Fetch dynamic Mongo metadata if connected
+        let mongoProductMap = {};
+        if (isMongoConnected) {
+            try {
+                const mongoDocs = await ProductModel.find({}).lean();
+                for (const doc of mongoDocs) {
+                    mongoProductMap[String(doc.id)] = doc;
+                }
+            }
+            catch { }
+        }
+        return res.json(dbRes.rows.map(p => {
+            const pId = String(p.id);
+            const mDoc = mongoProductMap[pId] || {};
+            return {
+                id: pId,
+                name: p.name,
+                category: p.category,
+                brand: mDoc.brand || '',
+                subCategory: mDoc.subCategory || '',
+                price: Number(p.price),
+                originalPrice: Number(p.original_price || p.price),
+                unit: p.unit,
+                image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
+                description: p.description || mDoc.description || '',
+                isOrganic: p.is_organic,
+                stock: p.stock,
+                rating: Number(p.rating || mDoc.rating || 5.0),
+                active: p.active ?? true,
+                attributes: mDoc.attributes || {},
+                tags: mDoc.tags || []
+            };
+        }));
     }
     catch (err) {
         return res.status(500).json({ error: 'Failed to fetch products', message: err?.message });
     }
 });
+app.get(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
+    const targetId = Number(req.params.id);
+    if (isNaN(targetId))
+        return res.status(400).json({ error: 'Invalid product ID' });
+    try {
+        const dbRes = await gatewayPgPool.query('SELECT * FROM products WHERE id = $1', [targetId]);
+        if (dbRes.rows.length === 0)
+            return res.status(404).json({ error: 'Product not found' });
+        const p = dbRes.rows[0];
+        let mDoc = {};
+        if (isMongoConnected) {
+            try {
+                mDoc = (await ProductModel.findOne({ id: String(targetId) }).lean()) || {};
+            }
+            catch { }
+        }
+        return res.json({
+            id: String(p.id),
+            name: p.name,
+            category: p.category,
+            brand: mDoc.brand || '',
+            subCategory: mDoc.subCategory || '',
+            price: Number(p.price),
+            originalPrice: Number(p.original_price || p.price),
+            unit: p.unit,
+            image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
+            description: p.description || mDoc.description || '',
+            isOrganic: p.is_organic,
+            stock: p.stock,
+            rating: Number(p.rating || mDoc.rating || 5.0),
+            active: p.active ?? true,
+            attributes: mDoc.attributes || {},
+            tags: mDoc.tags || []
+        });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch product', message: err?.message });
+    }
+});
 app.post(['/api/products', '/api/admin/products'], async (req, res) => {
-    const { name, category, price, originalPrice, unit, image, isOrganic, stock } = req.body || {};
+    const { name, category, price, originalPrice, unit, image, description, isOrganic, stock, brand, subCategory, attributes, tags, vendorId } = req.body || {};
     if (!name || !category || price === undefined)
         return res.status(400).json({ error: 'Name, category, and price required' });
     try {
-        const dbRes = await gatewayPgPool.query(`INSERT INTO products (name, category, price, original_price, unit, image, is_organic, stock, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) RETURNING *`, [name, category, Number(price), Number(originalPrice || price), unit || '1 kg', image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400', isOrganic !== false, Number(stock || 100)]);
+        const dbRes = await gatewayPgPool.query(`INSERT INTO products (name, category, price, original_price, unit, image, description, is_organic, stock, active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true) RETURNING *`, [name, category, Number(price), Number(originalPrice || price), unit || '1 unit', image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400', description || '', isOrganic !== false, Number(stock || 100)]);
         const p = dbRes.rows[0];
         const formattedProduct = {
-            id: String(p.id), name: p.name, category: p.category, price: Number(p.price), originalPrice: Number(p.original_price), unit: p.unit, image: p.image, isOrganic: p.is_organic, stock: p.stock, rating: 4.8, active: true
+            id: String(p.id),
+            name: p.name,
+            category: p.category,
+            brand: brand || '',
+            subCategory: subCategory || '',
+            price: Number(p.price),
+            originalPrice: Number(p.original_price),
+            unit: p.unit,
+            image: p.image,
+            description: p.description || '',
+            isOrganic: p.is_organic,
+            stock: p.stock,
+            rating: 5.0,
+            active: true,
+            attributes: attributes || {},
+            tags: tags || [],
+            vendorId: vendorId || ''
         };
+        if (isMongoConnected) {
+            try {
+                await ProductModel.create({
+                    ...formattedProduct,
+                    id: String(p.id)
+                });
+            }
+            catch (mErr) {
+                console.warn('MongoDB Product sync notice:', mErr);
+            }
+        }
         broadcastRealtimeEvent({ type: 'PRODUCT_CREATED', path: req.originalUrl || req.url, method: 'POST', data: formattedProduct });
         return res.status(201).json(formattedProduct);
     }
     catch (err) {
         return res.status(500).json({ error: 'Failed to create product', message: err?.message });
+    }
+});
+app.put(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
+    const targetId = Number(req.params.id);
+    if (isNaN(targetId))
+        return res.status(400).json({ error: 'Invalid product ID' });
+    const { name, category, price, originalPrice, unit, image, description, isOrganic, stock, brand, subCategory, attributes, tags } = req.body || {};
+    try {
+        const dbRes = await gatewayPgPool.query(`UPDATE products 
+       SET name = COALESCE($1, name),
+           category = COALESCE($2, category),
+           price = COALESCE($3, price),
+           original_price = COALESCE($4, original_price),
+           unit = COALESCE($5, unit),
+           image = COALESCE($6, image),
+           description = COALESCE($7, description),
+           is_organic = COALESCE($8, is_organic),
+           stock = COALESCE($9, stock)
+       WHERE id = $10 RETURNING *`, [name, category, price !== undefined ? Number(price) : null, originalPrice !== undefined ? Number(originalPrice) : null, unit, image, description, isOrganic, stock !== undefined ? Number(stock) : null, targetId]);
+        if (dbRes.rows.length === 0)
+            return res.status(404).json({ error: 'Product not found' });
+        const p = dbRes.rows[0];
+        const formattedProduct = {
+            id: String(p.id),
+            name: p.name,
+            category: p.category,
+            brand: brand || '',
+            subCategory: subCategory || '',
+            price: Number(p.price),
+            originalPrice: Number(p.original_price),
+            unit: p.unit,
+            image: p.image,
+            description: p.description || '',
+            isOrganic: p.is_organic,
+            stock: p.stock,
+            rating: Number(p.rating || 5.0),
+            active: p.active ?? true,
+            attributes: attributes || {},
+            tags: tags || []
+        };
+        if (isMongoConnected) {
+            try {
+                await ProductModel.findOneAndUpdate({ id: String(p.id) }, { $set: formattedProduct }, { upsert: true, new: true });
+            }
+            catch (mErr) {
+                console.warn('MongoDB Product update sync notice:', mErr);
+            }
+        }
+        broadcastRealtimeEvent({ type: 'PRODUCT_UPDATED', path: req.originalUrl || req.url, method: 'PUT', data: formattedProduct });
+        return res.json(formattedProduct);
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to update product', message: err?.message });
     }
 });
 app.delete(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
@@ -1791,9 +2138,26 @@ app.get('/api/delivery/riders', async (_req, res) => {
 app.get(['/api/delivery/payouts', '/api/admin/rider-payouts'], async (_req, res) => {
     try {
         const dbRes = await gatewayPgPool.query('SELECT * FROM rider_payouts ORDER BY id DESC');
-        return res.json(dbRes.rows.map(r => ({
-            id: r.id, riderId: r.rider_id, riderName: r.rider_name, phone: r.phone, email: r.email, upiId: r.upi_id, amount: Number(r.amount), tripsCompleted: r.trips_completed, status: r.status, createdAt: r.created_at
-        })));
+        return res.json(dbRes.rows.map(r => {
+            const amt = Number(r.amount || 0);
+            const dist = Number(r.total_distance_km || r.distance_km || Math.max(1, Math.round((amt - 30) / 10)) || 5);
+            const delivs = Number(r.completed_deliveries || r.trips_completed || 1);
+            const name = r.rider_name || (r.rider_id ? `Rider ${r.rider_id}` : 'Rider Partner');
+            return {
+                id: r.id,
+                riderId: r.rider_id,
+                riderName: name,
+                phone: r.phone || '+91 9908970908',
+                email: r.email || 'rider@sunotal.com',
+                upiId: r.upi_id || '9908970908@ybl',
+                amount: amt,
+                tripsCompleted: delivs,
+                completedDeliveries: delivs,
+                totalDistanceKm: dist,
+                status: r.status,
+                createdAt: r.created_at
+            };
+        }));
     }
     catch (err) {
         return res.status(500).json({ error: 'Failed to fetch rider payouts', message: err?.message });
@@ -2040,12 +2404,59 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
         const wLat = Number(orderRow?.wh_lat || warehouseRow?.latitude || 0);
         const wLng = Number(orderRow?.wh_lng || warehouseRow?.longitude || 0);
         const whName = orderRow?.wh_name || warehouseRow?.name || 'Dark Store Hub';
-        // 3. Delivery Partner Live GPS Location
+        // 3. Delivery Partner Live GPS Location & Rider Profile DB Lookup
         const liveTelemetry = global.activeRiderTelemetry?.[String(orderId)] || global.activeRiderTelemetry?.[String(orderRow?.id)] || global.activeRiderTelemetry?.[String(orderRow?.order_number)];
         const dLat = liveTelemetry?.lat || (wLat && cLat ? Number(((wLat + cLat) / 2).toFixed(4)) : wLat);
         const dLng = liveTelemetry?.lng || (wLng && cLng ? Number(((wLng + cLng) / 2).toFixed(4)) : wLng);
         const currentStage = liveTelemetry?.stage || orderRow?.status || 'placed';
         const distKm = Number(getHaversineDistanceKm(dLat, dLng, cLat, cLng).toFixed(1));
+        // Dynamic Rider DB Query
+        let riderName = liveTelemetry?.riderName || orderRow?.rider_name || orderRow?.rider_full_name;
+        let riderPhone = liveTelemetry?.riderPhone || orderRow?.rider_phone || orderRow?.rider_full_phone;
+        let vehicleNo = orderRow?.vehicle_no || orderRow?.vehicle;
+        let riderPhoto = orderRow?.rider_photo;
+        let rating = 4.9;
+        let deliveriesCompleted = 150;
+        const targetRiderId = liveTelemetry?.riderId || orderRow?.rider_id;
+        if (gatewayPgPool) {
+            try {
+                if (targetRiderId) {
+                    const cleanId = String(targetRiderId).replace(/[^0-9]/g, '');
+                    const rRes = await gatewayPgPool.query('SELECT * FROM delivery_riders WHERE id = $1 OR rider_id = $2 LIMIT 1', [Number(cleanId) || 0, String(targetRiderId)]);
+                    if (rRes.rows && rRes.rows.length > 0) {
+                        const r = rRes.rows[0];
+                        if (!riderName)
+                            riderName = r.name || r.rider_name;
+                        if (!riderPhone)
+                            riderPhone = r.phone;
+                        if (!vehicleNo)
+                            vehicleNo = r.vehicle || r.vehicle_no;
+                        if (!riderPhoto)
+                            riderPhoto = r.photo || r.avatar;
+                        if (r.rating || r.avg_rating)
+                            rating = Number(r.rating || r.avg_rating);
+                        if (r.total_deliveries !== undefined)
+                            deliveriesCompleted = Number(r.total_deliveries);
+                    }
+                    if (!riderName) {
+                        const uRes = await gatewayPgPool.query('SELECT id, name, phone, wallet_balance FROM users WHERE id = $1 LIMIT 1', [Number(cleanId) || 0]);
+                        if (uRes.rows && uRes.rows.length > 0) {
+                            riderName = uRes.rows[0].name;
+                            riderPhone = uRes.rows[0].phone;
+                        }
+                    }
+                }
+                if (!riderName) {
+                    const fallbackRiderRes = await gatewayPgPool.query("SELECT * FROM users WHERE LOWER(role) IN ('delivery', 'rider', 'delivery_partner', 'driver') ORDER BY id ASC LIMIT 1");
+                    if (fallbackRiderRes.rows && fallbackRiderRes.rows.length > 0) {
+                        const fr = fallbackRiderRes.rows[0];
+                        riderName = fr.name;
+                        riderPhone = fr.phone;
+                    }
+                }
+            }
+            catch { }
+        }
         return res.json({
             orderId: String(orderRow?.id || orderId),
             orderNumber: orderRow?.order_number || `ORD-${orderId}`,
@@ -2072,13 +2483,13 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
                 updatedAt: liveTelemetry?.updatedAt || new Date().toISOString(),
             },
             driverProfile: {
-                id: liveTelemetry?.riderId || orderRow?.rider_id || 'RIDER-ACTIVE',
-                name: liveTelemetry?.riderName || orderRow?.rider_name || orderRow?.rider_full_name || 'Delivery Partner',
-                phone: liveTelemetry?.riderPhone || orderRow?.rider_phone || orderRow?.rider_full_phone || '',
-                vehicleNo: orderRow?.vehicle_no || 'EV Express Bike',
-                photo: orderRow?.rider_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
-                rating: 4.9,
-                deliveriesCompleted: 150,
+                id: targetRiderId || 'RIDER-ACTIVE',
+                name: riderName || 'Assigned Delivery Partner',
+                phone: riderPhone || '',
+                vehicleNo: vehicleNo || 'EV Express Bike',
+                photo: riderPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+                rating: rating,
+                deliveriesCompleted: deliveriesCompleted,
             },
         });
     }
@@ -2181,6 +2592,97 @@ app.get('/api/admin/stats', async (_req, res) => {
     }
     catch (err) {
         res.status(500).json({ error: 'Failed to fetch dashboard stats', message: err?.message });
+    }
+});
+// AWS BILLING & COMPREHENSIVE SERVICE COST BREAKDOWN API (GET /api/admin/aws-billing)
+app.get('/api/admin/aws-billing', async (_req, res) => {
+    try {
+        let liveServices = [];
+        let isLiveAws = false;
+        let monthToDateSpend = 0;
+        let forecastedMonthEndBill = 0;
+        if (costExplorerClient && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+            try {
+                const now = new Date();
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                const today = now.toISOString().split('T')[0];
+                const costCmd = new client_cost_explorer_1.GetCostAndUsageCommand({
+                    TimePeriod: { Start: startOfMonth, End: today === startOfMonth ? new Date(now.getTime() + 86400000).toISOString().split('T')[0] : today },
+                    Granularity: 'MONTHLY',
+                    Metrics: ['UnblendedCost'],
+                    GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }]
+                });
+                const costData = await costExplorerClient.send(costCmd);
+                if (costData.ResultsByTime && costData.ResultsByTime.length > 0) {
+                    const groups = costData.ResultsByTime[0].Groups || [];
+                    for (const g of groups) {
+                        const serviceName = g.Keys?.[0] || 'Other AWS Service';
+                        const amount = Number(g.Metrics?.UnblendedCost?.Amount || 0);
+                        if (amount > 0 || groups.length < 5) {
+                            monthToDateSpend += amount;
+                            liveServices.push({
+                                id: serviceName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+                                serviceName,
+                                category: serviceName.includes('Compute') || serviceName.includes('EC2') ? 'Compute' : serviceName.includes('Database') || serviceName.includes('RDS') ? 'Database' : serviceName.includes('Storage') || serviceName.includes('S3') ? 'Storage' : 'Networking & Infrastructure',
+                                specs: 'Managed AWS Resource',
+                                usageMetric: 'Live AWS Metered Consumption',
+                                accruedCost: Number(amount.toFixed(2)),
+                                estimatedMonthly: Number((amount * 1.35).toFixed(2)),
+                            });
+                        }
+                    }
+                    if (liveServices.length > 0) {
+                        isLiveAws = true;
+                        forecastedMonthEndBill = Number((monthToDateSpend * 1.3).toFixed(2));
+                    }
+                }
+            }
+            catch (awsErr) {
+                console.warn('⚠️ AWS Cost Explorer SDK Notice:', awsErr?.message || awsErr);
+            }
+        }
+        if (!isLiveAws || liveServices.length === 0) {
+            const all15AwsModules = [
+                { id: "ecs", serviceName: "Amazon Elastic Compute Cloud - Fargate / EC2", category: "Compute", specs: "6 Microservice Tasks (0.25 vCPU, 0.5GB RAM)", usageMetric: "720 Hours / Month", accruedCost: 36.40, estimatedMonthly: 48.50 },
+                { id: "rds", serviceName: "Amazon Relational Database Service (RDS)", category: "Database", specs: "PostgreSQL db.t4g.medium Multi-AZ + 50GB GP3", usageMetric: "720 Hours + 50 GB Storage", accruedCost: 41.20, estimatedMonthly: 54.20 },
+                { id: "redis", serviceName: "Amazon ElastiCache Redis", category: "Database & Cache", specs: "cache.t4g.micro (256 MB LRU Cache Node)", usageMetric: "720 Hours", accruedCost: 9.30, estimatedMonthly: 12.50 },
+                { id: "alb", serviceName: "AWS Elastic Load Balancing (ALB)", category: "Networking & DNS", specs: "Application Load Balancer + ACM SSL Certificate", usageMetric: "720 Hours + LCU Usage", accruedCost: 11.20, estimatedMonthly: 14.80 },
+                { id: "s3", serviceName: "Amazon Simple Storage Service (S3)", category: "Storage & CDN", specs: "Bucket: jcs-raju-sunotal-final", usageMetric: "14.2 GB Storage + 8,500 Requests", accruedCost: 1.80, estimatedMonthly: 2.40 },
+                { id: "cloudfront", serviceName: "Amazon CloudFront CDN", category: "Storage & CDN", specs: "Global Edge Content Delivery Network", usageMetric: "42.5 GB Data Transfer Out", accruedCost: 2.40, estimatedMonthly: 3.10 },
+                { id: "docdb", serviceName: "Amazon DocumentDB / MongoDB Atlas", category: "Database & Cache", specs: "M0 Free Sandbox Cluster / db.t3.medium", usageMetric: "512 MB Storage", accruedCost: 0.00, estimatedMonthly: 0.00 },
+                { id: "lambda", serviceName: "AWS Lambda", category: "Compute", specs: "Image Processing & Invoice PDF Generators", usageMetric: "12,400 Executions / Month", accruedCost: 0.60, estimatedMonthly: 0.80 },
+                { id: "sqs", serviceName: "Amazon Simple Queue Service (SQS)", category: "Management & Messaging", specs: "Order Fulfillment Event Queue", usageMetric: "45,000 API Messages", accruedCost: 0.30, estimatedMonthly: 0.40 },
+                { id: "sns", serviceName: "Amazon Simple Notification Service (SNS)", category: "Management & Messaging", specs: "Hyperlocal Order Dispatch & Telemetry", usageMetric: "18,200 Event Notifications", accruedCost: 0.20, estimatedMonthly: 0.30 },
+                { id: "route53", serviceName: "Amazon Route 53", category: "Networking & DNS", specs: "Subdomain A-Alias Hosted Zones", usageMetric: "4 Hosted Subdomain Records", accruedCost: 1.10, estimatedMonthly: 1.50 },
+                { id: "cloudwatch", serviceName: "Amazon CloudWatch", category: "Management & Messaging", specs: "Microservice Log Groups & Alarm Telemetry", usageMetric: "4.8 GB Log Ingestion", accruedCost: 3.10, estimatedMonthly: 4.20 },
+                { id: "ses", serviceName: "Amazon Simple Email Service (SES)", category: "Management & Messaging", specs: "Transactional Order Receipts & Alerts", usageMetric: "2,400 Email Dispatches", accruedCost: 0.30, estimatedMonthly: 0.40 },
+                { id: "dynamodb", serviceName: "Amazon DynamoDB", category: "Database & Cache", specs: "Terraform Remote State Lock Table", usageMetric: "Pay Per Request (On-Demand)", accruedCost: 0.20, estimatedMonthly: 0.25 },
+                { id: "kms_vpc", serviceName: "AWS KMS & VPC Data Transfer", category: "Networking & DNS", specs: "KMS Keys & Inter-Subnet Data Transfer", accruedCost: 2.80, estimatedMonthly: 3.80 }
+            ];
+            liveServices = all15AwsModules;
+            monthToDateSpend = Number(all15AwsModules.reduce((sum, s) => sum + s.accruedCost, 0).toFixed(2));
+            forecastedMonthEndBill = Number(all15AwsModules.reduce((sum, s) => sum + s.estimatedMonthly, 0).toFixed(2));
+        }
+        const totalForecast = forecastedMonthEndBill;
+        const servicesWithShare = liveServices.map(s => ({
+            ...s,
+            percentage: totalForecast > 0 ? Number(((s.estimatedMonthly / totalForecast) * 100).toFixed(1)) : 0
+        }));
+        return res.json({
+            currency: "USD",
+            isLiveAws,
+            monthToDateSpend,
+            forecastedMonthEndBill,
+            usedCredits: 150.00,
+            remainingCredits: 850.00,
+            totalCreditsAllocated: 1000.00,
+            totalActiveServices: servicesWithShare.length,
+            lastUpdated: new Date().toISOString(),
+            services: servicesWithShare
+        });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch AWS billing metrics', message: err?.message });
     }
 });
 // FINANCIAL LEDGER & DAY-END SETTLEMENT REPORT (GET /api/admin/ledger)
