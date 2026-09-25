@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "node",
-    "typeRoots": ["../node_modules/@types"],
+    "types": ["node"],
     "esModuleInterop": true,
     "strict": false,
     "skipLibCheck": true,
