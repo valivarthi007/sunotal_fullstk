@@ -283,7 +283,7 @@ export default function App() {
                   </View>
                   <View style={[styles.ledgerRow, { borderTopWidth: 1, borderColor: '#e2e8f0', paddingTop: 8, marginTop: 4 }]}>
                     <Text style={{ fontWeight: 'bold', fontSize: 15 }}>Total Daily Earnings</Text>
-                    <Text style={{ fontWeight: 'extrabold', fontSize: 18, color: '#059669' }}>₹{todayEarnings}</Text>
+                    <Text style={{ fontWeight: '800', fontSize: 18, color: '#059669' }}>₹{todayEarnings}</Text>
                   </View>
                 </View>
 
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
   },
   summaryVal: {
     fontSize: 18,
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     color: '#059669',
   },
   summaryLabel: {
@@ -417,11 +417,11 @@ const styles = StyleSheet.create({
   },
   taskOrderId: {
     fontSize: 15,
-    fontWeight: 'extrabold',
+    fontWeight: '800',
   },
   taskPayout: {
     fontSize: 16,
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     color: '#059669',
   },
   taskAddress: {
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   acceptBtnText: {
     color: '#ffffff',
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     fontSize: 13,
   },
   mapVisual: {

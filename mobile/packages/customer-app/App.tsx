@@ -252,7 +252,7 @@ export default function App() {
               {searchResults.length > 0 ? (
                 searchResults.map((product) => (
                   <View key={product.id} style={styles.searchRow}>
-                    <Image source={{ uri: product.image }} style={styles.searchThumb} />
+                    <Image source={{ uri: product.image }} style={styles.searchThumb as any} />
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={styles.searchRowTitle}>{product.name}</Text>
                       <Text style={styles.searchRowSub}>{product.unit} • ₹{product.price}</Text>
@@ -289,7 +289,7 @@ export default function App() {
                 {/* Cart Items */}
                 {cart.map((item) => (
                   <View key={item.product.id} style={styles.cartRow}>
-                    <Image source={{ uri: item.product.image }} style={styles.cartThumb} />
+                    <Image source={{ uri: item.product.image }} style={styles.cartThumb as any} />
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={styles.cartRowTitle}>{item.product.name}</Text>
                       <Text style={styles.cartRowSub}>₹{item.product.price} × {item.quantity}</Text>
@@ -367,7 +367,7 @@ export default function App() {
                   )}
                   <View style={[styles.billRow, { borderTopWidth: 1, borderColor: '#e2e8f0', paddingTop: 8, marginTop: 4 }]}>
                     <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Total Payable</Text>
-                    <Text style={{ fontSize: 18, fontWeight: 'extrabold', color: theme.colors.primary }}>₹{finalAmount}</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: theme.colors.primary }}>₹{finalAmount}</Text>
                   </View>
                 </View>
 
@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
   bannerTitle: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: 'extrabold',
+    fontWeight: '800',
   },
   bannerSub: {
     color: '#a7f3d0',
@@ -584,7 +584,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     color: '#0f172a',
     marginVertical: 10,
   },
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
   },
   cardPrice: {
     fontSize: 15,
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     color: theme.colors.primary,
   },
   addButton: {
@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: theme.colors.primary,
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     fontSize: 12,
   },
   stepper: {
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
   cartRowPrice: {
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     fontSize: 14,
   },
   sectionCard: {
@@ -848,7 +848,7 @@ const styles = StyleSheet.create({
   },
   submitBtnText: {
     color: '#ffffff',
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     fontSize: 15,
   },
   trackHeader: {
@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   trackOrderId: {
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     fontSize: 14,
   },
   trackStatus: {

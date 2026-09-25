@@ -1,3 +1,5 @@
+declare const process: any;
+
 const DEFAULT_BASE_URL = 'https://admin-sunotal.automateuniverse.space';
 
 export const getApiBaseUrl = (): string => {

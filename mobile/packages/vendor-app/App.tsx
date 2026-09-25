@@ -192,7 +192,7 @@ export default function App() {
                 <Text style={styles.sectionTitle}>Revenue & Platform Payouts</Text>
                 <View style={styles.salesCard}>
                   <Text style={{ color: '#94a3b8', fontSize: 12 }}>Gross Store Sales (Live API Aggregate)</Text>
-                  <Text style={{ color: '#ffffff', fontSize: 28, fontWeight: 'extrabold', marginTop: 4 }}>₹{grossSales}</Text>
+                  <Text style={{ color: '#ffffff', fontSize: 28, fontWeight: '800', marginTop: 4 }}>₹{grossSales}</Text>
                   <Text style={{ color: '#10b981', fontSize: 12, marginTop: 4 }}>
                     Net Payout (8% Fee Deducted): ₹{Math.round(grossSales * 0.92)}
                   </Text>
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     color: '#0f172a',
     marginVertical: 10,
   },
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   orderId: {
-    fontWeight: 'extrabold',
+    fontWeight: '800',
     fontSize: 15,
   },
   statusTag: {
