@@ -9,5 +9,10 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true
   },
-  "include": ["**/*.ts", "**/*.tsx", "../../shared/**/*.ts"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "../../shared/**/*.ts"
+  ],
+  "extends": "expo/tsconfig.base"
 }

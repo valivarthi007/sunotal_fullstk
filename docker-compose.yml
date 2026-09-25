@@ -342,6 +342,61 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+
+  mobile-customer-app:
+    build:
+      context: ./mobile/packages/customer-app
+      dockerfile: Dockerfile
+    container_name: sunotal-customer-mobile
+    restart: unless-stopped
+    ports:
+      - "3007:80"
+    depends_on:
+      gateway-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  mobile-rider-app:
+    build:
+      context: ./mobile/packages/rider-app
+      dockerfile: Dockerfile
+    container_name: sunotal-rider-mobile
+    restart: unless-stopped
+    ports:
+      - "3008:80"
+    depends_on:
+      gateway-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  mobile-vendor-app:
+    build:
+      context: ./mobile/packages/vendor-app
+      dockerfile: Dockerfile
+    container_name: sunotal-vendor-mobile
+    restart: unless-stopped
+    ports:
+      - "3009:80"
+    depends_on:
+      gateway-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   # ─── Nginx Subdomain Router (Port 80 for ALB Routing) ─────────────────────
   nginx-router:
     image: nginx:alpine
@@ -363,6 +418,12 @@ services:
       support-service-frontend:
         condition: service_healthy
       monitoring-service-frontend:
+        condition: service_healthy
+      mobile-customer-app:
+        condition: service_healthy
+      mobile-rider-app:
+        condition: service_healthy
+      mobile-vendor-app:
         condition: service_healthy
 
 volumes:
