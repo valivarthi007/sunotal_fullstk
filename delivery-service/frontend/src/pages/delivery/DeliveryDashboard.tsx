@@ -6,11 +6,14 @@ import { DeliveryLayout } from "@/components/layout/DeliveryLayout";
 import { getMapProvider } from "@/lib/providers/map/map-provider.factory";
 import { useLocationState } from "@/lib/location-context";
 import { toast } from "sonner";
+import { RaiseGrievanceModal } from "@/components/ui/RaiseGrievanceModal";
+import { AlertTriangle } from "lucide-react";
 
 export default function DeliveryDashboard() {
   const { location: userLoc } = useLocationState();
   const [isOnline, setIsOnline] = useState(true);
   const [activeTab, setActiveTab] = useState<"orders" | "earnings" | "reports">("orders");
+  const [showGrievanceModal, setShowGrievanceModal] = useState(false);
 
   // Order Alert Modal State
   const [hasAlert, setHasAlert] = useState(false);
@@ -461,19 +464,37 @@ export default function DeliveryDashboard() {
               </div>
             </div>
 
-            {/* Duty Online / Offline Toggle */}
-            <button
-              onClick={() => setIsOnline(!isOnline)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-xs transition-all shadow-sm ${
-                isOnline
-                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
-            >
-              <Power className="w-4 h-4" />
-              <span>{isOnline ? "DUTY ONLINE" : "OFFLINE"}</span>
-            </button>
+            {/* Duty Online / Offline Toggle & Grievance Button */}
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setShowGrievanceModal(true)}
+                className="bg-rose-600 hover:bg-rose-500 text-white rounded-full text-xs font-bold gap-1.5 shadow-sm"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 animate-pulse" /> Raise Grievance / Incident
+              </Button>
+              <button
+                onClick={() => setIsOnline(!isOnline)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-xs transition-all shadow-sm ${
+                  isOnline
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                <Power className="w-4 h-4" />
+                <span>{isOnline ? "DUTY ONLINE" : "OFFLINE"}</span>
+              </button>
+            </div>
           </div>
+
+          <RaiseGrievanceModal
+            isOpen={showGrievanceModal}
+            onClose={() => setShowGrievanceModal(false)}
+            defaultRole="delivery"
+            userProfile={{
+              name: riderUser?.name || "Rider Partner",
+              phone: riderUser?.phone || "",
+            }}
+          />
 
           {/* Navigation Tabs */}
           <div className="grid grid-cols-3 bg-accent/40 p-1.5 rounded-2xl border text-xs font-bold">

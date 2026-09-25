@@ -34,6 +34,8 @@ import { Badge } from "@/components/ui/badge";
 
 import { VendorLayout } from "@/components/layout/VendorLayout";
 import { fetchWarehouses, Warehouse, useListProductDefinitions, useListProducts } from "@/lib/api-client";
+import { RaiseGrievanceModal } from "@/components/ui/RaiseGrievanceModal";
+import { AlertTriangle } from "lucide-react";
 
 const quotationSchema = z.object({
   category: z.string().min(1, "Please select a supply category"),
@@ -118,6 +120,7 @@ export default function VendorDashboard() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<"submit" | "history" | "payouts">("submit");
+  const [showGrievanceModal, setShowGrievanceModal] = useState(false);
 
   const form = useForm<z.infer<typeof quotationSchema>>({
     resolver: zodResolver(quotationSchema),
@@ -280,6 +283,12 @@ export default function VendorDashboard() {
 
             <div className="flex items-center gap-3">
               <Button
+                onClick={() => setShowGrievanceModal(true)}
+                className="bg-rose-600 hover:bg-rose-500 text-white rounded-full text-xs font-bold gap-1.5 shadow-md shadow-rose-600/20"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 animate-pulse" /> Raise Grievance / Incident
+              </Button>
+              <Button
                 onClick={handleLogout}
                 variant="outline"
                 size="sm"
@@ -289,6 +298,16 @@ export default function VendorDashboard() {
               </Button>
             </div>
           </div>
+
+          <RaiseGrievanceModal
+            isOpen={showGrievanceModal}
+            onClose={() => setShowGrievanceModal(false)}
+            defaultRole="vendor"
+            userProfile={{
+              name: `${vendorProfile?.firstName || ''} ${vendorProfile?.lastName || ''}`.trim(),
+              phone: vendorProfile?.phone,
+            }}
+          />
 
           {/* Navigation Tabs */}
           <div className="flex border-b border-border gap-2 text-xs font-semibold overflow-x-auto">

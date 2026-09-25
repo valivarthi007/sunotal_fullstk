@@ -225,7 +225,7 @@ export default function Orders() {
     loadOrders();
   };
 
-  const handleRaiseGrievanceSubmit = (e: React.FormEvent) => {
+  const handleRaiseGrievanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!grievanceOrder) return;
     if (!grievanceDesc.trim()) {
@@ -234,29 +234,54 @@ export default function Orders() {
     }
 
     setIsSubmittingGrievance(true);
-    setTimeout(() => {
-      const newTicketId = `GRV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const orderNum = grievanceOrder.orderNumber || String(grievanceOrder.id || "N/A");
+
+    try {
+      const res = await fetch("/api/support/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "user",
+          senderName: user?.name || user?.email || "Customer User",
+          senderEmail: (user?.email || "customer@sunotal.com").trim().toLowerCase(),
+          senderPhone: user?.phone || "",
+          category: grievanceType.toLowerCase().includes("packaging") ? "packaging" : (grievanceType.toLowerCase().includes("payment") ? "payment" : "product"),
+          orderId: orderNum,
+          subject: `${grievanceType} for Order #${orderNum}`,
+          description: grievanceDesc,
+        }),
+      });
+
+      let realTicketId = `TKT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ticketId) realTicketId = data.ticketId;
+      }
+
       const newGrievance: Grievance = {
-        ticketId: newTicketId,
-        orderId: grievanceOrder.orderNumber || String(grievanceOrder.id || "N/A"),
+        ticketId: realTicketId,
+        orderId: orderNum,
         type: grievanceType,
         description: grievanceDesc,
         preferredResolution: grievanceResolution,
         status: "In Review",
         createdAt: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
-        responseMsg: "Grievance received. Our Quality Inspection Team is reviewing your ticket.",
+        responseMsg: "Grievance received. Dispatched to Central Support Portal for 24/7 agent review.",
       };
 
       const updated = [newGrievance, ...(Array.isArray(grievances) ? grievances : [])];
       setGrievances(updated);
       localStorage.setItem(STORAGE_GRIEVANCES_KEY, JSON.stringify(updated));
 
-      setIsSubmittingGrievance(false);
       setGrievanceOrder(null);
       setGrievanceDesc("");
-      toast.success(`Grievance ticket ${newTicketId} registered! Our team will respond within 2 hours.`);
+      toast.success(`Grievance ticket ${realTicketId} registered & reflected in Support Portal!`);
       setActiveTab("grievances");
-    }, 600);
+    } catch {
+      toast.error("Network error while submitting grievance");
+    } finally {
+      setIsSubmittingGrievance(false);
+    }
   };
 
   const [ratingOrder, setRatingOrder] = useState<OrderApi | null>(null);

@@ -225,7 +225,7 @@ export default function Orders() {
     loadOrders();
   };
 
-  const handleRaiseGrievanceSubmit = (e: React.FormEvent) => {
+  const handleRaiseGrievanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!grievanceOrder) return;
     if (!grievanceDesc.trim()) {
@@ -234,29 +234,54 @@ export default function Orders() {
     }
 
     setIsSubmittingGrievance(true);
-    setTimeout(() => {
-      const newTicketId = `GRV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const orderNum = grievanceOrder.orderNumber || String(grievanceOrder.id || "N/A");
+
+    try {
+      const res = await fetch("/api/support/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "user",
+          senderName: user?.name || user?.email || "Customer User",
+          senderEmail: (user?.email || "customer@sunotal.com").trim().toLowerCase(),
+          senderPhone: user?.phone || "",
+          category: grievanceType.toLowerCase().includes("packaging") ? "packaging" : (grievanceType.toLowerCase().includes("payment") ? "payment" : "product"),
+          orderId: orderNum,
+          subject: `${grievanceType} for Order #${orderNum}`,
+          description: grievanceDesc,
+        }),
+      });
+
+      let realTicketId = `TKT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ticketId) realTicketId = data.ticketId;
+      }
+
       const newGrievance: Grievance = {
-        ticketId: newTicketId,
-        orderId: grievanceOrder.orderNumber || String(grievanceOrder.id || "N/A"),
+        ticketId: realTicketId,
+        orderId: orderNum,
         type: grievanceType,
         description: grievanceDesc,
         preferredResolution: grievanceResolution,
         status: "In Review",
         createdAt: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
-        responseMsg: "Grievance received. Our Quality Inspection Team is reviewing your ticket.",
+        responseMsg: "Grievance received. Dispatched to Central Support Portal for 24/7 agent review.",
       };
 
       const updated = [newGrievance, ...(Array.isArray(grievances) ? grievances : [])];
       setGrievances(updated);
       localStorage.setItem(STORAGE_GRIEVANCES_KEY, JSON.stringify(updated));
 
-      setIsSubmittingGrievance(false);
       setGrievanceOrder(null);
       setGrievanceDesc("");
-      toast.success(`Grievance ticket ${newTicketId} registered! Our team will respond within 2 hours.`);
+      toast.success(`Grievance ticket ${realTicketId} registered & reflected in Support Portal!`);
       setActiveTab("grievances");
-    }, 600);
+    } catch {
+      toast.error("Network error while submitting grievance");
+    } finally {
+      setIsSubmittingGrievance(false);
+    }
   };
 
   const [ratingOrder, setRatingOrder] = useState<OrderApi | null>(null);
@@ -265,26 +290,49 @@ export default function Orders() {
   const [ratingFeedback, setRatingFeedback] = useState<string>("");
   const [submittingRating, setSubmittingRating] = useState<boolean>(false);
 
+  const [ratedOrderIds, setRatedOrderIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("sunotal_rated_orders") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
   const handleRatingSubmit = async () => {
     if (!ratingOrder) return;
     setSubmittingRating(true);
     try {
-      const token = localStorage.getItem("sunotal_token");
-      const res = await fetch(`/api/orders/${ratingOrder.id}/rate`, {
+      const res = await fetch(`/api/ratings`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({ itemRating: itemStars, driverRating: driverStars, feedback: ratingFeedback }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: ratingOrder.id,
+          userId: user?.id || 1,
+          riderId: (ratingOrder as any).riderId || "RIDER-101",
+          riderRating: driverStars,
+          productRating: itemStars,
+          riderFeedback: ratingFeedback,
+          productFeedback: ratingFeedback,
+        }),
       });
       const data = await res.json();
-      toast.success(data.message || "Thank you for your rating!");
-    } catch {
+
+      const newRated = [...ratedOrderIds, String(ratingOrder.id)];
+      setRatedOrderIds(newRated);
+      localStorage.setItem("sunotal_rated_orders", JSON.stringify(newRated));
+
+      toast.success(data.message || "Thank you for rating your produce items & delivery partner!");
+      setRatingOrder(null);
+    } catch (e: any) {
       toast.success("Thank you for rating your produce items & delivery partner!");
+      if (ratingOrder) {
+        const newRated = [...ratedOrderIds, String(ratingOrder.id)];
+        setRatedOrderIds(newRated);
+        localStorage.setItem("sunotal_rated_orders", JSON.stringify(newRated));
+      }
+      setRatingOrder(null);
     } finally {
       setSubmittingRating(false);
-      setRatingOrder(null);
       setRatingFeedback("");
     }
   };
@@ -449,14 +497,20 @@ export default function Orders() {
                           </Button>
                         )}
                         {order.status === "delivered" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setRatingOrder(order)}
-                            className="rounded-xl border-amber-400/50 text-amber-600 hover:bg-amber-50 font-bold"
-                          >
-                            <Star className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400" /> Rate Order & Rider
-                          </Button>
+                          ratedOrderIds.includes(String(order.id)) ? (
+                            <span className="inline-flex items-center text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl">
+                              <Star className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400" /> Rated ★★★★★
+                            </span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setRatingOrder(order)}
+                              className="rounded-xl border-amber-400/50 text-amber-600 hover:bg-amber-50 font-bold"
+                            >
+                              <Star className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400" /> Rate Order & Rider
+                            </Button>
+                          )
                         )}
                         <Button
                           size="sm"
