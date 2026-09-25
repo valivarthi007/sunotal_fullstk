@@ -24,7 +24,7 @@ import { useCart } from "@/lib/cart-context";
 import { useLocationState } from "@/lib/location-context";
 import { LocationModal } from "@/components/ui/location-modal";
 import { InteractiveMapPickerModal } from "@/components/ui/InteractiveMapPickerModal";
-import { cn } from "@/lib/utils";
+import { SearchAutocomplete } from "@/components/ui/SearchAutocomplete";
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -164,14 +164,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
 
-          <div className="hidden lg:flex flex-1 max-w-xl mx-8 items-center">
-            <div className="relative w-full group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <Input
-                placeholder="Search for fresh vegetables, fruits, dairy..."
-                className="pl-9 bg-accent/50 border-transparent focus-visible:bg-background focus-visible:border-primary/30 focus-visible:ring-primary/20 rounded-full h-11"
-              />
-            </div>
+          <div className="hidden lg:flex flex-1 max-w-xl mx-8 items-center justify-center">
+            <SearchAutocomplete />
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">

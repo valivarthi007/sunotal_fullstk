@@ -58,10 +58,17 @@ export function SearchAutocomplete() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const handleSelect = (productId: string) => {
+  const handleSelectProduct = (product: SearchResultProduct) => {
     setIsOpen(false);
     setQuery("");
-    setLocation(`/products?search=${encodeURIComponent(query)}`);
+    setLocation(`/products?search=${encodeURIComponent(product.name)}`);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && query.trim()) {
+      setIsOpen(false);
+      setLocation(`/products?search=${encodeURIComponent(query.trim())}`);
+    }
   };
 
   return (
@@ -72,8 +79,9 @@ export function SearchAutocomplete() {
           placeholder="Search for fresh spinach, mangoes, milk..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
           onFocus={() => query.length >= 2 && setIsOpen(true)}
-          className="pl-10 pr-9 h-11 bg-card border-border rounded-xl shadow-sm text-sm focus:border-emerald-500"
+          className="pl-10 pr-9 h-11 bg-accent/40 border-border/60 rounded-full shadow-xs text-sm focus:border-emerald-500 focus:bg-background focus:ring-emerald-500/20"
         />
         {query && (
           <button
@@ -82,7 +90,7 @@ export function SearchAutocomplete() {
               setResults([]);
               setIsOpen(false);
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
           >
             <X className="w-4 h-4" />
           </button>
@@ -105,13 +113,13 @@ export function SearchAutocomplete() {
               {results.map((product) => (
                 <div
                   key={product.id}
-                  onClick={() => handleSelect(product.id)}
-                  className="flex items-center gap-3 p-2 hover:bg-muted/50 rounded-xl cursor-pointer transition-colors"
+                  onClick={() => handleSelectProduct(product)}
+                  className="flex items-center gap-3 p-2 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/40 rounded-xl cursor-pointer transition-colors"
                 >
                   <img
                     src={normalizeImageUrl(product.image, product.category)}
                     alt={product.name}
-                    className="w-10 h-10 object-cover rounded-lg bg-muted shrink-0"
+                    className="w-10 h-10 object-cover rounded-lg bg-muted shrink-0 border border-border/40"
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-foreground truncate">{product.name}</p>

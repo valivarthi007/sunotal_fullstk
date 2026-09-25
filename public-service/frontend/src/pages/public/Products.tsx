@@ -72,9 +72,16 @@ export default function ProductsPage({ initialCategory = "All" }: ProductsPagePr
 
   // Sync state if URL changes
   useEffect(() => {
-    const catFromUrl = getCategoryFromUrl();
-    if (catFromUrl && catFromUrl.toLowerCase() !== filters.category.toLowerCase()) {
-      setFilters((prev) => ({ ...prev, category: catFromUrl }));
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const catFromUrl = urlParams.get("category");
+      const searchFromUrl = urlParams.get("search");
+      if (catFromUrl && catFromUrl.toLowerCase() !== filters.category.toLowerCase()) {
+        setFilters((prev) => ({ ...prev, category: catFromUrl }));
+      }
+      if (searchFromUrl !== null) {
+        setSearch(searchFromUrl);
+      }
     }
   }, [location]);
 
@@ -105,7 +112,7 @@ export default function ProductsPage({ initialCategory = "All" }: ProductsPagePr
   const { data: rawProducts, isLoading } = useListProducts(
     {
       category: filters.category !== "All" ? filters.category : undefined,
-      search: search.length > 2 ? search : undefined,
+      search: search.trim().length > 0 ? search.trim() : undefined,
     },
     { query: { queryKey: ["products", filters.category, search] } }
   );
