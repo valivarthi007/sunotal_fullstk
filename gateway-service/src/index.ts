@@ -3,14 +3,78 @@ import cors from 'cors';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Pool } from 'pg';
+import mongoose, { Schema } from 'mongoose';
 
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@127.0.0.1:5432/sunotal';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/sunotal';
 const JWT_SECRET = process.env.JWT_SECRET || 'sunotal_jwt_secret_2026_super_secure';
 const AWS_REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || 'jcs-raju-sunotal-final';
 const AWS_CLOUDFRONT_DOMAIN = process.env.AWS_CLOUDFRONT_DOMAIN || '';
+
+// MONGODB CONNECTION & FLEXIBLE SCHEMAS
+let isMongoConnected = false;
+async function initMongo() {
+  try {
+    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 3000 });
+    isMongoConnected = true;
+    console.log('✅ Connected to MongoDB Document Database for Quick-Commerce Catalog & Supplies');
+  } catch (err: any) {
+    console.warn('⚠️ MongoDB connection notice (using PostgreSQL hybrid fallback):', err?.message || err);
+    isMongoConnected = false;
+  }
+}
+initMongo();
+
+const ProductMongoSchema = new Schema({
+  id: { type: String, required: true },
+  sku: { type: String },
+  name: { type: String, required: true },
+  brand: { type: String, default: '' },
+  category: { type: String, required: true },
+  subCategory: { type: String, default: '' },
+  price: { type: Number, required: true },
+  originalPrice: { type: Number },
+  unit: { type: String, default: '1 unit' },
+  image: { type: String },
+  description: { type: String, default: '' },
+  isOrganic: { type: Boolean, default: false },
+  stock: { type: Number, default: 0 },
+  rating: { type: Number, default: 5.0 },
+  active: { type: Boolean, default: true },
+  attributes: { type: Schema.Types.Mixed, default: {} }, // 100% Dynamic schema key-values
+  tags: [{ type: String }],
+  vendorId: { type: String },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const ProductModel: mongoose.Model<any> = (mongoose.models.MongoProduct as mongoose.Model<any>) || mongoose.model('MongoProduct', ProductMongoSchema);
+
+const VendorSupplyMongoSchema = new Schema({
+  id: { type: String, required: true },
+  vendorId: { type: String, required: true },
+  vendorName: { type: String, required: true },
+  category: { type: String, required: true },
+  subCategory: { type: String, default: '' },
+  produce: { type: String, required: true },
+  brand: { type: String, default: '' },
+  batchNo: { type: String, default: '' },
+  expiryOrWarranty: { type: String, default: '' },
+  unit: { type: String, default: '1 unit' },
+  quantity: { type: Number, required: true },
+  price: { type: Number, required: true },
+  suggestedMrp: { type: Number },
+  darkStoreAllocation: { type: String, required: true },
+  qualityGrade: { type: String, default: 'A Grade' },
+  status: { type: String, default: 'PENDING' },
+  notes: { type: String, default: '' },
+  attributes: { type: Schema.Types.Mixed, default: {} },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const VendorSupplyModel: mongoose.Model<any> = (mongoose.models.MongoVendorSupply as mongoose.Model<any>) || mongoose.model('MongoVendorSupply', VendorSupplyMongoSchema);
 
 let s3Client: S3Client | null = null;
 try {
@@ -471,7 +535,34 @@ async function initDatabase() {
       }
     }
 
-    console.log('✅ PostgreSQL database schema, indexes & seed user credentials ready.');
+    // Seed 11 Quick-Commerce Verticals Categories
+    const seedCategories = [
+      { name: "Fresh Produce & Organic", icon: "🍏" },
+      { name: "Dairy, Bread & Eggs", icon: "🥛" },
+      { name: "Beverages & Drinks", icon: "🥤" },
+      { name: "Snacks & Munchies", icon: "🍿" },
+      { name: "Breakfast & Instant Meals", icon: "🥣" },
+      { name: "Grains, Oils & Dal", icon: "🌾" },
+      { name: "Personal Care & Hygiene", icon: "🧼" },
+      { name: "Cleaning & Household", icon: "🧹" },
+      { name: "Electronics & Tech Accessories", icon: "🔌" },
+      { name: "Baby Care & Wellness", icon: "👶" },
+      { name: "Pet Care & Specialty", icon: "🐶" }
+    ];
+
+    for (const cat of seedCategories) {
+      try {
+        await client.query(
+          `INSERT INTO categories (name, icon, active) VALUES ($1, $2, true)
+           ON CONFLICT (name) DO UPDATE SET icon = EXCLUDED.icon`,
+          [cat.name, cat.icon]
+        );
+      } catch (err: any) {
+        console.warn(`Failed to seed category ${cat.name}:`, err?.message || err);
+      }
+    }
+
+    console.log('✅ PostgreSQL database schema, indexes, seed accounts & Quick-Commerce categories ready.');
   } catch (err: any) {
     console.warn('⚠️ PostgreSQL DB init notice:', err?.message || err);
   } finally {
@@ -940,18 +1031,51 @@ app.get(['/api/admin/quotations', '/api/vendors/quotations', '/api/procurement/q
 });
 
 app.post(['/api/vendors/quotations', '/api/procurement/quotations'], async (req, res) => {
-  const { vendorName, name, produce, cropName, quantity, price, category, unit, qualityGrade, expectedHarvestDate, darkStoreAllocation, notes, phone, address } = req.body || {};
-  const produceName = produce || cropName;
+  const { 
+    vendorId, vendorName, name, produce, cropName, quantity, price, suggestedMrp, category, subCategory, 
+    unit, qualityGrade, expectedHarvestDate, darkStoreAllocation, notes, phone, address, brand, batchNo, 
+    expiryOrWarranty, attributes 
+  } = req.body || {};
+  const produceName = produce || name || cropName;
   if (!produceName || quantity === undefined || price === undefined) {
-    return res.status(400).json({ error: 'Produce name, quantity, and price per unit are required' });
+    return res.status(400).json({ error: 'Item/Product name, quantity, and wholesale price per unit are required' });
   }
   try {
     const dbRes = await gatewayPgPool.query(
       `INSERT INTO quotations (vendor_name, produce, crop_name, quantity, price, category, unit, quality_grade, expected_harvest_date, dark_store_allocation, notes, phone, address, status, payment_status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'pending', 'processing') RETURNING *`,
-      [vendorName || name || 'Local Farm Vendor', produceName, produceName, Number(quantity), Number(price), category || 'Vegetables', unit || 'Quintal', qualityGrade || 'Grade A (Organic / Premium)', expectedHarvestDate || new Date().toISOString().split('T')[0], darkStoreAllocation || 'Vijayawada Central Hub', notes || '', phone || '', address || '']
+      [vendorName || name || 'Quick-Commerce Supply Vendor', produceName, produceName, Number(quantity), Number(price), category || 'Fresh Produce & Organic', unit || '1 unit', qualityGrade || 'Grade A (Premium / Verified)', expectedHarvestDate || new Date().toISOString().split('T')[0], darkStoreAllocation || 'Vijayawada Central Hub', notes || '', phone || '', address || '']
     );
     const q = dbRes.rows[0];
+
+    // Sync to Mongo VendorSupplyModel
+    if (isMongoConnected) {
+      try {
+        await VendorSupplyModel.create({
+          id: String(q.id),
+          vendorId: vendorId || 'VND-' + Date.now(),
+          vendorName: vendorName || name || 'Quick-Commerce Supply Vendor',
+          category: category || 'Fresh Produce & Organic',
+          subCategory: subCategory || '',
+          produce: produceName,
+          brand: brand || '',
+          batchNo: batchNo || '',
+          expiryOrWarranty: expiryOrWarranty || '',
+          unit: unit || '1 unit',
+          quantity: Number(quantity),
+          price: Number(price),
+          suggestedMrp: suggestedMrp ? Number(suggestedMrp) : undefined,
+          darkStoreAllocation: darkStoreAllocation || 'Central Dark Store Hub',
+          qualityGrade: qualityGrade || 'Grade A',
+          status: 'PENDING',
+          notes: notes || '',
+          attributes: attributes || {}
+        });
+      } catch (mErr: any) {
+        console.warn('⚠️ Mongo VendorSupply sync warning:', mErr?.message);
+      }
+    }
+
     return res.status(201).json({
       id: q.id, vendorName: q.vendor_name, produce: q.produce, cropName: q.crop_name, quantity: Number(q.quantity), price: Number(q.price), category: q.category, unit: q.unit, qualityGrade: q.quality_grade, expectedHarvestDate: q.expected_harvest_date, darkStoreAllocation: q.dark_store_allocation, notes: q.notes, status: q.status, paymentStatus: q.payment_status, createdAt: q.created_at
     });
@@ -961,26 +1085,23 @@ app.post(['/api/vendors/quotations', '/api/procurement/quotations'], async (req,
 });
 
 function parseQuotationUnitAndPrice(rawUnit: string, rawQuantity: number, rawPrice: number, category: string = '') {
-  const u = (rawUnit || 'Quintal').toLowerCase().trim();
+  const u = (rawUnit || '1 unit').toLowerCase().trim();
   const cat = (category || '').toLowerCase().trim();
-  const isLiquid = cat.includes('dairy') || cat.includes('liquid') || cat.includes('milk') || cat.includes('juice');
+  const isLiquid = cat.includes('dairy') || cat.includes('liquid') || cat.includes('milk') || cat.includes('beverage') || cat.includes('drink');
 
   let qtyInBaseUnit = Number(rawQuantity || 1);
-  let baseUnitName = isLiquid ? 'Litre' : 'kg';
+  let baseUnitName = 'unit';
   let vendorPricePerBaseUnit = Number(rawPrice || 0);
 
   if (u.includes('quintal')) {
-    // 1 Quintal = 100 kg
     qtyInBaseUnit = Number(rawQuantity || 1) * 100;
     vendorPricePerBaseUnit = Number(rawPrice || 0) / 100;
     baseUnitName = 'kg';
   } else if (u.includes('ton')) {
-    // 1 Metric Ton = 1000 kg
     qtyInBaseUnit = Number(rawQuantity || 1) * 1000;
     vendorPricePerBaseUnit = Number(rawPrice || 0) / 1000;
     baseUnitName = 'kg';
   } else if (u.includes('ml') || u.includes('milliliter')) {
-    // 1 Litre = 1000 mL
     qtyInBaseUnit = Number(rawQuantity || 1) / 1000;
     vendorPricePerBaseUnit = Number(rawPrice || 0) * 1000;
     baseUnitName = 'Litre';
@@ -988,14 +1109,24 @@ function parseQuotationUnitAndPrice(rawUnit: string, rawQuantity: number, rawPri
     qtyInBaseUnit = Number(rawQuantity || 1);
     vendorPricePerBaseUnit = Number(rawPrice || 0);
     baseUnitName = 'Litre';
-  } else {
-    // kg or default
+  } else if (u.includes('kg') || u.includes('kilo')) {
     qtyInBaseUnit = Number(rawQuantity || 1);
     vendorPricePerBaseUnit = Number(rawPrice || 0);
-    baseUnitName = isLiquid ? 'Litre' : 'kg';
+    baseUnitName = 'kg';
+  } else if (u.includes('g') || u.includes('gram')) {
+    qtyInBaseUnit = Number(rawQuantity || 1) / 1000;
+    vendorPricePerBaseUnit = Number(rawPrice || 0) * 1000;
+    baseUnitName = 'kg';
+  } else if (u.includes('piece') || u.includes('pcs') || u.includes('pack') || u.includes('box') || u.includes('bottle') || u.includes('can') || u.includes('unit') || u.includes('item')) {
+    qtyInBaseUnit = Number(rawQuantity || 1);
+    vendorPricePerBaseUnit = Number(rawPrice || 0);
+    baseUnitName = rawUnit.trim() || 'unit';
+  } else {
+    qtyInBaseUnit = Number(rawQuantity || 1);
+    vendorPricePerBaseUnit = Number(rawPrice || 0);
+    baseUnitName = isLiquid ? 'Litre' : (cat.includes('fresh') || cat.includes('produce') || cat.includes('grain') ? 'kg' : 'unit');
   }
 
-  // Calculate selling price per 1 kg / 1 Litre with 10% markup per unit
   const sellingPrice = Number((vendorPricePerBaseUnit * 1.10).toFixed(2));
   const originalPrice = Number((sellingPrice * 1.25).toFixed(2));
   const displayUnit = `1 ${baseUnitName}`;
@@ -1023,18 +1154,20 @@ app.put(['/api/admin/quotations/:id/status', '/api/admin/quotations/:id'], async
       if (status === 'accepted' || status === 'approved') {
         const crop = q.produce || q.crop_name;
         if (crop) {
-          const cat = q.category || 'Vegetables';
-          const vendorName = q.vendor_name || 'Farm Vendor';
+          const cat = q.category || 'Fresh Produce & Organic';
+          const vendorName = q.vendor_name || 'Supply Vendor';
           const darkStore = q.dark_store_allocation || 'Central Dark Store Hub';
           const parsed = parseQuotationUnitAndPrice(q.unit, Number(q.quantity), Number(q.price), cat);
 
           let defaultImg = 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&q=80';
-          if (cat.toLowerCase().includes('fruit')) {
+          if (cat.toLowerCase().includes('electronics') || cat.toLowerCase().includes('tech')) {
+            defaultImg = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80';
+          } else if (cat.toLowerCase().includes('fruit') || cat.toLowerCase().includes('produce')) {
             defaultImg = 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=500&q=80';
-          } else if (parsed.baseUnitName === 'Litre') {
+          } else if (parsed.baseUnitName === 'Litre' || cat.toLowerCase().includes('beverage') || cat.toLowerCase().includes('dairy')) {
             defaultImg = 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=500&q=80';
-          } else if (cat.toLowerCase().includes('grain')) {
-            defaultImg = 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=500&q=80';
+          } else if (cat.toLowerCase().includes('snack') || cat.toLowerCase().includes('biscuit')) {
+            defaultImg = 'https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=500&q=80';
           }
 
           let targetProdId: number | null = null;
@@ -1054,6 +1187,25 @@ app.put(['/api/admin/quotations/:id/status', '/api/admin/quotations/:id'], async
               );
               targetProdId = newProd.rows[0]?.id || null;
             }
+
+            // Also sync to MongoDB ProductModel
+            if (isMongoConnected && targetProdId) {
+              await ProductModel.findOneAndUpdate(
+                { id: String(targetProdId) },
+                {
+                  id: String(targetProdId),
+                  name: crop,
+                  category: cat,
+                  price: parsed.sellingPrice,
+                  originalPrice: parsed.originalPrice,
+                  unit: parsed.displayUnit,
+                  image: defaultImg,
+                  stock: parsed.qtyInBaseUnit,
+                  active: true
+                },
+                { upsert: true, new: true }
+              );
+            }
           } catch (e: any) {
             console.warn('Product auto-upsert warning:', e?.message);
           }
@@ -1062,18 +1214,18 @@ app.put(['/api/admin/quotations/:id/status', '/api/admin/quotations/:id'], async
             await gatewayPgPool.query(
               `INSERT INTO inventory (product_id, product_name, vendor_name, warehouse_name, quantity, unit, status, notes)
                VALUES ($1, $2, $3, $4, $5, $6, 'in_stock', $7)`,
-              [targetProdId, crop, vendorName, darkStore, parsed.qtyInBaseUnit, parsed.baseUnitName, `Auto-stocked from approved quotation #${q.id}`]
+              [targetProdId, crop, vendorName, darkStore, parsed.qtyInBaseUnit, parsed.baseUnitName, `Auto-stocked from approved proposal #${q.id}`]
             );
           } catch (e: any) {
             console.warn('Inventory auto-stock warning:', e?.message);
           }
         }
       }
-      return res.json({ success: true, message: `Quotation #${targetId} marked as ${status}`, quotation: q });
+      return res.json({ success: true, message: `Proposal #${targetId} marked as ${status}`, quotation: q });
     }
-    return res.status(404).json({ error: 'Quotation not found' });
+    return res.status(404).json({ error: 'Proposal not found' });
   } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to update quotation status', message: err?.message });
+    return res.status(500).json({ error: 'Failed to update proposal status', message: err?.message });
   }
 });
 
@@ -1667,20 +1819,40 @@ app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (req,
     sql += ' ORDER BY id DESC';
 
     const dbRes = await gatewayPgPool.query(sql, params);
-    return res.json(dbRes.rows.map(p => ({
-      id: String(p.id),
-      name: p.name,
-      category: p.category,
-      price: Number(p.price),
-      originalPrice: Number(p.original_price || p.price),
-      unit: p.unit,
-      image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
-      description: p.description || '',
-      isOrganic: p.is_organic,
-      stock: p.stock,
-      rating: Number(p.rating || 4.8),
-      active: p.active ?? true
-    })));
+    
+    // Fetch dynamic Mongo metadata if connected
+    let mongoProductMap: Record<string, any> = {};
+    if (isMongoConnected) {
+      try {
+        const mongoDocs = await ProductModel.find({}).lean();
+        for (const doc of mongoDocs) {
+          mongoProductMap[String(doc.id)] = doc;
+        }
+      } catch {}
+    }
+
+    return res.json(dbRes.rows.map(p => {
+      const pId = String(p.id);
+      const mDoc = mongoProductMap[pId] || {};
+      return {
+        id: pId,
+        name: p.name,
+        category: p.category,
+        brand: mDoc.brand || '',
+        subCategory: mDoc.subCategory || '',
+        price: Number(p.price),
+        originalPrice: Number(p.original_price || p.price),
+        unit: p.unit,
+        image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
+        description: p.description || mDoc.description || '',
+        isOrganic: p.is_organic,
+        stock: p.stock,
+        rating: Number(p.rating || mDoc.rating || 5.0),
+        active: p.active ?? true,
+        attributes: mDoc.attributes || {},
+        tags: mDoc.tags || []
+      };
+    }));
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch products', message: err?.message });
   }
@@ -1693,19 +1865,31 @@ app.get(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
     const dbRes = await gatewayPgPool.query('SELECT * FROM products WHERE id = $1', [targetId]);
     if (dbRes.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
     const p = dbRes.rows[0];
+
+    let mDoc: any = {};
+    if (isMongoConnected) {
+      try {
+        mDoc = (await ProductModel.findOne({ id: String(targetId) }).lean()) || {};
+      } catch {}
+    }
+
     return res.json({
       id: String(p.id),
       name: p.name,
       category: p.category,
+      brand: mDoc.brand || '',
+      subCategory: mDoc.subCategory || '',
       price: Number(p.price),
       originalPrice: Number(p.original_price || p.price),
       unit: p.unit,
       image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
-      description: p.description || '',
+      description: p.description || mDoc.description || '',
       isOrganic: p.is_organic,
       stock: p.stock,
-      rating: Number(p.rating || 4.8),
-      active: p.active ?? true
+      rating: Number(p.rating || mDoc.rating || 5.0),
+      active: p.active ?? true,
+      attributes: mDoc.attributes || {},
+      tags: mDoc.tags || []
     });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch product', message: err?.message });
@@ -1713,18 +1897,46 @@ app.get(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
 });
 
 app.post(['/api/products', '/api/admin/products'], async (req, res) => {
-  const { name, category, price, originalPrice, unit, image, description, isOrganic, stock } = req.body || {};
+  const { name, category, price, originalPrice, unit, image, description, isOrganic, stock, brand, subCategory, attributes, tags, vendorId } = req.body || {};
   if (!name || !category || price === undefined) return res.status(400).json({ error: 'Name, category, and price required' });
   try {
     const dbRes = await gatewayPgPool.query(
       `INSERT INTO products (name, category, price, original_price, unit, image, description, is_organic, stock, active)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true) RETURNING *`,
-      [name, category, Number(price), Number(originalPrice || price), unit || '1 kg', image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400', description || '', isOrganic !== false, Number(stock || 100)]
+      [name, category, Number(price), Number(originalPrice || price), unit || '1 unit', image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400', description || '', isOrganic !== false, Number(stock || 100)]
     );
     const p = dbRes.rows[0];
     const formattedProduct = {
-      id: String(p.id), name: p.name, category: p.category, price: Number(p.price), originalPrice: Number(p.original_price), unit: p.unit, image: p.image, description: p.description || '', isOrganic: p.is_organic, stock: p.stock, rating: 4.8, active: true
+      id: String(p.id),
+      name: p.name,
+      category: p.category,
+      brand: brand || '',
+      subCategory: subCategory || '',
+      price: Number(p.price),
+      originalPrice: Number(p.original_price),
+      unit: p.unit,
+      image: p.image,
+      description: p.description || '',
+      isOrganic: p.is_organic,
+      stock: p.stock,
+      rating: 5.0,
+      active: true,
+      attributes: attributes || {},
+      tags: tags || [],
+      vendorId: vendorId || ''
     };
+
+    if (isMongoConnected) {
+      try {
+        await ProductModel.create({
+          ...formattedProduct,
+          id: String(p.id)
+        });
+      } catch (mErr) {
+        console.warn('MongoDB Product sync notice:', mErr);
+      }
+    }
+
     broadcastRealtimeEvent({ type: 'PRODUCT_CREATED', path: req.originalUrl || req.url, method: 'POST', data: formattedProduct });
     return res.status(201).json(formattedProduct);
   } catch (err: any) {
@@ -1735,7 +1947,7 @@ app.post(['/api/products', '/api/admin/products'], async (req, res) => {
 app.put(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
   const targetId = Number(req.params.id);
   if (isNaN(targetId)) return res.status(400).json({ error: 'Invalid product ID' });
-  const { name, category, price, originalPrice, unit, image, description, isOrganic, stock } = req.body || {};
+  const { name, category, price, originalPrice, unit, image, description, isOrganic, stock, brand, subCategory, attributes, tags } = req.body || {};
   try {
     const dbRes = await gatewayPgPool.query(
       `UPDATE products 
@@ -1753,9 +1965,38 @@ app.put(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
     );
     if (dbRes.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
     const p = dbRes.rows[0];
+
     const formattedProduct = {
-      id: String(p.id), name: p.name, category: p.category, price: Number(p.price), originalPrice: Number(p.original_price), unit: p.unit, image: p.image, description: p.description || '', isOrganic: p.is_organic, stock: p.stock, rating: Number(p.rating || 4.8), active: p.active ?? true
+      id: String(p.id),
+      name: p.name,
+      category: p.category,
+      brand: brand || '',
+      subCategory: subCategory || '',
+      price: Number(p.price),
+      originalPrice: Number(p.original_price),
+      unit: p.unit,
+      image: p.image,
+      description: p.description || '',
+      isOrganic: p.is_organic,
+      stock: p.stock,
+      rating: Number(p.rating || 5.0),
+      active: p.active ?? true,
+      attributes: attributes || {},
+      tags: tags || []
     };
+
+    if (isMongoConnected) {
+      try {
+        await ProductModel.findOneAndUpdate(
+          { id: String(p.id) },
+          { $set: formattedProduct },
+          { upsert: true, new: true }
+        );
+      } catch (mErr) {
+        console.warn('MongoDB Product update sync notice:', mErr);
+      }
+    }
+
     broadcastRealtimeEvent({ type: 'PRODUCT_UPDATED', path: req.originalUrl || req.url, method: 'PUT', data: formattedProduct });
     return res.json(formattedProduct);
   } catch (err: any) {

@@ -90,27 +90,27 @@ export default function FarmerRegistration() {
         <div className="absolute inset-0 bg-primary/10" />
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl">
-            <Badge className="mb-6 bg-primary/20 text-primary border-primary/20">Sunotal For Farmers</Badge>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 tracking-tight">Grow with Sunotal.<br/>Sell Direct. Earn More.</h1>
+            <Badge className="mb-6 bg-primary/20 text-primary border-primary/20">Sunotal Quick-Commerce Vendor Network</Badge>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 tracking-tight">Partner with Sunotal.<br/>Supply 10-Min Dark Store Networks.</h1>
             <p className="text-xl text-white/80 mb-10 max-w-2xl">
-              Join a network of progressive farmers selling directly to customers. Cut out the middlemen and get paid faster.
+              Join India's premier Quick-Commerce sourcing network. Supply FMCG, Electronics, Fresh Produce, Beverages & Household goods directly to dark stores.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-6 border-t border-white/10">
               <div>
+                <p className="text-3xl font-bold text-primary mb-1">11</p>
+                <p className="text-sm text-white/70 uppercase tracking-wider font-semibold">Product Verticals</p>
+              </div>
+              <div>
                 <p className="text-3xl font-bold text-primary mb-1">50k+</p>
-                <p className="text-sm text-white/70 uppercase tracking-wider font-semibold">Customers</p>
+                <p className="text-sm text-white/70 uppercase tracking-wider font-semibold">Active Customers</p>
               </div>
               <div>
-                <p className="text-3xl font-bold text-primary mb-1">40%</p>
-                <p className="text-sm text-white/70 uppercase tracking-wider font-semibold">More Earnings</p>
+                <p className="text-3xl font-bold text-primary mb-1">24 Hour</p>
+                <p className="text-sm text-white/70 uppercase tracking-wider font-semibold">Settlement Ledgers</p>
               </div>
               <div>
-                <p className="text-3xl font-bold text-primary mb-1">2 Day</p>
-                <p className="text-sm text-white/70 uppercase tracking-wider font-semibold">Payments</p>
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-primary mb-1">1000+</p>
-                <p className="text-sm text-white/70 uppercase tracking-wider font-semibold">Farmers</p>
+                <p className="text-3xl font-bold text-primary mb-1">2000+</p>
+                <p className="text-sm text-white/70 uppercase tracking-wider font-semibold">Verified Vendors</p>
               </div>
             </div>
           </div>
@@ -120,7 +120,7 @@ export default function FarmerRegistration() {
       <div className="container mx-auto px-4 py-16">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
           <div>
-            <h2 className="text-3xl font-bold mb-8">Why partner with us?</h2>
+            <h2 className="text-3xl font-bold mb-8">Why supply to Sunotal?</h2>
             
             <div className="space-y-8">
               <div className="flex gap-4">
@@ -128,8 +128,8 @@ export default function FarmerRegistration() {
                   <Users className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold mb-2">Direct Market Access</h3>
-                  <p className="text-muted-foreground">Your produce reaches the end consumer without going through multiple hands. Build your own brand.</p>
+                  <h3 className="text-xl font-bold mb-2">Direct Dark Store Inflow</h3>
+                  <p className="text-muted-foreground">Your items are stored in hyper-local dark stores for 10-minute instant doorstep delivery to customers.</p>
                 </div>
               </div>
               
@@ -138,8 +138,8 @@ export default function FarmerRegistration() {
                   <HandCoins className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold mb-2">Transparent Pricing & Fast Payments</h3>
-                  <p className="text-muted-foreground">Know exactly what you earn. Payments are credited directly to your bank account within 48 hours of sale.</p>
+                  <h3 className="text-xl font-bold mb-2">Automated Financial Ledgers</h3>
+                  <p className="text-muted-foreground">Track wholesale orders, dynamic MongoDB catalog proposals, and direct bank payouts in real time.</p>
                 </div>
               </div>
               
@@ -148,8 +148,8 @@ export default function FarmerRegistration() {
                   <TrendingUp className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold mb-2">Logistics Support</h3>
-                  <p className="text-muted-foreground">We handle the pick-up from designated collection centers so you can focus entirely on farming.</p>
+                  <h3 className="text-xl font-bold mb-2">Multi-Category Support</h3>
+                  <p className="text-muted-foreground">From Electronics, Mobile Accessories, and FMCG to Organic Produce & Household items, supply any category seamlessly.</p>
                 </div>
               </div>
               
@@ -158,16 +158,16 @@ export default function FarmerRegistration() {
                   <Leaf className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold mb-2">Dedicated Support</h3>
-                  <p className="text-muted-foreground">Access agronomists, weather updates, and market demand forecasts through our farmer app.</p>
+                  <h3 className="text-xl font-bold mb-2">Dedicated Sourcing Portal</h3>
+                  <p className="text-muted-foreground">Manage inventory proposals, dark store allocations, and brand warranties via your vendor dashboard.</p>
                 </div>
               </div>
             </div>
           </div>
           
           <div className="bg-card border border-border shadow-sm rounded-3xl p-8">
-            <h2 className="text-2xl font-bold mb-2">Apply to become a Vendor</h2>
-            <p className="text-muted-foreground mb-8">Fill out the details below and our sourcing team will visit your farm.</p>
+            <h2 className="text-2xl font-bold mb-2">Apply to Become a Verified Vendor</h2>
+            <p className="text-muted-foreground mb-8">Fill out the details below and our vendor procurement team will activate your sourcing account.</p>
             
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">

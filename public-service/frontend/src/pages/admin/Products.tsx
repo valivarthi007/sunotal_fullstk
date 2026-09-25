@@ -120,7 +120,7 @@ export default function ProductsAdmin() {
     defaultValues: {
       productId: "",
       name: "",
-      category: "Vegetables",
+      category: "Fresh Produce & Organic",
       unit: "1 kg",
       price: 0,
       originalPrice: 0,

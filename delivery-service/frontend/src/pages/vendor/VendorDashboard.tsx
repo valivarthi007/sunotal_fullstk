@@ -36,14 +36,18 @@ import { VendorLayout } from "@/components/layout/VendorLayout";
 import { fetchWarehouses, Warehouse, useListProductDefinitions, useListProducts } from "@/lib/api-client";
 
 const quotationSchema = z.object({
-  category: z.string().min(1, "Please select a produce category"),
-  produce: z.string().min(2, "Produce name must be at least 2 characters"),
+  category: z.string().min(1, "Please select a supply category"),
+  produce: z.string().min(2, "Product/Item name must be at least 2 characters"),
+  brand: z.string().optional(),
+  batchNo: z.string().optional(),
+  expiryOrWarranty: z.string().optional(),
   unit: z.string().min(1, "Please select a unit"),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
-  price: z.coerce.number().min(1, "Price must be at least 1"),
+  price: z.coerce.number().min(1, "Wholesale price must be at least 1"),
+  suggestedMrp: z.coerce.number().optional(),
   qualityGrade: z.string().min(1, "Please select a quality grade"),
   expectedHarvestDate: z.string().optional(),
-  darkStoreAllocation: z.string().min(1, "Please select target Dark Store"),
+  darkStoreAllocation: z.string().min(1, "Please select target Dark Store Hub"),
   notes: z.string().optional(),
 });
 
@@ -61,7 +65,6 @@ export default function VendorDashboard() {
   const categories = Array.isArray(rawCategories) ? rawCategories : (Array.isArray((rawCategories as any)?.categories) ? (rawCategories as any).categories : []);
   const productDefs = Array.isArray(rawProductDefs) ? rawProductDefs : [];
   const products = Array.isArray(rawProducts) ? rawProducts : (Array.isArray((rawProducts as any)?.products) ? (rawProducts as any).products : []);
-
 
   const [vendorProfile, setVendorProfile] = useState<any>(null);
   const [quotations, setQuotations] = useState<any[]>([]);
@@ -91,7 +94,7 @@ export default function VendorDashboard() {
       firstName: userName.split(" ")[0] || "Vendor",
       lastName: userName.split(" ").slice(1).join(" ") || "",
       phone: user?.phone || "N/A",
-      location: user?.city || "Direct Sourcing Mandal",
+      location: user?.city || "Central Sourcing Hub",
       status: user?.active ? "approved" : "pending",
     });
 
@@ -121,10 +124,14 @@ export default function VendorDashboard() {
     defaultValues: {
       category: "",
       produce: "",
-      unit: "Quintal",
-      quantity: 10,
-      price: 3500,
-      qualityGrade: "Grade A (Organic / Premium)",
+      brand: "",
+      batchNo: "",
+      expiryOrWarranty: "",
+      unit: "Pieces",
+      quantity: 50,
+      price: 250,
+      suggestedMrp: 350,
+      qualityGrade: "Grade A (Verified / Premium)",
       expectedHarvestDate: new Date().toISOString().split("T")[0],
       darkStoreAllocation: "",
       notes: "",
@@ -161,12 +168,13 @@ export default function VendorDashboard() {
     return list;
   }, [productDefs, products, selectedCategory]);
 
-  // Set default unit only if unit field is empty
+  // Set default unit dynamically based on category
   useEffect(() => {
     if (!form.getValues("unit")) {
-      if (selectedCategory === "Dairy") form.setValue("unit", "Liters");
-      else if (selectedCategory === "Fruits") form.setValue("unit", "Kg");
-      else form.setValue("unit", "Quintal");
+      const cat = (selectedCategory || "").toLowerCase();
+      if (cat.includes("dairy") || cat.includes("beverage") || cat.includes("drink")) form.setValue("unit", "Liters");
+      else if (cat.includes("fresh") || cat.includes("produce") || cat.includes("grain")) form.setValue("unit", "Kg");
+      else form.setValue("unit", "Pieces");
     }
   }, [selectedCategory, form]);
 
@@ -181,34 +189,50 @@ export default function VendorDashboard() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
+      const payload = {
+        ...values,
+        vendorId: user?.id || 'VND-' + Date.now(),
+        vendorName: `${vendorProfile?.firstName || 'Vendor'} ${vendorProfile?.lastName || ''}`.trim(),
+        phone: vendorProfile?.phone || '',
+        attributes: {
+          brand: values.brand || '',
+          batchNo: values.batchNo || '',
+          expiryOrWarranty: values.expiryOrWarranty || '',
+          suggestedMrp: values.suggestedMrp || values.price,
+        }
+      };
+
       const res = await fetch("/api/vendors/quotations", {
         method: "POST",
         headers,
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
         const newQuote = await res.json();
         setQuotations((prev) => [newQuote, ...prev]);
-        toast.success(`Harvest Supply quotation for ${values.produce} submitted to ${values.darkStoreAllocation}!`);
+        toast.success(`Wholesale supply proposal for ${values.produce} submitted to ${values.darkStoreAllocation}!`);
       } else {
-        // Local POC fallback insertion
         const newQuote = {
           id: Date.now(),
-          ...values,
+          ...payload,
           status: "pending",
           createdAt: new Date().toISOString(),
         };
         setQuotations((prev) => [newQuote, ...prev]);
-        toast.success(`Harvest Supply quotation for ${values.produce} submitted successfully!`);
+        toast.success(`Wholesale supply proposal for ${values.produce} submitted successfully!`);
       }
 
       form.reset({
         category: values.category,
         produce: "",
+        brand: "",
+        batchNo: "",
+        expiryOrWarranty: "",
         unit: values.unit,
-        quantity: 10,
+        quantity: 50,
         price: values.price,
+        suggestedMrp: values.price * 1.3,
         qualityGrade: values.qualityGrade,
         expectedHarvestDate: new Date().toISOString().split("T")[0],
         darkStoreAllocation: values.darkStoreAllocation,
@@ -216,7 +240,7 @@ export default function VendorDashboard() {
       });
       setActiveTab("history");
     } catch (err: any) {
-      toast.error(err.message || "Failed to submit quotation");
+      toast.error(err.message || "Failed to submit proposal");
     } finally {
       setIsSubmitting(false);
     }
@@ -238,18 +262,18 @@ export default function VendorDashboard() {
           <div className="bg-card border border-border rounded-3xl p-5 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold text-2xl shadow-md">
-                🌾
+                🛍️
               </div>
               <div>
                 <div className="font-bold text-base text-secondary flex items-center gap-2">
                   <span>{vendorProfile?.firstName} {vendorProfile?.lastName}</span>
                   <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] uppercase font-mono font-bold">
-                    VERIFIED FARM VENDOR
+                    VERIFIED QUICK-COMMERCE VENDOR
                   </Badge>
                 </div>
                 <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                   <span>📍 {vendorProfile?.location}</span>
-                  <span>• {vendorProfile?.farmSize || "10 Acres"}</span>
+                  <span>• Multi-Category Sourcing Partner</span>
                 </div>
               </div>
             </div>
@@ -267,279 +291,324 @@ export default function VendorDashboard() {
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex border-b border-border gap-2 text-xs font-semibold">
+          <div className="flex border-b border-border gap-2 text-xs font-semibold overflow-x-auto">
             <button
               onClick={() => setActiveTab("submit")}
-              className={`py-3 px-5 border-b-2 transition-all flex items-center gap-2 rounded-t-xl ${
+              className={`py-3 px-5 border-b-2 transition-all flex items-center gap-2 rounded-t-xl whitespace-nowrap ${
                 activeTab === "submit"
                   ? "border-emerald-600 text-emerald-600 font-bold bg-accent/40"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              <PlusCircle className="w-4 h-4" /> Submit Crop Harvest Supply
+              <PlusCircle className="w-4 h-4" /> Submit Wholesale Supply Proposal
             </button>
-          <button
-            onClick={() => setActiveTab("history")}
-            className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === "history"
-                ? "border-emerald-400 text-emerald-400 font-bold bg-slate-900/60 rounded-t-xl"
-                : "border-transparent text-slate-400 hover:text-white"
-            }`}
-          >
-            <FileText className="w-4 h-4" /> Supply Batches & Quotations ({quotations.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("payouts")}
-            className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === "payouts"
-                ? "border-emerald-400 text-emerald-400 font-bold bg-slate-900/60 rounded-t-xl"
-                : "border-transparent text-slate-400 hover:text-white"
-            }`}
-          >
-            <CreditCard className="w-4 h-4" /> Direct Farmer Settlement Payouts
-          </button>
-        </div>
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                activeTab === "history"
+                  ? "border-emerald-400 text-emerald-400 font-bold bg-slate-900/60 rounded-t-xl"
+                  : "border-transparent text-slate-400 hover:text-white"
+              }`}
+            >
+              <FileText className="w-4 h-4" /> Wholesale Proposals ({quotations.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("payouts")}
+              className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                activeTab === "payouts"
+                  ? "border-emerald-400 text-emerald-400 font-bold bg-slate-900/60 rounded-t-xl"
+                  : "border-transparent text-slate-400 hover:text-white"
+              }`}
+            >
+              <CreditCard className="w-4 h-4" /> Vendor Settlement Payouts
+            </button>
+          </div>
 
-        {/* TAB 1: Submit Produce Form */}
-        {activeTab === "submit" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Form Section */}
-            <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
-              <div>
-                <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-amber-400" /> Submit Harvest Produce Quotation
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Supply farm-fresh crops, vegetables, grains, or dairy direct to Sunotal Dark Stores.
-                </p>
-              </div>
+          {/* TAB 1: Submit Wholesale Proposal Form */}
+          {activeTab === "submit" && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Form Section */}
+              <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
+                <div>
+                  <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-400" /> Submit Wholesale Supply Proposal
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Supply FMCG, Electronics & Tech, Fresh Produce, Dairy, or Household goods direct to Sunotal Dark Stores.
+                  </p>
+                </div>
 
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmitQuotation)} className="space-y-4 text-xs">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Category - Strict Admin Control */}
-                    <FormField
-                      control={form.control}
-                      name="category"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-slate-300 font-bold">Produce Category (Admin Catalog)</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
-                                <SelectValue placeholder="Select Admin Category" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                              {categories && categories.length > 0 ? (
-                                categories.map((cat: any) => (
-                                  <SelectItem key={cat.id || cat.name} value={cat.name}>
-                                    📦 {cat.name}
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="none" disabled>
-                                  No active categories created in DB. Please create a category in Admin Panel first.
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Produce Name - Strict Admin Control */}
-                    <FormField
-                      control={form.control}
-                      name="produce"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-slate-300 font-bold">Produce Crop Name (Admin Defined Catalog)</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
-                                <SelectValue placeholder="Select Product defined by Admin..." />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
-                              {availableProduceItems.map((prodName) => (
-                                <SelectItem key={prodName} value={prodName}>
-                                  🌱 {prodName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Unit Selector */}
-                    <FormField
-                      control={form.control}
-                      name="unit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
-                            <Scale className="w-3.5 h-3.5 text-amber-400" /> Supply Unit
-                          </FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-bold">
-                                <SelectValue placeholder="Select Unit" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                              {selectedCategory === "Dairy" ? (
-                                <>
-                                  <SelectItem value="Liters">Liters (L)</SelectItem>
-                                  <SelectItem value="Milliliters">Milliliters (mL)</SelectItem>
-                                </>
-                              ) : selectedCategory === "Fruits" ? (
-                                <>
-                                  <SelectItem value="Quintal">Quintals (100 kg/unit)</SelectItem>
-                                  <SelectItem value="Kg">Kilograms (kg)</SelectItem>
-                                  <SelectItem value="Dozen">Dozen</SelectItem>
-                                  <SelectItem value="Pack">Boxes / Packs</SelectItem>
-                                </>
-                              ) : (
-                                <>
-                                  <SelectItem value="Quintal">Quintals (100 kg/unit)</SelectItem>
-                                  <SelectItem value="Kg">Kilograms (kg)</SelectItem>
-                                  <SelectItem value="Tons">Metric Tons</SelectItem>
-                                </>
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Quantity */}
-                    <FormField
-                      control={form.control}
-                      name="quantity"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-slate-300 font-bold">Available Quantity ({selectedUnit})</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min="1"
-                              {...field}
-                              className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-mono font-bold"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Price */}
-                    <FormField
-                      control={form.control}
-                      name="price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-slate-300 font-bold">Asking Price (₹ per {selectedUnit})</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min="1"
-                              {...field}
-                              className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-mono font-bold"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Quality Grade */}
-                    <FormField
-                      control={form.control}
-                      name="qualityGrade"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-slate-300 font-bold">Quality Grade</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
-                                <SelectValue placeholder="Grade" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                              <SelectItem value="Grade A (Organic / Premium)">Grade A (100% Organic Premium)</SelectItem>
-                              <SelectItem value="Grade B (Standard)">Grade B (Standard Quality)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Harvest Date */}
-                    <FormField
-                      control={form.control}
-                      name="expectedHarvestDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
-                            <Calendar className="w-3.5 h-3.5 text-amber-400" /> Harvest Date
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              type="date"
-                              {...field}
-                              className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Dark Store Allocation */}
-                    <FormField
-                      control={form.control}
-                      name="darkStoreAllocation"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
-                            <Building2 className="w-3.5 h-3.5 text-amber-400" /> Target Dark Store
-                          </FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
-                                <SelectValue placeholder="Select Target Store / Warehouse" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
-                              {targetWarehouses.length > 0 ? (
-                                targetWarehouses.map((wh) => {
-                                  const labelVal = `${wh.name} (${wh.city})`;
-                                  return (
-                                    <SelectItem key={wh.id} value={labelVal}>
-                                      🏢 {wh.name} — {wh.address}, {wh.city}
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmitQuotation)} className="space-y-4 text-xs">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Category */}
+                      <FormField
+                        control={form.control}
+                        name="category"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold">Supply Category</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                  <SelectValue placeholder="Select Quick-Commerce Category" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                                {categories && categories.length > 0 ? (
+                                  categories.map((cat: any) => (
+                                    <SelectItem key={cat.id || cat.name} value={cat.name}>
+                                      📦 {cat.name}
                                     </SelectItem>
-                                  );
-                                })
-                              ) : (
-                                <SelectItem value="none" disabled>No active dark stores created in DB. Please create a warehouse in Admin Panel first.</SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                                  ))
+                                ) : (
+                                  <>
+                                    <SelectItem value="Fresh Produce & Organic">🍏 Fresh Produce & Organic</SelectItem>
+                                    <SelectItem value="Dairy, Bread & Eggs">🥛 Dairy, Bread & Eggs</SelectItem>
+                                    <SelectItem value="Beverages & Drinks">🥤 Beverages & Drinks</SelectItem>
+                                    <SelectItem value="Snacks & Munchies">🍿 Snacks & Munchies</SelectItem>
+                                    <SelectItem value="Electronics & Tech Accessories">🔌 Electronics & Tech Accessories</SelectItem>
+                                    <SelectItem value="Cleaning & Household">🧹 Cleaning & Household</SelectItem>
+                                    <SelectItem value="Personal Care & Hygiene">🧼 Personal Care & Hygiene</SelectItem>
+                                  </>
+                                )}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Product Name Input */}
+                      <FormField
+                        control={form.control}
+                        name="produce"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold">Product / Item Name</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g. Fast Charging USB-C Cable 65W / Organic Alphonso Mangoes"
+                                {...field}
+                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Brand Name */}
+                      <FormField
+                        control={form.control}
+                        name="brand"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold">Brand / OEM Manufacturer</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g. Boat / Amul / Tata / Sony"
+                                {...field}
+                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Batch / Model No */}
+                      <FormField
+                        control={form.control}
+                        name="batchNo"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold">Model # / Batch No</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g. BATCH-2026-09 / MOD-X65"
+                                {...field}
+                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Expiry / Warranty */}
+                      <FormField
+                        control={form.control}
+                        name="expiryOrWarranty"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold">Warranty / Expiry Info</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g. 1 Year OEM Warranty / Best Before Oct 2026"
+                                {...field}
+                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Unit Selector */}
+                      <FormField
+                        control={form.control}
+                        name="unit"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
+                              <Scale className="w-3.5 h-3.5 text-amber-400" /> Supply Packaging Unit
+                            </FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-bold">
+                                  <SelectValue placeholder="Select Unit" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                                <SelectItem value="Pieces">Pieces / Units</SelectItem>
+                                <SelectItem value="Packs">Packs / Boxes</SelectItem>
+                                <SelectItem value="Cartons">Wholesale Cartons</SelectItem>
+                                <SelectItem value="Kg">Kilograms (kg)</SelectItem>
+                                <SelectItem value="Liters">Liters (L)</SelectItem>
+                                <SelectItem value="Quintal">Quintals (100 kg/unit)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Quantity */}
+                      <FormField
+                        control={form.control}
+                        name="quantity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold">Supply Quantity ({selectedUnit})</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="1"
+                                {...field}
+                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-mono font-bold"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Wholesale Price */}
+                      <FormField
+                        control={form.control}
+                        name="price"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold">Wholesale Quote (₹ per {selectedUnit})</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="1"
+                                {...field}
+                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-mono font-bold text-amber-400"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Suggested MRP */}
+                      <FormField
+                        control={form.control}
+                        name="suggestedMrp"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold">Suggested Retail MRP (₹)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="1"
+                                {...field}
+                                className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs font-mono font-bold text-emerald-400"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Quality Grade */}
+                      <FormField
+                        control={form.control}
+                        name="qualityGrade"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold">Quality & Compliance Grade</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                  <SelectValue placeholder="Grade" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                                <SelectItem value="Grade A (Verified / Premium)">Grade A (Verified OEM / Sealed)</SelectItem>
+                                <SelectItem value="Grade A (Organic Certified)">Grade A (Organic Certified)</SelectItem>
+                                <SelectItem value="Grade B (Standard Commercial)">Grade B (Standard Commercial)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Dark Store Allocation */}
+                      <FormField
+                        control={form.control}
+                        name="darkStoreAllocation"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-300 font-bold flex items-center gap-1">
+                              <Building2 className="w-3.5 h-3.5 text-amber-400" /> Target Dark Store Hub
+                            </FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white rounded-xl h-11 text-xs">
+                                  <SelectValue placeholder="Select Target Store / Warehouse" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-60">
+                                {targetWarehouses.length > 0 ? (
+                                  targetWarehouses.map((wh) => {
+                                    const labelVal = `${wh.name} (${wh.city})`;
+                                    return (
+                                      <SelectItem key={wh.id} value={labelVal}>
+                                        🏢 {wh.name} — {wh.address}, {wh.city}
+                                      </SelectItem>
+                                    );
+                                  })
+                                ) : (
+                                  <SelectItem value="none" disabled>No active dark stores created in DB. Please create a warehouse in Admin Panel first.</SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
                   <FormField
                     control={form.control}

@@ -72,16 +72,19 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const dbCategories = Array.isArray(rawDbCategories) ? rawDbCategories : [];
   const categoryNavLinks = useMemo(() => {
     const defaults = [
-      { name: "Vegetables", path: "/vegetables" },
-      { name: "Fruits", path: "/fruits" },
-      { name: "Dairy", path: "/dairy" },
-      { name: "Dry Fruits", path: "/dry-fruits" },
-      { name: "Grains", path: "/grains" },
+      { name: "Fresh Produce", path: "/products?category=Fresh%20Produce%20%26%20Organic" },
+      { name: "Dairy & Eggs", path: "/products?category=Dairy%2C%20Bread%20%26%20Eggs" },
+      { name: "Beverages", path: "/products?category=Beverages%20%26%20Drinks" },
+      { name: "Snacks", path: "/products?category=Snacks%20%26%20Munchies" },
+      { name: "Electronics & Tech", path: "/products?category=Electronics%20%26%20Tech%20Accessories" },
+      { name: "Grains & Oils", path: "/products?category=Grains%2C%20Oils%20%26%20Dal" },
+      { name: "Personal Care", path: "/products?category=Personal%20Care%20%26%20Hygiene" },
+      { name: "Cleaning & Home", path: "/products?category=Cleaning%20%26%20Household" },
     ];
     if (!Array.isArray(dbCategories) || dbCategories.length === 0) return defaults;
     return dbCategories.map((c) => ({
       name: c.name,
-      path: c.name === "Vegetables" ? "/vegetables" : c.name === "Fruits" ? "/fruits" : c.name === "Dairy" ? "/dairy" : c.name === "Dry Fruits" ? "/dry-fruits" : c.name === "Grains" ? "/grains" : `/products?category=${encodeURIComponent(c.name)}`,
+      path: `/products?category=${encodeURIComponent(c.name)}`,
     }));
   }, [dbCategories]);
 
@@ -187,7 +190,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse ml-0.5" />
             </button>
 
-            {user ? (
+            {token && user ? (
               <div className="hidden sm:flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -226,6 +229,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 Login / Sign Up
               </Button>
             )}
+
 
             {/* Cart Button */}
             <Button
@@ -428,14 +432,24 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   <span>Total</span>
                   <span className="text-primary">{fmt(totalPrice)}</span>
                 </div>
+                {totalPrice < 250 && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between font-semibold">
+                    <span>Minimum order value is ₹250</span>
+                    <span>Add ₹{(250 - totalPrice).toFixed(0)} more</span>
+                  </div>
+                )}
                 <Button
+                  disabled={totalPrice < 250}
                   className="w-full h-12 text-base font-bold rounded-xl shadow-md shadow-primary/20"
                   onClick={() => {
+                    if (totalPrice < 250) {
+                      return;
+                    }
                     if (!user) { closeCart(); setLocation("/login"); }
                     else { closeCart(); setLocation("/checkout"); }
                   }}
                 >
-                  {user ? "Proceed to Checkout" : "Login to Checkout"}
+                  {totalPrice < 250 ? `Add ₹${(250 - totalPrice).toFixed(0)} More to Checkout` : (user ? "Proceed to Checkout" : "Login to Checkout")}
                 </Button>
                 <button
                   onClick={clearCart}

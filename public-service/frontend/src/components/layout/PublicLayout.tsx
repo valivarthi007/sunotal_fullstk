@@ -72,16 +72,19 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const dbCategories = Array.isArray(rawDbCategories) ? rawDbCategories : [];
   const categoryNavLinks = useMemo(() => {
     const defaults = [
-      { name: "Vegetables", path: "/vegetables" },
-      { name: "Fruits", path: "/fruits" },
-      { name: "Dairy", path: "/dairy" },
-      { name: "Dry Fruits", path: "/dry-fruits" },
-      { name: "Grains", path: "/grains" },
+      { name: "Fresh Produce", path: "/products?category=Fresh%20Produce%20%26%20Organic" },
+      { name: "Dairy & Eggs", path: "/products?category=Dairy%2C%20Bread%20%26%20Eggs" },
+      { name: "Beverages", path: "/products?category=Beverages%20%26%20Drinks" },
+      { name: "Snacks", path: "/products?category=Snacks%20%26%20Munchies" },
+      { name: "Electronics & Tech", path: "/products?category=Electronics%20%26%20Tech%20Accessories" },
+      { name: "Grains & Oils", path: "/products?category=Grains%2C%20Oils%20%26%20Dal" },
+      { name: "Personal Care", path: "/products?category=Personal%20Care%20%26%20Hygiene" },
+      { name: "Cleaning & Home", path: "/products?category=Cleaning%20%26%20Household" },
     ];
     if (!Array.isArray(dbCategories) || dbCategories.length === 0) return defaults;
     return dbCategories.map((c) => ({
       name: c.name,
-      path: c.name === "Vegetables" ? "/vegetables" : c.name === "Fruits" ? "/fruits" : c.name === "Dairy" ? "/dairy" : c.name === "Dry Fruits" ? "/dry-fruits" : c.name === "Grains" ? "/grains" : `/products?category=${encodeURIComponent(c.name)}`,
+      path: `/products?category=${encodeURIComponent(c.name)}`,
     }));
   }, [dbCategories]);
 
