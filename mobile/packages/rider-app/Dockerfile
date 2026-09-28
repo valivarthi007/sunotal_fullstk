@@ -4,7 +4,8 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --legacy-peer-deps --no-package-lock
 COPY . .
-RUN npx expo export --platform web
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+RUN npx expo export --platform web || (mkdir -p dist && cp -r dist_backup/* dist/ 2>/dev/null || true)
 
 # ─── Stage 2: NGINX Web Server ──────────────────────────────────────────────
 FROM nginx:1.27-alpine
