@@ -2,7 +2,7 @@ import { customFetch } from "./custom-fetch";
 
 export interface VerifyPaymentPayload {
   orderId: number;
-  paymentMethod: "card" | "upi" | "netbanking" | "po";
+  paymentMethod: "card" | "upi" | "netbanking" | "po" | "razorpay" | string;
   paymentId?: string;
   otp?: string;
   amount: number;

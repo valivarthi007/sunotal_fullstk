@@ -54,6 +54,9 @@ jobs:
           npm install --legacy-peer-deps --no-package-lock
 
       - name: TypeScript Typecheck & Build
+        env:
+          VITE_PAYMENT_PROVIDER: razorpay
+          VITE_RAZORPAY_KEY_ID: ${{ secrets.VITE_RAZORPAY_KEY_ID || secrets.RAZORPAY_KEY_ID }}
         run: |
           cd ${{ matrix.service_path }}
           if grep -q '"build":' package.json; then
@@ -144,6 +147,9 @@ jobs:
           context: ./${{ matrix.target }}
           file: ./${{ matrix.target }}/Dockerfile
           push: true
+          build-args: |
+            VITE_PAYMENT_PROVIDER=razorpay
+            VITE_RAZORPAY_KEY_ID=${{ secrets.VITE_RAZORPAY_KEY_ID || secrets.RAZORPAY_KEY_ID }}
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ matrix.repo }}:latest
             ${{ steps.login-ecr.outputs.registry }}/${{ matrix.repo }}:${{ github.sha }}
