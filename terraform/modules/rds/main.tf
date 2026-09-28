@@ -33,8 +33,14 @@ variable "db_password" {
   sensitive = true
 }
 
+variable "publicly_accessible" {
+  type    = bool
+  default = true
+}
+
 # ─── 1. DB Subnet Group ───────────────────────────────────────────────────────
 resource "aws_db_subnet_group" "rds" {
+  count      = length(var.private_subnet_ids) > 0 ? 1 : 0
   name       = "sunotal-rds-subnet-group"
   subnet_ids = var.private_subnet_ids
   tags       = merge(var.tags, { Name = "sunotal-rds-subnet-group" })
@@ -76,27 +82,33 @@ resource "aws_db_instance" "postgres" {
   allocated_storage      = 20
   max_allocated_storage  = 100
   storage_type           = "gp3"
-  storage_encrypted      = true
+  storage_encrypted      = false
   engine                 = "postgres"
   engine_version         = "16.3"
-  instance_class         = var.dev_mode ? "db.t3.micro" : "db.t4g.micro"
+  instance_class         = "db.t4g.micro"
   db_name                = var.db_name
   username               = var.db_username
   password               = var.db_password
-  parameter_group_name   = aws_db_parameter_group.postgres.name
-  db_subnet_group_name   = aws_db_subnet_group.rds.name
+  parameter_group_name   = "default.postgres16"
+  db_subnet_group_name   = length(aws_db_subnet_group.rds) > 0 ? aws_db_subnet_group.rds[0].name : "default"
   vpc_security_group_ids = [var.db_security_group_id]
-  publicly_accessible    = false
+  publicly_accessible    = var.publicly_accessible
   skip_final_snapshot    = true
   deletion_protection    = false
   apply_immediately      = true
 
-  backup_retention_period = var.dev_mode ? 0 : 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "Mon:04:00-Mon:05:00"
-
-  performance_insights_enabled = var.dev_mode ? false : true
+  backup_retention_period = 7
+  performance_insights_enabled = false
   auto_minor_version_upgrade   = true
+
+  lifecycle {
+    ignore_changes = [
+      password,
+      latest_restorable_time,
+      parameter_group_name,
+      db_subnet_group_name
+    ]
+  }
 
   tags = merge(var.tags, { Name = "sunotal-postgres-db" })
 }
