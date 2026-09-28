@@ -13,10 +13,10 @@ let currentProvider: IPaymentProvider | null = null;
 export function getPaymentProvider(): IPaymentProvider {
   if (currentProvider) return currentProvider;
 
-  const providerType = (import.meta.env.VITE_PAYMENT_PROVIDER || "").toLowerCase();
+  const providerType = (import.meta.env.VITE_PAYMENT_PROVIDER || "razorpay").toLowerCase();
   const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
 
-  if (providerType === "razorpay" || (razorpayKey && razorpayKey !== "" && providerType !== "mock")) {
+  if (providerType !== "mock") {
     currentProvider = new RazorpayPaymentProvider(razorpayKey);
   } else {
     currentProvider = new MockPaymentProvider();

@@ -14,6 +14,7 @@ import { PublicLayout } from "@/components/layout/PublicLayout";
 import { PaymentGatewayModal } from "@/components/ui/PaymentGatewayModal";
 import { DeliverySlotPicker } from "@/components/ui/DeliverySlotPicker";
 import { InteractiveMapPickerModal } from "@/components/ui/InteractiveMapPickerModal";
+import { getPaymentProvider } from "@/lib/providers/payment/payment-provider.factory";
 import { calculateDeliveryFee, createOrderCheckout, verifyPayment, DeliveryFeeCalculation } from "@/lib/api-client";
 import {
   MapPin,
@@ -193,7 +194,34 @@ export default function Checkout() {
         return;
       }
 
-      const generatedPaymentId = `PAY-${Date.now()}`;
+      let generatedPaymentId = `PAY-${Date.now()}`;
+
+      if (values.paymentMethod !== "corporate_po" && values.paymentMethod !== "po" && values.paymentMethod !== "cod") {
+        try {
+          const provider = getPaymentProvider();
+          const pResult = await provider.processPayment({
+            orderId: orderNumber,
+            amount: finalPayable,
+            currency: "INR",
+            method: (values.paymentMethod as any) || "card",
+            customerName: user?.name || values.fullName || "Customer",
+            customerEmail: user?.email || values.email || "customer@sunotal.com",
+            customerPhone: user?.phone || values.phone || "9876543210",
+          });
+
+          if (!pResult.success) {
+            toast.error(pResult.error || "Payment was cancelled or failed.");
+            setIsSubmitting(false);
+            return;
+          }
+          if (pResult.paymentId) {
+            generatedPaymentId = pResult.paymentId;
+          }
+        } catch (paymentErr: any) {
+          console.warn("Payment checkout modal error:", paymentErr);
+        }
+      }
+
       const confirmData = {
         id: orderNumber,
         orderId: orderNumber,

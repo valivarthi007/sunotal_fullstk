@@ -92,6 +92,11 @@ export default function DeliveryDashboard() {
           upiId: riderUpiId,
           amount: stats.totalPayout || riderUser?.walletBalance || 0,
           riderId: riderUser?.id,
+          riderName: riderUser?.name || "Delivery Partner",
+          phone: riderUser?.phone || "",
+          email: riderUser?.email || "",
+          completedDeliveries: stats.completedDeliveries || 1,
+          totalDistanceKm: stats.totalKmsRun || 0,
         }),
       });
       const data = await res.json();

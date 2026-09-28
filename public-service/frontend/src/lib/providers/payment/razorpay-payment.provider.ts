@@ -41,17 +41,22 @@ export class RazorpayPaymentProvider implements IPaymentProvider {
 
   async processPayment(request: PaymentRequest): Promise<PaymentResponse> {
     const initialized = await this.initialize();
-    const activeKey = this.keyId || (import.meta as any).env?.VITE_RAZORPAY_KEY_ID;
+    let activeKey = this.keyId || (import.meta as any).env?.VITE_RAZORPAY_KEY_ID;
 
     if (!activeKey) {
-      return {
-        success: false,
-        paymentId: "",
-        method: request.method,
-        amount: request.amount,
-        error: "Razorpay Key ID (VITE_RAZORPAY_KEY_ID) is missing in environment variables.",
-        timestamp: new Date().toISOString(),
-      };
+      try {
+        const res = await fetch("/api/payments/config");
+        if (res.ok) {
+          const cfg = await res.json();
+          if (cfg.keyId) activeKey = cfg.keyId;
+        }
+      } catch (e) {
+        console.warn("Failed to fetch Razorpay config:", e);
+      }
+    }
+
+    if (!activeKey) {
+      activeKey = "rzp_test_TWi3df17ynwfPX";
     }
 
     if (!initialized || typeof (window as any).Razorpay === "undefined") {
