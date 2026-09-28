@@ -39,12 +39,42 @@ data "aws_ami" "amazon_linux_2023" {
   }
 }
 
+resource "aws_iam_role" "ssm_role" {
+  name = "sunotal-ec2-ssm-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_attach" {
+  role       = aws_iam_role.ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ssm_profile" {
+  name = "sunotal-ec2-ssm-profile"
+  role = aws_iam_role.ssm_role.name
+}
+
 resource "aws_instance" "sunotal_single_ec2" {
-  ami                    = var.ami_id != "" ? var.ami_id : data.aws_ami.amazon_linux_2023.id
-  instance_type          = var.instance_type
-  key_name               = var.key_name
-  subnet_id              = var.public_subnet_id
+  ami                  = var.ami_id != "" ? var.ami_id : data.aws_ami.amazon_linux_2023.id
+  instance_type        = var.instance_type
+  key_name             = var.key_name
+  subnet_id            = var.public_subnet_id
   vpc_security_group_ids = [var.security_group_id]
+  iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
 
   user_data = file("${path.module}/../../user_data_dev.sh")
 
