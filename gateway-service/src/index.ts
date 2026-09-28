@@ -480,6 +480,11 @@ async function initDatabase() {
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS tip_amount NUMERIC(10, 2) DEFAULT 0;
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_instructions VARCHAR(255) DEFAULT '';
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS replacement_preference VARCHAR(100) DEFAULT 'Replace with closest brand';
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_amount NUMERIC(10, 2) DEFAULT 0;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS final_amount NUMERIC(10, 2) DEFAULT 0;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10, 2) DEFAULT 0;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(10, 2) DEFAULT 0;
+      UPDATE orders SET final_amount = total_amount WHERE (final_amount IS NULL OR final_amount = 0) AND total_amount > 0;
 
       -- Enables pg_trgm fuzzy search index
       CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -2336,8 +2341,8 @@ app.get(['/api/delivery/orders/active', '/api/delivery/orders'], async (_req, re
 app.get('/api/delivery/stats', async (req, res) => {
   try {
     const delRes = await gatewayPgPool.query(
-      `SELECT COUNT(*) as count, COALESCE(SUM(final_amount), 0) as total FROM orders WHERE status = 'delivered'`
-    );
+      `SELECT COUNT(*) as count, COALESCE(SUM(total_amount), 0) as total FROM orders WHERE status = 'delivered'`
+    ).catch(() => ({ rows: [{ count: 0, total: 0 }] }));
     const count = Number(delRes.rows[0]?.count || 0);
     const kms = Number((count * 3.5).toFixed(1));
     const basePay = count * 30;
@@ -2696,18 +2701,18 @@ app.get('/api/admin/stats', async (_req, res) => {
       recentVRes,
       recentURes
     ] = await Promise.all([
-      gatewayPgPool.query('SELECT COUNT(*) FROM users'),
-      gatewayPgPool.query('SELECT COUNT(*) FROM products'),
-      gatewayPgPool.query('SELECT COUNT(*) FROM vendors'),
-      gatewayPgPool.query('SELECT COUNT(*) FROM vendors WHERE active = true'),
-      gatewayPgPool.query('SELECT COUNT(*) FROM orders'),
-      gatewayPgPool.query("SELECT COALESCE(SUM(final_amount), SUM(total_amount), 0) as rev FROM orders WHERE status != 'cancelled'"),
-      gatewayPgPool.query('SELECT COUNT(*) FROM warehouses WHERE is_active = true'),
+      gatewayPgPool.query('SELECT COUNT(*) FROM users').catch(() => ({ rows: [{ count: '0' }] })),
+      gatewayPgPool.query('SELECT COUNT(*) FROM products').catch(() => ({ rows: [{ count: '0' }] })),
+      gatewayPgPool.query('SELECT COUNT(*) FROM vendors').catch(() => ({ rows: [{ count: '0' }] })),
+      gatewayPgPool.query('SELECT COUNT(*) FROM vendors WHERE active = true').catch(() => ({ rows: [{ count: '0' }] })),
+      gatewayPgPool.query('SELECT COUNT(*) FROM orders').catch(() => ({ rows: [{ count: '0' }] })),
+      gatewayPgPool.query("SELECT COALESCE(SUM(total_amount), 0) as rev FROM orders WHERE status != 'cancelled'").catch(() => ({ rows: [{ rev: 0 }] })),
+      gatewayPgPool.query('SELECT COUNT(*) FROM warehouses WHERE is_active = true').catch(() => ({ rows: [{ count: '0' }] })),
       gatewayPgPool.query("SELECT COUNT(*) FROM delivery_riders WHERE status = 'available' OR status = 'on_delivery' OR status = 'APPROVED' OR status = 'ONLINE'").catch(() => ({ rows: [{ count: '0' }] })),
       gatewayPgPool.query("SELECT COALESCE(SUM(price * quantity), 0) as vendor_charges FROM quotations WHERE status IN ('accepted', 'approved') OR payment_status = 'paid'").catch(() => ({ rows: [{ vendor_charges: 0 }] })),
       gatewayPgPool.query("SELECT COALESCE(SUM(amount), 0) as delivery_charges FROM rider_payouts").catch(() => ({ rows: [{ delivery_charges: 0 }] })),
-      gatewayPgPool.query('SELECT * FROM vendors ORDER BY id DESC LIMIT 5'),
-      gatewayPgPool.query('SELECT id, name, email, role, phone, city, created_at FROM users ORDER BY id DESC LIMIT 5'),
+      gatewayPgPool.query('SELECT * FROM vendors ORDER BY id DESC LIMIT 5').catch(() => ({ rows: [] })),
+      gatewayPgPool.query('SELECT id, name, email, role, phone, city, created_at FROM users ORDER BY id DESC LIMIT 5').catch(() => ({ rows: [] })),
     ]);
 
     const totalUsers = parseInt(uCountRes.rows[0]?.count || '0', 10);
@@ -3617,9 +3622,9 @@ app.delete('/api/wishlists/:userId/:productId', async (req, res) => {
 app.get('/api/analytics/revenue', async (_req, res) => {
   try {
     const dbRes = await gatewayPgPool.query(
-      `SELECT DATE(created_at) as date, SUM(final_amount) as total_revenue, COUNT(id) as total_orders
+      `SELECT DATE(created_at) as date, COALESCE(SUM(total_amount), 0) as total_revenue, COUNT(id) as total_orders
        FROM orders GROUP BY DATE(created_at) ORDER BY DATE(created_at) ASC LIMIT 30`
-    );
+    ).catch(() => ({ rows: [] }));
     const data = dbRes.rows.map(r => ({
       date: String(r.date).split('T')[0], revenue: Number(r.total_revenue || 0), orders: Number(r.total_orders || 0)
     }));
@@ -3798,14 +3803,14 @@ app.post(['/api/support/ai-chat', '/api/ai/chat'], async (req, res) => {
   let activeProducts: any[] = [];
   try {
     const [pRes, oRes, wRes] = await Promise.all([
-      gatewayPgPool.query('SELECT id, name, category, price, unit FROM products WHERE active = true ORDER BY RANDOM() LIMIT 8'),
-      gatewayPgPool.query('SELECT id, order_number, status, final_amount, created_at FROM orders ORDER BY id DESC LIMIT 3'),
-      gatewayPgPool.query('SELECT id, name, city FROM warehouses WHERE is_active = true LIMIT 3')
+      gatewayPgPool.query('SELECT id, name, category, price, unit FROM products WHERE active = true ORDER BY RANDOM() LIMIT 8').catch(() => ({ rows: [] })),
+      gatewayPgPool.query('SELECT id, order_number, status, total_amount, created_at FROM orders ORDER BY id DESC LIMIT 3').catch(() => ({ rows: [] })),
+      gatewayPgPool.query('SELECT id, name, city FROM warehouses WHERE is_active = true LIMIT 3').catch(() => ({ rows: [] }))
     ]);
 
     activeProducts = pRes.rows || [];
     const productsContext = activeProducts.map(p => `- ${p.name} (${p.category}): ₹${p.price}/${p.unit || '1 kg'}`).join('\n');
-    const ordersContext = (oRes.rows || []).map(o => `- Order #${o.order_number || o.id}: ${o.status.toUpperCase()} (₹${o.final_amount})`).join('\n');
+    const ordersContext = (oRes.rows || []).map(o => `- Order #${o.order_number || o.id}: ${o.status.toUpperCase()} (₹${o.total_amount || 0})`).join('\n');
     const storesContext = (wRes.rows || []).map(w => `- ${w.name} (${w.city})`).join('\n');
 
     dbContext = `
