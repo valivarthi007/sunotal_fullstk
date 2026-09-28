@@ -2502,6 +2502,22 @@ function findNearestWarehouse(custLat: number, custLng: number, warehouses: any[
   return nearest;
 }
 
+async function fetchNominatimGeocode(query: string): Promise<{ lat: number; lng: number } | null> {
+  if (!query || query.trim().length < 2) return null;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`, {
+      headers: { 'User-Agent': 'SunotalGatewayService/1.0' }
+    }).catch(() => null);
+    if (res && res.ok) {
+      const data = await res.json().catch(() => []);
+      if (Array.isArray(data) && data.length > 0) {
+        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      }
+    }
+  } catch {}
+  return null;
+}
+
 // LIVE GPS DELIVERY TRACKING TELEMETRY (GET /api/delivery/track/:id)
 app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/:id'], async (req, res) => {
   const orderId = req.params.id;
@@ -2567,14 +2583,42 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
       }
     }
 
-    const wLat = Number(orderRow?.wh_lat || warehouseRow?.latitude || 0);
-    const wLng = Number(orderRow?.wh_lng || warehouseRow?.longitude || 0);
-    const whName = orderRow?.wh_name || warehouseRow?.name || 'Dark Store Hub';
+    let wLat = Number(orderRow?.wh_lat || warehouseRow?.latitude || 0);
+    let wLng = Number(orderRow?.wh_lng || warehouseRow?.longitude || 0);
+    const whName = orderRow?.wh_name || warehouseRow?.name || 'Express Dark Store Hub';
+
+    // Dynamic OpenStreetMap geocode lookup for warehouse if DB coordinates are 0
+    if (!wLat || !wLng) {
+      const query = warehouseRow?.address || warehouseRow?.city || orderRow?.city || 'Vijayawada';
+      const geo = await fetchNominatimGeocode(query);
+      if (geo) {
+        wLat = geo.lat;
+        wLng = geo.lng;
+      }
+    }
+
+    // Dynamic OpenStreetMap geocode lookup for customer destination if DB coordinates are 0
+    if (!cLat || !cLng) {
+      const query = orderRow?.delivery_address || orderRow?.address || orderRow?.city;
+      if (query) {
+        const geo = await fetchNominatimGeocode(query);
+        if (geo) {
+          cLat = geo.lat;
+          cLng = geo.lng;
+        }
+      }
+    }
+
+    // Dynamic offset relative to store if customer location is missing
+    if (!cLat || !cLng) {
+      cLat = wLat ? wLat + 0.008 : 16.5142;
+      cLng = wLng ? wLng + 0.006 : 80.6540;
+    }
 
     // 3. Delivery Partner Live GPS Location & Rider Profile DB Lookup
     const liveTelemetry = (global as any).activeRiderTelemetry?.[String(orderId)] || (global as any).activeRiderTelemetry?.[String(orderRow?.id)] || (global as any).activeRiderTelemetry?.[String(orderRow?.order_number)];
-    const dLat = liveTelemetry?.lat || (wLat && cLat ? Number(((wLat + cLat) / 2).toFixed(4)) : wLat);
-    const dLng = liveTelemetry?.lng || (wLng && cLng ? Number(((wLng + cLng) / 2).toFixed(4)) : wLng);
+    let dLat = liveTelemetry?.lat || Number(((wLat + cLat) / 2).toFixed(4));
+    let dLng = liveTelemetry?.lng || Number(((wLng + cLng) / 2).toFixed(4));
     const currentStage = liveTelemetry?.stage || orderRow?.status || 'placed';
 
     const distKm = Number(getHaversineDistanceKm(dLat, dLng, cLat, cLng).toFixed(1));

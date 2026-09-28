@@ -55,12 +55,38 @@ export const LiveDeliveryMapTracker: React.FC<LiveDeliveryMapTrackerProps> = ({ 
       }
 
       const { warehouseOrigin, customerDestination, driverLocation, driverProfile } = telemetry;
-      const wLat = Number(warehouseOrigin?.lat || 0);
-      const wLng = Number(warehouseOrigin?.lng || 0);
-      const cLat = Number(customerDestination?.lat || 0);
-      const cLng = Number(customerDestination?.lng || 0);
-      const dLat = Number(driverLocation?.lat || (wLat && cLat ? (wLat + cLat) / 2 : 0));
-      const dLng = Number(driverLocation?.lng || (wLng && cLng ? (wLng + cLng) / 2 : 0));
+      const CITY_DEFAULTS: Record<string, [number, number]> = {
+        "vijayawada": [16.5062, 80.6480],
+        "bengaluru": [12.9716, 77.5946],
+        "bangalore": [12.9716, 77.5946],
+        "hyderabad": [17.3850, 78.4867],
+        "mumbai": [19.0760, 72.8777],
+        "delhi": [28.6139, 77.2090]
+      };
+
+      const cityKey = String(customerDestination?.city || warehouseOrigin?.city || "vijayawada").toLowerCase();
+      const defaultCityCoords = CITY_DEFAULTS[cityKey] || CITY_DEFAULTS["vijayawada"];
+
+      let wLat = Number(warehouseOrigin?.lat || 0);
+      let wLng = Number(warehouseOrigin?.lng || 0);
+      let cLat = Number(customerDestination?.lat || 0);
+      let cLng = Number(customerDestination?.lng || 0);
+
+      if (!wLat || wLat < 5.0 || wLat > 38.0 || !wLng || wLng < 68.0 || wLng > 98.0) {
+        wLat = defaultCityCoords[0];
+        wLng = defaultCityCoords[1];
+      }
+      if (!cLat || cLat < 5.0 || cLat > 38.0 || !cLng || cLng < 68.0 || cLng > 98.0) {
+        cLat = wLat + 0.008;
+        cLng = wLng + 0.006;
+      }
+
+      let dLat = Number(driverLocation?.lat || ((wLat + cLat) / 2));
+      let dLng = Number(driverLocation?.lng || ((wLng + cLng) / 2));
+      if (!dLat || dLat < 5.0 || dLat > 38.0 || !dLng || dLng < 68.0 || dLng > 98.0) {
+        dLat = Number(((wLat + cLat) / 2).toFixed(4));
+        dLng = Number(((wLng + cLng) / 2).toFixed(4));
+      }
 
       const map = L.map(mapContainerRef.current, {
         zoomControl: true,

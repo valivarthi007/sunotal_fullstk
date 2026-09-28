@@ -183,20 +183,40 @@ export default function DeliveryDashboard() {
       .then((data) => {
         if (!isMounted || !mapContainerRef.current) return;
 
-        const wLat = Number(data?.warehouseOrigin?.lat || acceptedOrder?.warehouse_latitude || 0);
-        const wLng = Number(data?.warehouseOrigin?.lng || acceptedOrder?.warehouse_longitude || 0);
+        const CITY_DEFAULTS: Record<string, [number, number]> = {
+          "vijayawada": [16.5062, 80.6480],
+          "bengaluru": [12.9716, 77.5946],
+          "bangalore": [12.9716, 77.5946],
+          "hyderabad": [17.3850, 78.4867],
+          "mumbai": [19.0760, 72.8777],
+          "delhi": [28.6139, 77.2090]
+        };
+
+        const cityKey = String(acceptedOrder?.city || data?.customerDestination?.city || "vijayawada").toLowerCase();
+        const defaultCityCoords = CITY_DEFAULTS[cityKey] || CITY_DEFAULTS["vijayawada"];
+
+        let wLat = Number(data?.warehouseOrigin?.lat || acceptedOrder?.warehouse_latitude || 0);
+        let wLng = Number(data?.warehouseOrigin?.lng || acceptedOrder?.warehouse_longitude || 0);
+        if (!wLat || !wLng || wLat < 5.0 || wLat > 38.0) {
+          wLat = defaultCityCoords[0];
+          wLng = defaultCityCoords[1];
+        }
+
         const whName = data?.warehouseOrigin?.name || acceptedOrder?.warehouse_name || "Dark Store Hub";
 
         let cLat = Number(data?.customerDestination?.lat || acceptedOrder?.lat || acceptedOrder?.delivery_latitude || 0);
         let cLng = Number(data?.customerDestination?.lng || acceptedOrder?.lng || acceptedOrder?.delivery_longitude || 0);
-
-        if (!cLat || !cLng) {
-          cLat = wLat ? wLat + 0.008 : 0;
-          cLng = wLng ? wLng + 0.006 : 0;
+        if (!cLat || !cLng || cLat < 5.0 || cLat > 38.0) {
+          cLat = wLat + 0.008;
+          cLng = wLng + 0.006;
         }
 
-        const dLat = Number(data?.driverLocation?.lat || ((wLat + cLat) / 2));
-        const dLng = Number(data?.driverLocation?.lng || ((wLng + cLng) / 2));
+        let dLat = Number(data?.driverLocation?.lat || ((wLat + cLat) / 2));
+        let dLng = Number(data?.driverLocation?.lng || ((wLng + cLng) / 2));
+        if (!dLat || !dLng || dLat < 5.0 || dLat > 38.0) {
+          dLat = (wLat + cLat) / 2;
+          dLng = (wLng + cLng) / 2;
+        }
 
         mapProvider.loadSdk().then(() => {
           const L = (window as any).L;
