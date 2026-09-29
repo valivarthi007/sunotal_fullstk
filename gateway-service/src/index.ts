@@ -1871,6 +1871,48 @@ app.get('/api/delivery/slots', (_req, res) => {
   ]);
 });
 
+let mapplsCachedToken: { token: string; expiresAt: number } | null = null;
+
+// GET Mappls Access Token (OAuth 2.0 Client Credentials)
+app.get('/api/mappls/token', async (_req, res) => {
+  const clientId = process.env.MAPPLS_CLIENT_ID;
+  const clientSecret = process.env.MAPPLS_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    return res.status(200).json({ access_token: process.env.VITE_MAPPLS_SDK_KEY || '' });
+  }
+
+  if (mapplsCachedToken && Date.now() < mapplsCachedToken.expiresAt) {
+    return res.json({ access_token: mapplsCachedToken.token });
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+    params.append('client_id', clientId);
+    params.append('client_secret', clientSecret);
+
+    const tokenRes = await fetch('https://outpost.mappls.com/api/security/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+
+    if (!tokenRes.ok) throw new Error(`OAuth request failed with status ${tokenRes.status}`);
+
+    const data = await tokenRes.json();
+    mapplsCachedToken = {
+      token: data.access_token,
+      expiresAt: Date.now() + ((data.expires_in || 86400) - 300) * 1000
+    };
+
+    return res.json({ access_token: data.access_token });
+  } catch (err: any) {
+    console.warn('Mappls OAuth warning:', err?.message);
+    return res.json({ access_token: process.env.VITE_MAPPLS_SDK_KEY || '' });
+  }
+});
+
 // PRODUCTS & CATALOG
 app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (req, res) => {
   try {

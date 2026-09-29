@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useEffect, useMemo } from "react";
 import type { Product } from "@workspace/api-client-react";
 import { useCart } from "./cart-context";
+import { getApiUrl } from "./api-client";
 
 interface WishlistContextValue {
   wishlistItems: Product[];
@@ -63,7 +64,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     async function fetchServerWishlist() {
       try {
         setIsLoading(true);
-        const res = await fetch(`/api/wishlists/${userId}`);
+        const res = await fetch(getApiUrl(`/api/wishlists/${userId}`));
         if (!res.ok) throw new Error("Failed to fetch wishlist");
         const data = await res.json();
         if (data.success && Array.isArray(data.wishlist) && isSubscribed) {
@@ -114,7 +115,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
 
       // Trigger backend async sync
       try {
-        await fetch("/api/wishlists/toggle", {
+        await fetch(getApiUrl("/api/wishlists/toggle"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId, productId: product.id }),
@@ -138,7 +139,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
       saveWishlistToStorage(updatedList);
 
       try {
-        await fetch("/api/wishlists", {
+        await fetch(getApiUrl("/api/wishlists"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId, productId: product.id }),
@@ -156,7 +157,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
       saveWishlistToStorage(updatedList);
 
       try {
-        await fetch(`/api/wishlists/${userId}/${productId}`, {
+        await fetch(getApiUrl(`/api/wishlists/${userId}/${productId}`), {
           method: "DELETE",
         });
       } catch {}
