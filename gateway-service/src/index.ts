@@ -442,11 +442,13 @@ async function initDatabase() {
 
       CREATE TABLE IF NOT EXISTS wishlists (
         id SERIAL PRIMARY KEY,
-        user_id INT NOT NULL,
+        user_id VARCHAR(255) NOT NULL,
         product_id INT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, product_id)
       );
+
+      ALTER TABLE wishlists ALTER COLUMN user_id TYPE VARCHAR(255);
 
       -- Subscriptions Table (BB Daily Model)
       CREATE TABLE IF NOT EXISTS subscriptions (
@@ -3783,16 +3785,37 @@ app.post('/api/coupons/validate', async (req, res) => {
 });
 
 // WISHLISTS API
-app.get('/api/wishlists/:userId', async (req, res) => {
-  const userId = Number(req.params.userId);
+app.get(['/api/wishlists', '/api/wishlists/:userId'], async (req, res) => {
+  const userId = String(req.params.userId || req.query.userId || 'guest');
   try {
     const dbRes = await gatewayPgPool.query(
-      `SELECT p.* FROM wishlists w JOIN products p ON w.product_id = p.id WHERE w.user_id = $1`,
+      `SELECT p.*, w.created_at as wishlisted_at
+       FROM wishlists w
+       JOIN products p ON w.product_id = p.id
+       WHERE w.user_id = $1
+       ORDER BY w.created_at DESC`,
       [userId]
     );
-    return res.json(dbRes.rows.map(p => ({
-      id: String(p.id), name: p.name, category: p.category, price: Number(p.price), image: p.image, unit: p.unit
-    })));
+
+    const formatted = (dbRes.rows || []).map((p: any) => ({
+      id: String(p.id),
+      name: p.name,
+      category: p.category,
+      price: Number(p.price),
+      originalPrice: Number(p.original_price || p.price),
+      unit: p.unit || '1 kg',
+      image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
+      isOrganic: p.is_organic ?? true,
+      badge: p.badge || null,
+      description: p.description || '',
+      stock: p.stock ?? 100,
+      rating: Number(p.rating || 5.0),
+      status: p.status || 'active',
+      active: p.active ?? true,
+      wishlistedAt: p.wishlisted_at ? new Date(p.wishlisted_at).toISOString() : new Date().toISOString(),
+    }));
+
+    return res.json({ success: true, wishlist: formatted, count: formatted.length });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch wishlist', message: err?.message });
   }
@@ -3800,23 +3823,57 @@ app.get('/api/wishlists/:userId', async (req, res) => {
 
 app.post('/api/wishlists', async (req, res) => {
   const { userId, productId } = req.body || {};
+  if (!productId) return res.status(400).json({ error: 'productId required' });
+  const cleanUserId = String(userId || 'guest');
+  const targetProdId = Number(productId);
+
   try {
     await gatewayPgPool.query(
-      `INSERT INTO wishlists (user_id, product_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-      [Number(userId), Number(productId)]
+      `INSERT INTO wishlists (user_id, product_id) VALUES ($1, $2) ON CONFLICT (user_id, product_id) DO NOTHING`,
+      [cleanUserId, targetProdId]
     );
-    return res.status(201).json({ success: true, message: 'Added to wishlist' });
+    return res.status(201).json({ success: true, inWishlist: true, message: 'Added to wishlist' });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to add to wishlist', message: err?.message });
   }
 });
 
-app.delete('/api/wishlists/:userId/:productId', async (req, res) => {
-  const userId = Number(req.params.userId);
-  const productId = Number(req.params.productId);
+app.post('/api/wishlists/toggle', async (req, res) => {
+  const { userId, productId } = req.body || {};
+  if (!productId) return res.status(400).json({ error: 'productId required' });
+  const cleanUserId = String(userId || 'guest');
+  const targetProdId = Number(productId);
+
+  try {
+    const checkRes = await gatewayPgPool.query(
+      'SELECT id FROM wishlists WHERE user_id = $1 AND product_id = $2',
+      [cleanUserId, targetProdId]
+    );
+
+    if (checkRes.rows && checkRes.rows.length > 0) {
+      await gatewayPgPool.query('DELETE FROM wishlists WHERE user_id = $1 AND product_id = $2', [cleanUserId, targetProdId]);
+      return res.json({ success: true, inWishlist: false, message: 'Removed from wishlist' });
+    } else {
+      await gatewayPgPool.query(
+        'INSERT INTO wishlists (user_id, product_id) VALUES ($1, $2) ON CONFLICT (user_id, product_id) DO NOTHING',
+        [cleanUserId, targetProdId]
+      );
+      return res.json({ success: true, inWishlist: true, message: 'Added to wishlist' });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to toggle wishlist', message: err?.message });
+  }
+});
+
+app.delete(['/api/wishlists/:userId/:productId', '/api/wishlists'], async (req, res) => {
+  const userId = String(req.params.userId || req.body?.userId || req.query?.userId || 'guest');
+  const productId = Number(req.params.productId || req.body?.productId || req.query?.productId);
+
+  if (!productId) return res.status(400).json({ error: 'productId required' });
+
   try {
     await gatewayPgPool.query('DELETE FROM wishlists WHERE user_id = $1 AND product_id = $2', [userId, productId]);
-    return res.json({ success: true, message: 'Removed from wishlist' });
+    return res.json({ success: true, inWishlist: false, message: 'Removed from wishlist' });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to remove from wishlist', message: err?.message });
   }
