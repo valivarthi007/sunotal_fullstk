@@ -436,6 +436,9 @@ app.get('/api/storefront/search', async (req, res) => {
 // Fetch user wishlist items with full product details
 app.get(['/api/wishlists', '/api/wishlists/:userId'], async (req, res) => {
   const userId = String(req.params.userId || req.query.userId || 'guest');
+  if (userId === 'guest' || isNaN(Number(userId))) {
+    return res.json({ success: true, wishlist: [], count: 0 });
+  }
   try {
     const dbRes = await pool.query(
       `SELECT p.*, w.created_at as wishlisted_at

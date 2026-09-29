@@ -95,6 +95,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "All Products", path: "/products" },
+    { name: "My Wishlist", path: "/wishlist" },
     ...categoryNavLinks,
   ];
 

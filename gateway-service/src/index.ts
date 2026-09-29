@@ -3787,6 +3787,9 @@ app.post('/api/coupons/validate', async (req, res) => {
 // WISHLISTS API
 app.get(['/api/wishlists', '/api/wishlists/:userId'], async (req, res) => {
   const userId = String(req.params.userId || req.query.userId || 'guest');
+  if (userId === 'guest' || isNaN(Number(userId))) {
+    return res.json({ success: true, wishlist: [], count: 0 });
+  }
   try {
     const dbRes = await gatewayPgPool.query(
       `SELECT p.*, w.created_at as wishlisted_at
@@ -3842,6 +3845,9 @@ app.post('/api/wishlists/toggle', async (req, res) => {
   const { userId, productId } = req.body || {};
   if (!productId) return res.status(400).json({ error: 'productId required' });
   const cleanUserId = String(userId || 'guest');
+  if (cleanUserId === 'guest' || isNaN(Number(cleanUserId))) {
+    return res.json({ success: true, message: 'Guest wishlist updated locally', inWishlist: true });
+  }
   const targetProdId = Number(productId);
 
   try {

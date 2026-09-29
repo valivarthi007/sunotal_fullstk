@@ -442,6 +442,28 @@ export default function ProductDetail() {
                 >
                   <Sparkles className="w-4 h-4 text-amber-500" /> SUBSCRIBE DAILY (6:00 AM Doorstep Delivery)
                 </Button>
+
+                {/* Explicit Add to Wishlist Button */}
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (!product) return;
+                    const isNowAdded = await toggleWishlist(product);
+                    if (isNowAdded) {
+                      toast.success(`Saved ${product.name} to wishlist`);
+                    } else {
+                      toast.info(`Removed ${product.name} from wishlist`);
+                    }
+                  }}
+                  className={`w-full h-11 rounded-2xl font-bold text-xs gap-2 transition-all ${
+                    product && isInWishlist(product.id)
+                      ? "bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100"
+                      : "bg-background border-border text-muted-foreground hover:border-rose-300 hover:text-rose-500"
+                  }`}
+                >
+                  <Heart className={`w-4 h-4 ${product && isInWishlist(product.id) ? "fill-rose-500 text-rose-500" : ""}`} /> 
+                  {product && isInWishlist(product.id) ? "SAVED TO WISHLIST" : "ADD TO WISHLIST"}
+                </Button>
               </div>
             </div>
           </div>
