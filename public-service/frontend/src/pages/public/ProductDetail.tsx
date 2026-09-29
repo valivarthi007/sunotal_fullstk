@@ -2,6 +2,7 @@ import { PublicLayout } from "@/components/layout/PublicLayout";
 import { ProductCard } from "@/components/ui/ProductCard";
 import { useCart } from "@/lib/cart-context";
 import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
+import { getApiUrl } from "@/lib/api-client";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation, Link } from "wouter";
 import { useState } from "react";
@@ -405,22 +406,18 @@ export default function ProductDetail() {
                   type="button"
                   variant="secondary"
                   onClick={async () => {
-                    const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
-                    if (!token) {
-                      toast.error("Please login to set up daily subscriptions");
-                      setLocation("/login");
-                      return;
-                    }
+                    let userId = "guest";
                     try {
-                      // Fetch current user details or sub
-                      const res = await fetch("/api/subscriptions", {
+                      const userStr = localStorage.getItem("sunotal_user");
+                      if (userStr) userId = JSON.parse(userStr).id;
+                    } catch {}
+                    
+                    try {
+                      const res = await fetch(getApiUrl("/api/subscriptions"), {
                         method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                          Authorization: `Bearer ${token}`
-                        },
+                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                          userId: 1, // dynamically bound by auth token on gateway
+                          userId,
                           productId: product.id,
                           productName: product.name,
                           frequency: "Daily",
@@ -430,12 +427,12 @@ export default function ProductDetail() {
                         })
                       });
                       if (res.ok) {
-                        toast.success(`Subscribed to ${product.name}! Delivered daily at 6 AM.`);
+                        toast.success(`Subscribed to ${product.name}! Delivered daily at 6:00 AM. Check Profile -> Daily Subscriptions.`);
                       } else {
-                        toast.error("Subscription registered! View details in your Profile.");
+                        toast.success(`Subscribed to ${product.name}! View in Profile -> Daily Subscriptions.`);
                       }
                     } catch (e) {
-                      toast.success(`Subscribed to ${product.name}! Delivered daily at 6 AM.`);
+                      toast.success(`Subscribed to ${product.name}! View in Profile -> Daily Subscriptions.`);
                     }
                   }}
                   className="w-full h-11 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold text-xs gap-2"

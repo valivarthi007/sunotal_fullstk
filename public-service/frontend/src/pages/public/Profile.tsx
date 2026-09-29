@@ -32,6 +32,7 @@ import {
   MessageSquare,
   Sparkles,
   LogOut,
+  MapPinned,
 } from "lucide-react";
 import { useLocationState } from "@/lib/location-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -96,7 +97,7 @@ export default function Profile() {
   const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
   const { location: userLoc } = useLocationState();
 
-  const [activeTab, setActiveTab] = useState<"account" | "orders" | "grievances" | "subscriptions">("orders");
+  const [activeTab, setActiveTab] = useState<"account" | "subscriptions">("account");
   const [subscriptionsList, setSubscriptionsList] = useState<any[]>([]);
 
   // Address state
@@ -490,28 +491,6 @@ export default function Profile() {
         {/* Unified Profile Control Bar (Tabs) */}
         <div className="flex flex-wrap items-center gap-2 border-b pb-4 mb-8">
           <button
-            onClick={() => setActiveTab("orders")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all ${
-              activeTab === "orders"
-                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                : "bg-card border border-border text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <ShoppingBag className="w-4 h-4" /> My Orders & Tracking ({orders.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab("grievances")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all ${
-              activeTab === "grievances"
-                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                : "bg-card border border-border text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <LifeBuoy className="w-4 h-4" /> Grievances & Tickets ({grievances.length})
-          </button>
-
-          <button
             onClick={() => setActiveTab("subscriptions")}
             className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all ${
               activeTab === "subscriptions"
@@ -867,7 +846,17 @@ export default function Profile() {
               {/* Address Edit Dialog */}
               {editingAddr && (
                 <div className="mt-4 p-5 border rounded-2xl bg-background space-y-3">
-                  <h3 className="font-bold text-sm text-secondary">Save Address Details</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-sm text-secondary">Save Address Details</h3>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-7 text-[10px] rounded-full border-primary/30 text-primary hover:bg-primary/10 gap-1"
+                      onClick={handleDetectLocationForAddress}
+                    >
+                      <MapPinned className="w-3 h-3" /> Auto Detect GPS Location
+                    </Button>
+                  </div>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <Input placeholder="Label (Home, Office, Hub)" value={editingAddr.label} onChange={(e) => setEditingAddr({ ...editingAddr, label: e.target.value })} />
                     <Input placeholder="Phone Number" value={editingAddr.phone} onChange={(e) => setEditingAddr({ ...editingAddr, phone: e.target.value })} />
@@ -927,7 +916,9 @@ export default function Profile() {
                     </div>
                     <div>
                       <p className="font-bold text-sm text-secondary">Quality Checked & Packed</p>
-                      <p className="text-xs text-muted-foreground">Jubilee Hills Fulfillment Hub</p>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedOrderTrack.warehouseName || (selectedOrderTrack.city ? `${selectedOrderTrack.city} Express Dark Store Hub` : "Vijayawada Urmila Nagar Hub")}
+                      </p>
                     </div>
                   </div>
 

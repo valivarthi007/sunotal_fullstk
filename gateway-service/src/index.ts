@@ -1863,6 +1863,14 @@ app.post('/api/delivery/calculate', async (req, res) => {
   }
 });
 
+app.get('/api/delivery/slots', (_req, res) => {
+  return res.json([
+    { id: 'express_2hr', name: 'Instant Express 10-Min / 2-Hour', description: 'Fastest doorstep fulfillment', price: 0, isAvailable: true },
+    { id: 'morning_slot', name: 'Tomorrow Morning (6 AM - 9 AM)', description: 'Fresh morning milk & produce slot', price: 0, isAvailable: true },
+    { id: 'evening_slot', name: 'Tomorrow Evening (5 PM - 8 PM)', description: 'Convenient evening slot', price: 0, isAvailable: true }
+  ]);
+});
+
 // PRODUCTS & CATALOG
 app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (req, res) => {
   try {
@@ -4150,7 +4158,7 @@ ${storesContext || 'Central Dark Store'}
 
   return res.json({
     success: true,
-    response: `${botText}\n\n${dbContext ? `DB Snapshot:\n${dbContext}` : ''}`,
+    response: botText,
     suggestedAction
   });
 });

@@ -83,9 +83,45 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
         });
       }
 
-      fetchUserAddresses()
-        .then((data) => setSavedAddresses(data))
-        .catch((err) => console.error("Failed to load saved addresses", err));
+      // Load addresses from local storage (Profile.tsx format) to sync with Profile saves
+      try {
+        const userStr = localStorage.getItem("sunotal_user");
+        let userId = "guest";
+        if (userStr) {
+          try { userId = JSON.parse(userStr).id; } catch (e) {}
+        }
+        
+        const raw = localStorage.getItem(`user_addresses_${userId}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const mapped: UserAddressApi[] = parsed.map((a: any) => ({
+              id: a.id || Math.random(),
+              userId: a.userId || userId,
+              tag: a.label || "other",
+              houseNo: a.line1 || "",
+              street: a.line2 || "",
+              city: a.city || "",
+              state: "State",
+              pincode: "000000",
+              latitude: 0,
+              longitude: 0,
+              isDefault: false,
+              createdAt: new Date().toISOString()
+            }));
+            setSavedAddresses(mapped);
+          }
+        } else {
+          // Fallback to API if no local storage
+          fetchUserAddresses()
+            .then((data) => {
+              if (Array.isArray(data) && data.length > 0) setSavedAddresses(data);
+            })
+            .catch((err) => console.error("Failed to load saved addresses", err));
+        }
+      } catch (err) {
+        console.error("Failed to parse local addresses", err);
+      }
 
       mapProvider.loadSdk().then((success) => {
         setMapLoaded(success);

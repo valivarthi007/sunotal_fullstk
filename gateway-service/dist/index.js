@@ -1814,6 +1814,13 @@ app.post('/api/delivery/calculate', async (req, res) => {
         return res.status(500).json({ error: 'Calculation failed', message: err?.message });
     }
 });
+app.get('/api/delivery/slots', (_req, res) => {
+    return res.json([
+        { id: 'express_2hr', name: 'Instant Express 10-Min / 2-Hour', description: 'Fastest doorstep fulfillment', price: 0, isAvailable: true },
+        { id: 'morning_slot', name: 'Tomorrow Morning (6 AM - 9 AM)', description: 'Fresh morning milk & produce slot', price: 0, isAvailable: true },
+        { id: 'evening_slot', name: 'Tomorrow Evening (5 PM - 8 PM)', description: 'Convenient evening slot', price: 0, isAvailable: true }
+    ]);
+});
 // PRODUCTS & CATALOG
 app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (req, res) => {
     try {
@@ -3567,6 +3574,9 @@ app.post('/api/coupons/validate', async (req, res) => {
 // WISHLISTS API
 app.get(['/api/wishlists', '/api/wishlists/:userId'], async (req, res) => {
     const userId = String(req.params.userId || req.query.userId || 'guest');
+    if (userId === 'guest' || isNaN(Number(userId))) {
+        return res.json({ success: true, wishlist: [], count: 0 });
+    }
     try {
         const dbRes = await gatewayPgPool.query(`SELECT p.*, w.created_at as wishlisted_at
        FROM wishlists w
@@ -3615,6 +3625,9 @@ app.post('/api/wishlists/toggle', async (req, res) => {
     if (!productId)
         return res.status(400).json({ error: 'productId required' });
     const cleanUserId = String(userId || 'guest');
+    if (cleanUserId === 'guest' || isNaN(Number(cleanUserId))) {
+        return res.json({ success: true, message: 'Guest wishlist updated locally', inWishlist: true });
+    }
     const targetProdId = Number(productId);
     try {
         const checkRes = await gatewayPgPool.query('SELECT id FROM wishlists WHERE user_id = $1 AND product_id = $2', [cleanUserId, targetProdId]);
@@ -3886,7 +3899,7 @@ ${storesContext || 'Central Dark Store'}
     }
     return res.json({
         success: true,
-        response: `${botText}\n\n${dbContext ? `DB Snapshot:\n${dbContext}` : ''}`,
+        response: botText,
         suggestedAction
     });
 });

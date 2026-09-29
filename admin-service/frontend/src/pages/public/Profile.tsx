@@ -646,7 +646,9 @@ export default function Profile() {
                     </div>
                     <div>
                       <p className="font-bold text-sm text-secondary">Quality Checked & Packed</p>
-                      <p className="text-xs text-muted-foreground">Jubilee Hills Fulfillment Hub</p>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedOrderTrack.warehouseName || (selectedOrderTrack.city ? `${selectedOrderTrack.city} Express Dark Store Hub` : "Vijayawada Urmila Nagar Hub")}
+                      </p>
                     </div>
                   </div>
 

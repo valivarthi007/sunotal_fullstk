@@ -1,23 +1,13 @@
 import React from "react";
 
+import { useListCategories } from "@workspace/api-client-react";
+
 export interface CategoryItem {
   id: string;
   name: string;
   icon: string;
   badge?: string;
 }
-
-export const GROCERY_CATEGORIES: CategoryItem[] = [
-  { id: "All", name: "All Items", icon: "🛒" },
-  { id: "Vegetables", name: "Fresh Vegetables", icon: "🥦", badge: "Farm Fresh" },
-  { id: "Fruits", name: "Fresh Fruits", icon: "🍎", badge: "Organic" },
-  { id: "Dairy", name: "Dairy & Eggs", icon: "🥛", badge: "Daily" },
-  { id: "Beverages", name: "Cold Drinks & Juices", icon: "🧃" },
-  { id: "Snacks", name: "Snacks & Munchies", icon: "🍿" },
-  { id: "Bakery", name: "Bakery & Instant", icon: "🥐" },
-  { id: "Grains", name: "Atta, Rice & Dal", icon: "🌾" },
-  { id: "Dry Fruits", name: "Dry Fruits & Nuts", icon: "🥜" },
-];
 
 interface CategoryPillsProps {
   selectedCategory: string;
@@ -28,10 +18,30 @@ export const CategoryPills: React.FC<CategoryPillsProps> = ({
   selectedCategory,
   onSelectCategory,
 }) => {
+  const { data: rawDbCategories } = useListCategories();
+  
+  const dynamicCategories = React.useMemo(() => {
+    const list: CategoryItem[] = [
+      { id: "All", name: "All Items", icon: "🛒" }
+    ];
+    if (Array.isArray(rawDbCategories)) {
+      for (const c of rawDbCategories) {
+        if (c?.name) {
+          list.push({
+            id: c.name,
+            name: c.name,
+            icon: c.icon || "📦",
+          });
+        }
+      }
+    }
+    return list;
+  }, [rawDbCategories]);
+
   return (
     <div className="w-full bg-background border-b border-border py-3 px-4 overflow-x-auto no-scrollbar scroll-smooth">
       <div className="max-w-7xl mx-auto flex items-center gap-2 min-w-max">
-        {GROCERY_CATEGORIES.map((cat) => {
+        {dynamicCategories.map((cat) => {
           const isSelected = selectedCategory === cat.id;
           return (
             <button
