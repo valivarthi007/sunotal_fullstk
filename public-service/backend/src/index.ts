@@ -60,6 +60,14 @@ async function initDb() {
         active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS wishlists (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        product_id INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT unique_user_product UNIQUE(user_id, product_id)
+      );
     `);
 
     // Safe migrations — add missing columns without dropping existing data
@@ -84,6 +92,8 @@ async function initDb() {
       `CREATE INDEX IF NOT EXISTS idx_products_lower_name ON products(LOWER(name))`,
       `CREATE INDEX IF NOT EXISTS idx_products_lower_category ON products(LOWER(category))`,
       `CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name)`,
+      `CREATE INDEX IF NOT EXISTS idx_wishlists_user ON wishlists(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_wishlists_product ON wishlists(product_id)`,
     ];
     for (const idx of indexes) {
       try { await pool.query(idx); } catch {}
@@ -419,6 +429,116 @@ app.get('/api/storefront/search', async (req, res) => {
     return res.json({ success: true, products: matched });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to perform storefront search' });
+  }
+});
+
+// ─── WISHLIST API ─────────────────────────────────────────────────────────────
+// Fetch user wishlist items with full product details
+app.get(['/api/wishlists', '/api/wishlists/:userId'], async (req, res) => {
+  const userId = String(req.params.userId || req.query.userId || 'guest');
+  try {
+    const dbRes = await pool.query(
+      `SELECT p.*, w.created_at as wishlisted_at
+       FROM wishlists w
+       JOIN products p ON w.product_id = p.id
+       WHERE w.user_id = $1
+       ORDER BY w.created_at DESC`,
+      [userId]
+    );
+
+    const formatted = (dbRes.rows || []).map((p: any) => ({
+      id: String(p.id),
+      name: p.name,
+      category: p.category,
+      price: Number(p.price),
+      originalPrice: Number(p.original_price || p.price),
+      unit: p.unit || '1 kg',
+      image: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
+      isOrganic: p.is_organic ?? true,
+      badge: p.badge || null,
+      description: p.description || '',
+      stock: p.stock ?? 100,
+      rating: Number(p.rating || 5.0),
+      status: p.status || 'active',
+      active: p.active ?? true,
+      wishlistedAt: p.wishlisted_at ? new Date(p.wishlisted_at).toISOString() : new Date().toISOString(),
+    }));
+
+    return res.json({ success: true, wishlist: formatted, count: formatted.length });
+  } catch (err: any) {
+    console.error('Error fetching wishlist:', err);
+    return res.status(500).json({ error: 'Failed to fetch wishlist', message: err?.message });
+  }
+});
+
+// Add item to wishlist
+app.post('/api/wishlists', async (req, res) => {
+  const { userId, productId } = req.body;
+  if (!productId) {
+    return res.status(400).json({ error: 'productId is required' });
+  }
+  const cleanUserId = String(userId || 'guest');
+  const targetProdId = Number(productId);
+
+  try {
+    await pool.query(
+      `INSERT INTO wishlists (user_id, product_id) VALUES ($1, $2)
+       ON CONFLICT (user_id, product_id) DO NOTHING`,
+      [cleanUserId, targetProdId]
+    );
+    return res.status(201).json({ success: true, inWishlist: true, message: 'Added to wishlist' });
+  } catch (err: any) {
+    console.error('Error adding to wishlist:', err);
+    return res.status(500).json({ error: 'Failed to add to wishlist', message: err?.message });
+  }
+});
+
+// Toggle wishlist item status
+app.post('/api/wishlists/toggle', async (req, res) => {
+  const { userId, productId } = req.body;
+  if (!productId) {
+    return res.status(400).json({ error: 'productId is required' });
+  }
+  const cleanUserId = String(userId || 'guest');
+  const targetProdId = Number(productId);
+
+  try {
+    const checkRes = await pool.query(
+      'SELECT id FROM wishlists WHERE user_id = $1 AND product_id = $2',
+      [cleanUserId, targetProdId]
+    );
+
+    if (checkRes.rows && checkRes.rows.length > 0) {
+      await pool.query('DELETE FROM wishlists WHERE user_id = $1 AND product_id = $2', [cleanUserId, targetProdId]);
+      return res.json({ success: true, inWishlist: false, message: 'Removed from wishlist' });
+    } else {
+      await pool.query(
+        'INSERT INTO wishlists (user_id, product_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [cleanUserId, targetProdId]
+      );
+      return res.json({ success: true, inWishlist: true, message: 'Added to wishlist' });
+    }
+  } catch (err: any) {
+    console.error('Error toggling wishlist:', err);
+    return res.status(500).json({ error: 'Failed to toggle wishlist item', message: err?.message });
+  }
+});
+
+// Delete item from wishlist
+app.delete(['/api/wishlists/:userId/:productId', '/api/wishlists'], async (req, res) => {
+  const userId = String(req.params.userId || req.body?.userId || req.query?.userId || 'guest');
+  const productId = Number(req.params.productId || req.body?.productId || req.query?.productId);
+
+  if (!productId) {
+    return res.status(400).json({ error: 'productId is required' });
+  }
+
+  try {
+    await pool.query('DELETE FROM wishlists WHERE user_id = $1 AND product_id = $2', [userId, productId]);
+    return res.json({ success: true, inWishlist: false, message: 'Removed from wishlist' });
+  } catch (err: any) {
+    console.error('Error deleting from wishlist:', err);
+    return res.status(500).json({ error: 'Failed to remove from wishlist', message: err?.message });
   }
 });
 

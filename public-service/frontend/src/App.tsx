@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CartProvider } from "@/lib/cart-context";
+import { WishlistProvider } from "@/lib/wishlist-context";
 import { ShieldAlert, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -22,6 +23,7 @@ import ProductDetail from "@/pages/public/ProductDetail";
 const LiveOrderTrack = lazy(() => import("@/pages/public/LiveOrderTrack"));
 const Wallet = lazy(() => import("@/pages/public/Wallet"));
 const Recipes = lazy(() => import("@/pages/public/Recipes"));
+const Wishlist = lazy(() => import("@/pages/public/Wishlist"));
 
 // Admin Portal Pages (Lazy Loaded)
 const AdminLogin = lazy(() => import("@/pages/admin/AdminLogin"));
@@ -312,6 +314,7 @@ function SubdomainRouter() {
         <Route path="/checkout" component={Checkout} />
         <Route path="/wallet" component={Wallet} />
         <Route path="/recipes" component={Recipes} />
+        <Route path="/wishlist" component={Wishlist} />
         <Route path="/support" component={SupportPortal} />
         <Route path="/help" component={SupportPortal} />
         <Route path="/login" component={Login} />
@@ -355,14 +358,16 @@ function App() {
           <TooltipProvider>
             <LocationProvider>
               <CartProvider>
-                <ApiStatusProvider>
-                  <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                    <SubdomainRouter />
-                  </WouterRouter>
-                  <WebsiteTour />
-                  <ChatbotWidget />
-                </ApiStatusProvider>
-                <Toaster richColors position="top-right" />
+                <WishlistProvider>
+                  <ApiStatusProvider>
+                    <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                      <SubdomainRouter />
+                    </WouterRouter>
+                    <WebsiteTour />
+                    <ChatbotWidget />
+                  </ApiStatusProvider>
+                  <Toaster richColors position="top-right" />
+                </WishlistProvider>
               </CartProvider>
             </LocationProvider>
           </TooltipProvider>

@@ -16,12 +16,14 @@ import {
   Trash2,
   ShoppingBag,
   LogOut,
+  Heart,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
 import { useGetCurrentUser, getGetCurrentUserQueryKey, useListCategories } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart-context";
+import { useWishlist } from "@/lib/wishlist-context";
 import { useLocationState } from "@/lib/location-context";
 import { LocationModal } from "@/components/ui/location-modal";
 import { InteractiveMapPickerModal } from "@/components/ui/InteractiveMapPickerModal";
@@ -56,6 +58,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const serverUser = (rawUser as any)?.user || rawUser;
   const user = serverUser || tokenUser;
   const { items, totalItems, totalPrice, isOpen, openCart, closeCart, updateQuantity, removeItem, clearCart } = useCart();
+  const { totalWishlistItems } = useWishlist();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -225,6 +228,23 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               </Button>
             )}
 
+
+            {/* Wishlist Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full w-11 h-11 relative border-border/70 hover:border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-muted-foreground hover:text-rose-500 shadow-sm transition-all"
+              onClick={() => setLocation("/wishlist")}
+              aria-label="View Wishlist"
+              title="View Wishlist"
+            >
+              <Heart className={`w-5 h-5 ${totalWishlistItems > 0 ? "fill-rose-500 text-rose-500" : ""}`} />
+              {totalWishlistItems > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-background animate-pulse">
+                  {totalWishlistItems > 99 ? "99+" : totalWishlistItems}
+                </span>
+              )}
+            </Button>
 
             {/* Cart Button */}
             <Button

@@ -26,6 +26,7 @@ import {
   Clock
 } from "lucide-react";
 import { toast } from "sonner";
+import { useWishlist } from "@/lib/wishlist-context";
 
 export default function ProductDetail() {
   const [, params] = useRoute("/products/:id");
@@ -33,10 +34,10 @@ export default function ProductDetail() {
   const [, setLocation] = useLocation();
   const productId = params?.id || paramsAlt?.id;
 
-  const [isWishlisted, setIsWishlisted] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
 
   const { items, addItem, removeItem, updateQuantity, openCart } = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
 
   // Fetch product detail dynamically
   const { data: product, isLoading, isError } = useQuery({
@@ -207,11 +208,23 @@ export default function ProductDetail() {
                 {/* Action Floating Buttons */}
                 <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                   <button
-                    onClick={() => setIsWishlisted(!isWishlisted)}
-                    className="w-10 h-10 rounded-2xl bg-background/80 backdrop-blur-md border border-border/60 flex items-center justify-center text-muted-foreground hover:text-rose-500 transition-all shadow-sm"
-                    title="Wishlist"
+                    onClick={async () => {
+                      if (!product) return;
+                      const isNowAdded = await toggleWishlist(product);
+                      if (isNowAdded) {
+                        toast.success(`Saved ${product.name} to wishlist`);
+                      } else {
+                        toast.info(`Removed ${product.name} from wishlist`);
+                      }
+                    }}
+                    className={`w-10 h-10 rounded-2xl backdrop-blur-md border flex items-center justify-center transition-all shadow-sm active:scale-95 ${
+                      product && isInWishlist(product.id)
+                        ? "bg-rose-50 border-rose-200 text-rose-500 dark:bg-rose-950/60 dark:border-rose-800"
+                        : "bg-background/80 border-border/60 text-muted-foreground hover:text-rose-500"
+                    }`}
+                    title={product && isInWishlist(product.id) ? "Remove from Wishlist" : "Add to Wishlist"}
                   >
-                    <Heart className={`w-5 h-5 ${isWishlisted ? "fill-rose-500 text-rose-500" : ""}`} />
+                    <Heart className={`w-5 h-5 transition-transform ${product && isInWishlist(product.id) ? "fill-rose-500 text-rose-500 scale-110" : ""}`} />
                   </button>
                   <button
                     onClick={handleShare}

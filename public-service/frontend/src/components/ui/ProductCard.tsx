@@ -2,15 +2,17 @@ import { Product } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShoppingCart, Leaf, Check, MapPin, Plus, Minus } from "lucide-react";
+import { ShoppingCart, Leaf, Check, MapPin, Plus, Minus, Heart } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
+import { useWishlist } from "@/lib/wishlist-context";
 import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
 import { useState } from "react";
 import { Link } from "wouter";
 
 export function ProductCard({ product }: { product: Product }) {
   const { items, addItem, removeItem, updateQuantity } = useCart();
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const { isInWishlist, toggleWishlist } = useWishlist();
+  const isWishlisted = isInWishlist(product.id);
   
   // Find current cart quantity for this product
   const cartItem = items.find((i) => i.product.id === product.id);
@@ -39,14 +41,10 @@ export function ProductCard({ product }: { product: Product }) {
     }
   };
 
-  const handleToggleWishlist = (e: React.MouseEvent) => {
+  const handleToggleWishlist = async (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    setIsWishlisted(!isWishlisted);
-    fetch("/api/wishlists", {
-      method: isWishlisted ? "DELETE" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: 1, productId: product.id }),
-    }).catch(() => null);
+    await toggleWishlist(product);
   };
 
   return (
@@ -70,10 +68,14 @@ export function ProductCard({ product }: { product: Product }) {
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
         <button
           onClick={handleToggleWishlist}
-          className="w-8 h-8 rounded-full bg-background/80 backdrop-blur-md border border-border/50 flex items-center justify-center text-muted-foreground hover:text-red-500 transition-colors shadow-sm"
-          title="Add to Wishlist"
+          className={`w-8 h-8 rounded-full backdrop-blur-md border flex items-center justify-center transition-all shadow-sm active:scale-95 ${
+            isWishlisted
+              ? "bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100 dark:bg-rose-950/60 dark:border-rose-800"
+              : "bg-background/80 border-border/50 text-muted-foreground hover:text-rose-500 hover:bg-background"
+          }`}
+          title={isWishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
         >
-          <span className={isWishlisted ? "text-red-500" : "text-muted-foreground"}>{isWishlisted ? "❤️" : "🤍"}</span>
+          <Heart className={`w-4 h-4 transition-transform ${isWishlisted ? "fill-rose-500 text-rose-500 scale-110" : ""}`} />
         </button>
         {product.discountPercentage > 0 && (
           <Badge variant="secondary" className="bg-red-100 text-red-700 border-transparent hover:bg-red-100 font-bold px-2 py-0.5 shadow-sm font-mono text-[10px]">
