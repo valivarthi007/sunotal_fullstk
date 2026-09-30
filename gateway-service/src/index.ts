@@ -3227,7 +3227,7 @@ app.get('/api/admin/ledger', async (req, res) => {
 
 // ADDRESSES API (max 10 addresses per user)
 app.get(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res) => {
-  const userId = req.params.userId ? String(req.params.userId) : String(req.query.userId || '1');
+  const userId = String(req.params.userId || req.query.userId || req.body?.userId || '1');
   try {
     const dbRes = await gatewayPgPool.query('SELECT * FROM user_addresses WHERE user_id::text = $1 ORDER BY is_default DESC, id DESC', [userId]);
     return res.json(dbRes.rows.map(a => ({
@@ -3255,11 +3255,12 @@ app.get(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res
 });
 
 app.post(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res) => {
-  const userId = req.params.userId ? String(req.params.userId) : String(req.body.userId || '1');
+  const userId = String(req.params.userId || req.body.userId || '1');
   const { label, tag, houseNo, street, receiverName, phone, streetAddress, landmark, city, state, pincode, latitude, longitude, isDefault } = req.body || {};
-  const finalStreet = streetAddress || houseNo || 'Address';
-  const finalPhone = phone || '9000000000';
-  const finalReceiver = receiverName || 'Customer';
+  const finalLabel = tag || label || 'Home';
+  const finalStreet = streetAddress || houseNo || '';
+  const finalPhone = phone || '';
+  const finalReceiver = receiverName || '';
   try {
     // Enforce MAX 10 addresses
     const countRes = await gatewayPgPool.query('SELECT COUNT(*) FROM user_addresses WHERE user_id::text = $1', [userId]);
@@ -3276,14 +3277,14 @@ app.post(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, re
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [
         userId,
-        tag || label || 'home',
+        finalLabel,
         finalReceiver,
         finalPhone,
         finalStreet,
         street || landmark || '',
-        city || 'Vijayawada',
-        state || 'Andhra Pradesh',
-        pincode || '520001',
+        city || '',
+        state || '',
+        pincode || '',
         latitude || null,
         longitude || null,
         isDefault ? true : false
@@ -3310,13 +3311,18 @@ app.post(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, re
   }
 });
 
-app.put('/api/users/:userId/addresses/:addressId', async (req, res) => {
-  const userId = Number(req.params.userId);
-  const addressId = Number(req.params.addressId);
-  const { label, receiverName, phone, streetAddress, landmark, city, state, pincode, latitude, longitude, isDefault } = req.body || {};
+app.put(['/api/users/:userId/addresses/:addressId', '/api/user/addresses/:addressId'], async (req, res) => {
+  const userId = String(req.params.userId || req.body?.userId || '1');
+  const addressId = String(req.params.addressId);
+  const { label, tag, receiverName, phone, streetAddress, houseNo, landmark, street, city, state, pincode, latitude, longitude, isDefault } = req.body || {};
+  
+  const finalLabel = tag || label;
+  const finalStreet = streetAddress || houseNo;
+  const finalLandmark = landmark || street;
+
   try {
     if (isDefault) {
-      await gatewayPgPool.query('UPDATE user_addresses SET is_default = false WHERE user_id = $1', [userId]);
+      await gatewayPgPool.query('UPDATE user_addresses SET is_default = false WHERE user_id::text = $1', [userId]);
     }
     const dbRes = await gatewayPgPool.query(
       `UPDATE user_addresses SET
@@ -3324,36 +3330,47 @@ app.put('/api/users/:userId/addresses/:addressId', async (req, res) => {
         street_address = COALESCE($4, street_address), landmark = COALESCE($5, landmark), city = COALESCE($6, city),
         state = COALESCE($7, state), pincode = COALESCE($8, pincode), latitude = COALESCE($9, latitude),
         longitude = COALESCE($10, longitude), is_default = COALESCE($11, is_default)
-       WHERE id = $12 AND user_id = $13 RETURNING *`,
-      [label, receiverName, phone, streetAddress, landmark, city, state, pincode, latitude, longitude, isDefault, addressId, userId]
+       WHERE id::text = $12 AND user_id::text = $13 RETURNING *`,
+      [finalLabel, receiverName, phone, finalStreet, finalLandmark, city, state, pincode, latitude, longitude, isDefault, addressId, userId]
     );
+
     if (dbRes.rows && dbRes.rows.length > 0) {
       const a = dbRes.rows[0];
       return res.json({ id: a.id, userId: a.user_id, label: a.label, receiverName: a.receiver_name, phone: a.phone, streetAddress: a.street_address, landmark: a.landmark, city: a.city, state: a.state, pincode: a.pincode, latitude: a.latitude ? Number(a.latitude) : null, longitude: a.longitude ? Number(a.longitude) : null, isDefault: a.is_default });
     }
-    return res.status(404).json({ error: 'Address not found' });
+
+    // If addressId not found, fallback to inserting new address
+    const insertRes = await gatewayPgPool.query(
+      `INSERT INTO user_addresses (user_id, label, receiver_name, phone, street_address, landmark, city, state, pincode, latitude, longitude, is_default)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      [userId, finalLabel || 'Home', receiverName || '', phone || '', finalStreet || '', finalLandmark || '', city || '', state || '', pincode || '', latitude || null, longitude || null, !!isDefault]
+    );
+    const created = insertRes.rows[0];
+    return res.json({ id: created.id, userId: created.user_id, label: created.label, receiverName: created.receiver_name, phone: created.phone, streetAddress: created.street_address, landmark: created.landmark, city: created.city, state: created.state, pincode: created.pincode, isDefault: created.is_default });
+    const created = insertRes.rows[0];
+    return res.json({ id: created.id, userId: created.user_id, label: created.label, receiverName: created.receiver_name, phone: created.phone, streetAddress: created.street_address, landmark: created.landmark, city: created.city, state: created.state, pincode: created.pincode, isDefault: created.is_default });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to update address', message: err?.message });
   }
 });
 
-app.delete('/api/users/:userId/addresses/:addressId', async (req, res) => {
-  const userId = Number(req.params.userId);
-  const addressId = Number(req.params.addressId);
+app.delete(['/api/users/:userId/addresses/:addressId', '/api/user/addresses/:addressId'], async (req, res) => {
+  const userId = String(req.params.userId || req.body?.userId || req.query?.userId || '1');
+  const addressId = String(req.params.addressId);
   try {
-    await gatewayPgPool.query('DELETE FROM user_addresses WHERE id = $1 AND user_id = $2', [addressId, userId]);
+    await gatewayPgPool.query('DELETE FROM user_addresses WHERE id::text = $1 AND user_id::text = $2', [addressId, userId]);
     return res.json({ success: true, deletedId: addressId });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to delete address', message: err?.message });
   }
 });
 
-app.patch('/api/users/:userId/addresses/:addressId/default', async (req, res) => {
-  const userId = Number(req.params.userId);
-  const addressId = Number(req.params.addressId);
+app.patch(['/api/users/:userId/addresses/:addressId/default', '/api/user/addresses/:addressId/default'], async (req, res) => {
+  const userId = String(req.params.userId || req.body?.userId || req.query?.userId || '1');
+  const addressId = String(req.params.addressId);
   try {
-    await gatewayPgPool.query('UPDATE user_addresses SET is_default = false WHERE user_id = $1', [userId]);
-    const dbRes = await gatewayPgPool.query('UPDATE user_addresses SET is_default = true WHERE id = $1 AND user_id = $2 RETURNING *', [addressId, userId]);
+    await gatewayPgPool.query('UPDATE user_addresses SET is_default = false WHERE user_id::text = $1', [userId]);
+    const dbRes = await gatewayPgPool.query('UPDATE user_addresses SET is_default = true WHERE id::text = $1 AND user_id::text = $2 RETURNING *', [addressId, userId]);
     if (dbRes.rows && dbRes.rows.length > 0) return res.json({ success: true, address: dbRes.rows[0] });
     return res.status(404).json({ error: 'Address not found' });
   } catch (err: any) {

@@ -45,6 +45,8 @@ interface Address {
   line1: string;
   line2?: string;
   city?: string;
+  state?: string;
+  pincode?: string;
   phone?: string;
   isDefault?: boolean;
 }
@@ -189,10 +191,12 @@ export default function Profile() {
           if (Array.isArray(data)) {
             const mapped: Address[] = data.map((a: any, idx: number) => ({
               id: String(a.id),
-              label: a.label || "Home",
-              line1: a.streetAddress || "",
-              line2: a.landmark || "",
+              label: a.label || a.tag || "Home",
+              line1: a.streetAddress || a.houseNo || a.line1 || "",
+              line2: a.landmark || a.street || a.line2 || "",
               city: a.city || "",
+              state: a.state || "",
+              pincode: a.pincode || "",
               phone: a.phone || "",
               isDefault: a.isDefault ?? a.is_default ?? idx === 0,
             }));
@@ -319,6 +323,8 @@ export default function Profile() {
           ...editingAddr,
           line1: detected.formattedAddress || detected.city || editingAddr.line1,
           city: detected.city || editingAddr.city,
+          state: detected.state || editingAddr.state || "",
+          pincode: detected.pincode || editingAddr.pincode || "",
         });
         toast.success(`Location set to ${detected.city || detected.formattedAddress}`);
       } else {
@@ -329,7 +335,7 @@ export default function Profile() {
     }
   };
 
-  const handleSetDefaultAddr = (id: string) => {
+  const handleSetDefaultAddr = async (id: string) => {
     const next = addresses.map((a) => ({
       ...a,
       isDefault: a.id === id,
@@ -338,6 +344,15 @@ export default function Profile() {
     const target = next.find((a) => a.id === id);
     if (target && user) {
       localStorage.setItem(`sunotal_default_address_${user.id}`, JSON.stringify(target));
+      try {
+        const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+        await fetch(getApiUrl(`/api/users/${user.id}/addresses/${id}/default`), {
+          method: "PATCH",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+      } catch (err) {
+        console.warn("Backend address set default failed", err);
+      }
     }
     toast.success(`"${target?.label || "Address"}" set as default delivery address`);
   };
@@ -378,13 +393,14 @@ export default function Profile() {
         const method = isExisting ? "PUT" : "POST";
         const body = JSON.stringify({
           label: addr.label,
-          receiverName: user.name || "Customer",
-          phone: addr.phone || user.phone || "9999999999",
+          receiverName: user.name || "",
+          phone: addr.phone || user.phone || "",
           streetAddress: addr.line1,
           landmark: addr.line2 || "",
-          city: addr.city,
-          state: "State",
-          pincode: "560001"
+          city: addr.city || "",
+          state: addr.state || "",
+          pincode: addr.pincode || "",
+          isDefault: !!addr.isDefault,
         });
 
         const res = await fetch(url, { method, headers, body });
@@ -844,7 +860,7 @@ export default function Profile() {
                 </div>
                 <Button
                   onClick={() =>
-                    setEditingAddr({ id: String(Date.now()), label: "", line1: "", line2: "", city: "", phone: "" })
+                    setEditingAddr({ id: String(Date.now()), label: "", line1: "", line2: "", city: userLoc?.city || "", state: userLoc?.state || "", pincode: userLoc?.pincode || "", phone: user?.phone || "" })
                   }
                   className="rounded-xl font-bold text-xs gap-1.5"
                 >
@@ -937,7 +953,7 @@ export default function Profile() {
                     />
                     <Input
                       placeholder="Phone Number"
-                      value={editingAddr.phone}
+                      value={editingAddr.phone || ""}
                       onChange={(e) => setEditingAddr({ ...editingAddr, phone: e.target.value })}
                     />
                     <Input
@@ -948,13 +964,23 @@ export default function Profile() {
                     />
                     <Input
                       placeholder="Address Line 2 (Optional)"
-                      value={editingAddr.line2}
+                      value={editingAddr.line2 || ""}
                       onChange={(e) => setEditingAddr({ ...editingAddr, line2: e.target.value })}
                     />
                     <Input
                       placeholder="City"
-                      value={editingAddr.city}
+                      value={editingAddr.city || ""}
                       onChange={(e) => setEditingAddr({ ...editingAddr, city: e.target.value })}
+                    />
+                    <Input
+                      placeholder="State (Optional)"
+                      value={editingAddr.state || ""}
+                      onChange={(e) => setEditingAddr({ ...editingAddr, state: e.target.value })}
+                    />
+                    <Input
+                      placeholder="Pincode (Optional)"
+                      value={editingAddr.pincode || ""}
+                      onChange={(e) => setEditingAddr({ ...editingAddr, pincode: e.target.value })}
                     />
                   </div>
                   <div className="flex items-center gap-2 pt-1">

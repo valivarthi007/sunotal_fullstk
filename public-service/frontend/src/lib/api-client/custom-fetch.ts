@@ -373,6 +373,7 @@ export async function customFetch<T = unknown>(
     const token =
       (typeof localStorage !== "undefined" &&
         (localStorage.getItem("sunotal_token") ||
+          localStorage.getItem("sunotal_user_token") ||
           localStorage.getItem("sunotal_admin_token") ||
           localStorage.getItem("sunotal_vendor_token") ||
           localStorage.getItem("sunotal_delivery_token"))) ||
