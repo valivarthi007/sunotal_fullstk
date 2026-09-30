@@ -46,6 +46,7 @@ interface Address {
   line2?: string;
   city?: string;
   phone?: string;
+  isDefault?: boolean;
 }
 
 export interface OrderItem {
@@ -95,7 +96,7 @@ export default function Profile() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
-  const { location: userLoc } = useLocationState();
+  const { location: userLoc, detectLocation } = useLocationState();
 
   const [activeTab, setActiveTab] = useState<"account" | "subscriptions">("account");
   const [subscriptionsList, setSubscriptionsList] = useState<any[]>([]);
@@ -186,13 +187,14 @@ export default function Profile() {
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) {
-            const mapped: Address[] = data.map((a: any) => ({
+            const mapped: Address[] = data.map((a: any, idx: number) => ({
               id: String(a.id),
               label: a.label || "Home",
               line1: a.streetAddress || "",
               line2: a.landmark || "",
               city: a.city || "",
-              phone: a.phone || ""
+              phone: a.phone || "",
+              isDefault: a.isDefault ?? a.is_default ?? idx === 0,
             }));
             setAddresses(mapped);
             localStorage.setItem(`user_addresses_${user.id}`, JSON.stringify(mapped));
@@ -204,7 +206,12 @@ export default function Profile() {
       }
       try {
         const raw = localStorage.getItem(`user_addresses_${user.id}`) || "[]";
-        setAddresses(JSON.parse(raw));
+        const parsed: Address[] = JSON.parse(raw);
+        const withDefault = parsed.map((a, idx) => ({
+          ...a,
+          isDefault: a.isDefault ?? idx === 0,
+        }));
+        setAddresses(withDefault);
       } catch {
         setAddresses([]);
       }
@@ -302,6 +309,38 @@ export default function Profile() {
     localStorage.setItem(`user_addresses_${user.id}`, JSON.stringify(list));
     setAddresses(list);
   }
+
+  const handleDetectLocationForAddress = async () => {
+    try {
+      toast.info("Detecting your GPS location...");
+      const detected = await detectLocation();
+      if (detected && editingAddr) {
+        setEditingAddr({
+          ...editingAddr,
+          line1: detected.formattedAddress || detected.city || editingAddr.line1,
+          city: detected.city || editingAddr.city,
+        });
+        toast.success(`Location set to ${detected.city || detected.formattedAddress}`);
+      } else {
+        toast.error("Could not auto-detect location. Please enter manually.");
+      }
+    } catch {
+      toast.error("Location detection failed");
+    }
+  };
+
+  const handleSetDefaultAddr = (id: string) => {
+    const next = addresses.map((a) => ({
+      ...a,
+      isDefault: a.id === id,
+    }));
+    persistAddresses(next);
+    const target = next.find((a) => a.id === id);
+    if (target && user) {
+      localStorage.setItem(`sunotal_default_address_${user.id}`, JSON.stringify(target));
+    }
+    toast.success(`"${target?.label || "Address"}" set as default delivery address`);
+  };
 
   const handleSaveAddr = async (addr: Address) => {
     if (!addr.label || addr.label.trim().length < 2) {
@@ -819,38 +858,71 @@ export default function Profile() {
                 </div>
               ) : (
                 <div className="grid gap-3">
-                  {addresses.map((a) => (
-                    <div key={a.id} className="p-4 border rounded-2xl flex items-start justify-between bg-accent/20">
-                      <div>
-                        <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
-                          {a.label}
-                        </span>
-                        <p className="font-bold text-secondary text-sm mt-1">{a.line1}</p>
-                        {a.line2 && <p className="text-xs text-muted-foreground">{a.line2}</p>}
-                        <p className="text-xs font-semibold text-secondary mt-0.5">{a.city}</p>
-                        {a.phone && <p className="text-xs text-muted-foreground mt-0.5">Phone: {a.phone}</p>}
+                  {addresses.map((a, idx) => {
+                    const isDef = a.isDefault || (idx === 0 && !addresses.some((x) => x.isDefault));
+                    return (
+                      <div
+                        key={a.id}
+                        className={`p-4 border rounded-2xl flex items-start justify-between transition-all ${
+                          isDef ? "border-primary/50 bg-primary/5 shadow-sm" : "bg-accent/20"
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
+                              {a.label}
+                            </span>
+                            {isDef ? (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold tracking-wide flex items-center gap-1 shadow-sm">
+                                <CheckCircle2 className="w-3 h-3" /> DEFAULT
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSetDefaultAddr(a.id)}
+                                className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 transition-colors"
+                              >
+                                Set as Default
+                              </button>
+                            )}
+                          </div>
+                          <p className="font-bold text-secondary text-sm mt-1">{a.line1}</p>
+                          {a.line2 && <p className="text-xs text-muted-foreground">{a.line2}</p>}
+                          <p className="text-xs font-semibold text-secondary mt-0.5">{a.city}</p>
+                          {a.phone && <p className="text-xs text-muted-foreground mt-0.5">Phone: {a.phone}</p>}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="w-8 h-8 text-muted-foreground hover:text-foreground"
+                            onClick={() => setEditingAddr(a)}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="w-8 h-8 text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteAddr(a.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground" onClick={() => setEditingAddr(a)}>
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="w-8 h-8 text-destructive hover:bg-destructive/10" onClick={() => handleDeleteAddr(a.id)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
               {/* Address Edit Dialog */}
               {editingAddr && (
-                <div className="mt-4 p-5 border rounded-2xl bg-background space-y-3">
+                <div className="mt-4 p-5 border rounded-2xl bg-background space-y-3 shadow-md">
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold text-sm text-secondary">Save Address Details</h3>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="h-7 text-[10px] rounded-full border-primary/30 text-primary hover:bg-primary/10 gap-1"
                       onClick={handleDetectLocationForAddress}
                     >
@@ -858,15 +930,52 @@ export default function Profile() {
                     </Button>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-3">
-                    <Input placeholder="Label (Home, Office, Hub)" value={editingAddr.label} onChange={(e) => setEditingAddr({ ...editingAddr, label: e.target.value })} />
-                    <Input placeholder="Phone Number" value={editingAddr.phone} onChange={(e) => setEditingAddr({ ...editingAddr, phone: e.target.value })} />
-                    <Input placeholder="Address Line 1" value={editingAddr.line1} onChange={(e) => setEditingAddr({ ...editingAddr, line1: e.target.value })} className="sm:col-span-2" />
-                    <Input placeholder="Address Line 2 (Optional)" value={editingAddr.line2} onChange={(e) => setEditingAddr({ ...editingAddr, line2: e.target.value })} />
-                    <Input placeholder="City" value={editingAddr.city} onChange={(e) => setEditingAddr({ ...editingAddr, city: e.target.value })} />
+                    <Input
+                      placeholder="Label (Home, Office, Hub)"
+                      value={editingAddr.label}
+                      onChange={(e) => setEditingAddr({ ...editingAddr, label: e.target.value })}
+                    />
+                    <Input
+                      placeholder="Phone Number"
+                      value={editingAddr.phone}
+                      onChange={(e) => setEditingAddr({ ...editingAddr, phone: e.target.value })}
+                    />
+                    <Input
+                      placeholder="Address Line 1"
+                      value={editingAddr.line1}
+                      onChange={(e) => setEditingAddr({ ...editingAddr, line1: e.target.value })}
+                      className="sm:col-span-2"
+                    />
+                    <Input
+                      placeholder="Address Line 2 (Optional)"
+                      value={editingAddr.line2}
+                      onChange={(e) => setEditingAddr({ ...editingAddr, line2: e.target.value })}
+                    />
+                    <Input
+                      placeholder="City"
+                      value={editingAddr.city}
+                      onChange={(e) => setEditingAddr({ ...editingAddr, city: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="isDefaultAddrCheck"
+                      checked={!!editingAddr.isDefault}
+                      onChange={(e) => setEditingAddr({ ...editingAddr, isDefault: e.target.checked })}
+                      className="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4"
+                    />
+                    <label htmlFor="isDefaultAddrCheck" className="text-xs font-semibold text-secondary cursor-pointer select-none">
+                      Set as default delivery address
+                    </label>
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="ghost" size="sm" onClick={() => setEditingAddr(null)}>Cancel</Button>
-                    <Button size="sm" onClick={() => editingAddr && handleSaveAddr(editingAddr)}>Save Address</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setEditingAddr(null)}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={() => editingAddr && handleSaveAddr(editingAddr)}>
+                      Save Address
+                    </Button>
                   </div>
                 </div>
               )}
