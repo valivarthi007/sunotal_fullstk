@@ -51,13 +51,14 @@ services:
       start_period: 10s
 
   whisper-service:
-    image: onprem/whisper-asr-webservice:latest
+    image: onerahmet/openai-whisper-asr-webservice:latest
     container_name: sunotal-whisper-service
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8000:9000"
     environment:
       - ASR_MODEL=tiny
+      - ASR_ENGINE=faster_whisper
     networks:
       default:
         aliases:
