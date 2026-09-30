@@ -98,7 +98,7 @@ export default function Profile() {
   const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
   const { location: userLoc, detectLocation } = useLocationState();
 
-  const [activeTab, setActiveTab] = useState<"account" | "subscriptions">("account");
+  const [activeTab, setActiveTab] = useState<"account" | "orders" | "grievances" | "subscriptions">("account");
   const [subscriptionsList, setSubscriptionsList] = useState<any[]>([]);
 
   // Address state
@@ -1026,7 +1026,7 @@ export default function Profile() {
                     <div>
                       <p className="font-bold text-sm text-secondary">Quality Checked & Packed</p>
                       <p className="text-xs text-muted-foreground">
-                        {selectedOrderTrack.warehouseName || (selectedOrderTrack.city ? `${selectedOrderTrack.city} Express Dark Store Hub` : "Vijayawada Urmila Nagar Hub")}
+                        {(selectedOrderTrack as any).warehouseName || (selectedOrderTrack.city ? `${selectedOrderTrack.city} Express Dark Store Hub` : "Vijayawada Urmila Nagar Hub")}
                       </p>
                     </div>
                   </div>
