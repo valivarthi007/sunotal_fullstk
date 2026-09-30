@@ -3,17 +3,7 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { Loader2, Settings, ShieldCheck, Key, ExternalLink } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
 
 interface SocialLoginButtonsProps {
   onSuccess?: () => void;
@@ -25,40 +15,21 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
   const queryClient = useQueryClient();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
 
-  // Config Modal State
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [activeConfigProvider, setActiveConfigProvider] = useState<"google" | "facebook" | "apple" | null>(null);
-
   // Saved Client IDs from localStorage or env
-  const [googleClientId, setGoogleClientId] = useState(
+  const [googleClientId] = useState(
     () => localStorage.getItem("VITE_GOOGLE_CLIENT_ID") || (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || ""
   );
-  const [facebookAppId, setFacebookAppId] = useState(
+  const [facebookAppId] = useState(
     () => localStorage.getItem("VITE_FACEBOOK_APP_ID") || (import.meta as any).env?.VITE_FACEBOOK_APP_ID || ""
   );
-  const [appleServicesId, setAppleServicesId] = useState(
-    () => localStorage.getItem("VITE_APPLE_CLIENT_ID") || (import.meta as any).env?.VITE_APPLE_CLIENT_ID || ""
-  );
 
-  const saveCredentials = () => {
-    if (googleClientId) localStorage.setItem("VITE_GOOGLE_CLIENT_ID", googleClientId);
-    if (facebookAppId) localStorage.setItem("VITE_FACEBOOK_APP_ID", facebookAppId);
-    if (appleServicesId) localStorage.setItem("VITE_APPLE_CLIENT_ID", appleServicesId);
-
-    toast.success("OAuth Credentials Saved", {
-      description: "You can now use real Google, Facebook, and Apple sign-in.",
-    });
-    setShowConfigModal(false);
-  };
-
-  const handleSocialAuth = async (provider: "google" | "facebook" | "apple") => {
+  const handleSocialAuth = async (provider: "google" | "facebook") => {
     setLoadingProvider(provider);
     const redirectUri = window.location.origin;
 
     let clientId = "";
     if (provider === "google") clientId = googleClientId;
     else if (provider === "facebook") clientId = facebookAppId;
-    else if (provider === "apple") clientId = appleServicesId;
 
     if (!clientId) {
       setLoadingProvider(null);
@@ -82,12 +53,6 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
         )}&redirect_uri=${encodeURIComponent(
           redirectUri
         )}&scope=email,public_profile&response_type=token`;
-      } else if (provider === "apple") {
-        authUrl = `https://appleid.apple.com/auth/authorize?client_id=${encodeURIComponent(
-          clientId
-        )}&redirect_uri=${encodeURIComponent(
-          redirectUri
-        )}&response_type=code%20id_token&response_mode=fragment&scope=name%20email`;
       }
 
       const width = 600;
@@ -105,7 +70,6 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
         description: "Complete login in the popup window.",
       });
 
-      // Poll for popup closing or message response
       const timer = setInterval(async () => {
         if (!popup || popup.closed) {
           clearInterval(timer);
@@ -163,7 +127,7 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 gap-3">
         {/* Google Button */}
         <button
           type="button"
@@ -212,130 +176,11 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
           )}
           <span>Facebook</span>
         </button>
-
-        {/* Apple Button */}
-        <button
-          type="button"
-          disabled={!!loadingProvider}
-          onClick={() => handleSocialAuth("apple")}
-          className="flex items-center justify-center gap-2 py-2.5 px-3 border border-slate-800 rounded-xl text-xs font-semibold text-white bg-slate-950 hover:bg-slate-900 transition-all shadow-sm disabled:opacity-50"
-        >
-          {loadingProvider === "apple" ? (
-            <Loader2 className="w-4 h-4 animate-spin text-white" />
-          ) : (
-            <svg className="w-4 h-4 fill-current text-white shrink-0" viewBox="0 0 24 24">
-              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.85c.66-.8 1.11-1.92.99-3.04-.96.04-2.12.64-2.81 1.44-.61.71-1.15 1.86-.99 2.96 1.07.08 2.16-.56 2.81-1.36z" />
-            </svg>
-          )}
-          <span>Apple</span>
-        </button>
       </div>
 
-      {/* Confidential Production Provider Notice */}
       <div className="flex items-center justify-center text-[10px] text-slate-400 pt-1 font-mono">
         <span>🔒 Secure OAuth 2.0 Encryption</span>
       </div>
-
-      {/* OAuth Configuration Dialog */}
-      <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
-        <DialogContent className="sm:max-w-[550px] bg-card border border-border">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-              <Key className="w-5 h-5 text-emerald-600" />
-              Production OAuth 2.0 Credentials
-            </DialogTitle>
-            <DialogDescription>
-              Enter your domain OAuth Client IDs below. Once configured, clicking Google, Facebook, or Apple will launch real sign-in popup windows.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {/* Google Input */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold flex items-center justify-between">
-                <span>Google Client ID (<code className="text-emerald-600">VITE_GOOGLE_CLIENT_ID</code>)</span>
-                <a
-                  href="https://console.cloud.google.com/apis/credentials"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5"
-                >
-                  Google Console <ExternalLink className="w-2.5 h-2.5" />
-                </a>
-              </Label>
-              <Input
-                placeholder="1234567890-xyz.apps.googleusercontent.com"
-                value={googleClientId}
-                onChange={(e) => setGoogleClientId(e.target.value)}
-                className="font-mono text-xs rounded-xl"
-              />
-            </div>
-
-            {/* Facebook Input */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold flex items-center justify-between">
-                <span>Facebook App ID (<code className="text-blue-600">VITE_FACEBOOK_APP_ID</code>)</span>
-                <a
-                  href="https://developers.facebook.com/apps/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5"
-                >
-                  Meta for Developers <ExternalLink className="w-2.5 h-2.5" />
-                </a>
-              </Label>
-              <Input
-                placeholder="1092837465019283"
-                value={facebookAppId}
-                onChange={(e) => setFacebookAppId(e.target.value)}
-                className="font-mono text-xs rounded-xl"
-              />
-            </div>
-
-            {/* Apple Input */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold flex items-center justify-between">
-                <span>Apple Service ID (<code className="text-slate-800 dark:text-slate-200">VITE_APPLE_CLIENT_ID</code>)</span>
-                <a
-                  href="https://developer.apple.com/account/resources/identifiers/list/serviceId"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5"
-                >
-                  Apple Developer Portal <ExternalLink className="w-2.5 h-2.5" />
-                </a>
-              </Label>
-              <Input
-                placeholder="com.sunotal.grocery.signin"
-                value={appleServicesId}
-                onChange={(e) => setAppleServicesId(e.target.value)}
-                className="font-mono text-xs rounded-xl"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowConfigModal(false)}
-              className="text-xs font-semibold"
-            >
-              Cancel
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              onClick={saveCredentials}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 rounded-xl px-4"
-            >
-              <ShieldCheck className="w-4 h-4" /> Save OAuth Keys
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

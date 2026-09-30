@@ -142,7 +142,6 @@ export default function UsersAdmin() {
   // Social Channel Stats
   const googleCount = users.filter((u: any) => (u.loginProvider || u.login_provider) === "google").length;
   const facebookCount = users.filter((u: any) => (u.loginProvider || u.login_provider) === "facebook").length;
-  const appleCount = users.filter((u: any) => (u.loginProvider || u.login_provider) === "apple").length;
   const emailCount = users.filter((u: any) => !u.loginProvider || u.loginProvider === "email" || u.login_provider === "email").length;
 
   const renderProviderBadge = (providerRaw?: string) => {
@@ -160,14 +159,6 @@ export default function UsersAdmin() {
         <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1.5 w-fit">
           <span className="w-2 h-2 rounded-full bg-blue-600"></span>
           Facebook
-        </Badge>
-      );
-    }
-    if (provider === "apple") {
-      return (
-        <Badge className="bg-slate-900 dark:bg-slate-800 text-slate-100 border border-slate-700 text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1.5 w-fit">
-          <span className="w-2 h-2 rounded-full bg-white"></span>
-          Apple
         </Badge>
       );
     }
@@ -189,7 +180,7 @@ export default function UsersAdmin() {
       </div>
 
       {/* Social Auth Channel Metrics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div className="bg-card border border-border p-4 rounded-2xl shadow-sm">
           <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Total Users</p>
           <p className="text-2xl font-bold text-foreground mt-1">{users.length}</p>
@@ -207,13 +198,6 @@ export default function UsersAdmin() {
             <span className="w-2 h-2 rounded-full bg-blue-600"></span>
           </div>
           <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">{facebookCount}</p>
-        </div>
-        <div className="bg-slate-900/5 dark:bg-slate-800/40 border border-slate-700/30 p-4 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium uppercase tracking-wider">Apple ID</p>
-            <span className="w-2 h-2 rounded-full bg-slate-900 dark:bg-slate-100"></span>
-          </div>
-          <p className="text-2xl font-bold text-slate-800 dark:text-slate-200 mt-1">{appleCount}</p>
         </div>
         <div className="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-2xl shadow-sm">
           <div className="flex items-center justify-between">
