@@ -119,8 +119,8 @@ export default function Wishlist() {
             {wishlistItems.map((product) => {
               const cartItem = cartItems.find((i) => String(i.product.id) === String(product.id));
               const qtyInCart = cartItem ? cartItem.quantity : 0;
-              const isOrganic = product.organic ?? product.isOrganic ?? true;
-              const stock = product.stock ?? 100;
+              const isOrganic = product.organic ?? product.isOrganic ?? false;
+              const stock = product.stock !== undefined ? product.stock : 0;
               const originalPrice = product.originalPrice ?? product.price;
               const discountPercent = originalPrice > product.price 
                 ? Math.round(((originalPrice - product.price) / originalPrice) * 100)

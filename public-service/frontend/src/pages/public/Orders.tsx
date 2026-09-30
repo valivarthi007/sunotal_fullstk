@@ -397,21 +397,26 @@ export default function Orders() {
       }
 
       if (reorderItems.length === 0 && order.items && order.items.length > 0) {
-        reorderItems = order.items.map((item) => ({
-          product: {
-            id: item.productId || Math.floor(Math.random() * 10000),
-            name: item.productName || "Produce Item",
-            category: "Grocery",
-            price: item.unitPrice || (item.subtotal ? item.subtotal / (item.quantity || 1) : 50),
-            originalPrice: item.unitPrice || 50,
-            unit: "1 unit",
-            image: (item as any).image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400",
-            stock: 99,
-            rating: 5.0,
-            active: true,
-          },
-          quantity: item.quantity || 1,
-        }));
+        reorderItems = order.items
+          .filter((item) => item.productId || (item as any).id)
+          .map((item) => {
+            const itemPrice = Number(item.unitPrice || (item as any).price || (item.subtotal ? item.subtotal / (item.quantity || 1) : 0));
+            return {
+              product: {
+                id: Number(item.productId || (item as any).id),
+                name: item.productName || (item as any).name || "Item",
+                category: (item as any).category || "Grocery",
+                price: itemPrice,
+                originalPrice: itemPrice,
+                unit: (item as any).unit || "1 unit",
+                image: (item as any).image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400",
+                stock: (item as any).stock !== undefined ? (item as any).stock : 10,
+                rating: 4.8,
+                active: true,
+              },
+              quantity: item.quantity || 1,
+            };
+          });
       }
 
       if (reorderItems.length === 0) {

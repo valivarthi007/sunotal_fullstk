@@ -4246,13 +4246,17 @@ app.get('/api/subscriptions', async (req, res) => {
 
 app.post('/api/subscriptions', async (req, res) => {
   const { userId, productId, productName, frequency, deliverySlot, quantity, price } = req.body || {};
+  if (!productId || !productName || !price) {
+    return res.status(400).json({ error: 'productId, productName, and price are required to create a subscription' });
+  }
   try {
     const insRes = await gatewayPgPool.query(
       `INSERT INTO subscriptions (user_id, product_id, product_name, frequency, delivery_slot, quantity, price, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'active') RETURNING *`,
-      [userId || 1, productId || 1, productName || 'Fresh Organic Milk', frequency || 'daily', deliverySlot || '6:00 AM - 8:00 AM', quantity || 1, price || 32]
+      [userId || 1, Number(productId), String(productName), frequency || 'daily', deliverySlot || '6:00 AM - 8:00 AM', Number(quantity || 1), Number(price)]
     );
-    return res.json({ success: true, subscription: insRes.rows[0], message: `Subscribed to ${productName} (${frequency}) successfully!` });
+    const sub = insRes.rows[0];
+    return res.json({ success: true, subscription: sub, message: `Subscribed to ${sub.product_name} (${sub.frequency}) successfully!` });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to create subscription', message: err?.message });
   }
