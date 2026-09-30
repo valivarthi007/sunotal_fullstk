@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { fetchUserOrders, cancelUserOrder, OrderApi, reorderUserOrder } from "@/lib/api-client";
 import { useCart, CartItem } from "@/lib/cart-context";
 import { LiveDeliveryMapTracker } from "@/components/ui/LiveDeliveryMapTracker";
+import { RiderLiveChatModal } from "@/components/ui/RiderLiveChatModal";
 import {
   Dialog,
   DialogContent,
@@ -74,6 +75,7 @@ export default function Orders() {
 
   // Selected Order for live tracker modal
   const [selectedOrderTrack, setSelectedOrderTrack] = useState<OrderApi | null>(null);
+  const [chatOrder, setChatOrder] = useState<OrderApi | null>(null);
 
   // Selected Order for raising grievance
   const [grievanceOrder, setGrievanceOrder] = useState<OrderApi | null>(null);
@@ -626,6 +628,16 @@ export default function Orders() {
                           <RotateCcw className={`w-3.5 h-3.5 ${reorderingOrderId === order.id ? "animate-spin" : ""}`} />
                           {reorderingOrderId === order.id ? "Reordering..." : "Reorder Items"}
                         </Button>
+                        {order.status !== "cancelled" && order.status !== "delivered" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setChatOrder(order)}
+                            className="rounded-xl border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 font-bold text-xs gap-1.5"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> Chat with Rider
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           onClick={() => setSelectedOrderTrack(order)}
@@ -866,6 +878,19 @@ export default function Orders() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Live WhatsApp Style Rider Chat Modal */}
+        <RiderLiveChatModal
+          open={!!chatOrder}
+          onOpenChange={(open) => !open && setChatOrder(null)}
+          orderId={chatOrder?.id || ""}
+          orderNumber={chatOrder?.orderNumber}
+          riderName={(chatOrder as any)?.riderName || "Raju Kumar"}
+          riderPhone={(chatOrder as any)?.riderPhone || "9876543210"}
+          riderVehicle={(chatOrder as any)?.riderVehicle || "AP 39 EV 4021"}
+          currentUserRole="user"
+          currentUserName={user?.name || "Customer"}
+        />
       </div>
     </PublicLayout>
   );

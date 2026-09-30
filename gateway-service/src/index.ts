@@ -525,6 +525,18 @@ async function initDatabase() {
         resolved_by VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id SERIAL PRIMARY KEY,
+        order_id VARCHAR(255) NOT NULL,
+        sender_role VARCHAR(50) NOT NULL,
+        sender_id VARCHAR(255),
+        sender_name VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        message_type VARCHAR(50) DEFAULT 'text',
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // Safe Column Alterations
@@ -4193,6 +4205,64 @@ app.delete('/api/subscriptions/:id', async (req, res) => {
     return res.json({ success: true, message: 'Subscription cancelled successfully' });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to cancel subscription', message: err?.message });
+  }
+});
+
+// LIVE IN-APP RIDER CHAT API (WhatsApp Style)
+app.get('/api/chat/messages/:orderId', async (req, res) => {
+  const orderId = String(req.params.orderId);
+  try {
+    const dbRes = await gatewayPgPool.query(
+      'SELECT id, order_id as "orderId", sender_role as "senderRole", sender_id as "senderId", sender_name as "senderName", message, message_type as "messageType", is_read as "isRead", created_at as "createdAt" FROM chat_messages WHERE order_id = $1 ORDER BY id ASC',
+      [orderId]
+    );
+    return res.json({ success: true, orderId, messages: dbRes.rows });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch chat messages', message: err?.message });
+  }
+});
+
+app.post('/api/chat/messages', async (req, res) => {
+  const { orderId, senderRole, senderId, senderName, message, messageType } = req.body || {};
+  if (!orderId || !message) {
+    return res.status(400).json({ error: 'orderId and message are required' });
+  }
+
+  try {
+    const insRes = await gatewayPgPool.query(
+      `INSERT INTO chat_messages (order_id, sender_role, sender_id, sender_name, message, message_type, is_read)
+       VALUES ($1, $2, $3, $4, $5, $6, FALSE)
+       RETURNING id, order_id as "orderId", sender_role as "senderRole", sender_id as "senderId", sender_name as "senderName", message, message_type as "messageType", is_read as "isRead", created_at as "createdAt"`,
+      [String(orderId), senderRole || 'user', String(senderId || '1'), senderName || 'Customer', message, messageType || 'text']
+    );
+
+    const newMessage = insRes.rows[0];
+
+    // Broadcast live event over SSE to both customer & delivery partner apps
+    broadcastRealtimeEvent({
+      type: 'RIDER_CHAT_MESSAGE',
+      path: '/api/chat/messages',
+      method: 'POST',
+      data: newMessage,
+    });
+
+    return res.json({ success: true, message: newMessage });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to send chat message', message: err?.message });
+  }
+});
+
+app.patch('/api/chat/messages/read/:orderId', async (req, res) => {
+  const orderId = String(req.params.orderId);
+  const { senderRole } = req.body || {};
+  try {
+    await gatewayPgPool.query(
+      'UPDATE chat_messages SET is_read = TRUE WHERE order_id = $1 AND sender_role != $2',
+      [orderId, senderRole || 'user']
+    );
+    return res.json({ success: true, orderId });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to mark messages as read', message: err?.message });
   }
 });
 

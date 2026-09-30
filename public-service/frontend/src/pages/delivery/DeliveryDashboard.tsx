@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Bike, Power, Navigation, DollarSign, Bell, RefreshCw, Calculator, Route, CheckCircle2, Award, Calendar, ArrowRight } from "lucide-react";
+import { Bike, Power, Navigation, DollarSign, Bell, RefreshCw, Calculator, Route, CheckCircle2, Award, Calendar, ArrowRight, MessageSquare, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DeliveryLayout } from "@/components/layout/DeliveryLayout";
@@ -7,13 +7,14 @@ import { getMapProvider } from "@/lib/providers/map/map-provider.factory";
 import { useLocationState } from "@/lib/location-context";
 import { toast } from "sonner";
 import { RaiseGrievanceModal } from "@/components/ui/RaiseGrievanceModal";
-import { AlertTriangle } from "lucide-react";
+import { RiderLiveChatModal } from "@/components/ui/RiderLiveChatModal";
 
 export default function DeliveryDashboard() {
   const { location: userLoc } = useLocationState();
   const [isOnline, setIsOnline] = useState(true);
   const [activeTab, setActiveTab] = useState<"orders" | "earnings" | "reports">("orders");
   const [showGrievanceModal, setShowGrievanceModal] = useState(false);
+  const [showRiderChat, setShowRiderChat] = useState(false);
 
   // Order Alert Modal State
   const [hasAlert, setHasAlert] = useState(false);
@@ -580,7 +581,17 @@ export default function DeliveryDashboard() {
                       <h3 className="font-bold text-lg text-secondary">{acceptedOrder.customerName}</h3>
                       <p className="text-xs text-muted-foreground">{acceptedOrder.address}</p>
                     </div>
-                    <span className="text-emerald-600 font-mono font-bold text-xl">₹{acceptedOrder.pay}.00</span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-emerald-600 font-mono font-bold text-xl">₹{acceptedOrder.pay}.00</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowRiderChat(true)}
+                        className="rounded-xl border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 font-bold text-xs gap-1.5 h-8"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> Chat with Customer
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Interactive Route Map with Floating Navigation Pill */}
@@ -801,6 +812,20 @@ export default function DeliveryDashboard() {
 
         </div>
       </div>
+
+      {/* WhatsApp Style In-App Live Rider Chat Modal */}
+      <RiderLiveChatModal
+        open={showRiderChat}
+        onOpenChange={setShowRiderChat}
+        orderId={acceptedOrder?.numericId || acceptedOrder?.id || "1"}
+        orderNumber={acceptedOrder?.id ? `ORD-${acceptedOrder.id}` : "ORD-7842"}
+        riderName={riderUser?.name || "Raju Kumar"}
+        riderPhone={riderUser?.phone || "9876543210"}
+        riderVehicle={riderUser?.vehicleNumber || "AP 39 EV 4021"}
+        currentUserRole="rider"
+        currentUserName={riderUser?.name || "Delivery Partner"}
+        currentUserId={String(riderUser?.id || "RIDER-101")}
+      />
     </DeliveryLayout>
   );
 }
