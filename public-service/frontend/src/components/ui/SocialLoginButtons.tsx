@@ -61,11 +61,9 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
     else if (provider === "apple") clientId = appleServicesId;
 
     if (!clientId) {
-      setActiveConfigProvider(provider);
-      setShowConfigModal(true);
       setLoadingProvider(null);
-      toast.error(`Missing ${provider.toUpperCase()} Credentials`, {
-        description: `Please enter your ${provider.toUpperCase()} Client ID to initiate OAuth login.`,
+      toast.info(`${provider.toUpperCase()} Sign-In Notice`, {
+        description: `${provider.charAt(0).toUpperCase() + provider.slice(1)} sign-in is currently being configured by system administrator. Please sign in using your Email & Password.`,
       });
       return;
     }
@@ -233,20 +231,9 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
         </button>
       </div>
 
-      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-        <button
-          type="button"
-          onClick={() => {
-            setActiveConfigProvider(null);
-            setShowConfigModal(true);
-          }}
-          className="hover:text-emerald-600 dark:hover:text-emerald-400 flex items-center gap-1 font-medium underline underline-offset-2 transition-colors"
-        >
-          <Settings className="w-3 h-3" />
-          Configure OAuth API Keys (Google / FB / Apple)
-        </button>
-
-        <span className="text-[10px] text-slate-400 font-mono">OAuth 2.0</span>
+      {/* Confidential Production Provider Notice */}
+      <div className="flex items-center justify-center text-[10px] text-slate-400 pt-1 font-mono">
+        <span>🔒 Secure OAuth 2.0 Encryption</span>
       </div>
 
       {/* OAuth Configuration Dialog */}
