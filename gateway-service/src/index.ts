@@ -840,7 +840,7 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
     }
 
     if (defaultCredentials[cleanEmail] && password === defaultCredentials[cleanEmail].pass) {
-      const fallback = defaultCredentials[cleanEmail];
+      const fallback: any = defaultCredentials[cleanEmail];
       try {
         const pwdHash = await bcrypt.hash(fallback.pass, 10);
         const insRes = await gatewayPgPool.query(
@@ -865,7 +865,7 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
     return res.status(401).json({ error: 'Invalid email or password' });
   } catch (err: any) {
     if (defaultCredentials[cleanEmail] && password === defaultCredentials[cleanEmail].pass) {
-      const fallback = defaultCredentials[cleanEmail];
+      const fallback: any = defaultCredentials[cleanEmail];
       const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: fallback.phone || '', city: fallback.city || '', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
       const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
       return res.json({ success: true, token, user: normUser });
@@ -3345,8 +3345,6 @@ app.put(['/api/users/:userId/addresses/:addressId', '/api/user/addresses/:addres
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [userId, finalLabel || 'Home', receiverName || '', phone || '', finalStreet || '', finalLandmark || '', city || '', state || '', pincode || '', latitude || null, longitude || null, !!isDefault]
     );
-    const created = insertRes.rows[0];
-    return res.json({ id: created.id, userId: created.user_id, label: created.label, receiverName: created.receiver_name, phone: created.phone, streetAddress: created.street_address, landmark: created.landmark, city: created.city, state: created.state, pincode: created.pincode, isDefault: created.is_default });
     const created = insertRes.rows[0];
     return res.json({ id: created.id, userId: created.user_id, label: created.label, receiverName: created.receiver_name, phone: created.phone, streetAddress: created.street_address, landmark: created.landmark, city: created.city, state: created.state, pincode: created.pincode, isDefault: created.is_default });
   } catch (err: any) {
