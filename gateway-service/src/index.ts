@@ -675,10 +675,12 @@ async function initDatabase() {
   }
 }
 
-if (process.argv.includes('--migrate-only')) {
+if (process.argv.includes('--migrate-only') || process.env.MIGRATION_ONLY === 'true') {
   initDatabase().then(() => {
+    console.log('✅ PostgreSQL DB schema migration completed successfully. Exiting runner process.');
+    process.exit(0);
   }).catch((err) => {
-    console.warn('ℹ️ Database migration check finished (DB pending/offline):', err?.message || err);
+    console.warn('ℹ️ Database migration check finished:', err?.message || err);
     process.exit(0);
   });
 } else {
@@ -4724,7 +4726,9 @@ app.use('/api/*', (req, res) => {
   return res.status(404).json({ error: `API endpoint ${req.method} ${req.originalUrl || req.url} not found`, path: req.originalUrl || req.url });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n⚡ Sunotal Unified High-Speed Direct API Server running on port ${PORT}`);
-  console.log(`   Health Check: http://localhost:${PORT}/api/healthz\n`);
-});
+if (!process.argv.includes('--migrate-only') && process.env.MIGRATION_ONLY !== 'true') {
+  app.listen(PORT, () => {
+    console.log(`\n⚡ Sunotal Unified High-Speed Direct API Server running on port ${PORT}`);
+    console.log(`   Health Check: http://localhost:${PORT}/api/healthz\n`);
+  });
+}

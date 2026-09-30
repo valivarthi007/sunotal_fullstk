@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "migrate": "MIGRATION_ONLY=true node dist/index.js",
     "dev": "ts-node-dev --respawn src/index.ts"
   },
   "dependencies": {
