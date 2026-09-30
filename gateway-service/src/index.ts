@@ -4451,6 +4451,68 @@ app.post('/api/orders/:id/location', async (req, res) => {
   }
 });
 
+// ML RECOMMENDATION ENGINE PROXY API
+app.get('/api/recommendations/personalized', async (req, res) => {
+  const userId = String(req.query.userId || '1');
+  const limit = req.query.limit || '8';
+  try {
+    const recRes = await fetch(`http://recommendation-service:8001/api/recommendations/personalized?userId=${userId}&limit=${limit}`);
+    if (recRes.ok) {
+      const data = await recRes.json();
+      return res.json(data);
+    }
+  } catch (e) {
+    console.warn("Recommendation service proxy warning, serving DB fallback:", e);
+  }
+
+  // Database fallback if ML container is starting
+  try {
+    const dbRes = await gatewayPgPool.query(`
+      SELECT id, name, category, price, original_price as "originalPrice", unit, image, is_organic as "isOrganic", rating, stock
+      FROM products WHERE active = true ORDER BY rating DESC, stock DESC LIMIT $1
+    `, [Number(limit)]);
+    return res.json({ success: true, userId, recommendations: dbRes.rows });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch recommendations', message: err?.message });
+  }
+});
+
+app.get('/api/recommendations/frequently-bought-together', async (req, res) => {
+  const productId = String(req.query.productId || '1');
+  const limit = req.query.limit || '4';
+  try {
+    const recRes = await fetch(`http://recommendation-service:8001/api/recommendations/frequently-bought-together?productId=${productId}&limit=${limit}`);
+    if (recRes.ok) {
+      const data = await recRes.json();
+      return res.json(data);
+    }
+  } catch (e) {
+    console.warn("Frequently bought recommendation proxy warning:", e);
+  }
+
+  try {
+    const dbRes = await gatewayPgPool.query(`
+      SELECT id, name, category, price, original_price as "originalPrice", unit, image, is_organic as "isOrganic", rating, stock
+      FROM products WHERE active = true AND id::text != $1 ORDER BY RANDOM() LIMIT $2
+    `, [productId, Number(limit)]);
+    return res.json({ success: true, productId, recommendations: dbRes.rows });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch complementary recommendations', message: err?.message });
+  }
+});
+
+app.post('/api/recommendations/interactions', async (req, res) => {
+  const { userId, productId, actionType } = req.body || {};
+  try {
+    await fetch('http://recommendation-service:8001/api/recommendations/interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: String(userId || '1'), productId: String(productId || '1'), actionType: actionType || 'view' }),
+    }).catch(() => {});
+  } catch {}
+  return res.json({ success: true, message: 'Interaction logged' });
+});
+
 // GROQ AI CUSTOMER SUPPORT & ASSISTANT API
 app.post(['/api/support/ai-chat', '/api/ai/chat'], async (req, res) => {
   const { message, customerName, orderId } = req.body || {};

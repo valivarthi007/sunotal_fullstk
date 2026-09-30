@@ -63,6 +63,24 @@ services:
         aliases:
           - whisper-service
 
+  recommendation-service:
+    build:
+      context: ./recommendation-service
+      dockerfile: Dockerfile
+    container_name: sunotal-recommendation-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - recommendation-service
+
   # ─── 6 Core Micro-Service Backends ────────────────────────────────────────
   gateway-service:
     build:

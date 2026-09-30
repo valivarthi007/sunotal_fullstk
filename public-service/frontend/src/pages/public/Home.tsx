@@ -16,6 +16,7 @@ import { ExpressHeaderBanner } from "@/components/ui/ExpressHeaderBanner";
 import { CategoryPills } from "@/components/ui/CategoryPills";
 import { CartBar } from "@/components/ui/CartBar";
 import { InteractiveMapPickerModal } from "@/components/ui/InteractiveMapPickerModal";
+import { PersonalizedRecommendationsRail } from "@/components/ui/PersonalizedRecommendationsRail";
 
 const FALLBACK_SLIDES = [
   {
@@ -204,6 +205,13 @@ export default function Home() {
               </Link>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ML AI Personalized Recommendations Section */}
+      <section className="py-8 bg-card border-b">
+        <div className="container mx-auto px-4">
+          <PersonalizedRecommendationsRail title="Recommended For You" />
         </div>
       </section>
 
