@@ -21,6 +21,7 @@ import {
   Grid,
   User,
   ChevronRight,
+  Calendar,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
@@ -195,6 +196,13 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             {token && user ? (
               <div className="hidden sm:flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="rounded-full px-3.5 text-xs font-bold border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 gap-1.5"
+                  onClick={() => setLocation('/subscriptions')}
+                >
+                  <Calendar className="w-3.5 h-3.5 text-emerald-600" /> Daily Subscriptions 🥛
+                </Button>
                 <Button
                   variant="outline"
                   className="rounded-full px-3.5 text-xs font-bold border-primary/30 text-primary hover:bg-primary/5 gap-1.5"

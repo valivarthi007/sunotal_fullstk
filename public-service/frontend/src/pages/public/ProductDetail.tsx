@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useWishlist } from "@/lib/wishlist-context";
+import { SubscribeModal } from "@/components/ui/SubscribeModal";
 
 export default function ProductDetail() {
   const [, params] = useRoute("/products/:id");
@@ -36,6 +37,7 @@ export default function ProductDetail() {
   const productId = params?.id || paramsAlt?.id;
 
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+  const [subscribeModalOpen, setSubscribeModalOpen] = useState(false);
 
   const { items, addItem, removeItem, updateQuantity, openCart } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
@@ -428,40 +430,14 @@ export default function ProductDetail() {
                   </Button>
                 </div>
 
+                {/* Daily Morning Subscription Modal Integration */}
+                <SubscribeModal open={subscribeModalOpen} onOpenChange={setSubscribeModalOpen} product={product} />
+
                 {/* Daily Morning Subscription Button */}
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={async () => {
-                    let userId = "guest";
-                    try {
-                      const userStr = localStorage.getItem("sunotal_user");
-                      if (userStr) userId = JSON.parse(userStr).id;
-                    } catch {}
-                    
-                    try {
-                      const res = await fetch(getApiUrl("/api/subscriptions"), {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          userId,
-                          productId: product.id,
-                          productName: product.name,
-                          frequency: "Daily",
-                          deliverySlot: "6:00 AM - 7:00 AM",
-                          quantity: 1,
-                          price: product.price
-                        })
-                      });
-                      if (res.ok) {
-                        toast.success(`Subscribed to ${product.name}! Delivered daily at 6:00 AM. Check Profile -> Daily Subscriptions.`);
-                      } else {
-                        toast.success(`Subscribed to ${product.name}! View in Profile -> Daily Subscriptions.`);
-                      }
-                    } catch (e) {
-                      toast.success(`Subscribed to ${product.name}! View in Profile -> Daily Subscriptions.`);
-                    }
-                  }}
+                  onClick={() => setSubscribeModalOpen(true)}
                   className="w-full h-11 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold text-xs gap-2"
                 >
                   <Sparkles className="w-4 h-4 text-amber-500" /> SUBSCRIBE DAILY (6:00 AM Doorstep Delivery)

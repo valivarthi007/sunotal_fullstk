@@ -24,6 +24,7 @@ const LiveOrderTrack = lazy(() => import("@/pages/public/LiveOrderTrack"));
 const Wallet = lazy(() => import("@/pages/public/Wallet"));
 const Recipes = lazy(() => import("@/pages/public/Recipes"));
 const Wishlist = lazy(() => import("@/pages/public/Wishlist"));
+const Subscriptions = lazy(() => import("@/pages/public/Subscriptions"));
 
 // Admin Portal Pages (Lazy Loaded)
 const AdminLogin = lazy(() => import("@/pages/admin/AdminLogin"));
@@ -315,6 +316,7 @@ function SubdomainRouter() {
         <Route path="/wallet" component={Wallet} />
         <Route path="/recipes" component={Recipes} />
         <Route path="/wishlist" component={Wishlist} />
+        <Route path="/subscriptions" component={Subscriptions} />
         <Route path="/support" component={SupportPortal} />
         <Route path="/help" component={SupportPortal} />
         <Route path="/login" component={Login} />

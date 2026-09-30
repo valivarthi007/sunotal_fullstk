@@ -9,3 +9,5 @@ export * from './warehouses';
 export * from './payments';
 export * from './orders';
 export * from './delivery';
+export * from './subscriptions';
+

@@ -4172,6 +4172,20 @@ app.post('/api/subscriptions', async (req, res) => {
   }
 });
 
+app.patch('/api/subscriptions/:id/status', async (req, res) => {
+  const subId = req.params.id;
+  const { status } = req.body || {};
+  try {
+    const dbRes = await gatewayPgPool.query(
+      'UPDATE subscriptions SET status = $1 WHERE id::text = $2 RETURNING *',
+      [status || 'paused', subId]
+    );
+    return res.json({ success: true, subscription: dbRes.rows[0], message: `Subscription ${status} successfully` });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update subscription status', message: err?.message });
+  }
+});
+
 app.delete('/api/subscriptions/:id', async (req, res) => {
   const subId = req.params.id;
   try {
