@@ -46,8 +46,8 @@ const pg_1 = require("pg");
 const mongoose_1 = __importStar(require("mongoose"));
 const client_s3_1 = require("@aws-sdk/client-s3");
 const client_cost_explorer_1 = require("@aws-sdk/client-cost-explorer");
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@127.0.0.1:5432/sunotal';
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/sunotal';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal';
+const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://mongodb:27017/sunotal';
 const JWT_SECRET = process.env.JWT_SECRET || 'sunotal_jwt_secret_2026_super_secure';
 const AWS_REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || 'jcs-raju-sunotal-final';
@@ -68,15 +68,27 @@ catch (err) {
 // MONGODB CONNECTION & FLEXIBLE SCHEMAS
 let isMongoConnected = false;
 async function initMongo() {
-    try {
-        await mongoose_1.default.connect(MONGODB_URI, { serverSelectionTimeoutMS: 3000 });
-        isMongoConnected = true;
-        console.log('✅ Connected to MongoDB Document Database for Quick-Commerce Catalog & Supplies');
+    const urisToTry = Array.from(new Set([
+        process.env.MONGODB_URI,
+        process.env.MONGO_URI,
+        MONGODB_URI,
+        'mongodb://mongodb:27017/sunotal',
+        'mongodb://127.0.0.1:27017/sunotal',
+        'mongodb://localhost:27017/sunotal'
+    ].filter(Boolean)));
+    for (const uri of urisToTry) {
+        try {
+            await mongoose_1.default.connect(uri, { serverSelectionTimeoutMS: 2000 });
+            isMongoConnected = true;
+            console.log(`✅ Connected to MongoDB Document Database for Quick-Commerce Catalog at ${uri}`);
+            return;
+        }
+        catch {
+            // Continue trying next URI candidate
+        }
     }
-    catch (err) {
-        console.warn('⚠️ MongoDB connection notice (using PostgreSQL hybrid fallback):', err?.message || err);
-        isMongoConnected = false;
-    }
+    isMongoConnected = false;
+    console.info('ℹ️ MongoDB Document Store offline/optional; operating seamlessly on PostgreSQL primary schema.');
 }
 initMongo();
 const ProductMongoSchema = new mongoose_1.Schema({
@@ -683,10 +695,12 @@ async function initDatabase() {
             client.release();
     }
 }
-if (process.argv.includes('--migrate-only')) {
+if (process.argv.includes('--migrate-only') || process.env.MIGRATION_ONLY === 'true') {
     initDatabase().then(() => {
+        console.log('✅ PostgreSQL DB schema migration completed successfully. Exiting runner process.');
+        process.exit(0);
     }).catch((err) => {
-        console.warn('ℹ️ Database migration check finished (DB pending/offline):', err?.message || err);
+        console.warn('ℹ️ Database migration check finished:', err?.message || err);
         process.exit(0);
     });
 }
@@ -853,7 +867,7 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
                 catch { }
             }
             if (match) {
-                const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role || 'admin', active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '9063636167', city: u.city || 'Vijayawada', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || u.profile_photo_url || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
+                const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role || 'admin', active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '', city: u.city || '', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || u.profile_photo_url || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
                 const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
                 return res.json({ success: true, token, user: normUser });
             }
@@ -863,17 +877,17 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
             try {
                 const pwdHash = await bcryptjs_1.default.hash(fallback.pass, 10);
                 const insRes = await gatewayPgPool.query(`INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance, login_provider)
-           VALUES ($1, $2, $3, $4, true, '9063636167', 'Vijayawada', 1000.00, 'email')
-           ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, phone = EXCLUDED.phone, city = EXCLUDED.city, active = true
-           RETURNING *`, [fallback.name, cleanEmail, pwdHash, fallback.role]);
+           VALUES ($1, $2, $3, $4, true, $5, $6, 1000.00, 'email')
+           ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, active = true
+           RETURNING *`, [fallback.name, cleanEmail, pwdHash, fallback.role, fallback.phone || '', fallback.city || '']);
                 const u = insRes.rows[0];
-                const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || '', walletBalance: 1000.00, createdAt: u.created_at };
+                const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: true, status: 'active', phone: u.phone || '', city: u.city || '', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || '', walletBalance: Number(u.wallet_balance || 1000.00), createdAt: u.created_at };
                 const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
                 return res.json({ success: true, token, user: normUser });
             }
             catch (insErr) {
                 // Fallback transient response if DB write encounters temporary issue
-                const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
+                const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: fallback.phone || '', city: fallback.city || '', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
                 const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
                 return res.json({ success: true, token, user: normUser });
             }
@@ -883,7 +897,7 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
     catch (err) {
         if (defaultCredentials[cleanEmail] && password === defaultCredentials[cleanEmail].pass) {
             const fallback = defaultCredentials[cleanEmail];
-            const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
+            const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: fallback.phone || '', city: fallback.city || '', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
             const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
             return res.json({ success: true, token, user: normUser });
         }
@@ -2314,9 +2328,9 @@ app.get('/api/delivery/riders', async (_req, res) => {
                 id: `RIDER-${u.id}`,
                 riderId: `RIDER-${u.id}`,
                 name: riderName,
-                phone: u.phone || '+91 9908970908',
+                phone: u.phone || '',
                 email: u.email || `rider${u.id}@sunotal.com`,
-                city: u.city || 'Vijayawada',
+                city: u.city || '',
                 vehicle: 'Electric Bike',
                 status: u.active ? 'ONLINE' : 'OFFLINE',
                 walletBalance: Number(u.wallet_balance || 0),
@@ -2341,9 +2355,9 @@ app.get('/api/delivery/riders', async (_req, res) => {
                 id: r.id || r.rider_id || `RIDER-${r.id}`,
                 riderId: r.rider_id || `RIDER-${r.id}`,
                 name: riderName,
-                phone: r.phone || '+91 9908970908',
-                email: r.email || 'rider@sunotal.com',
-                city: r.city || 'Bengaluru',
+                phone: r.phone || '',
+                email: r.email || '',
+                city: r.city || '',
                 vehicle: r.vehicle || 'Electric Bike',
                 status: r.status === 'completed' || r.status === 'ONLINE' || r.status === 'APPROVED' ? 'ONLINE' : 'OFFLINE',
                 walletBalance: Number(r.wallet_balance || r.amount || 0),
@@ -3050,7 +3064,7 @@ app.get('/api/admin/ledger', async (req, res) => {
 });
 // ADDRESSES API (max 10 addresses per user)
 app.get(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res) => {
-    const userId = req.params.userId ? String(req.params.userId) : String(req.query.userId || '1');
+    const userId = String(req.params.userId || req.query.userId || req.body?.userId || '1');
     try {
         const dbRes = await gatewayPgPool.query('SELECT * FROM user_addresses WHERE user_id::text = $1 ORDER BY is_default DESC, id DESC', [userId]);
         return res.json(dbRes.rows.map(a => ({
@@ -3078,11 +3092,12 @@ app.get(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res
     }
 });
 app.post(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res) => {
-    const userId = req.params.userId ? String(req.params.userId) : String(req.body.userId || '1');
+    const userId = String(req.params.userId || req.body.userId || '1');
     const { label, tag, houseNo, street, receiverName, phone, streetAddress, landmark, city, state, pincode, latitude, longitude, isDefault } = req.body || {};
-    const finalStreet = streetAddress || houseNo || 'Address';
-    const finalPhone = phone || '9000000000';
-    const finalReceiver = receiverName || 'Customer';
+    const finalLabel = tag || label || 'Home';
+    const finalStreet = streetAddress || houseNo || '';
+    const finalPhone = phone || '';
+    const finalReceiver = receiverName || '';
     try {
         // Enforce MAX 10 addresses
         const countRes = await gatewayPgPool.query('SELECT COUNT(*) FROM user_addresses WHERE user_id::text = $1', [userId]);
@@ -3095,14 +3110,14 @@ app.post(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, re
         const dbRes = await gatewayPgPool.query(`INSERT INTO user_addresses (user_id, label, receiver_name, phone, street_address, landmark, city, state, pincode, latitude, longitude, is_default)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`, [
             userId,
-            tag || label || 'home',
+            finalLabel,
             finalReceiver,
             finalPhone,
             finalStreet,
             street || landmark || '',
-            city || 'Vijayawada',
-            state || 'Andhra Pradesh',
-            pincode || '520001',
+            city || '',
+            state || '',
+            pincode || '',
             latitude || null,
             longitude || null,
             isDefault ? true : false
@@ -3127,47 +3142,54 @@ app.post(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, re
         return res.status(500).json({ error: 'Failed to save user address', message: err?.message });
     }
 });
-app.put('/api/users/:userId/addresses/:addressId', async (req, res) => {
-    const userId = Number(req.params.userId);
-    const addressId = Number(req.params.addressId);
-    const { label, receiverName, phone, streetAddress, landmark, city, state, pincode, latitude, longitude, isDefault } = req.body || {};
+app.put(['/api/users/:userId/addresses/:addressId', '/api/user/addresses/:addressId'], async (req, res) => {
+    const userId = String(req.params.userId || req.body?.userId || '1');
+    const addressId = String(req.params.addressId);
+    const { label, tag, receiverName, phone, streetAddress, houseNo, landmark, street, city, state, pincode, latitude, longitude, isDefault } = req.body || {};
+    const finalLabel = tag || label;
+    const finalStreet = streetAddress || houseNo;
+    const finalLandmark = landmark || street;
     try {
         if (isDefault) {
-            await gatewayPgPool.query('UPDATE user_addresses SET is_default = false WHERE user_id = $1', [userId]);
+            await gatewayPgPool.query('UPDATE user_addresses SET is_default = false WHERE user_id::text = $1', [userId]);
         }
         const dbRes = await gatewayPgPool.query(`UPDATE user_addresses SET
         label = COALESCE($1, label), receiver_name = COALESCE($2, receiver_name), phone = COALESCE($3, phone),
         street_address = COALESCE($4, street_address), landmark = COALESCE($5, landmark), city = COALESCE($6, city),
         state = COALESCE($7, state), pincode = COALESCE($8, pincode), latitude = COALESCE($9, latitude),
         longitude = COALESCE($10, longitude), is_default = COALESCE($11, is_default)
-       WHERE id = $12 AND user_id = $13 RETURNING *`, [label, receiverName, phone, streetAddress, landmark, city, state, pincode, latitude, longitude, isDefault, addressId, userId]);
+       WHERE id::text = $12 AND user_id::text = $13 RETURNING *`, [finalLabel, receiverName, phone, finalStreet, finalLandmark, city, state, pincode, latitude, longitude, isDefault, addressId, userId]);
         if (dbRes.rows && dbRes.rows.length > 0) {
             const a = dbRes.rows[0];
             return res.json({ id: a.id, userId: a.user_id, label: a.label, receiverName: a.receiver_name, phone: a.phone, streetAddress: a.street_address, landmark: a.landmark, city: a.city, state: a.state, pincode: a.pincode, latitude: a.latitude ? Number(a.latitude) : null, longitude: a.longitude ? Number(a.longitude) : null, isDefault: a.is_default });
         }
-        return res.status(404).json({ error: 'Address not found' });
+        // If addressId not found, fallback to inserting new address
+        const insertRes = await gatewayPgPool.query(`INSERT INTO user_addresses (user_id, label, receiver_name, phone, street_address, landmark, city, state, pincode, latitude, longitude, is_default)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`, [userId, finalLabel || 'Home', receiverName || '', phone || '', finalStreet || '', finalLandmark || '', city || '', state || '', pincode || '', latitude || null, longitude || null, !!isDefault]);
+        const created = insertRes.rows[0];
+        return res.json({ id: created.id, userId: created.user_id, label: created.label, receiverName: created.receiver_name, phone: created.phone, streetAddress: created.street_address, landmark: created.landmark, city: created.city, state: created.state, pincode: created.pincode, isDefault: created.is_default });
     }
     catch (err) {
         return res.status(500).json({ error: 'Failed to update address', message: err?.message });
     }
 });
-app.delete('/api/users/:userId/addresses/:addressId', async (req, res) => {
-    const userId = Number(req.params.userId);
-    const addressId = Number(req.params.addressId);
+app.delete(['/api/users/:userId/addresses/:addressId', '/api/user/addresses/:addressId'], async (req, res) => {
+    const userId = String(req.params.userId || req.body?.userId || req.query?.userId || '1');
+    const addressId = String(req.params.addressId);
     try {
-        await gatewayPgPool.query('DELETE FROM user_addresses WHERE id = $1 AND user_id = $2', [addressId, userId]);
+        await gatewayPgPool.query('DELETE FROM user_addresses WHERE id::text = $1 AND user_id::text = $2', [addressId, userId]);
         return res.json({ success: true, deletedId: addressId });
     }
     catch (err) {
         return res.status(500).json({ error: 'Failed to delete address', message: err?.message });
     }
 });
-app.patch('/api/users/:userId/addresses/:addressId/default', async (req, res) => {
-    const userId = Number(req.params.userId);
-    const addressId = Number(req.params.addressId);
+app.patch(['/api/users/:userId/addresses/:addressId/default', '/api/user/addresses/:addressId/default'], async (req, res) => {
+    const userId = String(req.params.userId || req.body?.userId || req.query?.userId || '1');
+    const addressId = String(req.params.addressId);
     try {
-        await gatewayPgPool.query('UPDATE user_addresses SET is_default = false WHERE user_id = $1', [userId]);
-        const dbRes = await gatewayPgPool.query('UPDATE user_addresses SET is_default = true WHERE id = $1 AND user_id = $2 RETURNING *', [addressId, userId]);
+        await gatewayPgPool.query('UPDATE user_addresses SET is_default = false WHERE user_id::text = $1', [userId]);
+        const dbRes = await gatewayPgPool.query('UPDATE user_addresses SET is_default = true WHERE id::text = $1 AND user_id::text = $2 RETURNING *', [addressId, userId]);
         if (dbRes.rows && dbRes.rows.length > 0)
             return res.json({ success: true, address: dbRes.rows[0] });
         return res.status(404).json({ error: 'Address not found' });
@@ -4379,7 +4401,9 @@ ${storesContext || 'Central Dark Store'}
 app.use('/api/*', (req, res) => {
     return res.status(404).json({ error: `API endpoint ${req.method} ${req.originalUrl || req.url} not found`, path: req.originalUrl || req.url });
 });
-app.listen(PORT, () => {
-    console.log(`\n⚡ Sunotal Unified High-Speed Direct API Server running on port ${PORT}`);
-    console.log(`   Health Check: http://localhost:${PORT}/api/healthz\n`);
-});
+if (!process.argv.includes('--migrate-only') && process.env.MIGRATION_ONLY !== 'true') {
+    app.listen(PORT, () => {
+        console.log(`\n⚡ Sunotal Unified High-Speed Direct API Server running on port ${PORT}`);
+        console.log(`   Health Check: http://localhost:${PORT}/api/healthz\n`);
+    });
+}

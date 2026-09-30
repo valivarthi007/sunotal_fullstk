@@ -15,7 +15,7 @@ import { PaymentGatewayModal } from "@/components/ui/PaymentGatewayModal";
 import { DeliverySlotPicker } from "@/components/ui/DeliverySlotPicker";
 import { InteractiveMapPickerModal } from "@/components/ui/InteractiveMapPickerModal";
 import { getPaymentProvider } from "@/lib/providers/payment/payment-provider.factory";
-import { calculateDeliveryFee, createOrderCheckout, verifyPayment, DeliveryFeeCalculation } from "@/lib/api-client";
+import { calculateDeliveryFee, createOrderCheckout, verifyPayment, DeliveryFeeCalculation, getApiUrl } from "@/lib/api-client";
 import {
   MapPin,
   Truck,
@@ -96,14 +96,81 @@ export default function Checkout() {
     },
   });
 
-  // Sync user location into checkout address form & calculate distance delivery fee
-  const currentCity = form.watch("city") || "";
+  // Saved Delivery Addresses state
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [selectedAddrId, setSelectedAddrId] = useState<string | null>(null);
 
+  // Load saved delivery addresses
   useEffect(() => {
-    if (userLoc.city) form.setValue("city", userLoc.city);
-    if (userLoc.state) form.setValue("state", userLoc.state);
-    if (userLoc.pincode) form.setValue("pincode", userLoc.pincode);
-  }, [userLoc, form]);
+    if (!user) return;
+    const fetchAddrs = async () => {
+      try {
+        const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+        const res = await fetch(getApiUrl(`/api/users/${user.id}/addresses`), {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            const mapped = data.map((a: any, idx: number) => ({
+              id: String(a.id),
+              label: a.label || a.tag || "Home",
+              line1: a.streetAddress || a.houseNo || a.line1 || "",
+              line2: a.landmark || a.street || a.line2 || "",
+              city: a.city || "",
+              state: a.state || "",
+              pincode: a.pincode || "",
+              phone: a.phone || "",
+              isDefault: a.isDefault ?? a.is_default ?? idx === 0,
+              latitude: a.latitude ? Number(a.latitude) : undefined,
+              longitude: a.longitude ? Number(a.longitude) : undefined,
+            }));
+            setSavedAddresses(mapped);
+
+            const def = mapped.find((a: any) => a.isDefault) || mapped[0];
+            if (def) {
+              selectAddressForCheckout(def);
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Saved addresses fetch error in Checkout", e);
+      }
+
+      try {
+        const raw = localStorage.getItem(`user_addresses_${user.id}`) || "[]";
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSavedAddresses(parsed);
+          const def = parsed.find((a: any) => a.isDefault) || parsed[0];
+          if (def) {
+            selectAddressForCheckout(def);
+          }
+        }
+      } catch {}
+    };
+
+    fetchAddrs();
+  }, [user]);
+
+  const selectAddressForCheckout = (addr: any) => {
+    setSelectedAddrId(addr.id);
+    const fullLine = [addr.line1, addr.line2].filter(Boolean).join(", ");
+    form.setValue("streetAddress", fullLine);
+    form.setValue("city", addr.city || "");
+    form.setValue("state", addr.state || "");
+    form.setValue("pincode", addr.pincode || "");
+
+    // Recalculate Delivery Fee for selected address location
+    calculateDeliveryFee({
+      city: addr.city || userLoc.city || "",
+      lat: addr.latitude || userLoc.latitude,
+      lng: addr.longitude || userLoc.longitude,
+    })
+      .then((res) => setDeliveryCalc(res))
+      .catch((err) => console.warn("Delivery fee calculation error:", err));
+  };
 
   // Recalculate Delivery Fee when location/city changes
   useEffect(() => {
@@ -387,13 +454,70 @@ export default function Checkout() {
                     </div>
                   </div>
 
+                  {/* Saved Delivery Addresses Selection Cards */}
+                  {savedAddresses.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-secondary flex items-center justify-between">
+                        <span>Select Delivery Address for this Order:</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">Click any saved address to deliver here</span>
+                      </label>
+                      <div className="grid sm:grid-cols-2 gap-2.5">
+                        {savedAddresses.map((addr) => {
+                          const isSelected = selectedAddrId === addr.id;
+                          return (
+                            <div
+                              key={addr.id}
+                              onClick={() => {
+                                selectAddressForCheckout(addr);
+                                toast.success(`Selected "${addr.label}" (${addr.city}) for this order delivery`);
+                              }}
+                              className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
+                                isSelected
+                                  ? "border-primary bg-primary/10 shadow-md ring-2 ring-primary/30"
+                                  : "bg-accent/20 hover:bg-accent/50 border-border"
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center justify-between">
+                                  <span className="px-2.5 py-0.5 rounded-full bg-primary/20 text-primary text-[10px] font-extrabold uppercase tracking-wider">
+                                    {addr.label}
+                                  </span>
+                                  {addr.isDefault && (
+                                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold">
+                                      DEFAULT
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="font-bold text-secondary text-xs mt-2 line-clamp-1">{addr.line1}</p>
+                                {addr.line2 && <p className="text-[11px] text-muted-foreground line-clamp-1">{addr.line2}</p>}
+                                <p className="text-[11px] font-semibold text-secondary mt-0.5">{addr.city}{addr.pincode ? `, ${addr.pincode}` : ""}</p>
+                              </div>
+                              <div className="mt-2.5 pt-2 border-t flex items-center justify-between text-[11px]">
+                                {isSelected ? (
+                                  <span className="text-emerald-600 font-bold flex items-center gap-1">
+                                    <CheckCircle2 className="w-3.5 h-3.5" /> Selected for this order
+                                  </span>
+                                ) : (
+                                  <span className="text-primary font-semibold hover:underline">
+                                    Deliver Here →
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Dynamic Saved Address Quick Presets */}
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-                    <span className="text-muted-foreground font-medium text-[11px] shrink-0">Saved Address Presets:</span>
+                    <span className="text-muted-foreground font-medium text-[11px] shrink-0">Other Options:</span>
                     <button
                       type="button"
                       onClick={() => {
                         if (userLoc.city) {
+                          setSelectedAddrId("gps");
                           form.setValue("city", userLoc.city);
                           form.setValue("state", userLoc.state || "");
                           form.setValue("pincode", userLoc.pincode || "");
@@ -402,7 +526,7 @@ export default function Checkout() {
                       }}
                       className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-lg hover:bg-emerald-100 font-semibold shrink-0"
                     >
-                      📍 Auto-Detected ({userLoc.city || "Current Location"})
+                      📍 Auto-Detected GPS ({userLoc.city || "Current Location"})
                     </button>
                     {showMapModal ? null : (
                       <button
@@ -410,7 +534,7 @@ export default function Checkout() {
                         onClick={() => setShowMapModal(true)}
                         className="px-3 py-1 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 rounded-lg hover:bg-blue-100 font-semibold shrink-0"
                       >
-                        🗺️ Select on Map
+                        🗺️ Pin on Live Map
                       </button>
                     )}
                   </div>
