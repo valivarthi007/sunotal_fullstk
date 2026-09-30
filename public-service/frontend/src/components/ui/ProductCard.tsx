@@ -100,14 +100,36 @@ export function ProductCard({ product }: { product: Product }) {
             {product.name}
           </Link>
           {product.location && (
-            <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1 line-clamp-1">
+            <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1 line-clamp-1">
               <MapPin className="w-3 h-3 shrink-0" /> {product.location}
             </p>
           )}
+
+          {/* Real-time Stock Availability Indicator */}
           {product.stock !== undefined && (
-            <p className={`text-[10px] font-semibold mt-1.5 ${product.stock > 0 ? "text-green-600" : "text-destructive"}`}>
-              {product.stock > 0 ? `${product.stock} kg available` : "Out of stock"}
-            </p>
+            <div className="mt-2 space-y-1">
+              {product.stock === 0 ? (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-950/50 dark:border-rose-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                  Out of Stock
+                </span>
+              ) : product.stock <= 5 ? (
+                <div>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-300 dark:bg-amber-950/50 dark:border-amber-800 animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                    ⚡ Only {product.stock} left in stock!
+                  </span>
+                  <div className="w-full bg-amber-100 dark:bg-amber-950 h-1 rounded-full mt-1 overflow-hidden">
+                    <div className="bg-amber-500 h-full rounded-full transition-all duration-500" style={{ width: `${(product.stock / 5) * 100}%` }} />
+                  </div>
+                </div>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/50 dark:border-emerald-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  In Stock ({product.stock > 99 ? "99+" : product.stock} available)
+                </span>
+              )}
+            </div>
           )}
         </div>
 

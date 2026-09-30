@@ -40,7 +40,7 @@ export default function ProductDetail() {
   const { items, addItem, removeItem, updateQuantity, openCart } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
 
-  // Fetch product detail dynamically
+  // Fetch product detail dynamically with real-time stock sync
   const { data: product, isLoading, isError } = useQuery({
     queryKey: ["product", productId],
     queryFn: async () => {
@@ -50,6 +50,7 @@ export default function ProductDetail() {
       return res.json();
     },
     enabled: !!productId,
+    refetchInterval: 5000,
   });
 
   // Fetch related products for carousel/grid
@@ -324,12 +325,38 @@ export default function ProductDetail() {
                   </div>
                 </div>
 
-                {/* Stock & Availability Indicator */}
-                <div className="flex items-center gap-2 text-xs pt-1">
-                  <div className={`w-2.5 h-2.5 rounded-full ${product.stock > 0 ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
-                  <span className={`font-bold ${product.stock > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600"}`}>
-                    {product.stock > 0 ? `${product.stock} units in stock` : "Currently unavailable"}
-                  </span>
+                {/* Real-time Stock & Availability Indicator */}
+                <div className="p-3.5 rounded-2xl bg-accent/40 border border-border/60 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${product.stock === 0 ? "bg-rose-400" : product.stock <= 5 ? "bg-amber-400" : "bg-emerald-400"}`} />
+                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${product.stock === 0 ? "bg-rose-500" : product.stock <= 5 ? "bg-amber-500" : "bg-emerald-500"}`} />
+                      </span>
+                      <span className={`font-bold ${product.stock === 0 ? "text-rose-600" : product.stock <= 5 ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}>
+                        {product.stock === 0
+                          ? "Out of Stock - Restocking Soon"
+                          : product.stock <= 5
+                          ? `⚡ Low Stock Alert: Only ${product.stock} units remaining!`
+                          : `In Stock - ${product.stock} units ready for express dispatch`}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-mono">Live Inventory</span>
+                  </div>
+
+                  {product.stock > 0 && product.stock <= 10 && (
+                    <div className="space-y-1">
+                      <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${product.stock <= 5 ? "bg-amber-500" : "bg-emerald-500"}`}
+                          style={{ width: `${Math.min(100, (product.stock / 10) * 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                        High demand item — reserve before dark store stock runs out!
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Dynamic Product Description from Admin */}
