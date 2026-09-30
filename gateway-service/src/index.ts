@@ -4354,18 +4354,34 @@ app.patch('/api/chat/messages/read/:orderId', async (req, res) => {
 
 // MULTILINGUAL VOICE SEARCH API (English + Telugu + Hindi powered by Faster-Whisper)
 const REGIONAL_PRODUCE_DICTIONARY: Record<string, string> = {
-  "టమోటా": "Tomato", "టమోటాలు": "Tomato", "టమాటా": "Tomato", "टमाटर": "Tomato",
-  "పాలకూర": "Spinach", "पालक": "Spinach",
-  "ఆలుగడ్డ": "Potato", "బంగాళాదుంప": "Potato", "आलू": "Potato",
-  "ఉల్లిపాయలు": "Onion", "ఉల్లి": "Onion", "प्याज": "Onion", "कांदा": "Onion",
-  "మామిడి": "Mango", "మామిడికాయ": "Mango", "आम": "Mango",
-  "పాలు": "Milk", "दूध": "Milk",
-  "యాపిల్": "Apple", "ఆపిల్": "Apple", "सेब": "Apple",
-  "అరటిపండు": "Banana", "అరటికాయ": "Banana", "केला": "Banana",
-  "క్యారట్": "Carrots", "క్యారెట్": "Carrots", "गाजर": "Carrots",
-  "వంగపండు": "Brinjal", "వంకాయ": "Brinjal", "बैंगन": "Brinjal",
-  "అల్లం": "Ginger", "अदरक": "Ginger",
-  "వెల్లుల్లి": "Garlic", "लहसुन": "Garlic",
+  // Telugu Produce & Grocery Terms
+  "టమోటా": "Tomato", "టమోటాలు": "Tomato", "టమాటా": "Tomato",
+  "పాలకూర": "Spinach", "కూరగాయలు": "Vegetables",
+  "ఆలుగడ్డ": "Potato", "బంగాళాదుంప": "Potato", "ఆలు": "Potato",
+  "ఉల్లిపాయలు": "Onion", "ఉల్లి": "Onion", "ఉల్లిపాయ": "Onion",
+  "మామిడి": "Mango", "మామిడికాయ": "Mango", "మామిడి పండు": "Mango",
+  "పాలు": "Milk", "పెరుగు": "Curd", "వెన్న": "Butter", "నెయ్యి": "Ghee",
+  "యాపిల్": "Apple", "ఆపిల్": "Apple",
+  "అరటిపండు": "Banana", "అరటికాయ": "Banana", "అరటి": "Banana",
+  "క్యారట్": "Carrots", "క్యారెట్": "Carrots",
+  "వంగపండు": "Brinjal", "వంకాయ": "Brinjal",
+  "అల్లం": "Ginger", "వెల్లుల్లి": "Garlic",
+  "మిరపకాయ": "Chilli", "పచ్చిమిర్చి": "Chilli", "కారం": "Chilli",
+  "కొత్తిమీర": "Coriander", "పుదీనా": "Mint",
+  "బెండకాయ": "Lady Finger", "దొండకాయ": "Tindora",
+  "సొరకాయ": "Bottle Gourd", "గుమ్మడికాయ": "Pumpkin",
+  "కోడిగుడ్లు": "Eggs", "గుడ్లు": "Eggs",
+  "బియ్యం": "Basmati Rice", "పప్పు": "Dal",
+
+  // Hindi Produce & Grocery Terms
+  "टमाटर": "Tomato", "पालक": "Spinach", "आलू": "Potato",
+  "प्याज": "Onion", "कांदा": "Onion", "आम": "Mango", "दूध": "Milk",
+  "दही": "Curd", "मक्खन": "Butter", "घी": "Ghee",
+  "सेब": "Apple", "केला": "Banana", "गाजर": "Carrots",
+  "बैंगन": "Brinjal", "अदरक": "Ginger", "लहसुन": "Garlic",
+  "मिर्च": "Chilli", "हरी मिर्च": "Chilli", "धनिया": "Coriander", "पुदीना": "Mint",
+  "भिंडी": "Lady Finger", "लौकी": "Bottle Gourd",
+  "अंडे": "Eggs", "अंडा": "Eggs", "चावल": "Basmati Rice", "दाल": "Dal",
 };
 
 app.post('/api/voice/transcribe', async (req, res) => {
@@ -4375,20 +4391,48 @@ app.post('/api/voice/transcribe', async (req, res) => {
   // If audio buffer is provided, forward to Whisper container
   if (audioBase64) {
     try {
-      const buffer = Buffer.from(audioBase64, 'base64');
-      const formData = new (require('form-data'))();
-      formData.append('file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
-      formData.append('model', 'tiny');
+      const base64Data = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;
+      const buffer = Buffer.from(base64Data, 'base64');
+      const langCode = (language || 'en').split('-')[0];
 
-      const whisperRes = await fetch('http://whisper-service:8000/v1/audio/transcriptions', {
-        method: 'POST',
-        body: formData as any,
-        headers: formData.getHeaders(),
-      });
+      // Try 1: onprem/whisper-asr-webservice (/asr endpoint)
+      try {
+        const formDataAsr = new (require('form-data'))();
+        formDataAsr.append('audio_file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
 
-      if (whisperRes.ok) {
-        const whisperData: any = await whisperRes.json();
-        if (whisperData.text) rawText = whisperData.text;
+        const whisperRes1 = await fetch(`http://whisper-service:8000/asr?task=transcribe&encode=true&output=json&language=${langCode}`, {
+          method: 'POST',
+          body: formDataAsr as any,
+          headers: formDataAsr.getHeaders(),
+        });
+
+        if (whisperRes1.ok) {
+          const whisperData: any = await whisperRes1.json();
+          if (whisperData.text) {
+            rawText = whisperData.text.trim();
+          }
+        }
+      } catch (e1) {
+        console.warn("Whisper /asr call attempt warning:", e1);
+      }
+
+      // Try 2: OpenAI compatible /v1/audio/transcriptions if rawText is still empty
+      if (!rawText) {
+        const formDataV1 = new (require('form-data'))();
+        formDataV1.append('file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
+        formDataV1.append('model', 'tiny');
+        if (langCode) formDataV1.append('language', langCode);
+
+        const whisperRes2 = await fetch('http://whisper-service:8000/v1/audio/transcriptions', {
+          method: 'POST',
+          body: formDataV1 as any,
+          headers: formDataV1.getHeaders(),
+        });
+
+        if (whisperRes2.ok) {
+          const whisperData: any = await whisperRes2.json();
+          if (whisperData.text) rawText = whisperData.text.trim();
+        }
       }
     } catch (e) {
       console.warn("Whisper container proxy warning, proceeding with client text input:", e);

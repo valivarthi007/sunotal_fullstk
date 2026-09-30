@@ -888,8 +888,15 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
             const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
             return res.json({ success: true, token, user: normUser });
         }
-        return res.status(500).json({ error: 'Authentication service error', message: err?.message });
+        return res.status(500).json({ error: 'Login failed', message: err?.message });
     }
+});
+app.get('/api/auth/social-config', (_req, res) => {
+    return res.json({
+        success: true,
+        googleClientId: process.env.VITE_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '',
+        facebookAppId: process.env.VITE_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID || '',
+    });
 });
 app.post('/api/auth/social-login', async (req, res) => {
     const { provider, socialId, email, name, avatarUrl } = req.body || {};
@@ -3046,7 +3053,7 @@ app.get('/api/admin/ledger', async (req, res) => {
 app.get(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res) => {
     const userId = req.params.userId ? String(req.params.userId) : String(req.query.userId || '1');
     try {
-        const dbRes = await gatewayPgPool.query('SELECT * FROM user_addresses WHERE user_id::text = $1 OR user_id = 1 ORDER BY is_default DESC, id DESC', [userId]);
+        const dbRes = await gatewayPgPool.query('SELECT * FROM user_addresses WHERE user_id::text = $1 ORDER BY is_default DESC, id DESC', [userId]);
         return res.json(dbRes.rows.map(a => ({
             id: a.id,
             userId: a.user_id,
@@ -4046,6 +4053,103 @@ app.patch('/api/chat/messages/read/:orderId', async (req, res) => {
         return res.status(500).json({ error: 'Failed to mark messages as read', message: err?.message });
     }
 });
+// MULTILINGUAL VOICE SEARCH API (English + Telugu + Hindi powered by Faster-Whisper)
+const REGIONAL_PRODUCE_DICTIONARY = {
+    // Telugu Produce & Grocery Terms
+    "టమోటా": "Tomato", "టమోటాలు": "Tomato", "టమాటా": "Tomato",
+    "పాలకూర": "Spinach", "కూరగాయలు": "Vegetables",
+    "ఆలుగడ్డ": "Potato", "బంగాళాదుంప": "Potato", "ఆలు": "Potato",
+    "ఉల్లిపాయలు": "Onion", "ఉల్లి": "Onion", "ఉల్లిపాయ": "Onion",
+    "మామిడి": "Mango", "మామిడికాయ": "Mango", "మామిడి పండు": "Mango",
+    "పాలు": "Milk", "పెరుగు": "Curd", "వెన్న": "Butter", "నెయ్యి": "Ghee",
+    "యాపిల్": "Apple", "ఆపిల్": "Apple",
+    "అరటిపండు": "Banana", "అరటికాయ": "Banana", "అరటి": "Banana",
+    "క్యారట్": "Carrots", "క్యారెట్": "Carrots",
+    "వంగపండు": "Brinjal", "వంకాయ": "Brinjal",
+    "అల్లం": "Ginger", "వెల్లుల్లి": "Garlic",
+    "మిరపకాయ": "Chilli", "పచ్చిమిర్చి": "Chilli", "కారం": "Chilli",
+    "కొత్తిమీర": "Coriander", "పుదీనా": "Mint",
+    "బెండకాయ": "Lady Finger", "దొండకాయ": "Tindora",
+    "సొరకాయ": "Bottle Gourd", "గుమ్మడికాయ": "Pumpkin",
+    "కోడిగుడ్లు": "Eggs", "గుడ్లు": "Eggs",
+    "బియ్యం": "Basmati Rice", "పప్పు": "Dal",
+    // Hindi Produce & Grocery Terms
+    "टमाटर": "Tomato", "पालक": "Spinach", "आलू": "Potato",
+    "प्याज": "Onion", "कांदा": "Onion", "आम": "Mango", "दूध": "Milk",
+    "दही": "Curd", "मक्खन": "Butter", "घी": "Ghee",
+    "सेब": "Apple", "केला": "Banana", "गाजर": "Carrots",
+    "बैंगन": "Brinjal", "अदरक": "Ginger", "लहसुन": "Garlic",
+    "मिर्च": "Chilli", "हरी मिर्च": "Chilli", "धनिया": "Coriander", "पुदीना": "Mint",
+    "भिंडी": "Lady Finger", "लौकी": "Bottle Gourd",
+    "अंडे": "Eggs", "अंडा": "Eggs", "चावल": "Basmati Rice", "दाल": "Dal",
+};
+app.post('/api/voice/transcribe', async (req, res) => {
+    const { text, audioBase64, language } = req.body || {};
+    let rawText = (text || '').trim();
+    // If audio buffer is provided, forward to Whisper container
+    if (audioBase64) {
+        try {
+            const base64Data = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;
+            const buffer = Buffer.from(base64Data, 'base64');
+            const langCode = (language || 'en').split('-')[0];
+            // Try 1: onprem/whisper-asr-webservice (/asr endpoint)
+            try {
+                const formDataAsr = new (require('form-data'))();
+                formDataAsr.append('audio_file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
+                const whisperRes1 = await fetch(`http://whisper-service:8000/asr?task=transcribe&encode=true&output=json&language=${langCode}`, {
+                    method: 'POST',
+                    body: formDataAsr,
+                    headers: formDataAsr.getHeaders(),
+                });
+                if (whisperRes1.ok) {
+                    const whisperData = await whisperRes1.json();
+                    if (whisperData.text) {
+                        rawText = whisperData.text.trim();
+                    }
+                }
+            }
+            catch (e1) {
+                console.warn("Whisper /asr call attempt warning:", e1);
+            }
+            // Try 2: OpenAI compatible /v1/audio/transcriptions if rawText is still empty
+            if (!rawText) {
+                const formDataV1 = new (require('form-data'))();
+                formDataV1.append('file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
+                formDataV1.append('model', 'tiny');
+                if (langCode)
+                    formDataV1.append('language', langCode);
+                const whisperRes2 = await fetch('http://whisper-service:8000/v1/audio/transcriptions', {
+                    method: 'POST',
+                    body: formDataV1,
+                    headers: formDataV1.getHeaders(),
+                });
+                if (whisperRes2.ok) {
+                    const whisperData = await whisperRes2.json();
+                    if (whisperData.text)
+                        rawText = whisperData.text.trim();
+                }
+            }
+        }
+        catch (e) {
+            console.warn("Whisper container proxy warning, proceeding with client text input:", e);
+        }
+    }
+    // Resolve regional term to catalog product query
+    let cleanQuery = rawText;
+    const lowerText = rawText.toLowerCase();
+    for (const [key, val] of Object.entries(REGIONAL_PRODUCE_DICTIONARY)) {
+        if (rawText.includes(key) || lowerText.includes(key.toLowerCase())) {
+            cleanQuery = val;
+            break;
+        }
+    }
+    return res.json({
+        success: true,
+        rawText: rawText,
+        query: cleanQuery,
+        detectedLanguage: language || (/[\u0C00-\u0C7F]/.test(rawText) ? 'te' : /[\u0900-\u097F]/.test(rawText) ? 'hi' : 'en'),
+    });
+});
 // REALTIME RIDER GPS LOCATION STREAM API
 app.get('/api/orders/:id/location', async (req, res) => {
     const orderId = req.params.id;
@@ -4079,6 +4183,68 @@ app.post('/api/orders/:id/location', async (req, res) => {
     catch (err) {
         return res.status(500).json({ error: 'Failed to update rider location', message: err?.message });
     }
+});
+// ML RECOMMENDATION ENGINE PROXY API
+app.get('/api/recommendations/personalized', async (req, res) => {
+    const userId = String(req.query.userId || '1');
+    const limit = req.query.limit || '8';
+    try {
+        const recRes = await fetch(`http://recommendation-service:8001/api/recommendations/personalized?userId=${userId}&limit=${limit}`);
+        if (recRes.ok) {
+            const data = await recRes.json();
+            return res.json(data);
+        }
+    }
+    catch (e) {
+        console.warn("Recommendation service proxy warning, serving DB fallback:", e);
+    }
+    // Database fallback if ML container is starting
+    try {
+        const dbRes = await gatewayPgPool.query(`
+      SELECT id, name, category, price, original_price as "originalPrice", unit, image, is_organic as "isOrganic", rating, stock
+      FROM products WHERE active = true ORDER BY rating DESC, stock DESC LIMIT $1
+    `, [Number(limit)]);
+        return res.json({ success: true, userId, recommendations: dbRes.rows });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch recommendations', message: err?.message });
+    }
+});
+app.get('/api/recommendations/frequently-bought-together', async (req, res) => {
+    const productId = String(req.query.productId || '1');
+    const limit = req.query.limit || '4';
+    try {
+        const recRes = await fetch(`http://recommendation-service:8001/api/recommendations/frequently-bought-together?productId=${productId}&limit=${limit}`);
+        if (recRes.ok) {
+            const data = await recRes.json();
+            return res.json(data);
+        }
+    }
+    catch (e) {
+        console.warn("Frequently bought recommendation proxy warning:", e);
+    }
+    try {
+        const dbRes = await gatewayPgPool.query(`
+      SELECT id, name, category, price, original_price as "originalPrice", unit, image, is_organic as "isOrganic", rating, stock
+      FROM products WHERE active = true AND id::text != $1 ORDER BY RANDOM() LIMIT $2
+    `, [productId, Number(limit)]);
+        return res.json({ success: true, productId, recommendations: dbRes.rows });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch complementary recommendations', message: err?.message });
+    }
+});
+app.post('/api/recommendations/interactions', async (req, res) => {
+    const { userId, productId, actionType } = req.body || {};
+    try {
+        await fetch('http://recommendation-service:8001/api/recommendations/interactions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: String(userId || '1'), productId: String(productId || '1'), actionType: actionType || 'view' }),
+        }).catch(() => { });
+    }
+    catch { }
+    return res.json({ success: true, message: 'Interaction logged' });
 });
 // GROQ AI CUSTOMER SUPPORT & ASSISTANT API
 app.post(['/api/support/ai-chat', '/api/ai/chat'], async (req, res) => {

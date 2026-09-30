@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { Mic, MicOff, Volume2, Globe, Sparkles, Loader2, Search, Check, AlertCircle } from "lucide-react";
+import { Mic, MicOff, Globe, Sparkles, Loader2, Check } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,127 +25,205 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
   const [transcript, setTranscript] = useState("");
   const [processedQuery, setProcessedQuery] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<any>(null);
+  const silenceTimerRef = useRef<any>(null);
 
   const langLabels = {
-    "en-IN": { name: "English", flag: "🇮🇳", sample: "Try: 'Fresh Tomato' or 'Organic Spinach'" },
+    "en-IN": { name: "English", flag: "🇮🇳", sample: "Try saying: 'Fresh Tomato' or 'Spinach'" },
     "te-IN": { name: "తెలుగు (Telugu)", flag: "🇮🇳", sample: "చెప్పండి: 'టమోటా', 'పాలకూర', 'మామిడి'" },
     "hi-IN": { name: "हिंदी (Hindi)", flag: "🇮🇳", sample: "बोलिए: 'टमाटर', 'पालक', 'ताजा आम'" },
   };
 
   useEffect(() => {
     if (!open) {
-      stopListening();
+      cleanupAudio();
       setTranscript("");
       setProcessedQuery("");
       return;
     }
 
     startListening();
-    return () => stopListening();
+    return () => cleanupAudio();
   }, [open, selectedLang]);
 
-  const startListening = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      toast.error("Speech recognition is not supported in this browser");
-      return;
+  const cleanupAudio = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
     }
 
-    try {
-      if (recognitionRef.current) {
+    if (recognitionRef.current) {
+      try {
         recognitionRef.current.abort();
-      }
-
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = selectedLang;
-
-      recognition.onstart = () => {
-        setIsListening(true);
-        setTranscript("");
-        setProcessedQuery("");
-      };
-
-      recognition.onresult = (event: any) => {
-        let currentText = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          currentText += event.results[i][0].transcript;
-        }
-        setTranscript(currentText);
-
-        if (event.results[0].isFinal) {
-          handleFinalSpeech(currentText);
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.warn("Speech recognition error:", event.error);
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err) {
-      console.error("Failed to start speech recognition:", err);
-      setIsListening(false);
+      } catch {}
+      recognitionRef.current = null;
     }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    setIsListening(false);
+  };
+
+  const startListening = async () => {
+    cleanupAudio();
+    setTranscript("");
+    setProcessedQuery("");
+    audioChunksRef.current = [];
+
+    // 1. Initiate HTML5 MediaRecorder Audio Stream
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          if (audioBlob.size > 0) {
+            await sendAudioToBackend(audioBlob);
+          }
+        };
+
+        mediaRecorder.start();
+        setIsListening(true);
+      }
+    } catch (err: any) {
+      console.warn("MediaRecorder mic access error:", err);
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        toast.error("Microphone permission denied. Please allow microphone access.");
+      }
+    }
+
+    // 2. Initiate SpeechRecognition for real-time live preview feedback (if supported)
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = selectedLang;
+
+        recognition.onstart = () => {
+          setIsListening(true);
+        };
+
+        recognition.onresult = (event: any) => {
+          let currentText = "";
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            currentText += event.results[i][0].transcript;
+          }
+          if (currentText.trim()) {
+            setTranscript(currentText);
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn("Speech recognition warning:", event.error);
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+      } catch (err) {
+        console.warn("SpeechRecognition init warning:", err);
+      }
+    }
+
+    // Auto stop after 5 seconds of recording
+    silenceTimerRef.current = setTimeout(() => {
+      stopListening();
+    }, 5000);
   };
 
   const stopListening = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    } else if (transcript.trim()) {
+      handleFinalResult(transcript, "");
+    }
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {}
-      recognitionRef.current = null;
     }
+
     setIsListening(false);
   };
 
-  const handleFinalSpeech = async (spokenText: string) => {
-    if (!spokenText.trim()) return;
-
+  const sendAudioToBackend = async (audioBlob: Blob) => {
     setIsProcessing(true);
     try {
-      const res = await fetch(getApiUrl("/api/voice/transcribe"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: spokenText,
-          language: selectedLang.split("-")[0],
-        }),
-      });
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      reader.onloadend = async () => {
+        const base64Audio = reader.result as string;
+        try {
+          const res = await fetch(getApiUrl("/api/voice/transcribe"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              audioBase64: base64Audio,
+              text: transcript,
+              language: selectedLang.split("-")[0],
+            }),
+          });
 
-      const data = await res.json();
-      const finalResult = data.query || spokenText;
-      setProcessedQuery(finalResult);
-
-      toast.success(`Voice query recognized: "${finalResult}"`);
-
-      setTimeout(() => {
-        onOpenChange(false);
-        if (onQueryComplete) {
-          onQueryComplete(finalResult);
-        } else {
-          setLocation(`/products?search=${encodeURIComponent(finalResult)}`);
+          const data = await res.json();
+          const finalResult = data.query || data.rawText || transcript;
+          handleFinalResult(finalResult, data.rawText);
+        } catch (err) {
+          handleFinalResult(transcript, transcript);
+        } finally {
+          setIsProcessing(false);
         }
-      }, 800);
+      };
     } catch (err) {
-      setProcessedQuery(spokenText);
-      setTimeout(() => {
-        onOpenChange(false);
-        if (onQueryComplete) onQueryComplete(spokenText);
-        else setLocation(`/products?search=${encodeURIComponent(spokenText)}`);
-      }, 800);
-    } finally {
       setIsProcessing(false);
+      handleFinalResult(transcript, transcript);
     }
+  };
+
+  const handleFinalResult = (queryResult: string, rawSpoken?: string) => {
+    const clean = (queryResult || rawSpoken || "").trim();
+    if (!clean) return;
+
+    setProcessedQuery(clean);
+    toast.success(`Voice recognized: "${clean}"`);
+
+    setTimeout(() => {
+      onOpenChange(false);
+      if (onQueryComplete) {
+        onQueryComplete(clean);
+      } else {
+        setLocation(`/products?search=${encodeURIComponent(clean)}`);
+      }
+    }, 800);
   };
 
   return (
@@ -213,7 +291,7 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
 
             <div className="mt-4 text-center space-y-1">
               <span className={`text-xs font-bold uppercase tracking-wider ${isListening ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                {isProcessing ? "Processing Speech..." : isListening ? `Listening in ${langLabels[selectedLang].name}...` : "Tap Mic to Start Speaking"}
+                {isProcessing ? "Transcribing Voice..." : isListening ? `Listening in ${langLabels[selectedLang].name}...` : "Tap Mic to Speak"}
               </span>
               <p className="text-[11px] text-muted-foreground italic font-mono">
                 {langLabels[selectedLang].sample}
@@ -259,3 +337,4 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
     </Dialog>
   );
 }
+
