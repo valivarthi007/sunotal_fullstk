@@ -3436,6 +3436,90 @@ app.get('/api/orders/:id', async (req, res) => {
   }
 });
 
+app.post('/api/orders/:id/reorder', async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid order ID' });
+
+  try {
+    const oRes = await gatewayPgPool.query('SELECT * FROM orders WHERE id = $1', [id]);
+    if (!oRes.rows || oRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const itemsRes = await gatewayPgPool.query('SELECT * FROM order_items WHERE order_id = $1', [id]);
+    const orderItems = itemsRes.rows || [];
+
+    if (orderItems.length === 0) {
+      return res.status(400).json({ error: 'Order has no items to reorder' });
+    }
+
+    const productIds = orderItems.map((i: any) => i.product_id).filter(Boolean);
+    let currentProductsMap: Record<string, any> = {};
+
+    if (productIds.length > 0) {
+      const prodRes = await gatewayPgPool.query(
+        'SELECT * FROM products WHERE id = ANY($1::int[])',
+        [productIds]
+      );
+      for (const p of prodRes.rows) {
+        currentProductsMap[String(p.id)] = p;
+      }
+    }
+
+    const reorderItems: any[] = [];
+    const outOfStockItems: string[] = [];
+    let priceChangedCount = 0;
+
+    for (const item of orderItems) {
+      const pId = String(item.product_id);
+      const currentProd = currentProductsMap[pId];
+
+      if (!currentProd || (currentProd.stock !== null && currentProd.stock <= 0) || currentProd.active === false) {
+        outOfStockItems.push(item.product_name || 'Product #' + pId);
+        continue;
+      }
+
+      const originalPrice = Number(item.price);
+      const currentPrice = Number(currentProd.price);
+      const isPriceChanged = Math.abs(originalPrice - currentPrice) > 0.01;
+      if (isPriceChanged) priceChangedCount++;
+
+      const availStock = currentProd.stock !== null && currentProd.stock !== undefined ? Number(currentProd.stock) : 999;
+      const finalQuantity = Math.min(Number(item.quantity || 1), availStock);
+
+      reorderItems.push({
+        product: {
+          id: Number(currentProd.id),
+          name: currentProd.name,
+          category: currentProd.category || 'Grocery',
+          price: currentPrice,
+          originalPrice: Number(currentProd.original_price || currentPrice),
+          unit: currentProd.unit || item.unit || '1 unit',
+          image: currentProd.image || item.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400',
+          stock: availStock,
+          rating: Number(currentProd.rating || 5.0),
+          active: true,
+        },
+        quantity: finalQuantity,
+        originalPrice: originalPrice,
+        priceChanged: isPriceChanged,
+      });
+    }
+
+    return res.json({
+      success: true,
+      orderId: id,
+      orderNumber: oRes.rows[0].order_number,
+      reorderItems,
+      outOfStockItems,
+      priceChangedCount,
+      totalReordered: reorderItems.length,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to process reorder', message: err?.message });
+  }
+});
+
 app.post(['/api/orders', '/api/orders/checkout'], async (req, res) => {
   const { userId, userName, userPhone, address, shippingAddress, city, items, subtotal, discount, tax, deliveryFee, finalAmount, paymentMethod, latitude, longitude, deliveryLatitude, deliveryLongitude, warehouseId } = req.body || {};
   if (!items || !Array.isArray(items) || items.length === 0) {

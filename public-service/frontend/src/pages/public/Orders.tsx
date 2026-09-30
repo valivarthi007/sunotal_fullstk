@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { fetchUserOrders, cancelUserOrder, OrderApi } from "@/lib/api-client";
+import { fetchUserOrders, cancelUserOrder, OrderApi, reorderUserOrder } from "@/lib/api-client";
+import { useCart, CartItem } from "@/lib/cart-context";
 import { LiveDeliveryMapTracker } from "@/components/ui/LiveDeliveryMapTracker";
 import {
   Dialog,
@@ -34,6 +35,8 @@ import {
   Sparkles,
   XCircle,
   Star,
+  RotateCcw,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,11 +56,21 @@ const STORAGE_GRIEVANCES_KEY = "sunotal_user_grievances";
 export default function Orders() {
   const [, setLocation] = useLocation();
   const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
+  const { addMultipleItems, items: currentCartItems, openCart } = useCart();
 
   const [orders, setOrders] = useState<OrderApi[]>([]);
   const [loading, setLoading] = useState(true);
   const [grievances, setGrievances] = useState<Grievance[]>([]);
   const [activeTab, setActiveTab] = useState<"orders" | "grievances">("orders");
+
+  // Reorder state
+  const [reorderingOrderId, setReorderingOrderId] = useState<number | string | null>(null);
+  const [pendingReorderPayload, setPendingReorderPayload] = useState<{
+    order: OrderApi;
+    items: CartItem[];
+    outOfStock: string[];
+    priceChangedCount: number;
+  } | null>(null);
 
   // Selected Order for live tracker modal
   const [selectedOrderTrack, setSelectedOrderTrack] = useState<OrderApi | null>(null);
@@ -337,6 +350,90 @@ export default function Orders() {
     }
   };
 
+  const executeReorder = (
+    newCartItems: CartItem[],
+    mode: "merge" | "replace",
+    outOfStock: string[] = [],
+    priceChangedCount: number = 0
+  ) => {
+    addMultipleItems(newCartItems, mode);
+
+    if (outOfStock.length > 0) {
+      toast.warning(`Reordered ${newCartItems.length} items. (${outOfStock.length} items unavailable: ${outOfStock.join(", ")})`);
+    } else if (priceChangedCount > 0) {
+      toast.info(`Reordered ${newCartItems.length} items to cart. Prices updated to current catalog rates.`);
+    } else {
+      toast.success(`⚡ ${newCartItems.length} items added to your cart!`);
+    }
+
+    openCart();
+  };
+
+  const handleOneTapReorder = async (order: OrderApi) => {
+    const targetId = order.id;
+    setReorderingOrderId(targetId);
+
+    try {
+      let reorderItems: CartItem[] = [];
+      let outOfStockItems: string[] = [];
+      let priceChangedCount = 0;
+
+      if (typeof targetId === "number" || (typeof targetId === "string" && !isNaN(Number(targetId)))) {
+        try {
+          const res = await reorderUserOrder(Number(targetId));
+          if (res && res.success && Array.isArray(res.reorderItems) && res.reorderItems.length > 0) {
+            reorderItems = res.reorderItems.map((ri) => ({
+              product: ri.product,
+              quantity: ri.quantity,
+            }));
+            outOfStockItems = res.outOfStockItems || [];
+            priceChangedCount = res.priceChangedCount || 0;
+          }
+        } catch {
+          // fallback to client-side mapping if endpoint unavailable
+        }
+      }
+
+      if (reorderItems.length === 0 && order.items && order.items.length > 0) {
+        reorderItems = order.items.map((item) => ({
+          product: {
+            id: item.productId || Math.floor(Math.random() * 10000),
+            name: item.productName || "Produce Item",
+            category: "Grocery",
+            price: item.unitPrice || (item.subtotal ? item.subtotal / (item.quantity || 1) : 50),
+            originalPrice: item.unitPrice || 50,
+            unit: "1 unit",
+            image: (item as any).image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400",
+            stock: 99,
+            rating: 5.0,
+            active: true,
+          },
+          quantity: item.quantity || 1,
+        }));
+      }
+
+      if (reorderItems.length === 0) {
+        toast.error("No available items found to reorder.");
+        return;
+      }
+
+      if (currentCartItems.length > 0) {
+        setPendingReorderPayload({
+          order,
+          items: reorderItems,
+          outOfStock: outOfStockItems,
+          priceChangedCount,
+        });
+      } else {
+        executeReorder(reorderItems, "replace", outOfStockItems, priceChangedCount);
+      }
+    } catch {
+      toast.error("Failed to reorder items. Please try again.");
+    } finally {
+      setReorderingOrderId(null);
+    }
+  };
+
   const safeSearch = (searchQuery || "").toLowerCase();
   const filteredOrders = (Array.isArray(orders) ? orders : []).filter(
     (o) =>
@@ -522,6 +619,15 @@ export default function Orders() {
                         </Button>
                         <Button
                           size="sm"
+                          onClick={() => handleOneTapReorder(order)}
+                          disabled={reorderingOrderId === order.id}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm gap-1.5"
+                        >
+                          <RotateCcw className={`w-3.5 h-3.5 ${reorderingOrderId === order.id ? "animate-spin" : ""}`} />
+                          {reorderingOrderId === order.id ? "Reordering..." : "Reorder Items"}
+                        </Button>
+                        <Button
+                          size="sm"
                           onClick={() => setSelectedOrderTrack(order)}
                           className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl"
                         >
@@ -700,6 +806,66 @@ export default function Orders() {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* Reorder Confirmation Modal when cart has existing items */}
+        <Dialog open={!!pendingReorderPayload} onOpenChange={(open) => !open && setPendingReorderPayload(null)}>
+          <DialogContent className="max-w-md rounded-2xl p-6">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+                <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
+                Items Already in Cart
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground pt-1">
+                You currently have <span className="font-bold text-foreground">{currentCartItems.length} item(s)</span> in your cart. How would you like to handle this reorder of <span className="font-bold text-emerald-600">{pendingReorderPayload?.items.length} item(s)</span>?
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 pt-3">
+              <Button
+                className="w-full justify-start gap-3 py-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-sm"
+                onClick={() => {
+                  if (pendingReorderPayload) {
+                    executeReorder(
+                      pendingReorderPayload.items,
+                      "merge",
+                      pendingReorderPayload.outOfStock,
+                      pendingReorderPayload.priceChangedCount
+                    );
+                    setPendingReorderPayload(null);
+                  }
+                }}
+              >
+                <Plus className="w-5 h-5" />
+                <div className="text-left">
+                  <div className="font-bold text-sm">Merge with Existing Cart</div>
+                  <div className="text-xs text-emerald-100 font-normal">Add reordered items alongside current items</div>
+                </div>
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3 py-6 rounded-xl font-bold border-muted-foreground/20 hover:bg-muted"
+                onClick={() => {
+                  if (pendingReorderPayload) {
+                    executeReorder(
+                      pendingReorderPayload.items,
+                      "replace",
+                      pendingReorderPayload.outOfStock,
+                      pendingReorderPayload.priceChangedCount
+                    );
+                    setPendingReorderPayload(null);
+                  }
+                }}
+              >
+                <RefreshCw className="w-5 h-5 text-muted-foreground" />
+                <div className="text-left">
+                  <div className="font-bold text-sm text-foreground">Replace Existing Cart</div>
+                  <div className="text-xs text-muted-foreground font-normal">Clear current cart and add reordered items</div>
+                </div>
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </PublicLayout>
   );

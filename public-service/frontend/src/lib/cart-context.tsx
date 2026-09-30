@@ -9,6 +9,7 @@ export interface CartItem {
 interface CartContextValue {
   items: CartItem[];
   addItem: (product: Product) => void;
+  addMultipleItems: (newItems: CartItem[], mode?: "merge" | "replace") => void;
   removeItem: (productId: number) => void;
   updateQuantity: (productId: number, quantity: number) => void;
   clearCart: () => void;
@@ -53,15 +54,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback((product: Product) => {
     setItems((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id);
+      const existing = prev.find((i) => String(i.product.id) === String(product.id));
       if (existing) {
         return prev.map((i) =>
-          i.product.id === product.id
+          String(i.product.id) === String(product.id)
             ? { ...i, quantity: i.quantity + 1 }
             : i
         );
       }
       return [...prev, { product, quantity: 1 }];
+    });
+    setIsOpen(true);
+  }, []);
+
+  const addMultipleItems = useCallback((newItems: CartItem[], mode: "merge" | "replace" = "merge") => {
+    setItems((prev) => {
+      if (mode === "replace") return newItems;
+
+      const updated = [...prev];
+      newItems.forEach(({ product, quantity }) => {
+        const existingIdx = updated.findIndex((i) => String(i.product.id) === String(product.id));
+        if (existingIdx >= 0) {
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            quantity: updated[existingIdx].quantity + quantity,
+          };
+        } else {
+          updated.push({ product, quantity });
+        }
+      });
+      return updated;
     });
     setIsOpen(true);
   }, []);
@@ -101,6 +123,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       value={{
         items,
         addItem,
+        addMultipleItems,
         removeItem,
         updateQuantity,
         clearCart,

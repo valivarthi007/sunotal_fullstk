@@ -78,3 +78,25 @@ export async function updateOrderStatusAdmin(id: number, status: string, payment
     body: JSON.stringify({ status, paymentStatus }),
   });
 }
+
+export interface ReorderResponse {
+  success: boolean;
+  orderId: number;
+  orderNumber: string;
+  reorderItems: {
+    product: any;
+    quantity: number;
+    originalPrice: number;
+    priceChanged: boolean;
+  }[];
+  outOfStockItems: string[];
+  priceChangedCount: number;
+  totalReordered: number;
+}
+
+export async function reorderUserOrder(id: number): Promise<ReorderResponse> {
+  return customFetch<ReorderResponse>(`/api/orders/${id}/reorder`, {
+    method: "POST",
+  });
+}
+
