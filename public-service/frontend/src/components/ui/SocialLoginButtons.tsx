@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { Loader2, Settings, ShieldCheck, Key, ExternalLink, HelpCircle } from "lucide-react";
+import { Loader2, Settings, ShieldCheck, Key, ExternalLink } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,7 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [activeConfigProvider, setActiveConfigProvider] = useState<"google" | "facebook" | "apple" | null>(null);
 
-  // Saved Client IDs in localStorage or env
+  // Saved Client IDs from localStorage or env
   const [googleClientId, setGoogleClientId] = useState(
     () => localStorage.getItem("VITE_GOOGLE_CLIENT_ID") || (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || ""
   );
@@ -44,135 +44,113 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
     if (googleClientId) localStorage.setItem("VITE_GOOGLE_CLIENT_ID", googleClientId);
     if (facebookAppId) localStorage.setItem("VITE_FACEBOOK_APP_ID", facebookAppId);
     if (appleServicesId) localStorage.setItem("VITE_APPLE_CLIENT_ID", appleServicesId);
-    toast.success("OAuth Credentials saved!", {
-      description: "Real social sign-in popups are now active.",
+
+    toast.success("OAuth Credentials Saved", {
+      description: "You can now use real Google, Facebook, and Apple sign-in.",
     });
     setShowConfigModal(false);
   };
 
-  const handleSocialAuth = async (provider: "google" | "facebook" | "apple", forceDemo = false) => {
+  const handleSocialAuth = async (provider: "google" | "facebook" | "apple") => {
     setLoadingProvider(provider);
-
     const redirectUri = window.location.origin;
 
-    // Check if real API Key exists
-    const hasRealKey =
-      (provider === "google" && googleClientId) ||
-      (provider === "facebook" && facebookAppId) ||
-      (provider === "apple" && appleServicesId);
+    let clientId = "";
+    if (provider === "google") clientId = googleClientId;
+    else if (provider === "facebook") clientId = facebookAppId;
+    else if (provider === "apple") clientId = appleServicesId;
 
-    if (!hasRealKey && !forceDemo) {
+    if (!clientId) {
       setActiveConfigProvider(provider);
       setShowConfigModal(true);
       setLoadingProvider(null);
+      toast.error(`Missing ${provider.toUpperCase()} Credentials`, {
+        description: `Please enter your ${provider.toUpperCase()} Client ID to initiate OAuth login.`,
+      });
       return;
     }
 
     try {
-      if (hasRealKey && !forceDemo) {
-        // Trigger Real OAuth Popup Window
-        let authUrl = "";
-        if (provider === "google") {
-          authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
-            googleClientId
-          )}&redirect_uri=${encodeURIComponent(
-            redirectUri
-          )}&response_type=token%20id_token&scope=openid%20profile%20email&prompt=consent`;
-        } else if (provider === "facebook") {
-          authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${encodeURIComponent(
-            facebookAppId
-          )}&redirect_uri=${encodeURIComponent(
-            redirectUri
-          )}&scope=email,public_profile&response_type=token`;
-        } else if (provider === "apple") {
-          authUrl = `https://appleid.apple.com/auth/authorize?client_id=${encodeURIComponent(
-            appleServicesId
-          )}&redirect_uri=${encodeURIComponent(
-            redirectUri
-          )}&response_type=code%20id_token&response_mode=fragment&scope=name%20email`;
-        }
-
-        // Open OAuth popup window
-        const width = 600;
-        const height = 700;
-        const left = window.screen.width / 2 - width / 2;
-        const top = window.screen.height / 2 - height / 2;
-        const popup = window.open(
-          authUrl,
-          `${provider}_oauth`,
-          `width=${width},height=${height},top=${top},left=${left}`
-        );
-
-        toast.info(`Opening ${provider.toUpperCase()} Login window...`, {
-          description: "Complete authentication in the pop-up window.",
-        });
-
-        // Listen for popup response or fallback sandbox auth
-        setTimeout(async () => {
-          if (popup && !popup.closed) {
-            popup.close();
-          }
-          await executeSocialBackendLogin(provider, "real_oauth");
-        }, 3000);
-
-        return;
+      let authUrl = "";
+      if (provider === "google") {
+        authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
+          clientId
+        )}&redirect_uri=${encodeURIComponent(
+          redirectUri
+        )}&response_type=token%20id_token&scope=openid%20profile%20email&prompt=consent`;
+      } else if (provider === "facebook") {
+        authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${encodeURIComponent(
+          clientId
+        )}&redirect_uri=${encodeURIComponent(
+          redirectUri
+        )}&scope=email,public_profile&response_type=token`;
+      } else if (provider === "apple") {
+        authUrl = `https://appleid.apple.com/auth/authorize?client_id=${encodeURIComponent(
+          clientId
+        )}&redirect_uri=${encodeURIComponent(
+          redirectUri
+        )}&response_type=code%20id_token&response_mode=fragment&scope=name%20email`;
       }
 
-      // Demo Sandbox Authentication
-      await executeSocialBackendLogin(provider, "sandbox");
-    } catch (err: any) {
-      toast.error("Social Sign-in Failed", {
-        description: err.message || "Could not complete social authentication.",
+      const width = 600;
+      const height = 700;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+
+      const popup = window.open(
+        authUrl,
+        `${provider}_oauth`,
+        `width=${width},height=${height},top=${top},left=${left}`
+      );
+
+      toast.info(`Opening ${provider.toUpperCase()} Consent Screen...`, {
+        description: "Complete login in the popup window.",
       });
-    } finally {
+
+      // Poll for popup closing or message response
+      const timer = setInterval(async () => {
+        if (!popup || popup.closed) {
+          clearInterval(timer);
+          setLoadingProvider(null);
+        }
+      }, 1000);
+    } catch (err: any) {
+      toast.error("Social Sign-in Error", {
+        description: err.message || "Failed to open OAuth popup window.",
+      });
       setLoadingProvider(null);
     }
   };
 
-  const executeSocialBackendLogin = async (provider: "google" | "facebook" | "apple", mode: string) => {
-    let socialData = {
-      provider,
-      socialId: `${provider}_id_${Math.floor(100000 + Math.random() * 900000)}`,
-      email: mode === "real_oauth" ? `user.${provider}@gmail.com` : `${provider}.user@sunotal.com`,
-      name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} Verified User`,
-      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${provider}_user_${Date.now()}`,
+  // Listen for OAuth postMessage or Hash Token redirects
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data && event.data.type === "OAUTH_RESPONSE") {
+        const { provider, socialId, email, name, avatarUrl } = event.data;
+        if (email && provider) {
+          try {
+            const res = await fetch("/api/auth/social-login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ provider, socialId, email, name, avatarUrl }),
+            });
+            const data = await res.json();
+            if (data.token) {
+              localStorage.setItem("sunotal_token", data.token);
+              queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+              toast.success(`Signed in via ${provider.toUpperCase()}`);
+              if (onSuccess) onSuccess();
+              else setLocation("/");
+            }
+          } catch (err: any) {
+            toast.error("Authentication failed: " + err.message);
+          }
+        }
+      }
     };
-
-    if (provider === "facebook") {
-      socialData.email = "alex.mercer.fb@sunotal.com";
-      socialData.name = "Alex Mercer (FB)";
-    } else if (provider === "apple") {
-      socialData.email = "jordan.lee.appleid@privaterelay.apple.com";
-      socialData.name = "Jordan Lee (Apple ID)";
-    }
-
-    const res = await fetch("/api/auth/social-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(socialData),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || "Social authentication failed");
-    }
-
-    if (data.token) {
-      localStorage.setItem("sunotal_token", data.token);
-    }
-
-    queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-    toast.success(`Successfully authenticated via ${provider.toUpperCase()}`, {
-      description: `Logged in as ${data.user?.name || socialData.name}`,
-    });
-
-    if (onSuccess) {
-      onSuccess();
-    } else {
-      setLocation("/");
-    }
-  };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [onSuccess, setLocation, queryClient]);
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -193,7 +171,7 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
           type="button"
           disabled={!!loadingProvider}
           onClick={() => handleSocialAuth("google")}
-          className="flex items-center justify-center gap-2 py-2.5 px-3 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm disabled:opacity-50 group relative"
+          className="flex items-center justify-center gap-2 py-2.5 px-3 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm disabled:opacity-50"
         >
           {loadingProvider === "google" ? (
             <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
@@ -268,19 +246,19 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
           Configure OAuth API Keys (Google / FB / Apple)
         </button>
 
-        <span className="text-[10px] text-slate-400 font-mono">OAuth 2.0 Ready</span>
+        <span className="text-[10px] text-slate-400 font-mono">OAuth 2.0</span>
       </div>
 
-      {/* OAuth Configuration & Instructions Modal */}
+      {/* OAuth Configuration Dialog */}
       <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
         <DialogContent className="sm:max-w-[550px] bg-card border border-border">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl font-bold">
               <Key className="w-5 h-5 text-emerald-600" />
-              Configure Real OAuth 2.0 Credentials
+              Production OAuth 2.0 Credentials
             </DialogTitle>
             <DialogDescription>
-              To enable real OAuth popup windows for Google, Facebook, or Apple, enter your Client IDs below or add them to your environment variables.
+              Enter your domain OAuth Client IDs below. Once configured, clicking Google, Facebook, or Apple will launch real sign-in popup windows.
             </DialogDescription>
           </DialogHeader>
 
@@ -347,31 +325,17 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
                 className="font-mono text-xs rounded-xl"
               />
             </div>
-
-            {/* Quick Sandbox Bypass Option */}
-            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs space-y-1 text-amber-800 dark:text-amber-300">
-              <p className="font-bold flex items-center gap-1">
-                <HelpCircle className="w-3.5 h-3.5 text-amber-600" /> Need Instant Test Sign-In?
-              </p>
-              <p className="text-[11px] leading-relaxed">
-                If you don't have active OAuth credentials set up yet, click <strong>Test Sandbox Sign-In</strong> to complete login with mock verified social profiles instantly.
-              </p>
-            </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 pt-3 border-t">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => {
-                const p = activeConfigProvider || "google";
-                setShowConfigModal(false);
-                handleSocialAuth(p, true);
-              }}
+              onClick={() => setShowConfigModal(false)}
               className="text-xs font-semibold"
             >
-              Test Sandbox Sign-In ({activeConfigProvider || "google"})
+              Cancel
             </Button>
 
             <Button
@@ -380,7 +344,7 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
               onClick={saveCredentials}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 rounded-xl px-4"
             >
-              <ShieldCheck className="w-4 h-4" /> Save Credentials
+              <ShieldCheck className="w-4 h-4" /> Save OAuth Keys
             </Button>
           </div>
         </DialogContent>
@@ -388,4 +352,3 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
     </div>
   );
 }
-
