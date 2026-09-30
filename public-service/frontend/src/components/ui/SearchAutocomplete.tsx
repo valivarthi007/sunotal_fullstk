@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Search, Loader2, Package, ArrowRight, X } from "lucide-react";
+import { Search, Loader2, Package, ArrowRight, X, Mic } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { normalizeImageUrl } from "@/lib/image-utils";
 import { useLocation } from "wouter";
+import { VoiceSearchModal } from "@/components/ui/VoiceSearchModal";
 
 interface SearchResultProduct {
   id: string;
@@ -18,6 +19,7 @@ export function SearchAutocomplete() {
   const [results, setResults] = useState<SearchResultProduct[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -81,20 +83,39 @@ export function SearchAutocomplete() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => query.length >= 2 && setIsOpen(true)}
-          className="pl-10 pr-9 h-11 bg-accent/40 border-border/60 rounded-full shadow-xs text-sm focus:border-emerald-500 focus:bg-background focus:ring-emerald-500/20"
+          className="pl-10 pr-16 h-11 bg-accent/40 border-border/60 rounded-full shadow-xs text-sm focus:border-emerald-500 focus:bg-background focus:ring-emerald-500/20"
         />
-        {query && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          {query ? (
+            <button
+              onClick={() => {
+                setQuery("");
+                setResults([]);
+                setIsOpen(false);
+              }}
+              className="text-muted-foreground hover:text-foreground p-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          ) : null}
           <button
-            onClick={() => {
-              setQuery("");
-              setResults([]);
-              setIsOpen(false);
-            }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+            type="button"
+            onClick={() => setShowVoiceModal(true)}
+            title="Voice Search (English, Telugu, Hindi)"
+            className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 rounded-full transition-all"
           >
-            <X className="w-4 h-4" />
+            <Mic className="w-4 h-4" />
           </button>
-        )}
+        </div>
+
+        <VoiceSearchModal
+          open={showVoiceModal}
+          onOpenChange={setShowVoiceModal}
+          onQueryComplete={(q) => {
+            setQuery(q);
+            setLocation(`/products?search=${encodeURIComponent(q)}`);
+          }}
+        />
       </div>
 
       {/* Autocomplete Dropdown */}

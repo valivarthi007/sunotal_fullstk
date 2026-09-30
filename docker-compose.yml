@@ -50,6 +50,19 @@ services:
       retries: 3
       start_period: 10s
 
+  whisper-service:
+    image: fedirz/faster-whisper-server:latest
+    container_name: sunotal-whisper-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL=tiny
+    networks:
+      default:
+        aliases:
+          - whisper-service
+
   # ─── 6 Core Micro-Service Backends ────────────────────────────────────────
   gateway-service:
     build:

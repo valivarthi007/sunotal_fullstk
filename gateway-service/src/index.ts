@@ -4352,6 +4352,68 @@ app.patch('/api/chat/messages/read/:orderId', async (req, res) => {
   }
 });
 
+// MULTILINGUAL VOICE SEARCH API (English + Telugu + Hindi powered by Faster-Whisper)
+const REGIONAL_PRODUCE_DICTIONARY: Record<string, string> = {
+  "టమోటా": "Tomato", "టమోటాలు": "Tomato", "టమాటా": "Tomato", "टमाटर": "Tomato",
+  "పాలకూర": "Spinach", "पालक": "Spinach",
+  "ఆలుగడ్డ": "Potato", "బంగాళాదుంప": "Potato", "आलू": "Potato",
+  "ఉల్లిపాయలు": "Onion", "ఉల్లి": "Onion", "प्याज": "Onion", "कांदा": "Onion",
+  "మామిడి": "Mango", "మామిడికాయ": "Mango", "आम": "Mango",
+  "పాలు": "Milk", "दूध": "Milk",
+  "యాపిల్": "Apple", "ఆపిల్": "Apple", "सेब": "Apple",
+  "అరటిపండు": "Banana", "అరటికాయ": "Banana", "केला": "Banana",
+  "క్యారట్": "Carrots", "క్యారెట్": "Carrots", "गाजर": "Carrots",
+  "వంగపండు": "Brinjal", "వంకాయ": "Brinjal", "बैंगन": "Brinjal",
+  "అల్లం": "Ginger", "अदरक": "Ginger",
+  "వెల్లుల్లి": "Garlic", "लहसुन": "Garlic",
+};
+
+app.post('/api/voice/transcribe', async (req, res) => {
+  const { text, audioBase64, language } = req.body || {};
+  let rawText = (text || '').trim();
+
+  // If audio buffer is provided, forward to Whisper container
+  if (audioBase64) {
+    try {
+      const buffer = Buffer.from(audioBase64, 'base64');
+      const formData = new (require('form-data'))();
+      formData.append('file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
+      formData.append('model', 'tiny');
+
+      const whisperRes = await fetch('http://whisper-service:8000/v1/audio/transcriptions', {
+        method: 'POST',
+        body: formData as any,
+        headers: formData.getHeaders(),
+      });
+
+      if (whisperRes.ok) {
+        const whisperData: any = await whisperRes.json();
+        if (whisperData.text) rawText = whisperData.text;
+      }
+    } catch (e) {
+      console.warn("Whisper container proxy warning, proceeding with client text input:", e);
+    }
+  }
+
+  // Resolve regional term to catalog product query
+  let cleanQuery = rawText;
+  const lowerText = rawText.toLowerCase();
+
+  for (const [key, val] of Object.entries(REGIONAL_PRODUCE_DICTIONARY)) {
+    if (rawText.includes(key) || lowerText.includes(key.toLowerCase())) {
+      cleanQuery = val;
+      break;
+    }
+  }
+
+  return res.json({
+    success: true,
+    rawText: rawText,
+    query: cleanQuery,
+    detectedLanguage: language || (/[\u0C00-\u0C7F]/.test(rawText) ? 'te' : /[\u0900-\u097F]/.test(rawText) ? 'hi' : 'en'),
+  });
+});
+
 // REALTIME RIDER GPS LOCATION STREAM API
 app.get('/api/orders/:id/location', async (req, res) => {
   const orderId = req.params.id;
