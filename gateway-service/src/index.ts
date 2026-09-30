@@ -871,8 +871,16 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
       const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
       return res.json({ success: true, token, user: normUser });
     }
-    return res.status(500).json({ error: 'Authentication service error', message: err?.message });
+    return res.status(500).json({ error: 'Login failed', message: err?.message });
   }
+});
+
+app.get('/api/auth/social-config', (_req, res) => {
+  return res.json({
+    success: true,
+    googleClientId: process.env.VITE_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '',
+    facebookAppId: process.env.VITE_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID || '',
+  });
 });
 
 app.post('/api/auth/social-login', async (req, res) => {
