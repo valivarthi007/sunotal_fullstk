@@ -833,7 +833,7 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
       }
 
       if (match) {
-        const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role || 'admin', active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '9063636167', city: u.city || 'Vijayawada', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || u.profile_photo_url || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
+        const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role || 'admin', active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '', city: u.city || '', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || u.profile_photo_url || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
         const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
         return res.json({ success: true, token, user: normUser });
       }
@@ -845,18 +845,18 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
         const pwdHash = await bcrypt.hash(fallback.pass, 10);
         const insRes = await gatewayPgPool.query(
           `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance, login_provider)
-           VALUES ($1, $2, $3, $4, true, '9063636167', 'Vijayawada', 1000.00, 'email')
-           ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, phone = EXCLUDED.phone, city = EXCLUDED.city, active = true
+           VALUES ($1, $2, $3, $4, true, $5, $6, 1000.00, 'email')
+           ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, active = true
            RETURNING *`,
-          [fallback.name, cleanEmail, pwdHash, fallback.role]
+          [fallback.name, cleanEmail, pwdHash, fallback.role, fallback.phone || '', fallback.city || '']
         );
         const u = insRes.rows[0];
-        const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || '', walletBalance: 1000.00, createdAt: u.created_at };
+        const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: true, status: 'active', phone: u.phone || '', city: u.city || '', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || '', walletBalance: Number(u.wallet_balance || 1000.00), createdAt: u.created_at };
         const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
         return res.json({ success: true, token, user: normUser });
       } catch (insErr) {
         // Fallback transient response if DB write encounters temporary issue
-        const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
+        const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: fallback.phone || '', city: fallback.city || '', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
         const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
         return res.json({ success: true, token, user: normUser });
       }
@@ -866,7 +866,7 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
   } catch (err: any) {
     if (defaultCredentials[cleanEmail] && password === defaultCredentials[cleanEmail].pass) {
       const fallback = defaultCredentials[cleanEmail];
-      const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
+      const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: fallback.phone || '', city: fallback.city || '', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
       const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
       return res.json({ success: true, token, user: normUser });
     }
@@ -2407,9 +2407,9 @@ app.get('/api/delivery/riders', async (_req, res) => {
         id: `RIDER-${u.id}`,
         riderId: `RIDER-${u.id}`,
         name: riderName,
-        phone: u.phone || '+91 9908970908',
+        phone: u.phone || '',
         email: u.email || `rider${u.id}@sunotal.com`,
-        city: u.city || 'Vijayawada',
+        city: u.city || '',
         vehicle: 'Electric Bike',
         status: u.active ? 'ONLINE' : 'OFFLINE',
         walletBalance: Number(u.wallet_balance || 0),
@@ -2438,9 +2438,9 @@ app.get('/api/delivery/riders', async (_req, res) => {
         id: r.id || r.rider_id || `RIDER-${r.id}`,
         riderId: r.rider_id || `RIDER-${r.id}`,
         name: riderName,
-        phone: r.phone || '+91 9908970908',
-        email: r.email || 'rider@sunotal.com',
-        city: r.city || 'Bengaluru',
+        phone: r.phone || '',
+        email: r.email || '',
+        city: r.city || '',
         vehicle: r.vehicle || 'Electric Bike',
         status: r.status === 'completed' || r.status === 'ONLINE' || r.status === 'APPROVED' ? 'ONLINE' : 'OFFLINE',
         walletBalance: Number(r.wallet_balance || r.amount || 0),
