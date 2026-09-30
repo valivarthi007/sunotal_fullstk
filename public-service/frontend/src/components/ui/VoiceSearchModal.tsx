@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { Mic, MicOff, Globe, Sparkles, Loader2, Check } from "lucide-react";
+import { Mic, MicOff, Globe, Sparkles, Loader2, Check, Square, Volume2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,12 +25,13 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
   const [transcript, setTranscript] = useState("");
   const [processedQuery, setProcessedQuery] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<any>(null);
-  const silenceTimerRef = useRef<any>(null);
+  const timerRef = useRef<any>(null);
 
   const langLabels = {
     "en-IN": { name: "English", flag: "🇮🇳", sample: "Try saying: 'Fresh Tomato' or 'Spinach'" },
@@ -43,17 +44,15 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
       cleanupAudio();
       setTranscript("");
       setProcessedQuery("");
-      return;
+      setRecordingSeconds(0);
     }
-
-    startListening();
     return () => cleanupAudio();
-  }, [open, selectedLang]);
+  }, [open]);
 
   const cleanupAudio = () => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
 
     if (recognitionRef.current) {
@@ -82,8 +81,9 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
     setTranscript("");
     setProcessedQuery("");
     audioChunksRef.current = [];
+    setRecordingSeconds(0);
 
-    // 1. Initiate HTML5 MediaRecorder Audio Stream
+    // 1. Request Microphone Stream
     try {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -100,22 +100,36 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
 
         mediaRecorder.onstop = async () => {
           const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-          if (audioBlob.size > 0) {
-            await sendAudioToBackend(audioBlob);
-          }
+          await sendAudioToBackend(audioBlob);
         };
 
-        mediaRecorder.start();
+        // Start recording with 250ms timeslice chunks
+        mediaRecorder.start(250);
         setIsListening(true);
+
+        // Timer for recording length (Max 8s)
+        let seconds = 0;
+        timerRef.current = setInterval(() => {
+          seconds += 1;
+          setRecordingSeconds(seconds);
+          if (seconds >= 8) {
+            stopListening();
+          }
+        }, 1000);
+      } else {
+        toast.error("Microphone access is not supported in this browser environment.");
       }
     } catch (err: any) {
       console.warn("MediaRecorder mic access error:", err);
       if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        toast.error("Microphone permission denied. Please allow microphone access.");
+        toast.error("Microphone permission denied. Please click the mic icon and allow access in your browser address bar.");
+      } else {
+        toast.error("Unable to access microphone. Please check system settings.");
       }
+      setIsListening(false);
     }
 
-    // 2. Initiate SpeechRecognition for real-time live preview feedback (if supported)
+    // 2. Web Speech Recognition API (as immediate text preview feedback)
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       try {
@@ -123,10 +137,6 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
         recognition.continuous = false;
         recognition.interimResults = true;
         recognition.lang = selectedLang;
-
-        recognition.onstart = () => {
-          setIsListening(true);
-        };
 
         recognition.onresult = (event: any) => {
           let currentText = "";
@@ -138,27 +148,18 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
           }
         };
 
-        recognition.onerror = (event: any) => {
-          console.warn("Speech recognition warning:", event.error);
-        };
-
         recognitionRef.current = recognition;
         recognition.start();
       } catch (err) {
         console.warn("SpeechRecognition init warning:", err);
       }
     }
-
-    // Auto stop after 5 seconds of recording
-    silenceTimerRef.current = setTimeout(() => {
-      stopListening();
-    }, 5000);
   };
 
   const stopListening = () => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
@@ -179,47 +180,46 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
   const sendAudioToBackend = async (audioBlob: Blob) => {
     setIsProcessing(true);
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      reader.onloadend = async () => {
-        const base64Audio = reader.result as string;
-        try {
-          const res = await fetch(getApiUrl("/api/voice/transcribe"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              audioBase64: base64Audio,
-              text: transcript,
-              language: selectedLang.split("-")[0],
-            }),
-          });
+      let base64Audio = "";
+      if (audioBlob && audioBlob.size > 0) {
+        base64Audio = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = () => resolve(reader.result as string);
+        });
+      }
 
-          const data = await res.json();
-          const finalResult = data.query || data.rawText || transcript;
-          handleFinalResult(finalResult, data.rawText);
-        } catch (err) {
-          handleFinalResult(transcript, transcript);
-        } finally {
-          setIsProcessing(false);
-        }
-      };
+      const res = await fetch(getApiUrl("/api/voice/transcribe"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          audioBase64: base64Audio,
+          text: transcript,
+          language: selectedLang.split("-")[0],
+        }),
+      });
+
+      const data = await res.json();
+      const finalResult = data.query || data.rawText || transcript;
+      handleFinalResult(finalResult, data.rawText);
     } catch (err) {
-      setIsProcessing(false);
       handleFinalResult(transcript, transcript);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const handleFinalResult = (queryResult: string, rawSpoken?: string) => {
     const clean = (queryResult || rawSpoken || "").trim();
     if (!clean) {
-      toast.info("No speech detected. Please try speaking clearly into the mic.");
+      toast.info("No speech detected. Please tap the mic button and speak clearly into your microphone.");
       setIsListening(false);
       setIsProcessing(false);
       return;
     }
 
     setProcessedQuery(clean);
-    toast.success(`Voice recognized: "${clean}"`);
+    toast.success(`Voice Recognized: "${clean}"`);
 
     setTimeout(() => {
       onOpenChange(false);
@@ -236,7 +236,7 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
       <DialogContent className="sm:max-w-md bg-card border border-border shadow-2xl rounded-3xl p-6">
         <DialogHeader className="text-center space-y-1">
           <div className="flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400">
-            <Sparkles className="w-5 h-5 animate-pulse" />
+            <Sparkles className="w-5 h-5 animate-pulse text-amber-500" />
             <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
               Multilingual Voice Search
             </DialogTitle>
@@ -253,7 +253,10 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
               <button
                 key={lang}
                 type="button"
-                onClick={() => setSelectedLang(lang)}
+                onClick={() => {
+                  setSelectedLang(lang);
+                  if (isListening) stopListening();
+                }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                   selectedLang === lang
                     ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
@@ -267,41 +270,63 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
           </div>
 
           {/* Pulse Microphone Audio Visualizer Area */}
-          <div className="flex flex-col items-center justify-center py-6 relative">
+          <div className="flex flex-col items-center justify-center py-4 relative">
             <div className="relative">
               {isListening && (
                 <>
-                  <div className="absolute -inset-4 rounded-full bg-emerald-500/20 animate-ping" />
-                  <div className="absolute -inset-8 rounded-full bg-emerald-500/10 animate-pulse" />
+                  <div className="absolute -inset-4 rounded-full bg-emerald-500/30 animate-ping" />
+                  <div className="absolute -inset-8 rounded-full bg-emerald-500/15 animate-pulse" />
                 </>
               )}
               <button
                 type="button"
                 onClick={isListening ? stopListening : startListening}
-                className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-xl ${
+                className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-all shadow-xl ${
                   isListening
-                    ? "bg-gradient-to-tr from-emerald-600 to-teal-500 text-white scale-105"
-                    : "bg-muted text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600"
+                    ? "bg-gradient-to-tr from-emerald-600 to-teal-500 text-white scale-105 shadow-emerald-500/50"
+                    : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:scale-105 border-2 border-emerald-500/30"
                 }`}
               >
                 {isProcessing ? (
-                  <Loader2 className="w-9 h-9 animate-spin" />
+                  <Loader2 className="w-10 h-10 animate-spin" />
                 ) : isListening ? (
-                  <Mic className="w-9 h-9 animate-bounce" />
+                  <Mic className="w-10 h-10 animate-bounce text-white" />
                 ) : (
-                  <MicOff className="w-9 h-9" />
+                  <Mic className="w-10 h-10" />
                 )}
               </button>
             </div>
 
-            <div className="mt-4 text-center space-y-1">
-              <span className={`text-xs font-bold uppercase tracking-wider ${isListening ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                {isProcessing ? "Transcribing Voice..." : isListening ? `Listening in ${langLabels[selectedLang].name}...` : "Tap Mic to Speak"}
+            <div className="mt-5 text-center space-y-1">
+              <span className={`text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 ${isListening ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transcribing Speech...
+                  </>
+                ) : isListening ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                    Listening ({recordingSeconds}s)... Speak Now
+                  </>
+                ) : (
+                  "Tap Microphone to Speak"
+                )}
               </span>
               <p className="text-[11px] text-muted-foreground italic font-mono">
                 {langLabels[selectedLang].sample}
               </p>
             </div>
+
+            {/* Explicit Action Buttons */}
+            {isListening && (
+              <Button
+                type="button"
+                onClick={stopListening}
+                className="mt-3 bg-rose-600 hover:bg-rose-700 text-white text-xs rounded-xl px-4 py-1.5 flex items-center gap-1.5 shadow-md"
+              >
+                <Square className="w-3.5 h-3.5 fill-white" /> Stop & Search
+              </Button>
+            )}
           </div>
 
           {/* Live Transcript Display Box */}
@@ -312,7 +337,8 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
                 <span>Searching: "{processedQuery}"</span>
               </div>
             ) : transcript ? (
-              <p className="text-sm font-semibold text-foreground tracking-wide">
+              <p className="text-sm font-semibold text-foreground tracking-wide flex items-center justify-center gap-1.5">
+                <Volume2 className="w-4 h-4 text-emerald-600 shrink-0 animate-pulse" />
                 "{transcript}"
               </p>
             ) : (
@@ -342,4 +368,5 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
     </Dialog>
   );
 }
+
 
