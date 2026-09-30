@@ -211,7 +211,12 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
 
   const handleFinalResult = (queryResult: string, rawSpoken?: string) => {
     const clean = (queryResult || rawSpoken || "").trim();
-    if (!clean) return;
+    if (!clean) {
+      toast.info("No speech detected. Please try speaking clearly into the mic.");
+      setIsListening(false);
+      setIsProcessing(false);
+      return;
+    }
 
     setProcessedQuery(clean);
     toast.success(`Voice recognized: "${clean}"`);

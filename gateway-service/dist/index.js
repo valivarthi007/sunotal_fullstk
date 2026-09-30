@@ -685,8 +685,6 @@ async function initDatabase() {
 }
 if (process.argv.includes('--migrate-only')) {
     initDatabase().then(() => {
-        console.log('✅ Database migration check completed.');
-        process.exit(0);
     }).catch((err) => {
         console.warn('ℹ️ Database migration check finished (DB pending/offline):', err?.message || err);
         process.exit(0);
@@ -698,7 +696,8 @@ else {
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 app.use((0, cors_1.default)({ origin: true, credentials: true }));
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '50mb' }));
+app.use(express_1.default.urlencoded({ limit: '50mb', extended: true }));
 // Correlation ID
 app.use((req, res, next) => {
     const correlationId = req.headers['x-correlation-id'] || `sn-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
