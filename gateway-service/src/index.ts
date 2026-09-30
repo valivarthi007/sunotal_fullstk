@@ -8,8 +8,8 @@ import mongoose, { Schema } from 'mongoose';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { CostExplorerClient, GetCostAndUsageCommand } from '@aws-sdk/client-cost-explorer';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@127.0.0.1:5432/sunotal';
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/sunotal';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://sunotal:sunotal_pass_dev@postgres:5432/sunotal';
+const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://mongodb:27017/sunotal';
 const JWT_SECRET = process.env.JWT_SECRET || 'sunotal_jwt_secret_2026_super_secure';
 const AWS_REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || 'jcs-raju-sunotal-final';
@@ -31,14 +31,28 @@ try {
 // MONGODB CONNECTION & FLEXIBLE SCHEMAS
 let isMongoConnected = false;
 async function initMongo() {
-  try {
-    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 3000 });
-    isMongoConnected = true;
-    console.log('✅ Connected to MongoDB Document Database for Quick-Commerce Catalog & Supplies');
-  } catch (err: any) {
-    console.warn('⚠️ MongoDB connection notice (using PostgreSQL hybrid fallback):', err?.message || err);
-    isMongoConnected = false;
+  const urisToTry = Array.from(new Set([
+    process.env.MONGODB_URI,
+    process.env.MONGO_URI,
+    MONGODB_URI,
+    'mongodb://mongodb:27017/sunotal',
+    'mongodb://127.0.0.1:27017/sunotal',
+    'mongodb://localhost:27017/sunotal'
+  ].filter(Boolean))) as string[];
+
+  for (const uri of urisToTry) {
+    try {
+      await mongoose.connect(uri, { serverSelectionTimeoutMS: 2000 });
+      isMongoConnected = true;
+      console.log(`✅ Connected to MongoDB Document Database for Quick-Commerce Catalog at ${uri}`);
+      return;
+    } catch {
+      // Continue trying next URI candidate
+    }
   }
+
+  isMongoConnected = false;
+  console.info('ℹ️ MongoDB Document Store offline/optional; operating seamlessly on PostgreSQL primary schema.');
 }
 initMongo();
 
