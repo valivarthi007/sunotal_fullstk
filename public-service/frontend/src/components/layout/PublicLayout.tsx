@@ -17,6 +17,10 @@ import {
   ShoppingBag,
   LogOut,
   Heart,
+  Home,
+  Grid,
+  User,
+  ChevronRight,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { normalizeImageUrl, handleImageError } from "@/lib/image-utils";
@@ -263,6 +267,11 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
         </div>
+
+        {/* Mobile Search Bar */}
+        <div className="container mx-auto px-4 pt-2 lg:hidden">
+          <SearchAutocomplete />
+        </div>
       </header>
 
 
@@ -480,7 +489,97 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Main Content */}
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 pb-24 md:pb-0">{children}</main>
+
+      {/* Mobile Floating Cart Pill Bar (Blinkit / Zepto style) */}
+      {totalItems > 0 && !isOpen && (
+        <div className="md:hidden fixed bottom-16 left-3 right-3 z-40 animate-in slide-in-from-bottom duration-300">
+          <button
+            onClick={openCart}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl p-3 shadow-xl flex items-center justify-between border border-emerald-400/30 backdrop-blur-md active:scale-95 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-sm relative">
+                <ShoppingCart className="w-5 h-5 text-white" />
+                <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                  {totalItems}
+                </span>
+              </div>
+              <div className="text-left">
+                <p className="text-[11px] font-medium text-emerald-100 uppercase tracking-wider leading-none">
+                  {totalItems} {totalItems === 1 ? "Item" : "Items"} in Cart
+                </p>
+                <p className="font-black text-base leading-tight mt-0.5">{fmt(totalPrice)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 font-bold text-xs bg-white text-emerald-800 px-3 py-2 rounded-xl shadow-sm">
+              <span>View Cart</span>
+              <ChevronRight className="w-4 h-4" />
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-lg border-t border-border/70 px-2 py-1.5 flex items-center justify-around text-[10px] font-semibold text-muted-foreground shadow-lg pb-safe">
+        <Link
+          href="/"
+          className={cn(
+            "flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-all",
+            location === "/" ? "text-primary font-bold bg-primary/10" : "hover:text-foreground"
+          )}
+        >
+          <Home className="w-5 h-5" />
+          <span>Home</span>
+        </Link>
+
+        <Link
+          href="/products"
+          className={cn(
+            "flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-all",
+            location.startsWith("/products") ? "text-primary font-bold bg-primary/10" : "hover:text-foreground"
+          )}
+        >
+          <Grid className="w-5 h-5" />
+          <span>Categories</span>
+        </Link>
+
+        <Link
+          href="/orders"
+          className={cn(
+            "flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-all relative",
+            location === "/orders" ? "text-primary font-bold bg-primary/10" : "hover:text-foreground"
+          )}
+        >
+          <ShoppingBag className="w-5 h-5" />
+          <span>Orders</span>
+        </Link>
+
+        <Link
+          href="/wishlist"
+          className={cn(
+            "flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-all relative",
+            location === "/wishlist" ? "text-rose-500 font-bold bg-rose-500/10" : "hover:text-foreground"
+          )}
+        >
+          <Heart className={cn("w-5 h-5", totalWishlistItems > 0 && "fill-rose-500 text-rose-500")} />
+          <span>Wishlist</span>
+          {totalWishlistItems > 0 && (
+            <span className="absolute top-0.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full animate-ping" />
+          )}
+        </Link>
+
+        <button
+          onClick={() => (token && user ? setLocation("/profile") : setLocation("/login"))}
+          className={cn(
+            "flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-all",
+            location === "/profile" || location === "/login" ? "text-primary font-bold bg-primary/10" : "hover:text-foreground"
+          )}
+        >
+          <User className="w-5 h-5" />
+          <span>{token && user ? "Account" : "Login"}</span>
+        </button>
+      </nav>
 
       {/* Footer */}
       <footer className="bg-secondary text-secondary-foreground pt-16 pb-8 border-t-4 border-primary">

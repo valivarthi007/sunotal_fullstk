@@ -152,6 +152,29 @@
     @apply border-border;
   }
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased bg-background text-foreground min-h-screen;
+    -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* Mobile responsiveness & PWA polish */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .pb-safe {
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 768px) {
+  /* Ensure touch targets are at least 44px high */
+  input, button, select {
+    min-height: 44px;
+  }
+}
+
