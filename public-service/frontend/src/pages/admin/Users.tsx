@@ -139,12 +139,88 @@ export default function UsersAdmin() {
     });
   };
 
+  // Social Channel Stats
+  const googleCount = users.filter((u: any) => (u.loginProvider || u.login_provider) === "google").length;
+  const facebookCount = users.filter((u: any) => (u.loginProvider || u.login_provider) === "facebook").length;
+  const appleCount = users.filter((u: any) => (u.loginProvider || u.login_provider) === "apple").length;
+  const emailCount = users.filter((u: any) => !u.loginProvider || u.loginProvider === "email" || u.login_provider === "email").length;
+
+  const renderProviderBadge = (providerRaw?: string) => {
+    const provider = (providerRaw || "email").toLowerCase();
+    if (provider === "google") {
+      return (
+        <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1.5 w-fit">
+          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+          Google
+        </Badge>
+      );
+    }
+    if (provider === "facebook") {
+      return (
+        <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1.5 w-fit">
+          <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+          Facebook
+        </Badge>
+      );
+    }
+    if (provider === "apple") {
+      return (
+        <Badge className="bg-slate-900 dark:bg-slate-800 text-slate-100 border border-slate-700 text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1.5 w-fit">
+          <span className="w-2 h-2 rounded-full bg-white"></span>
+          Apple
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1.5 w-fit">
+        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+        Direct Email
+      </Badge>
+    );
+  };
+
   return (
     <AdminLayout>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-sidebar-foreground tracking-tight">Users</h1>
-          <p className="text-muted-foreground mt-1">Manage customers, admins, and account access.</p>
+          <h1 className="text-3xl font-bold text-sidebar-foreground tracking-tight">User Accounts & Identity</h1>
+          <p className="text-muted-foreground mt-1">Manage customer profiles, OAuth providers, and access control.</p>
+        </div>
+      </div>
+
+      {/* Social Auth Channel Metrics Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div className="bg-card border border-border p-4 rounded-2xl shadow-sm">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Total Users</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{users.length}</p>
+        </div>
+        <div className="bg-rose-500/5 border border-rose-500/20 p-4 rounded-2xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-rose-600 dark:text-rose-400 font-medium uppercase tracking-wider">Google OAuth</p>
+            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+          </div>
+          <p className="text-2xl font-bold text-rose-700 dark:text-rose-300 mt-1">{googleCount}</p>
+        </div>
+        <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-2xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wider">Facebook OAuth</p>
+            <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+          </div>
+          <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">{facebookCount}</p>
+        </div>
+        <div className="bg-slate-900/5 dark:bg-slate-800/40 border border-slate-700/30 p-4 rounded-2xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium uppercase tracking-wider">Apple ID</p>
+            <span className="w-2 h-2 rounded-full bg-slate-900 dark:bg-slate-100"></span>
+          </div>
+          <p className="text-2xl font-bold text-slate-800 dark:text-slate-200 mt-1">{appleCount}</p>
+        </div>
+        <div className="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-2xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wider">Email/Password</p>
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+          </div>
+          <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">{emailCount}</p>
         </div>
       </div>
 
@@ -197,19 +273,19 @@ export default function UsersAdmin() {
         </DialogContent>
       </Dialog>
 
-      <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col h-[calc(100vh-200px)]">
+      <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col h-[calc(100vh-260px)]">
         <div className="p-4 border-b flex items-center justify-between bg-accent/20">
           <div className="relative w-full md:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
-              placeholder="Search by name, email, phone..." 
+              placeholder="Search by name, email, provider, phone..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 bg-background h-10 rounded-xl"
             />
           </div>
           <div className="text-sm text-muted-foreground font-medium hidden sm:block">
-            {users?.length || 0} Registered Users
+            {users?.length || 0} Registered Accounts
           </div>
         </div>
 
@@ -217,7 +293,8 @@ export default function UsersAdmin() {
           <table className="w-full text-sm text-left relative">
             <thead className="bg-accent/40 text-muted-foreground font-medium sticky top-0 z-10 shadow-sm backdrop-blur-sm">
               <tr>
-                <th className="px-6 py-4 font-medium">User Details</th>
+                <th className="px-6 py-4 font-medium">User Profile</th>
+                <th className="px-6 py-4 font-medium">Auth Provider</th>
                 <th className="px-6 py-4 font-medium">Contact & Location</th>
                 <th className="px-6 py-4 font-medium text-center">Role</th>
                 <th className="px-6 py-4 font-medium text-center">Status</th>
@@ -226,20 +303,31 @@ export default function UsersAdmin() {
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading ? (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">Loading users...</td></tr>
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">Loading users...</td></tr>
               ) : users && users.length > 0 ? (
                 users.map((user: any) => (
                   <tr key={user.id} className="hover:bg-accent/30 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0 border border-primary/20">
-                          {(user?.name || user?.email || "U").charAt(0).toUpperCase()}
-                        </div>
+                        {user.avatarUrl || user.avatar_url || user.profile_photo_url ? (
+                          <img
+                            src={user.avatarUrl || user.avatar_url || user.profile_photo_url}
+                            alt={user.name}
+                            className="w-10 h-10 rounded-full object-cover shrink-0 border border-primary/20 shadow-xs"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0 border border-primary/20">
+                            {(user?.name || user?.email || "U").charAt(0).toUpperCase()}
+                          </div>
+                        )}
                         <div>
                           <p className="font-semibold text-foreground text-base leading-tight">{user?.name || user?.email || "User"}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">{user.email}</p>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {renderProviderBadge(user.loginProvider || user.login_provider)}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {user.phone ? <p className="font-medium text-foreground">{user.phone}</p> : <p className="text-xs italic">No phone</p>}
@@ -318,7 +406,7 @@ export default function UsersAdmin() {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan={5} className="px-6 py-20 text-center text-muted-foreground">
+                <tr><td colSpan={6} className="px-6 py-20 text-center text-muted-foreground">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <User className="w-8 h-8 text-muted-foreground/50" />
                     <p>No users found matching your search.</p>

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Navigation, ShieldCheck, Gift, User, Lock, Mail, Phone, Calendar } from "lucide-react";
 import { useState } from "react";
 import { useLocationState } from "@/lib/location-context";
+import { SocialLoginButtons } from "@/components/ui/SocialLoginButtons";
 
 const formSchema = z
   .object({
@@ -391,6 +392,8 @@ export default function Register() {
               </Button>
             </form>
           </Form>
+
+          <SocialLoginButtons />
 
           <div className="mt-8 pt-6 border-t border-border text-center">
             <p className="text-sm text-muted-foreground">

@@ -551,6 +551,9 @@ async function initDatabase() {
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS gender VARCHAR(20)`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(50)`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS login_provider VARCHAR(50) DEFAULT 'email'`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS social_id VARCHAR(255)`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT`,
       `ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_number VARCHAR(100)`,
       `ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id INT`,
       `ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_name VARCHAR(255)`,
@@ -790,6 +793,9 @@ app.get(['/api/auth/me', '/api/auth/user', '/api/users/me'], async (req, res) =>
         status: u.active === false ? 'inactive' : 'active',
         phone: u.phone || '',
         city: u.city || '',
+        loginProvider: u.login_provider || 'email',
+        socialId: u.social_id || '',
+        avatarUrl: u.avatar_url || u.profile_photo_url || '',
         walletBalance: Number(u.wallet_balance || 0),
         createdAt: u.created_at
       };
@@ -814,6 +820,9 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
 
     if (dbRes.rows && dbRes.rows.length > 0) {
       const u = dbRes.rows[0];
+      if (u.active === false) {
+        return res.status(403).json({ error: 'Account has been disabled by system administrator.' });
+      }
       let match = await bcrypt.compare(password, u.password_hash);
 
       if (!match && defaultCredentials[cleanEmail] && password === defaultCredentials[cleanEmail].pass) {
@@ -825,7 +834,7 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
       }
 
       if (match) {
-        const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role || 'admin', active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '9063636167', city: u.city || 'Vijayawada', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
+        const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role || 'admin', active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '9063636167', city: u.city || 'Vijayawada', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || u.profile_photo_url || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
         const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
         return res.json({ success: true, token, user: normUser });
       }
@@ -836,19 +845,19 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
       try {
         const pwdHash = await bcrypt.hash(fallback.pass, 10);
         const insRes = await gatewayPgPool.query(
-          `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
-           VALUES ($1, $2, $3, $4, true, '9063636167', 'Vijayawada', 1000.00)
+          `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance, login_provider)
+           VALUES ($1, $2, $3, $4, true, '9063636167', 'Vijayawada', 1000.00, 'email')
            ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, phone = EXCLUDED.phone, city = EXCLUDED.city, active = true
            RETURNING *`,
           [fallback.name, cleanEmail, pwdHash, fallback.role]
         );
         const u = insRes.rows[0];
-        const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', walletBalance: 1000.00, createdAt: u.created_at };
+        const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || '', walletBalance: 1000.00, createdAt: u.created_at };
         const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
         return res.json({ success: true, token, user: normUser });
       } catch (insErr) {
         // Fallback transient response if DB write encounters temporary issue
-        const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', walletBalance: 1000.00, createdAt: new Date() };
+        const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
         const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
         return res.json({ success: true, token, user: normUser });
       }
@@ -858,11 +867,76 @@ app.post(['/api/auth/login', '/api/admin/login', '/api/auth/admin/login'], async
   } catch (err: any) {
     if (defaultCredentials[cleanEmail] && password === defaultCredentials[cleanEmail].pass) {
       const fallback = defaultCredentials[cleanEmail];
-      const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', walletBalance: 1000.00, createdAt: new Date() };
+      const normUser = { id: '1', name: fallback.name, email: cleanEmail, role: fallback.role, active: true, status: 'active', phone: '9063636167', city: 'Vijayawada', loginProvider: 'email', socialId: '', avatarUrl: '', walletBalance: 1000.00, createdAt: new Date() };
       const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
       return res.json({ success: true, token, user: normUser });
     }
     return res.status(500).json({ error: 'Authentication service error', message: err?.message });
+  }
+});
+
+app.post('/api/auth/social-login', async (req, res) => {
+  const { provider, socialId, email, name, avatarUrl } = req.body || {};
+  if (!provider || !email) {
+    return res.status(400).json({ error: 'Provider and email are required for social login' });
+  }
+
+  const cleanEmail = String(email).trim().toLowerCase();
+  const cleanProvider = String(provider).trim().toLowerCase(); // google, facebook, apple
+  const displayName = name || cleanEmail.split('@')[0];
+  const photo = avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(displayName)}`;
+
+  try {
+    const existing = await gatewayPgPool.query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+
+    let userObj;
+    if (existing.rows && existing.rows.length > 0) {
+      const u = existing.rows[0];
+      if (u.active === false) {
+        return res.status(403).json({ error: 'Your social login account has been disabled by administrator.' });
+      }
+
+      const updateRes = await gatewayPgPool.query(
+        `UPDATE users 
+         SET login_provider = COALESCE(login_provider, $1), 
+             social_id = COALESCE(social_id, $2), 
+             avatar_url = COALESCE(avatar_url, $3),
+             profile_photo_url = COALESCE(profile_photo_url, $3)
+         WHERE id = $4 RETURNING *`,
+        [cleanProvider, socialId || '', photo, u.id]
+      );
+      userObj = updateRes.rows[0] || u;
+    } else {
+      const pwdHash = await bcrypt.hash(`social_oauth_${Date.now()}_${Math.random()}`, 10);
+      const insRes = await gatewayPgPool.query(
+        `INSERT INTO users (name, email, password_hash, role, active, login_provider, social_id, avatar_url, profile_photo_url, wallet_balance)
+         VALUES ($1, $2, $3, 'customer', true, $4, $5, $6, $6, 500.00)
+         RETURNING *`,
+        [displayName, cleanEmail, pwdHash, cleanProvider, socialId || '', photo]
+      );
+      userObj = insRes.rows[0];
+    }
+
+    const normUser = {
+      id: String(userObj.id),
+      name: userObj.name,
+      email: userObj.email,
+      role: userObj.role || 'customer',
+      active: userObj.active ?? true,
+      status: userObj.active === false ? 'inactive' : 'active',
+      loginProvider: userObj.login_provider || cleanProvider,
+      socialId: userObj.social_id || socialId || '',
+      avatarUrl: userObj.avatar_url || userObj.profile_photo_url || photo,
+      phone: userObj.phone || '',
+      city: userObj.city || '',
+      walletBalance: Number(userObj.wallet_balance || 500),
+      createdAt: userObj.created_at
+    };
+
+    const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
+    return res.json({ success: true, token, user: normUser });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Social authentication failed', message: err?.message });
   }
 });
 
@@ -873,13 +947,13 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const pwdHash = await bcrypt.hash(password, 10);
     const dbRes = await gatewayPgPool.query(
-      `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance)
-       VALUES ($1, $2, $3, $4, true, $5, $6, 500)
+      `INSERT INTO users (name, email, password_hash, role, active, phone, city, wallet_balance, login_provider)
+       VALUES ($1, $2, $3, $4, true, $5, $6, 500, 'email')
        ON CONFLICT (email) DO UPDATE SET name=EXCLUDED.name, role=EXCLUDED.role RETURNING *`,
       [name || cleanEmail.split('@')[0], cleanEmail, pwdHash, role || 'customer', phone || '', city || '']
     );
     const u = dbRes.rows[0];
-    const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: true, status: 'active', phone: u.phone || '', city: u.city || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
+    const normUser = { id: String(u.id), name: u.name, email: u.email, role: u.role, active: true, status: 'active', phone: u.phone || '', city: u.city || '', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at };
     const token = signJwtNative({ id: normUser.id, email: normUser.email, role: normUser.role }, JWT_SECRET);
     return res.status(201).json({ success: true, token, user: normUser });
   } catch (err: any) {
@@ -891,7 +965,7 @@ app.get(['/api/users', '/api/admin/users'], async (_req, res) => {
   try {
     const dbRes = await gatewayPgPool.query('SELECT * FROM users ORDER BY id DESC');
     return res.json(dbRes.rows.map(u => ({
-      id: String(u.id), name: u.name, email: u.email, role: u.role, active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '', city: u.city || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at
+      id: String(u.id), name: u.name, email: u.email, role: u.role, active: u.active ?? true, status: u.active === false ? 'inactive' : 'active', phone: u.phone || '', city: u.city || '', loginProvider: u.login_provider || 'email', socialId: u.social_id || '', avatarUrl: u.avatar_url || u.profile_photo_url || '', walletBalance: Number(u.wallet_balance || 0), createdAt: u.created_at
     })));
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch users', message: err?.message });

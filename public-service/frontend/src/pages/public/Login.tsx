@@ -9,6 +9,7 @@ import { useLoginUser, getGetCurrentUserQueryKey } from "@workspace/api-client-r
 import { toast } from "sonner";
 import { ArrowLeft, User } from "lucide-react";
 import { queryClient } from "@/App";
+import { SocialLoginButtons } from "@/components/ui/SocialLoginButtons";
 
 const formSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -98,6 +99,8 @@ export default function Login() {
               </Button>
             </form>
           </Form>
+
+          <SocialLoginButtons />
 
           <div className="mt-8 pt-6 border-t text-center space-y-3">
             <p className="text-sm text-muted-foreground">
