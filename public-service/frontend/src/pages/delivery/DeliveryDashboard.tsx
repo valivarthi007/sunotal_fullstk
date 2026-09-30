@@ -819,12 +819,12 @@ export default function DeliveryDashboard() {
         onOpenChange={setShowRiderChat}
         orderId={acceptedOrder?.numericId || acceptedOrder?.id || "1"}
         orderNumber={acceptedOrder?.id ? `ORD-${acceptedOrder.id}` : "ORD-7842"}
-        riderName={riderUser?.name || "Raju Kumar"}
-        riderPhone={riderUser?.phone || "9876543210"}
-        riderVehicle={riderUser?.vehicleNumber || "AP 39 EV 4021"}
+        riderName={riderUser?.name || "Assigned Express Rider"}
+        riderPhone={riderUser?.phone || ""}
+        riderVehicle={riderUser?.vehicleNumber || "Electric Delivery EV"}
         currentUserRole="rider"
         currentUserName={riderUser?.name || "Delivery Partner"}
-        currentUserId={String(riderUser?.id || "RIDER-101")}
+        currentUserId={String(riderUser?.id || "1")}
       />
     </DeliveryLayout>
   );

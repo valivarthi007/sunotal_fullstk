@@ -3230,7 +3230,7 @@ app.get('/api/admin/ledger', async (req, res) => {
 app.get(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res) => {
   const userId = req.params.userId ? String(req.params.userId) : String(req.query.userId || '1');
   try {
-    const dbRes = await gatewayPgPool.query('SELECT * FROM user_addresses WHERE user_id::text = $1 OR user_id = 1 ORDER BY is_default DESC, id DESC', [userId]);
+    const dbRes = await gatewayPgPool.query('SELECT * FROM user_addresses WHERE user_id::text = $1 ORDER BY is_default DESC, id DESC', [userId]);
     return res.json(dbRes.rows.map(a => ({
       id: a.id,
       userId: a.user_id,

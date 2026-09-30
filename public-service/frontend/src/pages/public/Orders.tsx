@@ -890,9 +890,9 @@ export default function Orders() {
           onOpenChange={(open) => !open && setChatOrder(null)}
           orderId={chatOrder?.id || ""}
           orderNumber={chatOrder?.orderNumber}
-          riderName={(chatOrder as any)?.riderName || "Raju Kumar"}
-          riderPhone={(chatOrder as any)?.riderPhone || "9876543210"}
-          riderVehicle={(chatOrder as any)?.riderVehicle || "AP 39 EV 4021"}
+          riderName={(chatOrder as any)?.riderName || chatOrder?.driverName || "Assigned Express Rider"}
+          riderPhone={(chatOrder as any)?.riderPhone || chatOrder?.driverPhone || ""}
+          riderVehicle={(chatOrder as any)?.riderVehicle || chatOrder?.vehicleNo || "Electric Delivery EV"}
           currentUserRole="user"
           currentUserName={user?.name || "Customer"}
         />

@@ -3,7 +3,17 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Key, ExternalLink, ShieldCheck } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface SocialLoginButtonsProps {
   onSuccess?: () => void;
@@ -15,27 +25,50 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
   const queryClient = useQueryClient();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
 
-  // Saved Client IDs from localStorage or env
-  const [googleClientId] = useState(
-    () => localStorage.getItem("VITE_GOOGLE_CLIENT_ID") || (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || ""
-  );
-  const [facebookAppId] = useState(
-    () => localStorage.getItem("VITE_FACEBOOK_APP_ID") || (import.meta as any).env?.VITE_FACEBOOK_APP_ID || ""
-  );
+  // Server-fetched API Keys
+  const [serverGoogleKey, setServerGoogleKey] = useState("");
+  const [serverFacebookKey, setServerFacebookKey] = useState("");
 
-  const handleSocialAuth = async (provider: "google" | "facebook") => {
+  // Prompt Modal state if keys aren't in env
+  const [showPromptModal, setShowPromptModal] = useState(false);
+  const [targetProvider, setTargetProvider] = useState<"google" | "facebook">("google");
+  const [inputKey, setInputKey] = useState("");
+
+  // Saved Client IDs from localStorage or env
+  const googleClientId =
+    serverGoogleKey ||
+    localStorage.getItem("VITE_GOOGLE_CLIENT_ID") ||
+    (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
+    "";
+
+  const facebookAppId =
+    serverFacebookKey ||
+    localStorage.getItem("VITE_FACEBOOK_APP_ID") ||
+    (import.meta as any).env?.VITE_FACEBOOK_APP_ID ||
+    "";
+
+  // Fetch backend social-config on mount
+  useEffect(() => {
+    fetch("/api/auth/social-config")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.googleClientId) setServerGoogleKey(data.googleClientId);
+        if (data.facebookAppId) setServerFacebookKey(data.facebookAppId);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSocialAuth = async (provider: "google" | "facebook", overrideKey?: string) => {
     setLoadingProvider(provider);
     const redirectUri = window.location.origin;
 
-    let clientId = "";
-    if (provider === "google") clientId = googleClientId;
-    else if (provider === "facebook") clientId = facebookAppId;
+    let clientId = overrideKey || (provider === "google" ? googleClientId : facebookAppId);
 
     if (!clientId) {
+      setTargetProvider(provider);
+      setInputKey("");
+      setShowPromptModal(true);
       setLoadingProvider(null);
-      toast.info(`${provider.toUpperCase()} Sign-In Notice`, {
-        description: `${provider.charAt(0).toUpperCase() + provider.slice(1)} sign-in is currently being configured by system administrator. Please sign in using your Email & Password.`,
-      });
       return;
     }
 
@@ -67,7 +100,7 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
       );
 
       toast.info(`Opening ${provider.toUpperCase()} Consent Screen...`, {
-        description: "Complete login in the popup window.",
+        description: "Complete sign-in in the pop-up window.",
       });
 
       const timer = setInterval(async () => {
@@ -82,6 +115,23 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
       });
       setLoadingProvider(null);
     }
+  };
+
+  const saveKeyAndLaunch = () => {
+    const trimmed = inputKey.trim();
+    if (!trimmed) {
+      toast.error(`Please enter your ${targetProvider.toUpperCase()} Key`);
+      return;
+    }
+
+    if (targetProvider === "google") {
+      localStorage.setItem("VITE_GOOGLE_CLIENT_ID", trimmed);
+    } else {
+      localStorage.setItem("VITE_FACEBOOK_APP_ID", trimmed);
+    }
+
+    setShowPromptModal(false);
+    handleSocialAuth(targetProvider, trimmed);
   };
 
   // Listen for OAuth postMessage or Hash Token redirects
@@ -181,6 +231,72 @@ export function SocialLoginButtons({ onSuccess, className = "" }: SocialLoginBut
       <div className="flex items-center justify-center text-[10px] text-slate-400 pt-1 font-mono">
         <span>🔒 Secure OAuth 2.0 Encryption</span>
       </div>
+
+      {/* Dynamic Key Input Prompt Modal */}
+      <Dialog open={showPromptModal} onOpenChange={setShowPromptModal}>
+        <DialogContent className="sm:max-w-[450px] bg-card border border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <Key className="w-5 h-5 text-emerald-600" />
+              Enter {targetProvider.toUpperCase()} Key to Proceed
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              To launch real {targetProvider.toUpperCase()} Sign-In popups for your site, paste your {targetProvider === "google" ? "Client ID" : "App ID"} below.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold flex items-center justify-between">
+                <span>{targetProvider === "google" ? "Google Client ID" : "Facebook App ID"}</span>
+                <a
+                  href={
+                    targetProvider === "google"
+                      ? "https://console.cloud.google.com/apis/credentials"
+                      : "https://developers.facebook.com/apps/"
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5"
+                >
+                  Get Key <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+              </Label>
+              <Input
+                placeholder={
+                  targetProvider === "google"
+                    ? "1234567890-xyz.apps.googleusercontent.com"
+                    : "1092837465019283"
+                }
+                value={inputKey}
+                onChange={(e) => setInputKey(e.target.value)}
+                className="font-mono text-xs rounded-xl"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPromptModal(false)}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={saveKeyAndLaunch}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1 rounded-xl px-4"
+            >
+              <ShieldCheck className="w-4 h-4" /> Save & Launch Login
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

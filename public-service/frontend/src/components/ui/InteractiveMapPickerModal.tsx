@@ -5,8 +5,10 @@ import { Input } from "./input";
 import { Label } from "./label";
 import { getMapProvider } from "../../lib/providers/map/map-provider.factory";
 import { GeocodeResult } from "../../lib/providers/map/map-provider.interface";
-import { UserAddressApi, fetchUserAddresses, saveUserAddress } from "@/lib/api-client/delivery";
+import { UserAddressApi, saveUserAddress } from "@/lib/api-client/delivery";
 import { useLocationState } from "@/lib/location-context";
+import { useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { getApiUrl } from "@/lib/api-client";
 import { toast } from "sonner";
 
 interface InteractiveMapPickerModalProps {
@@ -29,6 +31,7 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
   onClose,
   onSelectAddress,
 }) => {
+  const { data: user } = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), retry: false } });
   const { location: userLoc, detectLocation } = useLocationState();
   const [activeTab, setActiveTab] = useState<"map" | "saved">("map");
   const [isDetectingGps, setIsDetectingGps] = useState(false);
@@ -83,45 +86,61 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
         });
       }
 
-      // Load addresses from local storage (Profile.tsx format) to sync with Profile saves
-      try {
-        const userStr = localStorage.getItem("sunotal_user");
-        let userId = "guest";
-        if (userStr) {
-          try { userId = JSON.parse(userStr).id; } catch (e) {}
+      // Load addresses directly from user API / synced local storage
+      const userId = String(user?.id || "1");
+      const loadAddresses = async () => {
+        try {
+          const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+          const res = await fetch(getApiUrl(`/api/users/${userId}/addresses`), {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              const mapped: UserAddressApi[] = data.map((a: any, idx: number) => ({
+                id: a.id,
+                userId: String(a.user_id || a.userId || userId),
+                tag: a.label || a.tag || "home",
+                houseNo: a.street_address || a.houseNo || a.line1 || "",
+                street: a.landmark || a.street || a.line2 || "",
+                city: a.city || "",
+                state: a.state || "State",
+                pincode: a.pincode || "560001",
+                latitude: a.latitude ? Number(a.latitude) : 0,
+                longitude: a.longitude ? Number(a.longitude) : 0,
+                isDefault: a.isDefault ?? a.is_default ?? idx === 0,
+                createdAt: a.created_at || new Date().toISOString()
+              }));
+              setSavedAddresses(mapped);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn("API address fetch in modal failed, falling back to storage", e);
         }
-        
-        const raw = localStorage.getItem(`user_addresses_${userId}`);
-        if (raw) {
+        try {
+          const raw = localStorage.getItem(`user_addresses_${userId}`) || "[]";
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            const mapped: UserAddressApi[] = parsed.map((a: any) => ({
-              id: a.id || Math.random(),
-              userId: a.userId || userId,
-              tag: a.label || "other",
+            const mapped: UserAddressApi[] = parsed.map((a: any, idx: number) => ({
+              id: a.id || idx + 1,
+              userId: userId,
+              tag: a.label || "home",
               houseNo: a.line1 || "",
               street: a.line2 || "",
               city: a.city || "",
               state: "State",
-              pincode: "000000",
+              pincode: "560001",
               latitude: 0,
               longitude: 0,
-              isDefault: false,
+              isDefault: a.isDefault ?? idx === 0,
               createdAt: new Date().toISOString()
             }));
             setSavedAddresses(mapped);
           }
-        } else {
-          // Fallback to API if no local storage
-          fetchUserAddresses()
-            .then((data) => {
-              if (Array.isArray(data) && data.length > 0) setSavedAddresses(data);
-            })
-            .catch((err) => console.error("Failed to load saved addresses", err));
-        }
-      } catch (err) {
-        console.error("Failed to parse local addresses", err);
-      }
+        } catch {}
+      };
+      loadAddresses();
 
       mapProvider.loadSdk().then((success) => {
         setMapLoaded(success);
@@ -351,6 +370,46 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSetDefaultFromModal = async (addrId: number | string) => {
+    const updated = savedAddresses.map((a) => ({
+      ...a,
+      isDefault: String(a.id) === String(addrId),
+    }));
+    setSavedAddresses(updated);
+
+    const target = updated.find((a) => String(a.id) === String(addrId));
+    const userId = String(user?.id || "1");
+
+    // Sync to Profile local storage format
+    const profileAddrList = updated.map((a) => ({
+      id: String(a.id),
+      label: a.tag,
+      line1: a.houseNo,
+      line2: a.street,
+      city: a.city,
+      isDefault: a.isDefault,
+    }));
+    localStorage.setItem(`user_addresses_${userId}`, JSON.stringify(profileAddrList));
+    if (target) {
+      localStorage.setItem(`sunotal_default_address_${userId}`, JSON.stringify(target));
+    }
+
+    // Sync to PostgreSQL DB
+    if (user?.id) {
+      try {
+        const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+        await fetch(getApiUrl(`/api/users/${user.id}/addresses/${addrId}/default`), {
+          method: "PATCH",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+      } catch (e) {
+        console.warn("Set default address API call failed:", e);
+      }
+    }
+
+    toast.success(`"${target?.tag || "Address"}" set as default delivery address`);
   };
 
   const handleSelectSaved = (saved: UserAddressApi) => {
@@ -600,28 +659,60 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
                   <p className="text-[11px] text-muted-foreground mt-1">Pin your location on the map to save an address.</p>
                 </div>
               ) : (
-                savedAddresses.map((addr) => (
-                  <div
-                    key={addr.id}
-                    onClick={() => handleSelectSaved(addr)}
-                    className="p-4 border rounded-2xl bg-card hover:border-emerald-600 cursor-pointer transition-all flex items-start justify-between group"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                          {addr.tag}
-                        </span>
-                        {addr.isDefault && <span className="text-[10px] text-emerald-600 font-bold">DEFAULT</span>}
+                savedAddresses.map((addr, idx) => {
+                  const isDef = addr.isDefault || (idx === 0 && !savedAddresses.some((x) => x.isDefault));
+                  return (
+                    <div
+                      key={addr.id}
+                      className={`p-4 border rounded-2xl bg-card hover:border-emerald-600 transition-all flex items-start justify-between group ${
+                        isDef ? "border-emerald-600/50 bg-emerald-500/5" : ""
+                      }`}
+                    >
+                      <div
+                        className="space-y-1 flex-1 cursor-pointer"
+                        onClick={() => handleSelectSaved(addr)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                            {addr.tag}
+                          </span>
+                          {isDef ? (
+                            <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                              <Check className="w-3 h-3" /> DEFAULT
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSetDefaultFromModal(addr.id);
+                              }}
+                              className="text-[10px] font-bold text-emerald-600 hover:underline transition-all"
+                            >
+                              Set as Default
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-xs font-bold text-foreground mt-1">
+                          {addr.houseNo}
+                          {addr.street ? `, ${addr.street}` : ""}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {addr.city}, {addr.state} - {addr.pincode}
+                        </p>
                       </div>
-                      <p className="text-xs font-bold text-foreground">{addr.houseNo}, {addr.street}</p>
-                      <p className="text-[11px] text-muted-foreground">{addr.city}, {addr.state} - {addr.pincode}</p>
-                    </div>
 
-                    <Button size="sm" variant="ghost" className="text-emerald-600 group-hover:bg-emerald-50 text-xs">
-                      Deliver Here
-                    </Button>
-                  </div>
-                ))
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSelectSaved(addr)}
+                        className="text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 border-emerald-600/30 text-xs font-bold rounded-xl ml-2 shrink-0"
+                      >
+                        Deliver Here
+                      </Button>
+                    </div>
+                  );
+                })
               )}
             </div>
           )}
