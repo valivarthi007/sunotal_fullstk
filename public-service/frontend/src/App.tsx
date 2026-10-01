@@ -50,6 +50,7 @@ const DeliveryRegistration = lazy(() => import("@/pages/delivery/DeliveryRegistr
 const DeliveryLogin = lazy(() => import("@/pages/delivery/DeliveryLogin"));
 const DeliveryEarnings = lazy(() => import("@/pages/delivery/Earnings"));
 const SupportPortal = lazy(() => import("@/pages/support/SupportPortal"));
+const WarehouseApp = lazy(() => import("@/pages/warehouse/WarehouseApp"));
 
 import NotFound from "@/pages/not-found";
 import Redirect from "@/lib/redirect";
@@ -342,6 +343,10 @@ function SubdomainRouter() {
         </Route>
         <Route path="/delivery/:rest*">
           {isLocalhost ? <DeliveryRouteGuard /> : <DomainRestrictionNotice portalName="Delivery Partner Portal" targetDomain="delivery-sunotal.automateuniverse.space" />}
+        </Route>
+        <Route path="/warehouse-app" component={WarehouseApp} />
+        <Route path="/warehouse/:rest*">
+          {isLocalhost ? <WarehouseApp /> : <DomainRestrictionNotice portalName="Warehouse WMS Application" targetDomain="warehouse-sunotal.automateuniverse.space" />}
         </Route>
 
         <Route component={NotFound} />

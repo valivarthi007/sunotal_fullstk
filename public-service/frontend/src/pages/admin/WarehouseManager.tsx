@@ -168,6 +168,27 @@ export const WarehouseManager: React.FC = () => {
           </div>
         </div>
 
+        {/* Dedicated WMS Floor Application Banner */}
+        <div className="p-4 bg-slate-900 border border-slate-800 text-white rounded-2xl flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-slate-950 font-black text-lg">
+              🏢
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-white">Dark Store Operational Floor App (WMS)</h4>
+              <p className="text-xs text-slate-400">Launch picker app for FEFO putaway, weight checks, rider staging & chain of custody audit logs.</p>
+            </div>
+          </div>
+          <a
+            href="/warehouse-app"
+            target="_blank"
+            rel="noreferrer"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-md shrink-0"
+          >
+            Launch WMS Floor App ↗
+          </a>
+        </div>
+
         {/* Warehouse Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {warehouses.map((wh) => (

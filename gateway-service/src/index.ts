@@ -518,6 +518,98 @@ async function initDatabase() {
       CREATE EXTENSION IF NOT EXISTS pg_trgm;
       CREATE INDEX IF NOT EXISTS idx_products_trgm_name ON products USING gin (name gin_trgm_ops);
 
+      -- Dedicated WMS Schema & Tables
+      CREATE SCHEMA IF NOT EXISTS wms;
+
+      CREATE TABLE IF NOT EXISTS wms.chain_of_custody_logs (
+        id BIGSERIAL PRIMARY KEY,
+        order_id VARCHAR(100),
+        asn_number VARCHAR(100),
+        product_id INTEGER,
+        batch_number VARCHAR(100),
+        actor_role VARCHAR(50) NOT NULL,
+        actor_id VARCHAR(100) NOT NULL,
+        actor_name VARCHAR(255) NOT NULL,
+        action VARCHAR(100) NOT NULL,
+        quantity NUMERIC(10, 2) DEFAULT 1,
+        bin_code VARCHAR(100),
+        measured_weight_grams NUMERIC(10, 2),
+        verification_token VARCHAR(100),
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_custody_order ON wms.chain_of_custody_logs (order_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_custody_actor ON wms.chain_of_custody_logs (actor_role, actor_id);
+
+      CREATE TABLE IF NOT EXISTS wms.putaway_bins (
+        id SERIAL PRIMARY KEY,
+        warehouse_id INT DEFAULT 1,
+        bin_code VARCHAR(100) UNIQUE NOT NULL,
+        zone_type VARCHAR(50) DEFAULT 'rack',
+        sequence_order INT DEFAULT 1,
+        capacity_units INT DEFAULT 500,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS wms.inventory_batches (
+        id SERIAL PRIMARY KEY,
+        product_id INT NOT NULL,
+        product_name VARCHAR(255) NOT NULL,
+        bin_id INT,
+        bin_code VARCHAR(100) DEFAULT 'A-01-R1',
+        batch_number VARCHAR(100) NOT NULL,
+        expiry_date DATE NOT NULL,
+        mfg_date DATE,
+        initial_qty NUMERIC(10, 2) DEFAULT 100,
+        current_qty NUMERIC(10, 2) DEFAULT 100,
+        cost_price NUMERIC(10, 2) DEFAULT 0,
+        markdown_discount_percent NUMERIC(5, 2) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS wms.asn_purchase_orders (
+        id SERIAL PRIMARY KEY,
+        asn_number VARCHAR(100) UNIQUE NOT NULL,
+        vendor_id INT,
+        vendor_name VARCHAR(255) NOT NULL,
+        warehouse_id INT DEFAULT 1,
+        expected_crates INT DEFAULT 10,
+        received_crates INT DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'expected',
+        cold_chain_passed BOOLEAN DEFAULT TRUE,
+        intake_temp_celsius NUMERIC(4, 1),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS wms.picking_tasks (
+        id SERIAL PRIMARY KEY,
+        order_id VARCHAR(100) UNIQUE NOT NULL,
+        warehouse_id INT DEFAULT 1,
+        picker_user_id VARCHAR(100),
+        picker_name VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'unassigned',
+        total_expected_weight_grams NUMERIC(10, 2) DEFAULT 0,
+        actual_verified_weight_grams NUMERIC(10, 2) DEFAULT 0,
+        staging_slot VARCHAR(50),
+        handover_otp VARCHAR(10),
+        started_at TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS wms.chiller_telemetry (
+        id SERIAL PRIMARY KEY,
+        warehouse_id INT DEFAULT 1,
+        unit_name VARCHAR(100) NOT NULL,
+        temperature_celsius NUMERIC(4, 1) NOT NULL,
+        humidity_percent NUMERIC(4, 1),
+        alert_triggered BOOLEAN DEFAULT FALSE,
+        logged_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
 
       CREATE TABLE IF NOT EXISTS inventory (
         id SERIAL PRIMARY KEY,
@@ -4450,6 +4542,212 @@ app.patch('/api/chat/messages/read/:orderId', async (req, res) => {
     return res.json({ success: true, orderId });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to mark messages as read', message: err?.message });
+  }
+});
+
+// WMS MULTI-ROLE CHAIN OF CUSTODY & WAREHOUSE ENGINE ENDPOINTS
+app.get('/api/wms/custody/logs', async (req, res) => {
+  const { orderId, actorRole, batchNumber } = req.query || {};
+  try {
+    let query = 'SELECT * FROM wms.chain_of_custody_logs WHERE 1=1';
+    const params: any[] = [];
+    if (orderId) {
+      params.push(String(orderId));
+      query += ` AND order_id = $${params.length}`;
+    }
+    if (actorRole) {
+      params.push(String(actorRole));
+      query += ` AND actor_role = $${params.length}`;
+    }
+    if (batchNumber) {
+      params.push(String(batchNumber));
+      query += ` AND batch_number = $${params.length}`;
+    }
+    query += ' ORDER BY id DESC LIMIT 100';
+
+    const dbRes = await gatewayPgPool.query(query, params);
+    return res.json({ success: true, count: dbRes.rows.length, logs: dbRes.rows });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch chain of custody logs', message: err?.message });
+  }
+});
+
+app.post('/api/wms/custody/log', async (req, res) => {
+  const { orderId, asnNumber, productId, batchNumber, actorRole, actorId, actorName, action, quantity, binCode, measuredWeightGrams, verificationToken, metadata } = req.body || {};
+  if (!actorRole || !actorId || !action) {
+    return res.status(400).json({ error: 'actorRole, actorId, and action are required' });
+  }
+  try {
+    const insRes = await gatewayPgPool.query(
+      `INSERT INTO wms.chain_of_custody_logs (
+        order_id, asn_number, product_id, batch_number, actor_role, actor_id, actor_name, action, quantity, bin_code, measured_weight_grams, verification_token, metadata
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING *`,
+      [
+        orderId || null, asnNumber || null, productId || null, batchNumber || 'DEFAULT_BATCH',
+        actorRole, String(actorId), actorName || actorRole, action, quantity || 1,
+        binCode || null, measuredWeightGrams || null, verificationToken || null, JSON.stringify(metadata || {})
+      ]
+    );
+    const newLog = insRes.rows[0];
+    broadcastRealtimeEvent({ type: 'WMS_CUSTODY_LOGGED', path: '/api/wms/custody/log', method: 'POST', data: newLog });
+    return res.json({ success: true, log: newLog });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to log custody event', message: err?.message });
+  }
+});
+
+app.get('/api/wms/asn', async (req, res) => {
+  try {
+    const dbRes = await gatewayPgPool.query('SELECT * FROM wms.asn_purchase_orders ORDER BY id DESC');
+    return res.json({ success: true, asns: dbRes.rows });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch ASNs', message: err?.message });
+  }
+});
+
+app.post('/api/wms/asn/receive', async (req, res) => {
+  const { asnNumber, receivedCrates, coldChainPassed, intakeTempCelsius, receivedByUserId, receivedByName } = req.body || {};
+  if (!asnNumber) return res.status(400).json({ error: 'asnNumber is required' });
+  try {
+    const updRes = await gatewayPgPool.query(
+      `UPDATE wms.asn_purchase_orders
+       SET received_crates = GREATEST(0, $1),
+           status = CASE WHEN $1 >= expected_crates THEN 'received' ELSE 'discrepancy' END,
+           cold_chain_passed = $2,
+           intake_temp_celsius = $3
+       WHERE asn_number = $4
+       RETURNING *`,
+      [Number(receivedCrates || 0), coldChainPassed !== false, intakeTempCelsius || 4.0, String(asnNumber)]
+    );
+
+    if (!updRes.rows.length) return res.status(404).json({ error: 'ASN order not found' });
+    const updatedAsn = updRes.rows[0];
+
+    await gatewayPgPool.query(
+      `INSERT INTO wms.chain_of_custody_logs (asn_number, actor_role, actor_id, actor_name, action, quantity, metadata)
+       VALUES ($1, 'warehouse_manager', $2, $3, 'dock_received', $4, $5)`,
+      [
+        String(asnNumber), String(receivedByUserId || 'wh_mgr_1'), receivedByName || 'Warehouse Manager',
+        Number(receivedCrates || 0), JSON.stringify({ coldChainPassed, intakeTempCelsius })
+      ]
+    );
+
+    return res.json({ success: true, asn: updatedAsn });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to inward ASN', message: err?.message });
+  }
+});
+
+app.get('/api/wms/batches', async (req, res) => {
+  try {
+    const dbRes = await gatewayPgPool.query(
+      'SELECT * FROM wms.inventory_batches ORDER BY expiry_date ASC, current_qty DESC'
+    );
+    return res.json({ success: true, batches: dbRes.rows });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch inventory batches', message: err?.message });
+  }
+});
+
+app.post('/api/wms/batches/markdown', async (req, res) => {
+  const { batchId, discountPercent, appliedByUserId, appliedByName } = req.body || {};
+  if (!batchId) return res.status(400).json({ error: 'batchId is required' });
+  try {
+    const updRes = await gatewayPgPool.query(
+      'UPDATE wms.inventory_batches SET markdown_discount_percent = $1 WHERE id = $2 RETURNING *',
+      [Number(discountPercent || 20), Number(batchId)]
+    );
+    if (!updRes.rows.length) return res.status(404).json({ error: 'Batch not found' });
+    const batch = updRes.rows[0];
+
+    await gatewayPgPool.query(
+      `INSERT INTO wms.chain_of_custody_logs (batch_number, product_id, actor_role, actor_id, actor_name, action, metadata)
+       VALUES ($1, $2, 'warehouse_manager', $3, $4, 'dynamic_markdown_applied', $5)`,
+      [
+        batch.batch_number, batch.product_id, String(appliedByUserId || 'mgr_1'),
+        appliedByName || 'Warehouse Manager', JSON.stringify({ discountPercent })
+      ]
+    );
+
+    return res.json({ success: true, batch });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to apply batch markdown', message: err?.message });
+  }
+});
+
+app.get('/api/wms/picking/tasks', async (req, res) => {
+  try {
+    const dbRes = await gatewayPgPool.query(`
+      SELECT pt.*, o.order_number, o.user_name as "customerName", o.delivery_address, o.status as "orderStatus"
+      FROM wms.picking_tasks pt
+      JOIN orders o ON String(pt.order_id) = String(o.id)
+      ORDER BY pt.id DESC
+    `);
+    return res.json({ success: true, tasks: dbRes.rows });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch picking tasks', message: err?.message });
+  }
+});
+
+app.post('/api/wms/picking/verify-weight', async (req, res) => {
+  const { orderId, measuredWeightGrams, pickerUserId, pickerName } = req.body || {};
+  if (!orderId || !measuredWeightGrams) {
+    return res.status(400).json({ error: 'orderId and measuredWeightGrams are required' });
+  }
+  try {
+    const updRes = await gatewayPgPool.query(
+      `UPDATE wms.picking_tasks
+       SET actual_verified_weight_grams = $1, status = 'weighed', completed_at = NOW()
+       WHERE order_id = $2
+       RETURNING *`,
+      [Number(measuredWeightGrams), String(orderId)]
+    );
+
+    await gatewayPgPool.query(
+      `INSERT INTO wms.chain_of_custody_logs (order_id, actor_role, actor_id, actor_name, action, measured_weight_grams)
+       VALUES ($1, 'picker', $2, $3, 'weight_verified', $4)`,
+      [String(orderId), String(pickerUserId || 'picker_1'), pickerName || 'Warehouse Picker', Number(measuredWeightGrams)]
+    );
+
+    return res.json({ success: true, task: updRes.rows[0] || null });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to verify weight', message: err?.message });
+  }
+});
+
+app.get('/api/wms/telemetry', async (req, res) => {
+  try {
+    const dbRes = await gatewayPgPool.query(
+      'SELECT * FROM wms.chiller_telemetry ORDER BY id DESC LIMIT 50'
+    );
+    return res.json({ success: true, telemetry: dbRes.rows });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch chiller telemetry', message: err?.message });
+  }
+});
+
+app.post('/api/wms/telemetry/log', async (req, res) => {
+  const { unitName, temperatureCelsius, humidityPercent } = req.body || {};
+  if (!unitName || temperatureCelsius === undefined) {
+    return res.status(400).json({ error: 'unitName and temperatureCelsius are required' });
+  }
+  const isAlert = Number(temperatureCelsius) > 6.0;
+  try {
+    const insRes = await gatewayPgPool.query(
+      `INSERT INTO wms.chiller_telemetry (unit_name, temperature_celsius, humidity_percent, alert_triggered)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [unitName, Number(temperatureCelsius), humidityPercent ? Number(humidityPercent) : null, isAlert]
+    );
+    const log = insRes.rows[0];
+    if (isAlert) {
+      broadcastRealtimeEvent({ type: 'WMS_CHILLER_ALERT', path: '/api/wms/telemetry/log', method: 'POST', data: log });
+    }
+    return res.json({ success: true, log });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to log telemetry', message: err?.message });
   }
 });
 
