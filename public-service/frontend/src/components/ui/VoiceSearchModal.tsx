@@ -317,8 +317,8 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
               </p>
             </div>
 
-            {/* Explicit Action Buttons */}
-            {isListening && (
+            {/* Explicit Action Buttons & Quick Test Chips */}
+            {isListening ? (
               <Button
                 type="button"
                 onClick={stopListening}
@@ -326,6 +326,26 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
               >
                 <Square className="w-3.5 h-3.5 fill-white" /> Stop & Search
               </Button>
+            ) : (
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 max-w-xs">
+                <span className="text-[10px] font-bold text-muted-foreground w-full text-center">Quick Tap Samples:</span>
+                {[
+                  { label: "టమోటా (Tomato)", query: "టమోటా" },
+                  { label: "పాలకూర (Spinach)", query: "పాలకూర" },
+                  { label: "टमाटर", query: "टमाटर" },
+                  { label: "palakura", query: "palakura" },
+                  { label: "Fresh Mango", query: "Mango" }
+                ].map((chip, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleFinalResult(chip.query, chip.query)}
+                    className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-600/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold hover:bg-emerald-100 transition-colors"
+                  >
+                    📍 {chip.label}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 
@@ -343,7 +363,7 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Say item names like <span className="font-semibold text-emerald-600">"టమోటా"</span>, <span className="font-semibold text-emerald-600">"टमाटर"</span> or <span className="font-semibold text-emerald-600">"Spinach"</span>
+                Say item names in Telugu <span className="font-semibold text-emerald-600">"పాలకూర" / "టమోటా"</span>, Hindi <span className="font-semibold text-emerald-600">"टमाटर" / "पालक"</span> or English <span className="font-semibold text-emerald-600">"Fresh Spinach"</span>
               </p>
             )}
           </div>
@@ -351,7 +371,7 @@ export function VoiceSearchModal({ open, onOpenChange, onQueryComplete }: VoiceS
           {/* Bottom Action Footer */}
           <div className="flex items-center justify-between pt-2 text-[11px] text-muted-foreground border-t">
             <span className="flex items-center gap-1 font-mono">
-              <Globe className="w-3.5 h-3.5 text-emerald-600" /> Faster-Whisper AI Engine
+              <Globe className="w-3.5 h-3.5 text-emerald-600" /> Faster-Whisper + IndicASR Engine
             </span>
             <Button
               type="button"

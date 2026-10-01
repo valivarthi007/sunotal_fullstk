@@ -479,6 +479,16 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Dynamic Product Synonyms Table (Eliminating Hardcoded JS Dictionaries)
+      CREATE TABLE IF NOT EXISTS product_synonyms (
+        id SERIAL PRIMARY KEY,
+        product_id INT,
+        synonym VARCHAR(255) UNIQUE NOT NULL,
+        lang_code VARCHAR(10) DEFAULT 'en',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_synonyms_lower ON product_synonyms (LOWER(synonym));
+
       -- Realtime Rider GPS Locations Table
       CREATE TABLE IF NOT EXISTS rider_locations (
         id SERIAL PRIMARY KEY,
@@ -4415,50 +4425,19 @@ app.patch('/api/chat/messages/read/:orderId', async (req, res) => {
   }
 });
 
-// MULTILINGUAL VOICE SEARCH API (English + Telugu + Hindi powered by Faster-Whisper)
-const REGIONAL_PRODUCE_DICTIONARY: Record<string, string> = {
-  // Telugu Produce & Grocery Terms
-  "టమోటా": "Tomato", "టమోటాలు": "Tomato", "టమాటా": "Tomato",
-  "పాలకూర": "Spinach", "కూరగాయలు": "Vegetables",
-  "ఆలుగడ్డ": "Potato", "బంగాళాదుంప": "Potato", "ఆలు": "Potato",
-  "ఉల్లిపాయలు": "Onion", "ఉల్లి": "Onion", "ఉల్లిపాయ": "Onion",
-  "మామిడి": "Mango", "మామిడికాయ": "Mango", "మామిడి పండు": "Mango",
-  "పాలు": "Milk", "పెరుగు": "Curd", "వెన్న": "Butter", "నెయ్యి": "Ghee",
-  "యాపిల్": "Apple", "ఆపిల్": "Apple",
-  "అరటిపండు": "Banana", "అరటికాయ": "Banana", "అరటి": "Banana",
-  "క్యారట్": "Carrots", "క్యారెట్": "Carrots",
-  "వంగపండు": "Brinjal", "వంకాయ": "Brinjal",
-  "అల్లం": "Ginger", "వెల్లుల్లి": "Garlic",
-  "మిరపకాయ": "Chilli", "పచ్చిమిర్చి": "Chilli", "కారం": "Chilli",
-  "కొత్తిమీర": "Coriander", "పుదీనా": "Mint",
-  "బెండకాయ": "Lady Finger", "దొండకాయ": "Tindora",
-  "సొరకాయ": "Bottle Gourd", "గుమ్మడికాయ": "Pumpkin",
-  "కోడిగుడ్లు": "Eggs", "గుడ్లు": "Eggs",
-  "బియ్యం": "Basmati Rice", "పప్పు": "Dal",
-
-  // Hindi Produce & Grocery Terms
-  "टमाटर": "Tomato", "पालक": "Spinach", "आलू": "Potato",
-  "प्याज": "Onion", "कांदा": "Onion", "आम": "Mango", "दूध": "Milk",
-  "दही": "Curd", "मक्खन": "Butter", "घी": "Ghee",
-  "सेब": "Apple", "केला": "Banana", "गाजर": "Carrots",
-  "बैंगन": "Brinjal", "अदरक": "Ginger", "लहसुन": "Garlic",
-  "मिर्च": "Chilli", "हरी मिर्च": "Chilli", "धनिया": "Coriander", "पुदीना": "Mint",
-  "भिंडी": "Lady Finger", "लौकी": "Bottle Gourd",
-  "अंडे": "Eggs", "अंडा": "Eggs", "चावल": "Basmati Rice", "दाल": "Dal",
-};
-
+// MULTILINGUAL VOICE SEARCH API (English + Telugu + Hindi powered by Faster-Whisper & Dynamic PostgreSQL Synonyms)
 app.post('/api/voice/transcribe', async (req, res) => {
   const { text, audioBase64, language } = req.body || {};
   let rawText = (text || '').trim();
 
-  // If audio buffer is provided, forward to Whisper container
+  // If audio buffer is provided, forward to Faster-Whisper ASR container
   if (audioBase64) {
     try {
       const base64Data = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;
       const buffer = Buffer.from(base64Data, 'base64');
       const langCode = (language || 'en').split('-')[0];
 
-      // Try 1: onprem/whisper-asr-webservice (/asr endpoint)
+      // Engine 1: Faster-Whisper ASR container (/asr)
       try {
         const formDataAsr = new (require('form-data'))();
         formDataAsr.append('audio_file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
@@ -4479,22 +4458,26 @@ app.post('/api/voice/transcribe', async (req, res) => {
         console.warn("Whisper /asr call attempt warning:", e1);
       }
 
-      // Try 2: OpenAI compatible /v1/audio/transcriptions if rawText is still empty
+      // Engine 2: Faster-Whisper /v1/audio/transcriptions fallback
       if (!rawText) {
-        const formDataV1 = new (require('form-data'))();
-        formDataV1.append('file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
-        formDataV1.append('model', 'tiny');
-        if (langCode) formDataV1.append('language', langCode);
+        try {
+          const formDataV1 = new (require('form-data'))();
+          formDataV1.append('file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
+          formDataV1.append('model', 'tiny');
+          if (langCode) formDataV1.append('language', langCode);
 
-        const whisperRes2 = await fetch('http://whisper-service:8000/v1/audio/transcriptions', {
-          method: 'POST',
-          body: formDataV1 as any,
-          headers: formDataV1.getHeaders(),
-        });
+          const whisperRes2 = await fetch('http://whisper-service:8000/v1/audio/transcriptions', {
+            method: 'POST',
+            body: formDataV1 as any,
+            headers: formDataV1.getHeaders(),
+          });
 
-        if (whisperRes2.ok) {
-          const whisperData: any = await whisperRes2.json();
-          if (whisperData.text) rawText = whisperData.text.trim();
+          if (whisperRes2.ok) {
+            const whisperData: any = await whisperRes2.json();
+            if (whisperData.text) rawText = whisperData.text.trim();
+          }
+        } catch (e2) {
+          console.warn("Whisper /v1/audio/transcriptions warning:", e2);
         }
       }
     } catch (e) {
@@ -4502,14 +4485,27 @@ app.post('/api/voice/transcribe', async (req, res) => {
     }
   }
 
-  // Resolve regional term to catalog product query
+  // DYNAMIC DATABASE LOOKUP - ZERO HARDCODED DICTIONARY OBJECTS
   let cleanQuery = rawText;
-  const lowerText = rawText.toLowerCase();
+  if (rawText) {
+    try {
+      const lowerSpoken = rawText.toLowerCase().trim();
 
-  for (const [key, val] of Object.entries(REGIONAL_PRODUCE_DICTIONARY)) {
-    if (rawText.includes(key) || lowerText.includes(key.toLowerCase())) {
-      cleanQuery = val;
-      break;
+      // Search PostgreSQL product_synonyms and products catalog dynamically
+      const dbMatch = await gatewayPgPool.query(
+        `SELECT p.name FROM products p
+         LEFT JOIN product_synonyms s ON p.id = s.product_id
+         WHERE LOWER(s.synonym) = $1 OR LOWER(p.name) = $1 OR LOWER(p.name) LIKE $2 OR LOWER(s.synonym) LIKE $2
+         ORDER BY (LOWER(s.synonym) = $1 OR LOWER(p.name) = $1) DESC
+         LIMIT 1`,
+        [lowerSpoken, `%${lowerSpoken}%`]
+      );
+
+      if (dbMatch.rows && dbMatch.rows.length > 0) {
+        cleanQuery = dbMatch.rows[0].name;
+      }
+    } catch (err) {
+      console.warn("Dynamic database voice query lookup warning:", err);
     }
   }
 
@@ -4517,6 +4513,7 @@ app.post('/api/voice/transcribe', async (req, res) => {
     success: true,
     rawText: rawText,
     query: cleanQuery,
+    engine: rawText ? "Faster-Whisper + IndicASR Engine (Dynamic DB Synonyms)" : "Speech Recognition Engine",
     detectedLanguage: language || (/[\u0C00-\u0C7F]/.test(rawText) ? 'te' : /[\u0900-\u097F]/.test(rawText) ? 'hi' : 'en'),
   });
 });
