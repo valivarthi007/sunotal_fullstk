@@ -1320,10 +1320,10 @@ app.get(['/api/admin/quotations', '/api/vendors/quotations', '/api/procurement/q
 });
 
 app.post(['/api/vendors/quotations', '/api/procurement/quotations'], async (req, res) => {
-  const { 
-    vendorId, vendorName, name, produce, cropName, quantity, price, suggestedMrp, category, subCategory, 
-    unit, qualityGrade, expectedHarvestDate, darkStoreAllocation, notes, phone, address, brand, batchNo, 
-    expiryOrWarranty, attributes 
+  const {
+    vendorId, vendorName, name, produce, cropName, quantity, price, suggestedMrp, category, subCategory,
+    unit, qualityGrade, expectedHarvestDate, darkStoreAllocation, notes, phone, address, brand, batchNo,
+    expiryOrWarranty, attributes
   } = req.body || {};
   const produceName = produce || name || cropName;
   if (!produceName || quantity === undefined || price === undefined) {
@@ -2158,7 +2158,7 @@ app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (req,
     sql += ' ORDER BY id DESC';
 
     const dbRes = await gatewayPgPool.query(sql, params);
-    
+
     // Fetch dynamic Mongo metadata if connected
     let mongoProductMap: Record<string, any> = {};
     if (isMongoConnected) {
@@ -2167,7 +2167,7 @@ app.get(['/api/products', '/api/admin/products', '/api/storefront'], async (req,
         for (const doc of mongoDocs) {
           mongoProductMap[String(doc.id)] = doc;
         }
-      } catch {}
+      } catch { }
     }
 
     return res.json(dbRes.rows.map(p => {
@@ -2209,7 +2209,7 @@ app.get(['/api/products/:id', '/api/admin/products/:id'], async (req, res) => {
     if (isMongoConnected) {
       try {
         mDoc = (await ProductModel.findOne({ id: String(targetId) }).lean()) || {};
-      } catch {}
+      } catch { }
     }
 
     return res.json({
@@ -2489,7 +2489,7 @@ app.get('/api/delivery/riders', async (_req, res) => {
     try {
       const ridersRes = await gatewayPgPool.query('SELECT * FROM delivery_riders ORDER BY id DESC');
       ridersFromDb = ridersRes.rows || [];
-    } catch {}
+    } catch { }
 
     // Fetch delivery stats from orders table
     let orderStatsMap: Record<string, { delivCount: number; distKm: number }> = {};
@@ -2511,13 +2511,13 @@ app.get('/api/delivery/riders', async (_req, res) => {
         if (keyId) orderStatsMap[keyId] = statsObj;
         if (keyName) orderStatsMap[keyName] = statsObj;
       });
-    } catch {}
+    } catch { }
 
     const usersRiders = (usersRes.rows || []).map(u => {
       const uIdStr = String(u.id);
       const uNameKey = String(u.name || '').trim().toLowerCase();
       const stats = orderStatsMap[uIdStr] || orderStatsMap[`RIDER-${uIdStr}`] || orderStatsMap[uNameKey] || { delivCount: 0, distKm: 0 };
-      
+
       let riderName = u.name;
       if (!riderName || riderName === 'Delivery Partner' || riderName === 'Rider') {
         riderName = `Delivery Partner #${u.id}`;
@@ -2869,7 +2869,7 @@ async function fetchNominatimGeocode(query: string): Promise<{ lat: number; lng:
         return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
       }
     }
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -2922,7 +2922,7 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
           cLat = Number(uAddrRes.rows[0].latitude);
           cLng = Number(uAddrRes.rows[0].longitude);
         }
-      } catch {}
+      } catch { }
     }
 
     // 2. Warehouse Location: Nearest active warehouse configured in Admin
@@ -3027,7 +3027,7 @@ app.get(['/api/delivery/track/:id', '/api/orders/:id/track', '/api/orders/track/
             riderPhone = fr.phone;
           }
         }
-      } catch {}
+      } catch { }
     }
 
     return res.json({
@@ -3093,7 +3093,7 @@ app.post(['/api/delivery/rider/location', '/api/rider/location'], async (req, re
 
       try {
         await gatewayPgPool.query('UPDATE orders SET status = $1 WHERE id = $2 OR order_number = $3', [dbStatus, isNaN(Number(orderId)) ? -1 : Number(orderId), String(orderId)]);
-      } catch {}
+      } catch { }
     }
   }
   broadcastRealtimeEvent({ type: 'GPS_TELEMETRY_UPDATED', path: req.originalUrl || req.url, method: 'POST', data: { orderId, lat, lng, riderId, stage } });
@@ -3462,7 +3462,7 @@ app.put(['/api/users/:userId/addresses/:addressId', '/api/user/addresses/:addres
   }
   const addressId = String(req.params.addressId);
   const { label, tag, receiverName, phone, streetAddress, houseNo, landmark, street, city, state, pincode, latitude, longitude, isDefault } = req.body || {};
-  
+
   const finalLabel = tag || label;
   const finalStreet = streetAddress || houseNo;
   const finalLandmark = landmark || street;
@@ -3812,7 +3812,7 @@ app.post(['/api/orders', '/api/orders/checkout'], async (req, res) => {
             orderLat = Number(addrRes.rows[0].latitude);
             orderLng = Number(addrRes.rows[0].longitude);
           }
-        } catch {}
+        } catch { }
       }
 
       let activeWhId = warehouseId ? Number(warehouseId) : null;
@@ -3825,7 +3825,7 @@ app.post(['/api/orders', '/api/orders/checkout'], async (req, res) => {
           if (whRes.rows[0].latitude) whLat = Number(whRes.rows[0].latitude);
           if (whRes.rows[0].longitude) whLng = Number(whRes.rows[0].longitude);
         }
-      } catch {}
+      } catch { }
 
       const etaMetrics = computeDynamicEtaMetrics(
         orderLat ? Number(orderLat) : null,
@@ -3947,7 +3947,7 @@ app.get(['/api/payments/config', '/api/payment/config'], (_req, res) => {
 app.post(['/api/payment/razorpay/order', '/api/payments/razorpay/order'], async (req, res) => {
   const { amount, currency = 'INR', receipt } = req.body || {};
   const rzpKey = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TWi3df17ynwfPX';
-  
+
   return res.json({
     success: true,
     keyId: rzpKey,
@@ -4751,6 +4751,35 @@ app.post('/api/wms/telemetry/log', async (req, res) => {
   }
 });
 
+app.get('/api/wms/staging/queue', async (req, res) => {
+  try {
+    const ordersRes = await gatewayPgPool.query(`
+      SELECT o.id, o.order_number, o.user_name, o.delivery_address, o.status, o.rider_name, o.rider_phone, o.delivery_otp, o.updated_at
+      FROM orders o
+      WHERE o.status IN ('weighed', 'packed', 'out_for_delivery')
+      ORDER BY o.updated_at DESC
+      LIMIT 50
+    `);
+    const ridersRes = await gatewayPgPool.query(`
+      SELECT id, name, phone, current_latitude, current_longitude, is_active, battery_level, updated_at
+      FROM delivery_partners
+      WHERE is_active = true
+      ORDER BY updated_at DESC
+      LIMIT 20
+    `);
+    return res.json({
+      success: true,
+      stagedOrders: ordersRes.rows,
+      activeRiders: ridersRes.rows,
+      stagedRiderCount: ridersRes.rows.length,
+      avgHandoverMins: 1.5,
+      validationRate: 100
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch staging queue', message: err?.message });
+  }
+});
+
 // DYNAMIC 10-MINUTE QUICK COMMERCE ETA ENGINE
 function calculateHaversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth radius in km
@@ -4759,9 +4788,9 @@ function calculateHaversineDistanceKm(lat1: number, lon1: number, lat2: number, 
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -4921,7 +4950,7 @@ app.post('/api/voice/transcribe', async (req, res) => {
               break;
             }
           }
-        } catch (e1) {}
+        } catch (e1) { }
       }
 
       // Engine 2: Faster-Whisper /v1/audio/transcriptions fallback
@@ -4947,7 +4976,7 @@ app.post('/api/voice/transcribe', async (req, res) => {
                 break;
               }
             }
-          } catch (e2) {}
+          } catch (e2) { }
         }
       }
 
@@ -5105,8 +5134,8 @@ app.post('/api/recommendations/interactions', async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: String(userId || '1'), productId: String(productId || '1'), actionType: actionType || 'view' }),
-    }).catch(() => {});
-  } catch {}
+    }).catch(() => { });
+  } catch { }
   return res.json({ success: true, message: 'Interaction logged' });
 });
 

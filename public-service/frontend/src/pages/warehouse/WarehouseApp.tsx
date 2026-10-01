@@ -28,6 +28,15 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 export default function WarehouseApp() {
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    return typeof window !== "undefined"
+      ? localStorage.getItem("sunotal_admin_token") || localStorage.getItem("sunotal_token")
+      : null;
+  });
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [activeTab, setActiveTab] = useState<"asn" | "fefo" | "picking" | "fleet" | "iot" | "custody">("picking");
   
   // Real DB state queries
@@ -36,6 +45,11 @@ export default function WarehouseApp() {
   const [inventoryBatches, setInventoryBatches] = useState<any[]>([]);
   const [pickingTasks, setPickingTasks] = useState<any[]>([]);
   const [telemetry, setTelemetry] = useState<any[]>([]);
+  const [stagedQueue, setStagedQueue] = useState<{ stagedOrders: any[]; activeRiders: any[]; stagedRiderCount: number }>({
+    stagedOrders: [],
+    activeRiders: [],
+    stagedRiderCount: 0
+  });
   const [storeStatus, setStoreStatus] = useState<"normal" | "throttled" | "offline">("normal");
 
   // Form states
@@ -43,15 +57,54 @@ export default function WarehouseApp() {
   const [measuredWeight, setMeasuredWeight] = useState("");
   const [intakeTemp, setIntakeTemp] = useState("3.8");
 
+  // Admin Login Handler
+  const handleAdminLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!loginEmail || !loginPassword) {
+      toast.error("Please enter email and password");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        localStorage.setItem("sunotal_admin_token", data.token);
+        setAuthToken(data.token);
+        toast.success("Authenticated successfully as Admin / WMS Manager!");
+      } else {
+        toast.error(data.error || data.message || "Invalid credentials");
+      }
+    } catch (err: any) {
+      toast.error("Login failed. Check internet or credentials.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("sunotal_admin_token");
+    setAuthToken(null);
+    toast.info("Logged out of Warehouse WMS");
+  };
+
   // Fetch live WMS data from Gateway
   const fetchWmsData = async () => {
     try {
-      const [logsRes, asnRes, batchRes, pickRes, telemRes] = await Promise.all([
-        fetch("/api/wms/custody/logs").then(r => r.ok ? r.json() : null),
-        fetch("/api/wms/asn").then(r => r.ok ? r.json() : null),
-        fetch("/api/wms/batches").then(r => r.ok ? r.json() : null),
-        fetch("/api/wms/picking/tasks").then(r => r.ok ? r.json() : null),
-        fetch("/api/wms/telemetry").then(r => r.ok ? r.json() : null),
+      const headers: Record<string, string> = {};
+      if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+
+      const [logsRes, asnRes, batchRes, pickRes, telemRes, stageRes] = await Promise.all([
+        fetch("/api/wms/custody/logs", { headers }).then(r => r.ok ? r.json() : null),
+        fetch("/api/wms/asn", { headers }).then(r => r.ok ? r.json() : null),
+        fetch("/api/wms/batches", { headers }).then(r => r.ok ? r.json() : null),
+        fetch("/api/wms/picking/tasks", { headers }).then(r => r.ok ? r.json() : null),
+        fetch("/api/wms/telemetry", { headers }).then(r => r.ok ? r.json() : null),
+        fetch("/api/wms/staging/queue", { headers }).then(r => r.ok ? r.json() : null),
       ]);
 
       if (logsRes?.logs) setCustodyLogs(logsRes.logs);
@@ -59,6 +112,13 @@ export default function WarehouseApp() {
       if (batchRes?.batches) setInventoryBatches(batchRes.batches);
       if (pickRes?.tasks) setPickingTasks(pickRes.tasks);
       if (telemRes?.telemetry) setTelemetry(telemRes.telemetry);
+      if (stageRes?.success) {
+        setStagedQueue({
+          stagedOrders: stageRes.stagedOrders || [],
+          activeRiders: stageRes.activeRiders || [],
+          stagedRiderCount: stageRes.stagedRiderCount || 0
+        });
+      }
     } catch (e) {
       console.warn("Error fetching WMS live data:", e);
     }
@@ -66,8 +126,33 @@ export default function WarehouseApp() {
 
   useEffect(() => {
     fetchWmsData();
-    const interval = setInterval(fetchWmsData, 5000);
-    return () => clearInterval(interval);
+    // Low-frequency fallback poll (15s)
+    const interval = setInterval(fetchWmsData, 15000);
+
+    // High-frequency Real-Time SSE listener
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource("/api/realtime/stream");
+      es.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (
+            payload.type?.startsWith("WMS_") ||
+            payload.type === "ORDER_CREATED" ||
+            payload.type === "ORDER_STATUS_UPDATED"
+          ) {
+            fetchWmsData();
+          }
+        } catch {}
+      };
+    } catch (err) {
+      console.warn("SSE connection error in WMS:", err);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (es) es.close();
+    };
   }, []);
 
   // Action Handlers
@@ -132,6 +217,58 @@ export default function WarehouseApp() {
     }
   };
 
+  if (!authToken) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-50 font-sans flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center text-slate-950 font-black text-2xl mx-auto shadow-lg shadow-emerald-500/20">
+              <Boxes className="w-8 h-8 text-slate-950" />
+            </div>
+            <h1 className="text-2xl font-black text-white tracking-tight">Sunotal WMS Access</h1>
+            <p className="text-xs text-slate-400">Warehouse Manager & Picker Authentication</p>
+          </div>
+
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-300">Admin / Manager Email</label>
+              <Input
+                type="email"
+                placeholder="admin@sunotal.com"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                className="bg-slate-950 border-slate-800 rounded-xl text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-300">Password</label>
+              <Input
+                type="password"
+                placeholder="••••••••"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                className="bg-slate-950 border-slate-800 rounded-xl text-xs"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-slate-950 font-black rounded-xl text-xs py-5"
+            >
+              {isSubmitting ? "Authenticating..." : "Sign In to Dark Store WMS"}
+            </Button>
+          </form>
+
+          <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800/80 text-[11px] text-slate-400 space-y-1">
+            <p className="font-bold text-emerald-400">Authorized Access Only</p>
+            <p>Admin credentials enable live stock inwarding, order picking, and chain of custody logging.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 font-sans pb-20">
       {/* Top WMS Header Bar */}
@@ -152,33 +289,44 @@ export default function WarehouseApp() {
             </div>
           </div>
 
-          {/* Store Throttling Mode Controls */}
-          <div className="flex items-center gap-2 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800">
-            <span className="text-xs text-slate-400 font-bold px-2">Store Mode:</span>
-            <button
-              onClick={() => setStoreStatus("normal")}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors ${
-                storeStatus === "normal" ? "bg-emerald-600 text-white shadow-md" : "text-slate-400 hover:text-white"
-              }`}
+          <div className="flex items-center gap-4">
+            {/* Store Throttling Mode Controls */}
+            <div className="flex items-center gap-2 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800">
+              <span className="text-xs text-slate-400 font-bold px-2">Store Mode:</span>
+              <button
+                onClick={() => setStoreStatus("normal")}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors ${
+                  storeStatus === "normal" ? "bg-emerald-600 text-white shadow-md" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Normal (10m SLA)
+              </button>
+              <button
+                onClick={() => setStoreStatus("throttled")}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors ${
+                  storeStatus === "throttled" ? "bg-amber-600 text-white shadow-md" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Throttled (Surge)
+              </button>
+              <button
+                onClick={() => setStoreStatus("offline")}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors ${
+                  storeStatus === "offline" ? "bg-rose-600 text-white shadow-md" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Offline
+              </button>
+            </div>
+
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              size="sm"
+              className="border-slate-800 rounded-xl text-slate-400 hover:text-white text-xs"
             >
-              Normal (10m SLA)
-            </button>
-            <button
-              onClick={() => setStoreStatus("throttled")}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors ${
-                storeStatus === "throttled" ? "bg-amber-600 text-white shadow-md" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Throttled (Surge)
-            </button>
-            <button
-              onClick={() => setStoreStatus("offline")}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors ${
-                storeStatus === "offline" ? "bg-rose-600 text-white shadow-md" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Offline
-            </button>
+              Sign Out
+            </Button>
           </div>
         </div>
       </header>
@@ -395,19 +543,45 @@ export default function WarehouseApp() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="bg-slate-900 border-slate-800 rounded-3xl p-6 text-center space-y-2">
                 <Radio className="w-8 h-8 text-emerald-400 mx-auto animate-pulse" />
-                <h3 className="text-2xl font-black text-white">6 Riders</h3>
-                <p className="text-xs text-slate-400">Inside 200m Geofence Waiting Zone</p>
+                <h3 className="text-2xl font-black text-white">{stagedQueue.stagedRiderCount} Active Riders</h3>
+                <p className="text-xs text-slate-400">Online & Active in Hub Zone</p>
               </Card>
               <Card className="bg-slate-900 border-slate-800 rounded-3xl p-6 text-center space-y-2">
                 <Clock className="w-8 h-8 text-amber-400 mx-auto" />
-                <h3 className="text-2xl font-black text-white">1.8 Mins</h3>
-                <p className="text-xs text-slate-400">Avg Staging Handover Time</p>
+                <h3 className="text-2xl font-black text-white">{stagedQueue.stagedOrders.length} Orders Staged</h3>
+                <p className="text-xs text-slate-400">Packed & Awaiting Rider Handover</p>
               </Card>
               <Card className="bg-slate-900 border-slate-800 rounded-3xl p-6 text-center space-y-2">
                 <ShieldCheck className="w-8 h-8 text-blue-400 mx-auto" />
                 <h3 className="text-2xl font-black text-white">100% Validated</h3>
                 <p className="text-xs text-slate-400">Tamper Seals & Handover OTPs</p>
               </Card>
+            </div>
+
+            <div className="space-y-3 pt-4">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Orders Ready for Rider Dispatch</h3>
+              {stagedQueue.stagedOrders.length === 0 ? (
+                <Card className="bg-slate-900 border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-400">
+                  No orders currently waiting at handover staging shelf.
+                </Card>
+              ) : (
+                stagedQueue.stagedOrders.map((o: any) => (
+                  <Card key={o.id} className="bg-slate-900 border-slate-800 rounded-2xl p-4 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold text-white uppercase font-mono">Order #{o.order_number || o.id}</span>
+                      <p className="text-slate-400">{o.user_name || "Customer"} • {o.delivery_address || "Hub Delivery"}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge className="bg-blue-950 text-blue-300 border-blue-500/30 uppercase text-[10px]">
+                        {o.status}
+                      </Badge>
+                      <Badge className="bg-slate-950 text-emerald-400 border-emerald-500/30 font-mono text-[10px]">
+                        OTP: {o.delivery_otp || "----"}
+                      </Badge>
+                    </div>
+                  </Card>
+                ))
+              )}
             </div>
           </div>
         )}

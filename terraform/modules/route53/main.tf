@@ -27,6 +27,7 @@ locals {
     "delivery-sunotal",
     "support-sunotal",
     "monitoring-sunotal",
+    "warehouse-sunotal",
     "api"
   ]
 }

@@ -523,21 +523,115 @@ async function initDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- Subservice Column Enhancements
-      ALTER TABLE products ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::jsonb;
-      ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS serviced_pincodes TEXT[] DEFAULT ARRAY['560001', '560002', '560034', '560102'];
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS tip_amount NUMERIC(10, 2) DEFAULT 0;
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_instructions VARCHAR(255) DEFAULT '';
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS replacement_preference VARCHAR(100) DEFAULT 'Replace with closest brand';
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_amount NUMERIC(10, 2) DEFAULT 0;
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS final_amount NUMERIC(10, 2) DEFAULT 0;
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10, 2) DEFAULT 0;
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(10, 2) DEFAULT 0;
-      UPDATE orders SET final_amount = total_amount WHERE (final_amount IS NULL OR final_amount = 0) AND total_amount > 0;
+      -- Dynamic ETA & SLA Columns Enhancements
+      ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS latitude NUMERIC(10, 6) DEFAULT 16.506174;
+      ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS longitude NUMERIC(10, 6) DEFAULT 80.648015;
+      ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS express_sla_radius_km NUMERIC(3, 1) DEFAULT 3.5;
+      ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS avg_picking_time_mins NUMERIC(3, 1) DEFAULT 2.0;
+
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_prep_mins NUMERIC(4, 1);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_transit_mins NUMERIC(4, 1);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS target_delivery_time TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS actual_delivered_time TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS sla_guaranteed BOOLEAN DEFAULT TRUE;
+
+      CREATE INDEX IF NOT EXISTS idx_rider_locations_order_time ON rider_locations (order_id, updated_at DESC);
 
       -- Enables pg_trgm fuzzy search index
       CREATE EXTENSION IF NOT EXISTS pg_trgm;
       CREATE INDEX IF NOT EXISTS idx_products_trgm_name ON products USING gin (name gin_trgm_ops);
+
+      -- Dedicated WMS Schema & Tables
+      CREATE SCHEMA IF NOT EXISTS wms;
+
+      CREATE TABLE IF NOT EXISTS wms.chain_of_custody_logs (
+        id BIGSERIAL PRIMARY KEY,
+        order_id VARCHAR(100),
+        asn_number VARCHAR(100),
+        product_id INTEGER,
+        batch_number VARCHAR(100),
+        actor_role VARCHAR(50) NOT NULL,
+        actor_id VARCHAR(100) NOT NULL,
+        actor_name VARCHAR(255) NOT NULL,
+        action VARCHAR(100) NOT NULL,
+        quantity NUMERIC(10, 2) DEFAULT 1,
+        bin_code VARCHAR(100),
+        measured_weight_grams NUMERIC(10, 2),
+        verification_token VARCHAR(100),
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_custody_order ON wms.chain_of_custody_logs (order_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_custody_actor ON wms.chain_of_custody_logs (actor_role, actor_id);
+
+      CREATE TABLE IF NOT EXISTS wms.putaway_bins (
+        id SERIAL PRIMARY KEY,
+        warehouse_id INT DEFAULT 1,
+        bin_code VARCHAR(100) UNIQUE NOT NULL,
+        zone_type VARCHAR(50) DEFAULT 'rack',
+        sequence_order INT DEFAULT 1,
+        capacity_units INT DEFAULT 500,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS wms.inventory_batches (
+        id SERIAL PRIMARY KEY,
+        product_id INT NOT NULL,
+        product_name VARCHAR(255) NOT NULL,
+        bin_id INT,
+        bin_code VARCHAR(100) DEFAULT 'A-01-R1',
+        batch_number VARCHAR(100) NOT NULL,
+        expiry_date DATE NOT NULL,
+        mfg_date DATE,
+        initial_qty NUMERIC(10, 2) DEFAULT 100,
+        current_qty NUMERIC(10, 2) DEFAULT 100,
+        cost_price NUMERIC(10, 2) DEFAULT 0,
+        markdown_discount_percent NUMERIC(5, 2) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS wms.asn_purchase_orders (
+        id SERIAL PRIMARY KEY,
+        asn_number VARCHAR(100) UNIQUE NOT NULL,
+        vendor_id INT,
+        vendor_name VARCHAR(255) NOT NULL,
+        warehouse_id INT DEFAULT 1,
+        expected_crates INT DEFAULT 10,
+        received_crates INT DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'expected',
+        cold_chain_passed BOOLEAN DEFAULT TRUE,
+        intake_temp_celsius NUMERIC(4, 1),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS wms.picking_tasks (
+        id SERIAL PRIMARY KEY,
+        order_id VARCHAR(100) UNIQUE NOT NULL,
+        warehouse_id INT DEFAULT 1,
+        picker_user_id VARCHAR(100),
+        picker_name VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'unassigned',
+        total_expected_weight_grams NUMERIC(10, 2) DEFAULT 0,
+        actual_verified_weight_grams NUMERIC(10, 2) DEFAULT 0,
+        staging_slot VARCHAR(50),
+        handover_otp VARCHAR(10),
+        started_at TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS wms.chiller_telemetry (
+        id SERIAL PRIMARY KEY,
+        warehouse_id INT DEFAULT 1,
+        unit_name VARCHAR(100) NOT NULL,
+        temperature_celsius NUMERIC(4, 1) NOT NULL,
+        humidity_percent NUMERIC(4, 1),
+        alert_triggered BOOLEAN DEFAULT FALSE,
+        logged_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
 
 
       CREATE TABLE IF NOT EXISTS inventory (
@@ -3388,7 +3482,11 @@ app.get('/api/orders/:id', async (req, res) => {
             riderName: o.rider_name,
             riderPhone: o.rider_phone,
             deliveryOtp: o.delivery_otp,
-            etaMinutes: o.eta_minutes || 15,
+            etaMinutes: o.eta_minutes || 10,
+            targetDeliveryTime: o.target_delivery_time,
+            estimatedPrepMins: o.estimated_prep_mins,
+            estimatedTransitMins: o.estimated_transit_mins,
+            slaGuaranteed: o.sla_guaranteed ?? true,
             createdAt: o.created_at,
             items: itemsRes.rows.map(i => ({
                 id: i.id,
@@ -3504,17 +3602,34 @@ app.post(['/api/orders', '/api/orders/checkout'], async (req, res) => {
                 catch { }
             }
             let activeWhId = warehouseId ? Number(warehouseId) : null;
-            if (!activeWhId) {
-                try {
-                    const whRes = await client.query('SELECT id FROM warehouses WHERE is_active = true ORDER BY id ASC LIMIT 1');
-                    if (whRes.rows && whRes.rows.length > 0) {
+            let whLat = 16.506174;
+            let whLng = 80.648015;
+            try {
+                const whRes = await client.query('SELECT id, latitude, longitude FROM warehouses WHERE is_active = true ORDER BY id ASC LIMIT 1');
+                if (whRes.rows && whRes.rows.length > 0) {
+                    if (!activeWhId)
                         activeWhId = whRes.rows[0].id;
-                    }
+                    if (whRes.rows[0].latitude)
+                        whLat = Number(whRes.rows[0].latitude);
+                    if (whRes.rows[0].longitude)
+                        whLng = Number(whRes.rows[0].longitude);
                 }
-                catch { }
             }
-            const oRes = await client.query(`INSERT INTO orders (order_number, user_id, user_name, user_phone, address, delivery_address, city, total_amount, discount_amount, final_amount, delivery_fee, status, payment_status, payment_method, delivery_otp, eta_minutes, delivery_latitude, delivery_longitude, warehouse_id)
-         VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, 'placed', 'paid', $11, $12, 15, $13, $14, $15) RETURNING *`, [orderNum, userId || 1, userName || 'Customer', userPhone || '', delAddress, city || 'Vijayawada', totAmount, discount || 0, finAmount, deliveryFee || 0, paymentMethod || 'UPI / Wallet', otp, orderLat || null, orderLng || null, activeWhId]);
+            catch { }
+            const etaMetrics = computeDynamicEtaMetrics(orderLat ? Number(orderLat) : null, orderLng ? Number(orderLng) : null, Array.isArray(items) ? items.length : 1, whLat, whLng);
+            const targetDeliveryTime = new Date(Date.now() + etaMetrics.totalMins * 60 * 1000);
+            const oRes = await client.query(`INSERT INTO orders (
+          order_number, user_id, user_name, user_phone, address, delivery_address, city,
+          total_amount, discount_amount, final_amount, delivery_fee, status, payment_status,
+          payment_method, delivery_otp, eta_minutes, delivery_latitude, delivery_longitude, warehouse_id,
+          estimated_prep_mins, estimated_transit_mins, target_delivery_time, sla_guaranteed
+         )
+         VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, 'placed', 'paid', $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING *`, [
+                orderNum, userId || 1, userName || 'Customer', userPhone || '', delAddress, city || 'Vijayawada',
+                totAmount, discount || 0, finAmount, deliveryFee || 0, paymentMethod || 'UPI / Wallet', otp,
+                etaMetrics.totalMins, orderLat || null, orderLng || null, activeWhId,
+                etaMetrics.prepMins, etaMetrics.transitMins, targetDeliveryTime, etaMetrics.isExpressEligible
+            ]);
             const newOrder = oRes.rows[0];
             for (const item of items) {
                 const pPrice = Number(item.price || 50);
@@ -4092,7 +4207,7 @@ app.post('/api/chat/messages', async (req, res) => {
     try {
         const insRes = await gatewayPgPool.query(`INSERT INTO chat_messages (order_id, sender_role, sender_id, sender_name, message, message_type, is_read)
        VALUES ($1, $2, $3, $4, $5, $6, FALSE)
-       RETURNING id, order_id as "orderId", sender_role as "senderRole", sender_id as "senderId", sender_name as "senderName", message, message_type as "messageType", is_read as "isRead", created_at as "createdAt"`, [String(orderId), senderRole || 'user', String(senderId || '1'), senderName || 'Customer', message, messageType || 'text']);
+       RETURNING id, order_id as "orderId", sender_role as "senderRole", sender_id as "senderId", sender_name as "senderName", message, message_type as "messageType", is_read as "isRead", created_at as "createdAt"`, [String(orderId), senderRole || 'user', String(senderId || senderRole || 'user'), senderName || (senderRole === 'rider' ? 'Rider' : 'Customer'), message, messageType || 'text']);
         const newMessage = insRes.rows[0];
         // Broadcast live event over SSE to both customer & delivery partner apps
         broadcastRealtimeEvent({
@@ -4116,6 +4231,303 @@ app.patch('/api/chat/messages/read/:orderId', async (req, res) => {
     }
     catch (err) {
         return res.status(500).json({ error: 'Failed to mark messages as read', message: err?.message });
+    }
+});
+// WMS MULTI-ROLE CHAIN OF CUSTODY & WAREHOUSE ENGINE ENDPOINTS
+app.get('/api/wms/custody/logs', async (req, res) => {
+    const { orderId, actorRole, batchNumber } = req.query || {};
+    try {
+        let query = 'SELECT * FROM wms.chain_of_custody_logs WHERE 1=1';
+        const params = [];
+        if (orderId) {
+            params.push(String(orderId));
+            query += ` AND order_id = $${params.length}`;
+        }
+        if (actorRole) {
+            params.push(String(actorRole));
+            query += ` AND actor_role = $${params.length}`;
+        }
+        if (batchNumber) {
+            params.push(String(batchNumber));
+            query += ` AND batch_number = $${params.length}`;
+        }
+        query += ' ORDER BY id DESC LIMIT 100';
+        const dbRes = await gatewayPgPool.query(query, params);
+        return res.json({ success: true, count: dbRes.rows.length, logs: dbRes.rows });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch chain of custody logs', message: err?.message });
+    }
+});
+app.post('/api/wms/custody/log', async (req, res) => {
+    const { orderId, asnNumber, productId, batchNumber, actorRole, actorId, actorName, action, quantity, binCode, measuredWeightGrams, verificationToken, metadata } = req.body || {};
+    if (!actorRole || !actorId || !action) {
+        return res.status(400).json({ error: 'actorRole, actorId, and action are required' });
+    }
+    try {
+        const insRes = await gatewayPgPool.query(`INSERT INTO wms.chain_of_custody_logs (
+        order_id, asn_number, product_id, batch_number, actor_role, actor_id, actor_name, action, quantity, bin_code, measured_weight_grams, verification_token, metadata
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING *`, [
+            orderId || null, asnNumber || null, productId || null, batchNumber || 'DEFAULT_BATCH',
+            actorRole, String(actorId), actorName || actorRole, action, quantity || 1,
+            binCode || null, measuredWeightGrams || null, verificationToken || null, JSON.stringify(metadata || {})
+        ]);
+        const newLog = insRes.rows[0];
+        broadcastRealtimeEvent({ type: 'WMS_CUSTODY_LOGGED', path: '/api/wms/custody/log', method: 'POST', data: newLog });
+        return res.json({ success: true, log: newLog });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to log custody event', message: err?.message });
+    }
+});
+app.get('/api/wms/asn', async (req, res) => {
+    try {
+        const dbRes = await gatewayPgPool.query('SELECT * FROM wms.asn_purchase_orders ORDER BY id DESC');
+        return res.json({ success: true, asns: dbRes.rows });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch ASNs', message: err?.message });
+    }
+});
+app.post('/api/wms/asn/receive', async (req, res) => {
+    const { asnNumber, receivedCrates, coldChainPassed, intakeTempCelsius, receivedByUserId, receivedByName } = req.body || {};
+    if (!asnNumber)
+        return res.status(400).json({ error: 'asnNumber is required' });
+    try {
+        const updRes = await gatewayPgPool.query(`UPDATE wms.asn_purchase_orders
+       SET received_crates = GREATEST(0, $1),
+           status = CASE WHEN $1 >= expected_crates THEN 'received' ELSE 'discrepancy' END,
+           cold_chain_passed = $2,
+           intake_temp_celsius = $3
+       WHERE asn_number = $4
+       RETURNING *`, [Number(receivedCrates || 0), coldChainPassed !== false, intakeTempCelsius || 4.0, String(asnNumber)]);
+        if (!updRes.rows.length)
+            return res.status(404).json({ error: 'ASN order not found' });
+        const updatedAsn = updRes.rows[0];
+        await gatewayPgPool.query(`INSERT INTO wms.chain_of_custody_logs (asn_number, actor_role, actor_id, actor_name, action, quantity, metadata)
+       VALUES ($1, 'warehouse_manager', $2, $3, 'dock_received', $4, $5)`, [
+            String(asnNumber), String(receivedByUserId || 'wh_mgr_1'), receivedByName || 'Warehouse Manager',
+            Number(receivedCrates || 0), JSON.stringify({ coldChainPassed, intakeTempCelsius })
+        ]);
+        return res.json({ success: true, asn: updatedAsn });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to inward ASN', message: err?.message });
+    }
+});
+app.get('/api/wms/batches', async (req, res) => {
+    try {
+        const dbRes = await gatewayPgPool.query('SELECT * FROM wms.inventory_batches ORDER BY expiry_date ASC, current_qty DESC');
+        return res.json({ success: true, batches: dbRes.rows });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch inventory batches', message: err?.message });
+    }
+});
+app.post('/api/wms/batches/markdown', async (req, res) => {
+    const { batchId, discountPercent, appliedByUserId, appliedByName } = req.body || {};
+    if (!batchId)
+        return res.status(400).json({ error: 'batchId is required' });
+    try {
+        const updRes = await gatewayPgPool.query('UPDATE wms.inventory_batches SET markdown_discount_percent = $1 WHERE id = $2 RETURNING *', [Number(discountPercent || 20), Number(batchId)]);
+        if (!updRes.rows.length)
+            return res.status(404).json({ error: 'Batch not found' });
+        const batch = updRes.rows[0];
+        await gatewayPgPool.query(`INSERT INTO wms.chain_of_custody_logs (batch_number, product_id, actor_role, actor_id, actor_name, action, metadata)
+       VALUES ($1, $2, 'warehouse_manager', $3, $4, 'dynamic_markdown_applied', $5)`, [
+            batch.batch_number, batch.product_id, String(appliedByUserId || 'mgr_1'),
+            appliedByName || 'Warehouse Manager', JSON.stringify({ discountPercent })
+        ]);
+        return res.json({ success: true, batch });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to apply batch markdown', message: err?.message });
+    }
+});
+app.get('/api/wms/picking/tasks', async (req, res) => {
+    try {
+        const dbRes = await gatewayPgPool.query(`
+      SELECT pt.*, o.order_number, o.user_name as "customerName", o.delivery_address, o.status as "orderStatus"
+      FROM wms.picking_tasks pt
+      JOIN orders o ON String(pt.order_id) = String(o.id)
+      ORDER BY pt.id DESC
+    `);
+        return res.json({ success: true, tasks: dbRes.rows });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch picking tasks', message: err?.message });
+    }
+});
+app.post('/api/wms/picking/verify-weight', async (req, res) => {
+    const { orderId, measuredWeightGrams, pickerUserId, pickerName } = req.body || {};
+    if (!orderId || !measuredWeightGrams) {
+        return res.status(400).json({ error: 'orderId and measuredWeightGrams are required' });
+    }
+    try {
+        const updRes = await gatewayPgPool.query(`UPDATE wms.picking_tasks
+       SET actual_verified_weight_grams = $1, status = 'weighed', completed_at = NOW()
+       WHERE order_id = $2
+       RETURNING *`, [Number(measuredWeightGrams), String(orderId)]);
+        await gatewayPgPool.query(`INSERT INTO wms.chain_of_custody_logs (order_id, actor_role, actor_id, actor_name, action, measured_weight_grams)
+       VALUES ($1, 'picker', $2, $3, 'weight_verified', $4)`, [String(orderId), String(pickerUserId || 'picker_1'), pickerName || 'Warehouse Picker', Number(measuredWeightGrams)]);
+        return res.json({ success: true, task: updRes.rows[0] || null });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to verify weight', message: err?.message });
+    }
+});
+app.get('/api/wms/telemetry', async (req, res) => {
+    try {
+        const dbRes = await gatewayPgPool.query('SELECT * FROM wms.chiller_telemetry ORDER BY id DESC LIMIT 50');
+        return res.json({ success: true, telemetry: dbRes.rows });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch chiller telemetry', message: err?.message });
+    }
+});
+app.post('/api/wms/telemetry/log', async (req, res) => {
+    const { unitName, temperatureCelsius, humidityPercent } = req.body || {};
+    if (!unitName || temperatureCelsius === undefined) {
+        return res.status(400).json({ error: 'unitName and temperatureCelsius are required' });
+    }
+    const isAlert = Number(temperatureCelsius) > 6.0;
+    try {
+        const insRes = await gatewayPgPool.query(`INSERT INTO wms.chiller_telemetry (unit_name, temperature_celsius, humidity_percent, alert_triggered)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`, [unitName, Number(temperatureCelsius), humidityPercent ? Number(humidityPercent) : null, isAlert]);
+        const log = insRes.rows[0];
+        if (isAlert) {
+            broadcastRealtimeEvent({ type: 'WMS_CHILLER_ALERT', path: '/api/wms/telemetry/log', method: 'POST', data: log });
+        }
+        return res.json({ success: true, log });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to log telemetry', message: err?.message });
+    }
+});
+app.get('/api/wms/staging/queue', async (req, res) => {
+    try {
+        const ordersRes = await gatewayPgPool.query(`
+      SELECT o.id, o.order_number, o.user_name, o.delivery_address, o.status, o.rider_name, o.rider_phone, o.delivery_otp, o.updated_at
+      FROM orders o
+      WHERE o.status IN ('weighed', 'packed', 'out_for_delivery')
+      ORDER BY o.updated_at DESC
+      LIMIT 50
+    `);
+        const ridersRes = await gatewayPgPool.query(`
+      SELECT id, name, phone, current_latitude, current_longitude, is_active, battery_level, updated_at
+      FROM delivery_partners
+      WHERE is_active = true
+      ORDER BY updated_at DESC
+      LIMIT 20
+    `);
+        return res.json({
+            success: true,
+            stagedOrders: ordersRes.rows,
+            activeRiders: ridersRes.rows,
+            stagedRiderCount: ridersRes.rows.length,
+            avgHandoverMins: 1.5,
+            validationRate: 100
+        });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch staging queue', message: err?.message });
+    }
+});
+// DYNAMIC 10-MINUTE QUICK COMMERCE ETA ENGINE
+function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth radius in km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+function computeDynamicEtaMetrics(customerLat, customerLng, itemCount = 1, whLat = 16.506174, whLng = 80.648015) {
+    const cLat = customerLat ? Number(customerLat) : whLat + 0.012;
+    const cLng = customerLng ? Number(customerLng) : whLng + 0.011;
+    const distanceKm = calculateHaversineDistanceKm(whLat, whLng, cLat, cLng);
+    const prepMins = Math.min(4.0, 1.5 + Math.max(1, itemCount) * 0.25);
+    const dispatchMins = 1.0;
+    const transitMins = (distanceKm * 1.3) / 0.366; // 22 km/h average speed in urban route
+    const totalMins = Math.max(6, Math.ceil(prepMins + dispatchMins + transitMins));
+    const isExpressEligible = distanceKm <= 3.5 && totalMins <= 15;
+    return {
+        distanceKm: Number(distanceKm.toFixed(2)),
+        prepMins: Number(prepMins.toFixed(1)),
+        transitMins: Number(transitMins.toFixed(1)),
+        totalMins,
+        isExpressEligible,
+        guaranteeText: isExpressEligible
+            ? `${totalMins} Min Express SLA Guaranteed`
+            : `Standard Delivery (${totalMins} Mins)`,
+    };
+}
+app.get('/api/eta/calculate', async (req, res) => {
+    const lat = req.query.lat ? Number(req.query.lat) : null;
+    const lng = req.query.lng ? Number(req.query.lng) : null;
+    const itemCount = req.query.itemCount ? Number(req.query.itemCount) : 1;
+    try {
+        const whRes = await gatewayPgPool.query('SELECT id, name, latitude, longitude, express_sla_radius_km FROM warehouses WHERE is_active = true ORDER BY id ASC LIMIT 1');
+        const darkStore = whRes.rows[0] || {
+            id: 1,
+            name: 'Sunotal Dark Store Hub',
+            latitude: 16.506174,
+            longitude: 80.648015,
+            express_sla_radius_km: 3.5,
+        };
+        const metrics = computeDynamicEtaMetrics(lat, lng, itemCount, Number(darkStore.latitude || 16.506174), Number(darkStore.longitude || 80.648015));
+        return res.json({
+            success: true,
+            darkStore: { id: darkStore.id, name: darkStore.name },
+            distanceKm: metrics.distanceKm,
+            etaMinutes: metrics.totalMins,
+            prepMins: metrics.prepMins,
+            transitMins: metrics.transitMins,
+            expressEligible: metrics.isExpressEligible,
+            guaranteeText: metrics.guaranteeText,
+        });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to calculate dynamic ETA', message: err?.message });
+    }
+});
+app.get('/api/orders/:id/live-eta', async (req, res) => {
+    const orderId = String(req.params.id);
+    try {
+        const oRes = await gatewayPgPool.query('SELECT id, order_number as "orderNumber", status, created_at, target_delivery_time, eta_minutes, delivery_latitude, delivery_longitude, sla_guaranteed FROM orders WHERE id = $1 OR order_number = $1', [orderId]);
+        if (!oRes.rows.length) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        const order = oRes.rows[0];
+        const createdAtTime = new Date(order.created_at).getTime();
+        const etaMins = order.eta_minutes || 10;
+        const targetTimestamp = order.target_delivery_time
+            ? new Date(order.target_delivery_time).getTime()
+            : createdAtTime + etaMins * 60 * 1000;
+        const secondsRemaining = Math.max(0, Math.floor((targetTimestamp - Date.now()) / 1000));
+        const rRes = await gatewayPgPool.query('SELECT latitude, longitude, speed, updated_at as "updatedAt" FROM rider_locations WHERE order_id = $1 ORDER BY updated_at DESC LIMIT 1', [String(order.id)]);
+        const riderLoc = rRes.rows[0] || null;
+        return res.json({
+            success: true,
+            orderId: String(order.id),
+            orderNumber: order.orderNumber,
+            status: order.status,
+            secondsRemaining,
+            etaMinutes: Math.max(0, Math.ceil(secondsRemaining / 60)),
+            targetDeliveryTime: new Date(targetTimestamp).toISOString(),
+            slaGuaranteed: order.sla_guaranteed ?? true,
+            riderLocation: riderLoc,
+        });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch live order ETA', message: err?.message });
     }
 });
 // MULTILINGUAL VOICE SEARCH API (English + Telugu + Hindi powered by Faster-Whisper & Dynamic PostgreSQL Synonyms)

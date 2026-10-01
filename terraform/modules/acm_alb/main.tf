@@ -70,6 +70,7 @@ locals {
     "delivery-frontend"   = { port = 80, path = "/healthz", host = "delivery-sunotal.${var.domain_name}" }
     "support-frontend"    = { port = 80, path = "/healthz", host = "support-sunotal.${var.domain_name}" }
     "monitoring-frontend" = { port = 80, path = "/healthz", host = "monitoring-sunotal.${var.domain_name}" }
+    "warehouse-frontend"  = { port = 80, path = "/healthz", host = "warehouse-sunotal.${var.domain_name}" }
     "gateway-service"     = { port = 5000, path = "/healthz", host = "api.${var.domain_name}" }
   }
 }

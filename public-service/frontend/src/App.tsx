@@ -223,6 +223,14 @@ function SubdomainRouter() {
     );
   }
 
+  if (subdomain === "warehouse") {
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <WarehouseApp />
+      </Suspense>
+    );
+  }
+
   if (subdomain === "admin") {
     return (
       <Suspense fallback={<LoadingFallback />}>
