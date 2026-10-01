@@ -583,14 +583,16 @@ export default function DeliveryDashboard() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className="text-emerald-600 font-mono font-bold text-xl">₹{acceptedOrder.pay}.00</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setShowRiderChat(true)}
-                        className="rounded-xl border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 font-bold text-xs gap-1.5 h-8"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> Chat with Customer
-                      </Button>
+                      {orderStage !== "delivered" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowRiderChat(true)}
+                          className="rounded-xl border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 font-bold text-xs gap-1.5 h-8"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> Chat with Customer
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -817,14 +819,15 @@ export default function DeliveryDashboard() {
       <RiderLiveChatModal
         open={showRiderChat}
         onOpenChange={setShowRiderChat}
-        orderId={acceptedOrder?.numericId || acceptedOrder?.id || "1"}
-        orderNumber={acceptedOrder?.id ? `ORD-${acceptedOrder.id}` : "ORD-7842"}
+        orderId={acceptedOrder?.numericId || acceptedOrder?.id || ""}
+        orderNumber={acceptedOrder?.id ? `ORD-${acceptedOrder.id}` : undefined}
+        orderStatus={acceptedOrder?.status || (orderStage === "delivered" ? "delivered" : "out_for_delivery")}
         riderName={riderUser?.name || "Assigned Express Rider"}
         riderPhone={riderUser?.phone || ""}
         riderVehicle={riderUser?.vehicleNumber || "Electric Delivery EV"}
         currentUserRole="rider"
         currentUserName={riderUser?.name || "Delivery Partner"}
-        currentUserId={String(riderUser?.id || "1")}
+        currentUserId={String(riderUser?.id || "")}
       />
     </DeliveryLayout>
   );

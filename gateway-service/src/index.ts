@@ -4392,7 +4392,7 @@ app.post('/api/chat/messages', async (req, res) => {
       `INSERT INTO chat_messages (order_id, sender_role, sender_id, sender_name, message, message_type, is_read)
        VALUES ($1, $2, $3, $4, $5, $6, FALSE)
        RETURNING id, order_id as "orderId", sender_role as "senderRole", sender_id as "senderId", sender_name as "senderName", message, message_type as "messageType", is_read as "isRead", created_at as "createdAt"`,
-      [String(orderId), senderRole || 'user', String(senderId || '1'), senderName || 'Customer', message, messageType || 'text']
+      [String(orderId), senderRole || 'user', String(senderId || senderRole || 'user'), senderName || (senderRole === 'rider' ? 'Rider' : 'Customer'), message, messageType || 'text']
     );
 
     const newMessage = insRes.rows[0];

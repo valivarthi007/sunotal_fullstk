@@ -40,6 +40,7 @@ interface RiderLiveChatModalProps {
   onOpenChange: (open: boolean) => void;
   orderId: string | number;
   orderNumber?: string;
+  orderStatus?: string;
   riderName?: string;
   riderPhone?: string;
   riderVehicle?: string;
@@ -53,12 +54,13 @@ export function RiderLiveChatModal({
   onOpenChange,
   orderId,
   orderNumber,
-  riderName = "Assigned Express Rider",
+  orderStatus = "out_for_delivery",
+  riderName = "Assigned Delivery Partner",
   riderPhone = "",
   riderVehicle = "Electric Delivery EV",
   currentUserRole = "user",
   currentUserName = "Customer",
-  currentUserId = "1",
+  currentUserId = "",
 }: RiderLiveChatModalProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -66,6 +68,7 @@ export function RiderLiveChatModal({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const cleanOrderId = String(orderId);
+  const isDeliveryActive = orderStatus !== "delivered" && orderStatus !== "completed" && orderStatus !== "cancelled";
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -81,16 +84,12 @@ export function RiderLiveChatModal({
           setMessages(data.messages);
         }
       }
-    } catch {
-      // fallback local storage
-      const stored = localStorage.getItem(`sunotal_chat_${cleanOrderId}`);
-      if (stored) {
-        try { setMessages(JSON.parse(stored)); } catch {}
-      }
+    } catch (err) {
+      console.warn("Failed to fetch live chat messages:", err);
     }
   };
 
-  // Initial load & 3-second live polling
+  // Initial load & 3-second live polling during modal view
   useEffect(() => {
     if (open && cleanOrderId) {
       fetchMessages();
@@ -104,6 +103,10 @@ export function RiderLiveChatModal({
   }, [messages]);
 
   const handleSendMessage = async (textToSend?: string) => {
+    if (!isDeliveryActive) {
+      toast.error("Chat is disabled because this delivery has already ended.");
+      return;
+    }
     const content = (textToSend || inputMessage).trim();
     if (!content) return;
 
@@ -112,7 +115,7 @@ export function RiderLiveChatModal({
     const payload = {
       orderId: cleanOrderId,
       senderRole: currentUserRole,
-      senderId: currentUserId,
+      senderId: currentUserId || (currentUserRole === "user" ? "user" : "rider"),
       senderName: currentUserName,
       message: content,
       messageType: "text",
@@ -123,7 +126,7 @@ export function RiderLiveChatModal({
       id: Date.now(),
       orderId: cleanOrderId,
       senderRole: currentUserRole,
-      senderId: currentUserId,
+      senderId: currentUserId || (currentUserRole === "user" ? "user" : "rider"),
       senderName: currentUserName,
       message: content,
       messageType: "text",
@@ -147,15 +150,8 @@ export function RiderLiveChatModal({
           );
         }
       }
-    } catch {
-      // Cache locally
-      const stored = localStorage.getItem(`sunotal_chat_${cleanOrderId}`);
-      let existing: ChatMessage[] = [];
-      if (stored) {
-        try { existing = JSON.parse(stored); } catch {}
-      }
-      const updated = [...existing, tempMsg];
-      localStorage.setItem(`sunotal_chat_${cleanOrderId}`, JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Failed to post chat message:", e);
     }
   };
 

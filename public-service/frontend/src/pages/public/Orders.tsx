@@ -633,7 +633,7 @@ export default function Orders() {
                           <RotateCcw className={`w-3.5 h-3.5 ${reorderingOrderId === order.id ? "animate-spin" : ""}`} />
                           {reorderingOrderId === order.id ? "Reordering..." : "Reorder Items"}
                         </Button>
-                        {order.status !== "cancelled" && order.status !== "delivered" && (
+                        {order.status !== "cancelled" && order.status !== "delivered" && order.status !== "completed" && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -890,6 +890,7 @@ export default function Orders() {
           onOpenChange={(open) => !open && setChatOrder(null)}
           orderId={chatOrder?.id || ""}
           orderNumber={chatOrder?.orderNumber}
+          orderStatus={chatOrder?.status}
           riderName={(chatOrder as any)?.riderName || chatOrder?.driverName || "Assigned Express Rider"}
           riderPhone={(chatOrder as any)?.riderPhone || chatOrder?.driverPhone || ""}
           riderVehicle={(chatOrder as any)?.riderVehicle || chatOrder?.vehicleNo || "Electric Delivery EV"}

@@ -12,17 +12,20 @@ import {
   ChevronLeft,
   Store,
   Navigation,
-  AlertCircle
+  AlertCircle,
+  MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { RiderLiveChatModal } from "@/components/ui/RiderLiveChatModal";
 
 export default function LiveOrderTrack() {
   const [, setLocation] = useLocation();
   const [match, params] = useRoute("/orders/:id/track");
   const orderId = params?.id || "1";
+  const [showChatModal, setShowChatModal] = useState(false);
 
   // Countdown timer simulation for express delivery
   const [secondsLeft, setSecondsLeft] = useState(684);
@@ -385,12 +388,22 @@ export default function LiveOrderTrack() {
                 </div>
               </div>
 
-              <a
-                href={`tel:${data?.driver?.phone || "#"}`}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl py-3 text-xs flex items-center justify-center gap-2 shadow-md transition-colors"
-              >
-                <PhoneCall className="w-4 h-4" /> Call Partner ({(data?.driver?.name || "Partner").split(" ")[0]})
-              </a>
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href={`tel:${data?.driver?.phone || "#"}`}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl py-2.5 text-xs flex items-center justify-center gap-2 shadow-md transition-colors"
+                >
+                  <PhoneCall className="w-4 h-4" /> Call Partner
+                </a>
+                {data.status !== "delivered" && data.status !== "completed" && data.status !== "cancelled" && (
+                  <Button
+                    onClick={() => setShowChatModal(true)}
+                    className="bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-bold rounded-xl py-2.5 text-xs flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <MessageSquare className="w-4 h-4" /> Live Chat
+                  </Button>
+                )}
+              </div>
             </Card>
 
             {/* Delivery Address */}
@@ -422,6 +435,20 @@ export default function LiveOrderTrack() {
           </div>
         </div>
       </main>
+
+      {/* WhatsApp Style Rider Chat Modal */}
+      <RiderLiveChatModal
+        open={showChatModal}
+        onOpenChange={setShowChatModal}
+        orderId={data?.orderId || orderId}
+        orderNumber={data?.orderNumber}
+        orderStatus={data?.status}
+        riderName={data?.driver?.name || "Assigned Express Rider"}
+        riderPhone={data?.driver?.phone || ""}
+        riderVehicle={data?.driver?.vehicleNo || "Electric Delivery EV"}
+        currentUserRole="user"
+        currentUserName="Customer"
+      />
     </div>
   );
 }
