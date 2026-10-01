@@ -40,7 +40,7 @@ data "aws_ami" "amazon_linux_2023" {
 }
 
 resource "aws_iam_role" "ssm_role" {
-  name = "sunotal-ec2-ssm-role"
+  name_prefix = "sunotal-ssm-role-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -64,7 +64,7 @@ resource "aws_iam_role_policy_attachment" "ssm_attach" {
 }
 
 resource "aws_iam_instance_profile" "ssm_profile" {
-  name = "sunotal-ec2-ssm-profile"
+  name_prefix = "sunotal-ssm-prof-"
   role = aws_iam_role.ssm_role.name
 }
 

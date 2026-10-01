@@ -97,7 +97,7 @@ resource "aws_db_instance" "postgres" {
   deletion_protection    = false
   apply_immediately      = true
 
-  backup_retention_period = 7
+  backup_retention_period = 1
   performance_insights_enabled = false
   auto_minor_version_upgrade   = true
 
