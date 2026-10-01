@@ -605,7 +605,9 @@ export default function DeliveryDashboard() {
                         <Navigation className="w-4 h-4 text-emerald-400 animate-pulse" />
                         <div>
                           <div className="font-bold text-white text-[11px]">📍 Next: {orderStage === 'accepted' || orderStage === 'at_warehouse' ? 'Dark Store Hub Pickup' : 'Customer Handover Destination'}</div>
-                          <div className="text-[10px] text-slate-300">Est. Distance: 1.8 km • 6 mins away</div>
+                          <div className="text-[10px] text-slate-300">
+                            Target SLA Handover: {acceptedOrder?.targetDeliveryTime ? new Date(acceptedOrder.targetDeliveryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Target Express 10-Min SLA Window"}
+                          </div>
                         </div>
                       </div>
                       <a

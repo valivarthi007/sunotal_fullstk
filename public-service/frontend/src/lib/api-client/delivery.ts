@@ -91,3 +91,23 @@ export async function fetchDeliverySlots(): Promise<DeliverySlotApi[]> {
 export async function fetchLiveTrackingTelemetry(orderId: string): Promise<LiveTrackingTelemetry> {
   return customFetch<LiveTrackingTelemetry>(`/api/delivery/track/${orderId}`);
 }
+
+export interface DynamicEtaMetrics {
+  success: boolean;
+  darkStore: { id: number; name: string };
+  distanceKm: number;
+  etaMinutes: number;
+  prepMins: number;
+  transitMins: number;
+  expressEligible: boolean;
+  guaranteeText: string;
+}
+
+export async function fetchDynamicEta(lat?: number, lng?: number, itemCount: number = 1): Promise<DynamicEtaMetrics> {
+  const params = new URLSearchParams();
+  if (lat) params.append("lat", String(lat));
+  if (lng) params.append("lng", String(lng));
+  params.append("itemCount", String(itemCount));
+
+  return customFetch<DynamicEtaMetrics>(`/api/eta/calculate?${params.toString()}`);
+}

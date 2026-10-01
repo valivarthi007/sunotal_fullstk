@@ -27,15 +27,20 @@ export default function LiveOrderTrack() {
   const orderId = params?.id || "1";
   const [showChatModal, setShowChatModal] = useState(false);
 
-  // Countdown timer simulation for express delivery
-  const [secondsLeft, setSecondsLeft] = useState(684);
+  // Dynamic ETA telemetry query from Gateway
+  const { data: liveEtaData } = useQuery({
+    queryKey: ["live-eta", orderId],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`/api/orders/${orderId}/live-eta`);
+        if (res.ok) return await res.json();
+      } catch {}
+      return null;
+    },
+    refetchInterval: 3000,
+  });
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const secondsLeft = liveEtaData?.secondsRemaining ?? 600;
 
   const formatTime = (totalSecs: number) => {
     const mins = Math.floor(totalSecs / 60);

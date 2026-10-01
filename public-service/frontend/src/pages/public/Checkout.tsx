@@ -15,7 +15,7 @@ import { PaymentGatewayModal } from "@/components/ui/PaymentGatewayModal";
 import { DeliverySlotPicker } from "@/components/ui/DeliverySlotPicker";
 import { InteractiveMapPickerModal } from "@/components/ui/InteractiveMapPickerModal";
 import { getPaymentProvider } from "@/lib/providers/payment/payment-provider.factory";
-import { calculateDeliveryFee, createOrderCheckout, verifyPayment, DeliveryFeeCalculation, getApiUrl } from "@/lib/api-client";
+import { calculateDeliveryFee, createOrderCheckout, verifyPayment, DeliveryFeeCalculation, getApiUrl, fetchDynamicEta, DynamicEtaMetrics } from "@/lib/api-client";
 import {
   MapPin,
   Truck,
@@ -76,6 +76,7 @@ export default function Checkout() {
 
   // Dynamic Delivery Calculation State
   const [deliveryCalc, setDeliveryCalc] = useState<DeliveryFeeCalculation | null>(null);
+  const [dynamicEta, setDynamicEta] = useState<DynamicEtaMetrics | null>(null);
 
   // Rider Tipping, Instructions & Substitute Preferences
   const [tipAmount, setTipAmount] = useState<number>(0);
@@ -172,7 +173,7 @@ export default function Checkout() {
       .catch((err) => console.warn("Delivery fee calculation error:", err));
   };
 
-  // Recalculate Delivery Fee when location/city changes
+  // Recalculate Delivery Fee and Dynamic ETA when location/city changes
   useEffect(() => {
     calculateDeliveryFee({
       city: currentCity || userLoc.city || "",
@@ -182,19 +183,12 @@ export default function Checkout() {
       .then((res) => setDeliveryCalc(res))
       .catch((err) => {
         console.error("Delivery fee calculation error:", err);
-        setDeliveryCalc({
-          distanceKm: 12.0,
-          deliveryFee: 0,
-          isFree: true,
-          freeRadiusKm: 30,
-          maxServiceRadiusKm: 70,
-          isServiceable: true,
-          warehouseName: "Express Dark Store Hub",
-          warehouseCity: currentCity || userLoc.city || "",
-          estimatedHours: "2 Hours",
-        });
       });
-  }, [currentCity, userLoc.latitude, userLoc.longitude, userLoc.city]);
+
+    fetchDynamicEta(userLoc.latitude, userLoc.longitude, cartItems.length)
+      .then((res) => setDynamicEta(res))
+      .catch((err) => console.warn("Dynamic ETA calculation warning:", err));
+  }, [currentCity, userLoc.latitude, userLoc.longitude, userLoc.city, cartItems.length]);
 
   // Redirect if unauthenticated
   useEffect(() => {
@@ -309,7 +303,7 @@ export default function Checkout() {
         finalAmount: finalPayable,
         status: "processing",
         paymentStatus: "paid",
-        estimatedDelivery: deliveryCalc?.estimatedHours || "Express Delivery within 2 Hours",
+        estimatedDelivery: dynamicEta?.guaranteeText || `${dynamicEta?.etaMinutes || 10} Mins Express SLA`,
         deliveryAddress: values.streetAddress,
         city: values.city,
         state: values.state,

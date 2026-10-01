@@ -500,17 +500,19 @@ async function initDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- Subservice Column Enhancements
-      ALTER TABLE products ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::jsonb;
-      ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS serviced_pincodes TEXT[] DEFAULT ARRAY['560001', '560002', '560034', '560102'];
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS tip_amount NUMERIC(10, 2) DEFAULT 0;
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_instructions VARCHAR(255) DEFAULT '';
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS replacement_preference VARCHAR(100) DEFAULT 'Replace with closest brand';
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_amount NUMERIC(10, 2) DEFAULT 0;
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS final_amount NUMERIC(10, 2) DEFAULT 0;
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10, 2) DEFAULT 0;
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(10, 2) DEFAULT 0;
-      UPDATE orders SET final_amount = total_amount WHERE (final_amount IS NULL OR final_amount = 0) AND total_amount > 0;
+      -- Dynamic ETA & SLA Columns Enhancements
+      ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS latitude NUMERIC(10, 6) DEFAULT 16.506174;
+      ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS longitude NUMERIC(10, 6) DEFAULT 80.648015;
+      ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS express_sla_radius_km NUMERIC(3, 1) DEFAULT 3.5;
+      ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS avg_picking_time_mins NUMERIC(3, 1) DEFAULT 2.0;
+
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_prep_mins NUMERIC(4, 1);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_transit_mins NUMERIC(4, 1);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS target_delivery_time TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS actual_delivered_time TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS sla_guaranteed BOOLEAN DEFAULT TRUE;
+
+      CREATE INDEX IF NOT EXISTS idx_rider_locations_order_time ON rider_locations (order_id, updated_at DESC);
 
       -- Enables pg_trgm fuzzy search index
       CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -3585,7 +3587,11 @@ app.get('/api/orders/:id', async (req, res) => {
       riderName: o.rider_name,
       riderPhone: o.rider_phone,
       deliveryOtp: o.delivery_otp,
-      etaMinutes: o.eta_minutes || 15,
+      etaMinutes: o.eta_minutes || 10,
+      targetDeliveryTime: o.target_delivery_time,
+      estimatedPrepMins: o.estimated_prep_mins,
+      estimatedTransitMins: o.estimated_transit_mins,
+      slaGuaranteed: o.sla_guaranteed ?? true,
       createdAt: o.created_at,
       items: itemsRes.rows.map(i => ({
         id: i.id,
@@ -3718,19 +3724,41 @@ app.post(['/api/orders', '/api/orders/checkout'], async (req, res) => {
       }
 
       let activeWhId = warehouseId ? Number(warehouseId) : null;
-      if (!activeWhId) {
-        try {
-          const whRes = await client.query('SELECT id FROM warehouses WHERE is_active = true ORDER BY id ASC LIMIT 1');
-          if (whRes.rows && whRes.rows.length > 0) {
-            activeWhId = whRes.rows[0].id;
-          }
-        } catch {}
-      }
+      let whLat = 16.506174;
+      let whLng = 80.648015;
+      try {
+        const whRes = await client.query('SELECT id, latitude, longitude FROM warehouses WHERE is_active = true ORDER BY id ASC LIMIT 1');
+        if (whRes.rows && whRes.rows.length > 0) {
+          if (!activeWhId) activeWhId = whRes.rows[0].id;
+          if (whRes.rows[0].latitude) whLat = Number(whRes.rows[0].latitude);
+          if (whRes.rows[0].longitude) whLng = Number(whRes.rows[0].longitude);
+        }
+      } catch {}
+
+      const etaMetrics = computeDynamicEtaMetrics(
+        orderLat ? Number(orderLat) : null,
+        orderLng ? Number(orderLng) : null,
+        Array.isArray(items) ? items.length : 1,
+        whLat,
+        whLng
+      );
+
+      const targetDeliveryTime = new Date(Date.now() + etaMetrics.totalMins * 60 * 1000);
 
       const oRes = await client.query(
-        `INSERT INTO orders (order_number, user_id, user_name, user_phone, address, delivery_address, city, total_amount, discount_amount, final_amount, delivery_fee, status, payment_status, payment_method, delivery_otp, eta_minutes, delivery_latitude, delivery_longitude, warehouse_id)
-         VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, 'placed', 'paid', $11, $12, 15, $13, $14, $15) RETURNING *`,
-        [orderNum, userId || 1, userName || 'Customer', userPhone || '', delAddress, city || 'Vijayawada', totAmount, discount || 0, finAmount, deliveryFee || 0, paymentMethod || 'UPI / Wallet', otp, orderLat || null, orderLng || null, activeWhId]
+        `INSERT INTO orders (
+          order_number, user_id, user_name, user_phone, address, delivery_address, city,
+          total_amount, discount_amount, final_amount, delivery_fee, status, payment_status,
+          payment_method, delivery_otp, eta_minutes, delivery_latitude, delivery_longitude, warehouse_id,
+          estimated_prep_mins, estimated_transit_mins, target_delivery_time, sla_guaranteed
+         )
+         VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, 'placed', 'paid', $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING *`,
+        [
+          orderNum, userId || 1, userName || 'Customer', userPhone || '', delAddress, city || 'Vijayawada',
+          totAmount, discount || 0, finAmount, deliveryFee || 0, paymentMethod || 'UPI / Wallet', otp,
+          etaMetrics.totalMins, orderLat || null, orderLng || null, activeWhId,
+          etaMetrics.prepMins, etaMetrics.transitMins, targetDeliveryTime, etaMetrics.isExpressEligible
+        ]
       );
       const newOrder = oRes.rows[0];
 
@@ -4422,6 +4450,134 @@ app.patch('/api/chat/messages/read/:orderId', async (req, res) => {
     return res.json({ success: true, orderId });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to mark messages as read', message: err?.message });
+  }
+});
+
+// DYNAMIC 10-MINUTE QUICK COMMERCE ETA ENGINE
+function calculateHaversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function computeDynamicEtaMetrics(
+  customerLat?: number | null,
+  customerLng?: number | null,
+  itemCount: number = 1,
+  whLat: number = 16.506174,
+  whLng: number = 80.648015
+) {
+  const cLat = customerLat ? Number(customerLat) : whLat + 0.012;
+  const cLng = customerLng ? Number(customerLng) : whLng + 0.011;
+  const distanceKm = calculateHaversineDistanceKm(whLat, whLng, cLat, cLng);
+
+  const prepMins = Math.min(4.0, 1.5 + Math.max(1, itemCount) * 0.25);
+  const dispatchMins = 1.0;
+  const transitMins = (distanceKm * 1.3) / 0.366; // 22 km/h average speed in urban route
+  const totalMins = Math.max(6, Math.ceil(prepMins + dispatchMins + transitMins));
+  const isExpressEligible = distanceKm <= 3.5 && totalMins <= 15;
+
+  return {
+    distanceKm: Number(distanceKm.toFixed(2)),
+    prepMins: Number(prepMins.toFixed(1)),
+    transitMins: Number(transitMins.toFixed(1)),
+    totalMins,
+    isExpressEligible,
+    guaranteeText: isExpressEligible
+      ? `${totalMins} Min Express SLA Guaranteed`
+      : `Standard Delivery (${totalMins} Mins)`,
+  };
+}
+
+app.get('/api/eta/calculate', async (req, res) => {
+  const lat = req.query.lat ? Number(req.query.lat) : null;
+  const lng = req.query.lng ? Number(req.query.lng) : null;
+  const itemCount = req.query.itemCount ? Number(req.query.itemCount) : 1;
+
+  try {
+    const whRes = await gatewayPgPool.query(
+      'SELECT id, name, latitude, longitude, express_sla_radius_km FROM warehouses WHERE is_active = true ORDER BY id ASC LIMIT 1'
+    );
+    const darkStore = whRes.rows[0] || {
+      id: 1,
+      name: 'Sunotal Dark Store Hub',
+      latitude: 16.506174,
+      longitude: 80.648015,
+      express_sla_radius_km: 3.5,
+    };
+
+    const metrics = computeDynamicEtaMetrics(
+      lat,
+      lng,
+      itemCount,
+      Number(darkStore.latitude || 16.506174),
+      Number(darkStore.longitude || 80.648015)
+    );
+
+    return res.json({
+      success: true,
+      darkStore: { id: darkStore.id, name: darkStore.name },
+      distanceKm: metrics.distanceKm,
+      etaMinutes: metrics.totalMins,
+      prepMins: metrics.prepMins,
+      transitMins: metrics.transitMins,
+      expressEligible: metrics.isExpressEligible,
+      guaranteeText: metrics.guaranteeText,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to calculate dynamic ETA', message: err?.message });
+  }
+});
+
+app.get('/api/orders/:id/live-eta', async (req, res) => {
+  const orderId = String(req.params.id);
+  try {
+    const oRes = await gatewayPgPool.query(
+      'SELECT id, order_number as "orderNumber", status, created_at, target_delivery_time, eta_minutes, delivery_latitude, delivery_longitude, sla_guaranteed FROM orders WHERE id = $1 OR order_number = $1',
+      [orderId]
+    );
+
+    if (!oRes.rows.length) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = oRes.rows[0];
+    const createdAtTime = new Date(order.created_at).getTime();
+    const etaMins = order.eta_minutes || 10;
+    const targetTimestamp = order.target_delivery_time
+      ? new Date(order.target_delivery_time).getTime()
+      : createdAtTime + etaMins * 60 * 1000;
+
+    const secondsRemaining = Math.max(0, Math.floor((targetTimestamp - Date.now()) / 1000));
+
+    const rRes = await gatewayPgPool.query(
+      'SELECT latitude, longitude, speed, updated_at as "updatedAt" FROM rider_locations WHERE order_id = $1 ORDER BY updated_at DESC LIMIT 1',
+      [String(order.id)]
+    );
+
+    const riderLoc = rRes.rows[0] || null;
+
+    return res.json({
+      success: true,
+      orderId: String(order.id),
+      orderNumber: order.orderNumber,
+      status: order.status,
+      secondsRemaining,
+      etaMinutes: Math.max(0, Math.ceil(secondsRemaining / 60)),
+      targetDeliveryTime: new Date(targetTimestamp).toISOString(),
+      slaGuaranteed: order.sla_guaranteed ?? true,
+      riderLocation: riderLoc,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch live order ETA', message: err?.message });
   }
 });
 
