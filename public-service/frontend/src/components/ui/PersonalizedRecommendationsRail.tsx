@@ -30,22 +30,24 @@ export function PersonalizedRecommendationsRail({ title = "Recommended For You",
 
   useEffect(() => {
     const fetchRecommendations = async () => {
-      const userId = String(user?.id || "1");
-      try {
-        const res = await fetch(getApiUrl(`/api/recommendations/personalized?userId=${userId}&limit=6`));
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
-            setProducts(data.recommendations);
-            if (data.preferredCategory) setCategoryTag(data.preferredCategory);
-            return;
+      const userId = user?.id ? String(user.id) : null;
+      if (userId) {
+        try {
+          const res = await fetch(getApiUrl(`/api/recommendations/personalized?userId=${userId}&limit=6`));
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+              setProducts(data.recommendations);
+              if (data.preferredCategory) setCategoryTag(data.preferredCategory);
+              return;
+            }
           }
+        } catch (e) {
+          console.warn("Failed to fetch ML recommendations:", e);
         }
-      } catch (e) {
-        console.warn("Failed to fetch ML recommendations:", e);
       }
 
-      // Catalog fallback
+      // Catalog fallback for guests / default
       try {
         const res = await fetch(getApiUrl("/api/products"));
         if (res.ok) {
@@ -83,7 +85,7 @@ export function PersonalizedRecommendationsRail({ title = "Recommended For You",
     fetch(getApiUrl("/api/recommendations/interactions"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: String(user?.id || "1"), productId: String(p.id), actionType: "cart" })
+      body: JSON.stringify({ userId: user?.id ? String(user.id) : "guest", productId: String(p.id), actionType: "cart" })
     }).catch(() => {});
   };
 

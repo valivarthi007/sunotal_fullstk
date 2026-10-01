@@ -3241,9 +3241,30 @@ app.get('/api/admin/ledger', async (req, res) => {
   }
 });
 
+// Helper function to extract user ID from route params, JWT bearer token, or body/query
+function extractUserIdFromReq(req: any): string | null {
+  if (req.params?.userId && req.params.userId !== 'undefined') {
+    return String(req.params.userId);
+  }
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (token) {
+    const decoded = verifyJwtNative(token, JWT_SECRET);
+    if (decoded && decoded.id) {
+      return String(decoded.id);
+    }
+  }
+  if (req.body?.userId) return String(req.body.userId);
+  if (req.query?.userId) return String(req.query.userId);
+  return null;
+}
+
 // ADDRESSES API (max 10 addresses per user)
 app.get(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res) => {
-  const userId = String(req.params.userId || req.query.userId || req.body?.userId || '1');
+  const userId = extractUserIdFromReq(req);
+  if (!userId) {
+    return res.json([]);
+  }
   try {
     const dbRes = await gatewayPgPool.query('SELECT * FROM user_addresses WHERE user_id::text = $1 ORDER BY is_default DESC, id DESC', [userId]);
     return res.json(dbRes.rows.map(a => ({
@@ -3271,7 +3292,10 @@ app.get(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res
 });
 
 app.post(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, res) => {
-  const userId = String(req.params.userId || req.body.userId || '1');
+  const userId = extractUserIdFromReq(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized: Authentication required to save addresses' });
+  }
   const { label, tag, houseNo, street, receiverName, phone, streetAddress, landmark, city, state, pincode, latitude, longitude, isDefault } = req.body || {};
   const finalLabel = tag || label || 'Home';
   const finalStreet = streetAddress || houseNo || '';
@@ -3328,7 +3352,10 @@ app.post(['/api/user/addresses', '/api/users/:userId/addresses'], async (req, re
 });
 
 app.put(['/api/users/:userId/addresses/:addressId', '/api/user/addresses/:addressId'], async (req, res) => {
-  const userId = String(req.params.userId || req.body?.userId || '1');
+  const userId = extractUserIdFromReq(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized: Authentication required to update addresses' });
+  }
   const addressId = String(req.params.addressId);
   const { label, tag, receiverName, phone, streetAddress, houseNo, landmark, street, city, state, pincode, latitude, longitude, isDefault } = req.body || {};
   
@@ -3369,7 +3396,10 @@ app.put(['/api/users/:userId/addresses/:addressId', '/api/user/addresses/:addres
 });
 
 app.delete(['/api/users/:userId/addresses/:addressId', '/api/user/addresses/:addressId'], async (req, res) => {
-  const userId = String(req.params.userId || req.body?.userId || req.query?.userId || '1');
+  const userId = extractUserIdFromReq(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized: Authentication required to delete addresses' });
+  }
   const addressId = String(req.params.addressId);
   try {
     await gatewayPgPool.query('DELETE FROM user_addresses WHERE id::text = $1 AND user_id::text = $2', [addressId, userId]);
@@ -3380,7 +3410,10 @@ app.delete(['/api/users/:userId/addresses/:addressId', '/api/user/addresses/:add
 });
 
 app.patch(['/api/users/:userId/addresses/:addressId/default', '/api/user/addresses/:addressId/default'], async (req, res) => {
-  const userId = String(req.params.userId || req.body?.userId || req.query?.userId || '1');
+  const userId = extractUserIdFromReq(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized: Authentication required to set default address' });
+  }
   const addressId = String(req.params.addressId);
   try {
     await gatewayPgPool.query('UPDATE user_addresses SET is_default = false WHERE user_id::text = $1', [userId]);

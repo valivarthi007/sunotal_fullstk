@@ -86,8 +86,13 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
         });
       }
 
-      // Load addresses directly from user API / synced local storage
-      const userId = String(user?.id || "1");
+      // Load addresses directly from user API / synced local storage (only for logged-in users)
+      if (!user?.id) {
+        setSavedAddresses([]);
+        return;
+      }
+
+      const userId = String(user.id);
       const loadAddresses = async () => {
         try {
           const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
@@ -373,6 +378,9 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
   };
 
   const handleSetDefaultFromModal = async (addrId: number | string) => {
+    if (!user?.id) return;
+    const userId = String(user.id);
+
     const updated = savedAddresses.map((a) => ({
       ...a,
       isDefault: String(a.id) === String(addrId),
@@ -380,7 +388,6 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
     setSavedAddresses(updated);
 
     const target = updated.find((a) => String(a.id) === String(addrId));
-    const userId = String(user?.id || "1");
 
     // Sync to Profile local storage format
     const profileAddrList = updated.map((a) => ({
@@ -397,16 +404,14 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
     }
 
     // Sync to PostgreSQL DB
-    if (user?.id) {
-      try {
-        const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
-        await fetch(getApiUrl(`/api/users/${user.id}/addresses/${addrId}/default`), {
-          method: "PATCH",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-      } catch (e) {
-        console.warn("Set default address API call failed:", e);
-      }
+    try {
+      const token = localStorage.getItem("sunotal_token") || localStorage.getItem("sunotal_user_token");
+      await fetch(getApiUrl(`/api/users/${userId}/addresses/${addrId}/default`), {
+        method: "PATCH",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch (e) {
+      console.warn("Set default address API call failed:", e);
     }
 
     toast.success(`"${target?.tag || "Address"}" set as default delivery address`);
@@ -461,7 +466,7 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
               activeTab === "saved" ? "border-emerald-600 text-emerald-600 font-bold bg-background" : "text-muted-foreground"
             }`}
           >
-            Saved Address Book ({savedAddresses.length})
+            Saved Address Book ({user?.id ? savedAddresses.length : 0})
           </button>
         </div>
 
@@ -652,7 +657,26 @@ export const InteractiveMapPickerModal: React.FC<InteractiveMapPickerModalProps>
 
           {activeTab === "saved" && (
             <div className="space-y-3">
-              {savedAddresses.length === 0 ? (
+              {!user?.id ? (
+                <div className="p-8 text-center border rounded-2xl bg-muted/20 space-y-3">
+                  <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-950 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                    <MapPin className="w-6 h-6" />
+                  </div>
+                  <p className="text-sm font-bold text-foreground">Log in to view saved addresses</p>
+                  <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                    Sign in to your Sunotal account to access your saved home, work, and family delivery locations.
+                  </p>
+                  <Button
+                    onClick={() => {
+                      onClose();
+                      window.location.href = "/login";
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2 rounded-xl"
+                  >
+                    Login / Sign Up
+                  </Button>
+                </div>
+              ) : savedAddresses.length === 0 ? (
                 <div className="p-8 text-center border rounded-2xl bg-muted/20">
                   <MapPin className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                   <p className="text-xs font-semibold text-foreground">No saved addresses</p>
