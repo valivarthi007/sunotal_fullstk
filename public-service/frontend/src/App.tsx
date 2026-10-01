@@ -134,13 +134,14 @@ function LoadingFallback() {
 }
 
 // Subdomain Portal Auto-Detection
-function getSubdomain(): "main" | "admin" | "vendor" | "delivery" | "support" {
+function getSubdomain(): "main" | "admin" | "vendor" | "delivery" | "support" | "warehouse" {
   if (typeof window === "undefined") return "main";
   const hostname = window.location.hostname.toLowerCase();
   if (hostname.startsWith("admin-") || hostname.startsWith("admin.")) return "admin";
   if (hostname.startsWith("vendor-") || hostname.startsWith("vendor.") || hostname.startsWith("farmer-")) return "vendor";
   if (hostname.startsWith("delivery-") || hostname.startsWith("delivery.") || hostname.startsWith("rider-")) return "delivery";
   if (hostname.startsWith("support-") || hostname.startsWith("support.") || hostname.startsWith("help-") || hostname.startsWith("help.")) return "support";
+  if (hostname.startsWith("warehouse-") || hostname.startsWith("warehouse.")) return "warehouse";
   return "main";
 }
 
