@@ -4170,6 +4170,29 @@ app.post('/api/voice/transcribe', async (req, res) => {
                     console.warn("Whisper /v1/audio/transcriptions warning:", e2);
                 }
             }
+            // Engine 3: AI4Bharat IndicWhisper Model Pipeline (IIT Madras Open-Source Indic ASR)
+            if (!rawText && (langCode === 'te' || langCode === 'hi')) {
+                try {
+                    const ai4bharatModel = langCode === 'te' ? 'ai4bharat/indicwhisper-te' : 'ai4bharat/indicwhisper-hi';
+                    const hfRes = await fetch(`https://api-inference.huggingface.co/models/${ai4bharatModel}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'audio/webm',
+                            ...(process.env.HUGGINGFACE_API_KEY ? { Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}` } : {})
+                        },
+                        body: buffer
+                    });
+                    if (hfRes.ok) {
+                        const hfData = await hfRes.json();
+                        if (hfData && hfData.text) {
+                            rawText = hfData.text.trim();
+                        }
+                    }
+                }
+                catch (e3) {
+                    console.warn("AI4Bharat IndicWhisper ASR call warning:", e3);
+                }
+            }
         }
         catch (e) {
             console.warn("Whisper container proxy warning, proceeding with client text input:", e);
