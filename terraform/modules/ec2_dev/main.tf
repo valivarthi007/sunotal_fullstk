@@ -39,33 +39,8 @@ data "aws_ami" "amazon_linux_2023" {
   }
 }
 
-resource "aws_iam_role" "ssm_role" {
-  name_prefix = "sunotal-ssm-role-"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "ssm_attach" {
-  role       = aws_iam_role.ssm_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_instance_profile" "ssm_profile" {
-  name_prefix = "sunotal-ssm-prof-"
-  role = aws_iam_role.ssm_role.name
+data "aws_iam_instance_profile" "ssm_profile" {
+  name = "sunotal-ec2-ssm-profile"
 }
 
 resource "aws_instance" "sunotal_single_ec2" {
@@ -74,7 +49,7 @@ resource "aws_instance" "sunotal_single_ec2" {
   key_name             = var.key_name
   subnet_id            = var.public_subnet_id
   vpc_security_group_ids = [var.security_group_id]
-  iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
+  iam_instance_profile = data.aws_iam_instance_profile.ssm_profile.name
 
   user_data = file("${path.module}/../../user_data_dev.sh")
 

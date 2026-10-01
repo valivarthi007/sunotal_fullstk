@@ -55,10 +55,18 @@ jobs:
             --output text 2>/dev/null || echo "NONE")
 
           if [ "$INSTANCE_ID" != "NONE" ] && [ "$INSTANCE_ID" != "None" ] && [ -n "$INSTANCE_ID" ]; then
-            SSM_STATUS=$(aws ssm describe-instance-information \
-              --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
-              --query "InstanceInformationList[0].PingStatus" \
-              --output text 2>/dev/null || echo "Offline")
+            SSM_STATUS="Offline"
+            for i in {1..12}; do
+              SSM_STATUS=$(aws ssm describe-instance-information \
+                --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+                --query "InstanceInformationList[0].PingStatus" \
+                --output text 2>/dev/null || echo "Offline")
+              if [ "$SSM_STATUS" = "Online" ]; then
+                break
+              fi
+              echo "⏳ Attempt $i/12: Waiting for SSM status of $INSTANCE_ID to become Online (current: '$SSM_STATUS')..."
+              sleep 10
+            done
 
             if [ "$SSM_STATUS" = "Online" ]; then
               echo "✅ EC2 Instance $INSTANCE_ID is Online in Systems Manager. Dispatching deployment..."
@@ -68,8 +76,7 @@ jobs:
                 --parameters 'commands=["mkdir -p /app/sunotal && cd /app/sunotal && (git clone https://github.com/valivarthi007/sunotal_fullstk.git . || git pull origin main)", "docker compose down || true", "docker rm -f $(docker ps -aq) || true", "printf \"DATABASE_URL=%s\nMONGODB_URI=%s\nRAZORPAY_KEY_ID=%s\nRAZORPAY_KEY_SECRET=%s\nVITE_RAZORPAY_KEY_ID=%s\nVITE_PAYMENT_PROVIDER=%s\nSMS_API_KEY=%s\nTWILIO_ACCOUNT_SID=%s\nTWILIO_AUTH_TOKEN=%s\nTWILIO_PHONE_NUMBER=%s\nSMTP_HOST=%s\nSMTP_PORT=%s\nSMTP_USER=%s\nSMTP_PASS=%s\nSMTP_FROM=%s\nFIREBASE_PROJECT_ID=%s\nFIREBASE_CLIENT_EMAIL=%s\nVITE_FIREBASE_API_KEY=%s\nVITE_FIREBASE_AUTH_DOMAIN=%s\nVITE_FIREBASE_PROJECT_ID=%s\nVITE_FIREBASE_STORAGE_BUCKET=%s\nVITE_FIREBASE_MESSAGING_SENDER_ID=%s\nVITE_FIREBASE_APP_ID=%s\nVITE_FIREBASE_VAPID_KEY=%s\nMAPPLS_CLIENT_ID=%s\nMAPPLS_CLIENT_SECRET=%s\nVITE_MAPPLS_SDK_KEY=%s\nVITE_MAP_PROVIDER=%s\nVITE_GOOGLE_CLIENT_ID=%s\nVITE_FACEBOOK_APP_ID=%s\n\" \"${{ secrets.DATABASE_URL }}\" \"${{ secrets.MONGODB_URI }}\" \"${{ secrets.RAZORPAY_KEY_ID }}\" \"${{ secrets.RAZORPAY_KEY_SECRET }}\" \"${{ secrets.VITE_RAZORPAY_KEY_ID || secrets.RAZORPAY_KEY_ID }}\" \"razorpay\" \"${{ secrets.SMS_API_KEY }}\" \"${{ secrets.TWILIO_ACCOUNT_SID }}\" \"${{ secrets.TWILIO_AUTH_TOKEN }}\" \"${{ secrets.TWILIO_PHONE_NUMBER }}\" \"${{ secrets.SMTP_HOST }}\" \"${{ secrets.SMTP_PORT }}\" \"${{ secrets.SMTP_USER }}\" \"${{ secrets.SMTP_PASS }}\" \"${{ secrets.SMTP_FROM }}\" \"${{ secrets.FIREBASE_PROJECT_ID }}\" \"${{ secrets.FIREBASE_CLIENT_EMAIL }}\" \"${{ secrets.VITE_FIREBASE_API_KEY }}\" \"${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}\" \"${{ secrets.VITE_FIREBASE_PROJECT_ID }}\" \"${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}\" \"${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}\" \"${{ secrets.VITE_FIREBASE_APP_ID }}\" \"${{ secrets.VITE_FIREBASE_VAPID_KEY }}\" \"${{ secrets.MAPPLS_CLIENT_ID }}\" \"${{ secrets.MAPPLS_CLIENT_SECRET }}\" \"${{ secrets.VITE_MAPPLS_SDK_KEY }}\" \"mappls\" \"${{ secrets.VITE_GOOGLE_CLIENT_ID }}\" \"${{ secrets.VITE_FACEBOOK_APP_ID }}\" > /app/sunotal/.env", "docker compose up -d --build"]' \
                 --region "${{ env.AWS_REGION }}" || exit 1
             else
-              echo "⚠️ EC2 Instance $INSTANCE_ID is running, but AWS SSM status is '$SSM_STATUS' (instance profile / SSM agent pending)."
-              echo "ℹ️ Retrying SSM connection or wait for instance initialization..."
+              echo "❌ EC2 Instance $INSTANCE_ID SSM status remains '$SSM_STATUS' after waiting 2 minutes."
               exit 1
             fi
           else
