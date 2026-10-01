@@ -4128,46 +4128,62 @@ app.post('/api/voice/transcribe', async (req, res) => {
             const base64Data = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;
             const buffer = Buffer.from(base64Data, 'base64');
             const langCode = (language || 'en').split('-')[0];
+            // Candidate Whisper ASR endpoints (port 9000 internal container / 8000 host)
+            const whisperCandidateUrls = [
+                'http://whisper-service:9000',
+                'http://whisper-service:8000',
+                'http://127.0.0.1:9000',
+                'http://127.0.0.1:8000',
+                'http://localhost:9000',
+                'http://localhost:8000'
+            ];
             // Engine 1: Faster-Whisper ASR container (/asr)
-            try {
-                const formDataAsr = new (require('form-data'))();
-                formDataAsr.append('audio_file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
-                const whisperRes1 = await fetch(`http://whisper-service:8000/asr?task=transcribe&encode=true&output=json&language=${langCode}`, {
-                    method: 'POST',
-                    body: formDataAsr,
-                    headers: formDataAsr.getHeaders(),
-                });
-                if (whisperRes1.ok) {
-                    const whisperData = await whisperRes1.json();
-                    if (whisperData.text) {
-                        rawText = whisperData.text.trim();
+            for (const baseUrl of whisperCandidateUrls) {
+                if (rawText)
+                    break;
+                try {
+                    const formDataAsr = new (require('form-data'))();
+                    formDataAsr.append('audio_file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
+                    const whisperRes1 = await fetch(`${baseUrl}/asr?task=transcribe&encode=true&output=json&language=${langCode}`, {
+                        method: 'POST',
+                        body: formDataAsr,
+                        headers: formDataAsr.getHeaders(),
+                    });
+                    if (whisperRes1.ok) {
+                        const whisperData = await whisperRes1.json();
+                        if (whisperData.text && whisperData.text.trim()) {
+                            rawText = whisperData.text.trim();
+                            break;
+                        }
                     }
                 }
-            }
-            catch (e1) {
-                console.warn("Whisper /asr call attempt warning:", e1);
+                catch (e1) { }
             }
             // Engine 2: Faster-Whisper /v1/audio/transcriptions fallback
             if (!rawText) {
-                try {
-                    const formDataV1 = new (require('form-data'))();
-                    formDataV1.append('file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
-                    formDataV1.append('model', 'tiny');
-                    if (langCode)
-                        formDataV1.append('language', langCode);
-                    const whisperRes2 = await fetch('http://whisper-service:8000/v1/audio/transcriptions', {
-                        method: 'POST',
-                        body: formDataV1,
-                        headers: formDataV1.getHeaders(),
-                    });
-                    if (whisperRes2.ok) {
-                        const whisperData = await whisperRes2.json();
-                        if (whisperData.text)
-                            rawText = whisperData.text.trim();
+                for (const baseUrl of whisperCandidateUrls) {
+                    if (rawText)
+                        break;
+                    try {
+                        const formDataV1 = new (require('form-data'))();
+                        formDataV1.append('file', buffer, { filename: 'speech.webm', contentType: 'audio/webm' });
+                        formDataV1.append('model', 'tiny');
+                        if (langCode)
+                            formDataV1.append('language', langCode);
+                        const whisperRes2 = await fetch(`${baseUrl}/v1/audio/transcriptions`, {
+                            method: 'POST',
+                            body: formDataV1,
+                            headers: formDataV1.getHeaders(),
+                        });
+                        if (whisperRes2.ok) {
+                            const whisperData = await whisperRes2.json();
+                            if (whisperData.text && whisperData.text.trim()) {
+                                rawText = whisperData.text.trim();
+                                break;
+                            }
+                        }
                     }
-                }
-                catch (e2) {
-                    console.warn("Whisper /v1/audio/transcriptions warning:", e2);
+                    catch (e2) { }
                 }
             }
             // Engine 3: AI4Bharat IndicWhisper Model Pipeline (IIT Madras Open-Source Indic ASR)
