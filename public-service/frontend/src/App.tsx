@@ -37,7 +37,7 @@ const UsersAdmin = lazy(() => import("@/pages/admin/Users"));
 const InventoryAdmin = lazy(() => import("@/pages/admin/Inventory"));
 const BannersAdmin = lazy(() => import("@/pages/admin/Banners"));
 const QuotationsAdmin = lazy(() => import("@/pages/admin/Quotations"));
-const WarehouseManager = lazy(() => import("@/pages/admin/WarehouseManager").then((m) => ({ default: m.WarehouseManager })));
+const WarehouseManager = lazy(() => import("@/pages/warehouse/WarehouseApp"));
 const ObservabilityDashboard = lazy(() => import("@/pages/admin/ObservabilityDashboard").then((m) => ({ default: m.ObservabilityDashboard })));
 const AdminLedger = lazy(() => import("@/pages/admin/Ledger").then((m) => ({ default: m.AdminLedger })));
 const AwsCostBreakdown = lazy(() => import("@/pages/admin/AwsCostBreakdown"));
